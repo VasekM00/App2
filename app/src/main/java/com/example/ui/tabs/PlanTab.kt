@@ -72,8 +72,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
+import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.domain.parseCustomLifeGoals
+import com.example.domain.serializeCustomLifeGoals
 import com.example.ui.components.KpiCard
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -96,6 +99,7 @@ fun PlanTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean>,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
@@ -122,7 +126,7 @@ fun PlanTab(
 
         when (selectedSubTab) {
             0 -> FireRoadmapSubTab(state, actionStates, onToggleAction)
-            1 -> LifeGoalsSimulatorSubTab(state)
+            1 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
             2 -> PensionSubTab(state)
         }
     }
@@ -346,16 +350,15 @@ private fun RoadmapPhaseCard(
 }
 
 @Composable
-private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
+private fun LifeGoalsSimulatorSubTab(
+    state: FullCalculationState,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+) {
     val scrollState = rememberScrollState()
     val baseYear = state.settings.baseYear
 
-    val defaultGoals = remember {
-        mutableStateListOf(
-            LifeGoalItem("1", "Real Estate Down Payment", Icons.Default.Home, 2028, 1_500_000.0, 450_000.0),
-            LifeGoalItem("2", "Children Education & Family Fund", Icons.Default.School, 2032, 600_000.0, 120_000.0),
-            LifeGoalItem("3", "Sabbatical / Career Break", Icons.Default.Star, 2030, 300_000.0, 80_000.0)
-        )
+    val customGoalsList = remember(state.settings.customGoalsJson) {
+        parseCustomLifeGoals(state.settings.customGoalsJson)
     }
 
     var showAddGoalDialog by remember { mutableStateOf(false) }
@@ -366,12 +369,12 @@ private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
     val monthlyNetSurplus = (monthlyNetIncome - monthlyExpenses).coerceAtLeast(0.0)
     val monthlyInvest = state.investMonthlyTotal
 
-    val totalRequiredMonthlyGoals = defaultGoals.sumOf { goal ->
+    val totalRequiredMonthlyGoals = customGoalsList.sumOf { goal ->
         val yrs = (goal.targetYear - baseYear).coerceAtLeast(1)
         val rem = (goal.targetAmountCzk - goal.currentSavedCzk).coerceAtLeast(0.0)
         rem / (yrs * 12.0)
     }
-    val totalRemainingCapitalNeeded = defaultGoals.sumOf { (it.targetAmountCzk - it.currentSavedCzk).coerceAtLeast(0.0) }
+    val totalRemainingCapitalNeeded = customGoalsList.sumOf { (it.targetAmountCzk - it.currentSavedCzk).coerceAtLeast(0.0) }
     val totalFireDelayYears = if (monthlyInvest > 0) totalRemainingCapitalNeeded / (monthlyInvest * 12.0) else 0.0
 
     val surplusAfterGoals = monthlyNetSurplus - totalRequiredMonthlyGoals
@@ -508,13 +511,20 @@ private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
         }
 
         // Goals List
-        defaultGoals.forEachIndexed { index, goal ->
+        customGoalsList.forEachIndexed { index, goal ->
             val yearsRemaining = (goal.targetYear - baseYear).coerceAtLeast(1)
             val monthsRemaining = yearsRemaining * 12
             val remainingAmount = (goal.targetAmountCzk - goal.currentSavedCzk).coerceAtLeast(0.0)
             val requiredMonthly = remainingAmount / monthsRemaining
             val progress = (goal.currentSavedCzk / goal.targetAmountCzk).coerceIn(0.0, 1.0)
             val goalFireDelay = if (monthlyInvest > 0) remainingAmount / (monthlyInvest * 12.0) else 0.0
+
+            val iconVec = when (goal.iconName) {
+                "home" -> Icons.Default.Home
+                "school" -> Icons.Default.School
+                "star" -> Icons.Default.Star
+                else -> Icons.Default.Flag
+            }
 
             Card(
                 modifier = Modifier
@@ -536,7 +546,7 @@ private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
                                     .background(BrandTeal.copy(alpha = 0.15f))
                                     .padding(8.dp)
                             ) {
-                                Icon(imageVector = goal.icon, contentDescription = null, tint = BrandTeal)
+                                Icon(imageVector = iconVec, contentDescription = null, tint = BrandTeal)
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -552,7 +562,10 @@ private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
                         }
 
                         IconButton(
-                            onClick = { defaultGoals.removeAt(index) },
+                            onClick = {
+                                val updated = customGoalsList.filterIndexed { i, _ -> i != index }
+                                onUpdateSettings?.invoke(state.settings.copy(customGoalsJson = serializeCustomLifeGoals(updated)))
+                            },
                             modifier = Modifier.testTag("delete_goal_$index")
                         ) {
                             Icon(
@@ -661,16 +674,16 @@ private fun LifeGoalsSimulatorSubTab(state: FullCalculationState) {
                         val targetAmt = targetAmountStr.toDoubleOrNull() ?: 500000.0
                         val savedAmt = currentSavedStr.toDoubleOrNull() ?: 0.0
 
-                        defaultGoals.add(
-                            LifeGoalItem(
-                                id = System.currentTimeMillis().toString(),
-                                name = name,
-                                icon = Icons.Default.Flag,
-                                targetYear = yr,
-                                targetAmountCzk = targetAmt,
-                                currentSavedCzk = savedAmt
-                            )
+                        val newItem = com.example.domain.CustomLifeGoalItem(
+                            id = System.currentTimeMillis().toString(),
+                            name = name,
+                            iconName = "flag",
+                            targetYear = yr,
+                            targetAmountCzk = targetAmt,
+                            currentSavedCzk = savedAmt
                         )
+                        val updated = customGoalsList + newItem
+                        onUpdateSettings?.invoke(state.settings.copy(customGoalsJson = serializeCustomLifeGoals(updated)))
                         showAddGoalDialog = false
                     },
                     modifier = Modifier.testTag("save_custom_goal_button")

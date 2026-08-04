@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.SettingsEntity
 import com.example.ui.components.ExportReportDialog
 import com.example.ui.components.HeroHeader
 import com.example.ui.components.ReformDialog
@@ -290,7 +291,8 @@ fun MainScreen(
                                 actionStates = actionStates,
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
-                                }
+                                },
+                                onUpdateSettings = { viewModel.updateSettings(it) }
                             )
                             4 -> SettingsTab(
                                 state = state,

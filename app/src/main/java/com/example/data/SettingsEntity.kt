@@ -80,5 +80,6 @@ data class SettingsEntity(
     val childUniMonthly: Double = 10000.0,
     val rentGrowthPct: Double = 4.0,
     val monteCarloN: Int = 1000,
-    val customExpensesJson: String = "[]"
+    val customExpensesJson: String = "[]",
+    val customGoalsJson: String = "[]"
 )

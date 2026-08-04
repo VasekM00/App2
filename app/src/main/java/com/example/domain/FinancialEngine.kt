@@ -30,6 +30,15 @@ data class CustomExpenseItem(
     val amount: Double
 )
 
+data class CustomLifeGoalItem(
+    val id: String,
+    val name: String,
+    val iconName: String = "flag",
+    val targetYear: Int,
+    val targetAmountCzk: Double,
+    val currentSavedCzk: Double
+)
+
 fun parseCustomExpenses(jsonStr: String): List<CustomExpenseItem> {
     if (jsonStr.isBlank()) return emptyList()
     return try {
@@ -58,6 +67,61 @@ fun serializeCustomExpenses(items: List<CustomExpenseItem>): String {
         obj.put("id", item.id)
         obj.put("name", item.name)
         obj.put("amount", item.amount)
+        array.put(obj)
+    }
+    return array.toString()
+}
+
+fun parseCustomLifeGoals(jsonStr: String): List<CustomLifeGoalItem> {
+    if (jsonStr.isBlank()) {
+        return listOf(
+            CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
+            CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
+            CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
+        )
+    }
+    return try {
+        val array = org.json.JSONArray(jsonStr)
+        val list = mutableListOf<CustomLifeGoalItem>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            list.add(
+                CustomLifeGoalItem(
+                    id = obj.optString("id", i.toString()),
+                    name = obj.optString("name", "Life Goal"),
+                    iconName = obj.optString("iconName", "flag"),
+                    targetYear = obj.optInt("targetYear", 2030),
+                    targetAmountCzk = obj.optDouble("targetAmountCzk", 500_000.0),
+                    currentSavedCzk = obj.optDouble("currentSavedCzk", 0.0)
+                )
+            )
+        }
+        if (list.isEmpty()) {
+            listOf(
+                CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
+                CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
+                CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
+            )
+        } else list
+    } catch (e: Exception) {
+        listOf(
+            CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
+            CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
+            CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
+        )
+    }
+}
+
+fun serializeCustomLifeGoals(items: List<CustomLifeGoalItem>): String {
+    val array = org.json.JSONArray()
+    items.forEach { item ->
+        val obj = org.json.JSONObject()
+        obj.put("id", item.id)
+        obj.put("name", item.name)
+        obj.put("iconName", item.iconName)
+        obj.put("targetYear", item.targetYear)
+        obj.put("targetAmountCzk", item.targetAmountCzk)
+        obj.put("currentSavedCzk", item.currentSavedCzk)
         array.put(obj)
     }
     return array.toString()
