@@ -155,15 +155,23 @@ fun NetWorthChart(
             val paddingLeft = 110f // Space for Y-Axis labels
             val paddingBottom = 60f // Space for X-Axis labels
 
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 24f
+                    isAntiAlias = true
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(240.dp)
             ) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(260.dp)
+                        .height(240.dp)
                         .pointerInput(data, zoomScale) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
@@ -188,11 +196,6 @@ fun NetWorthChart(
 
                     // Draw Y-Axis lines and numeric labels
                     val ySteps = 4
-                    val paint = android.graphics.Paint().apply {
-                        color = textColor
-                        textSize = 24f
-                        isAntiAlias = true
-                    }
 
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
@@ -211,7 +214,7 @@ fun NetWorthChart(
                             fmtCompact(valAtStep),
                             10f,
                             y + 8f,
-                            paint
+                            textPaint
                         )
                     }
 
@@ -243,7 +246,7 @@ fun NetWorthChart(
                                 "${pt.year}",
                                 x - 25f,
                                 plotH + 36f,
-                                paint
+                                textPaint
                             )
                         }
                     }
@@ -405,6 +408,14 @@ fun MonteCarloFanChart(
             val paddingLeft = 110f
             val paddingBottom = 60f
 
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 24f
+                    isAntiAlias = true
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -423,11 +434,6 @@ fun MonteCarloFanChart(
 
                     // Draw Y-Axis lines and numeric labels
                     val ySteps = 4
-                    val paint = android.graphics.Paint().apply {
-                        color = textColor
-                        textSize = 24f
-                        isAntiAlias = true
-                    }
 
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
@@ -444,7 +450,7 @@ fun MonteCarloFanChart(
                             fmtCompact(valAtStep),
                             10f,
                             y + 8f,
-                            paint
+                            textPaint
                         )
                     }
 
@@ -463,7 +469,7 @@ fun MonteCarloFanChart(
                             "${pt.year}",
                             x - 25f,
                             plotH + 36f,
-                            paint
+                            textPaint
                         )
                     }
 
@@ -598,6 +604,14 @@ fun CashFlowProjectionChart(
             val paddingLeft = 110f
             val paddingBottom = 60f
 
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 24f
+                    isAntiAlias = true
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -629,12 +643,6 @@ fun CashFlowProjectionChart(
                     val plotW = w - paddingLeft
                     val plotH = h - paddingBottom
 
-                    val paint = android.graphics.Paint().apply {
-                        color = textColor
-                        textSize = 24f
-                        isAntiAlias = true
-                    }
-
                     // Y-Axis
                     val ySteps = 4
                     for (i in 0..ySteps) {
@@ -652,7 +660,7 @@ fun CashFlowProjectionChart(
                             fmtCompact(valAtStep),
                             10f,
                             y + 8f,
-                            paint
+                            textPaint
                         )
                     }
 
@@ -675,7 +683,7 @@ fun CashFlowProjectionChart(
                                 "${pt.year}",
                                 x - 25f,
                                 plotH + 36f,
-                                paint
+                                textPaint
                             )
                         }
                     }

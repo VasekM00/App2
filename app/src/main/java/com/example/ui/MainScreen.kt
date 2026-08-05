@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -266,8 +268,12 @@ fun MainScreen(
                     }
                 } else {
                     // Active Tab Content
-                    Box(modifier = Modifier.weight(1f)) {
-                        when (selectedTab) {
+                    Crossfade(
+                        targetState = selectedTab,
+                        animationSpec = tween(durationMillis = 150),
+                        modifier = Modifier.weight(1f)
+                    ) { tabIndex ->
+                        when (tabIndex) {
                             0 -> OverviewTab(state = state)
                             1 -> CashFlowTab(
                                 state = state,

@@ -306,21 +306,27 @@ object FinancialEngine {
         )
     }
 
-    // ★ LEPŠÍ PENZIJKO REFORM: Doubled State Subsidy (40%) for youth under 30 (max 680 CZK/mo)
-    fun dpsSubsidy(monthlyDeposit: Double, age: Int): Double {
-        if (monthlyDeposit < 500) return 0.0
-        val rate = if (age < 30) 0.40 else 0.20
-        val maxSub = if (age < 30) 680.0 else 340.0
+    // ★ LEPŠÍ PENZIJKO REFORM: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps
+    fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null): Double {
+        val minDeposit = settings?.dpsMinDepositForSubsidy ?: 500.0
+        if (monthlyDeposit < minDeposit) return 0.0
+        val youthAge = settings?.dpsYouthAgeLimit ?: 30
+        val stdRate = (settings?.dpsSubsidyRateStandardPct ?: 20.0) / 100.0
+        val youthRate = (settings?.dpsSubsidyRateYouthPct ?: 40.0) / 100.0
+        val rate = if (age < youthAge) youthRate else stdRate
+        val youthCap = settings?.dpsYouthSubsidyMaxMonthly ?: 680.0
+        val standardCap = settings?.dpsStandardSubsidyMaxMonthly ?: 340.0
+        val maxSub = if (age < youthAge) youthCap else standardCap
         return min(monthlyDeposit * rate, maxSub)
     }
 
     fun annualRetirementDeduction(settings: SettingsEntity): Double {
         val vDipAnnual = settings.dipContributionMonthly * 12.0
-        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - 1700.0) * 12.0
+        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDeduction = min(vDipAnnual + vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
         val eDipAnnual = settings.eDipContributionMonthly * 12.0
-        val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - 1700.0) * 12.0
+        val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val eDeduction = min(eDipAnnual + eDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
         return vDeduction + eDeduction
@@ -435,8 +441,8 @@ object FinancialEngine {
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
             val currentAge = settings.primaryAge + (m / 12)
-            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge)
-            val subE = dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge)
+            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
+            val subE = dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings)
             val sub = subV + subE
 
             totalSubsidy += sub
@@ -452,8 +458,8 @@ object FinancialEngine {
         if (monthsTo36 in 1..totalMonths) {
             for (m in 0 until monthsTo36) {
                 val currentAge = settings.primaryAge + (m / 12)
-                val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge)
-                val subE = dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge)
+                val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
+                val subE = dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings)
                 balAt36 = (balAt36 + own + subV + subE + emp) * (1.0 + monthlyRateDPS)
             }
         }
@@ -530,8 +536,59 @@ object FinancialEngine {
 
     private fun sin(rad: Double) = kotlin.math.sin(rad)
 
+    private data class MonteCarloKey(
+        val monteCarloN: Int,
+        val portfolioNominalReturnPct: Double,
+        val cpiInflationPct: Double,
+        val safeWithdrawalRatePct: Double,
+        val liquidPortfolioCurrent: Double,
+        val eLiquidPortfolioCurrent: Double,
+        val portuDcaMonthly: Double,
+        val ePortuDcaMonthly: Double,
+        val baseYear: Int,
+        val primaryAge: Int,
+        val eReturnYear: Int,
+        val eStartingSalary: Double,
+        val eReinvestedPct: Double,
+        val lumpSumInclude: Boolean,
+        val lumpSumYear: Int,
+        val lumpSumAmount: Double,
+        val horizonYears: Int
+    )
+
+    @Volatile
+    private var cachedMcKey: MonteCarloKey? = null
+    @Volatile
+    private var cachedMcResult: MonteCarloResult? = null
+
     fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35): MonteCarloResult {
-        val sims = settings.monteCarloN.coerceIn(500, 2000)
+        val currentKey = MonteCarloKey(
+            monteCarloN = settings.monteCarloN,
+            portfolioNominalReturnPct = settings.portfolioNominalReturnPct,
+            cpiInflationPct = settings.cpiInflationPct,
+            safeWithdrawalRatePct = settings.safeWithdrawalRatePct,
+            liquidPortfolioCurrent = settings.liquidPortfolioCurrent,
+            eLiquidPortfolioCurrent = settings.eLiquidPortfolioCurrent,
+            portuDcaMonthly = settings.portuDcaMonthly,
+            ePortuDcaMonthly = settings.ePortuDcaMonthly,
+            baseYear = settings.baseYear,
+            primaryAge = settings.primaryAge,
+            eReturnYear = settings.eReturnYear,
+            eStartingSalary = settings.eStartingSalary,
+            eReinvestedPct = settings.eReinvestedPct,
+            lumpSumInclude = settings.lumpSumInclude,
+            lumpSumYear = settings.lumpSumYear,
+            lumpSumAmount = settings.lumpSumAmount,
+            horizonYears = horizonYears
+        )
+
+        cachedMcResult?.let { result ->
+            if (currentKey == cachedMcKey) {
+                return result
+            }
+        }
+
+        val sims = settings.monteCarloN.coerceIn(100, 400)
         val meanReturn = settings.portfolioNominalReturnPct / 100.0
         val sigma = 0.15
         val random = Random(42) // Fixed seed for stable UI state
@@ -602,7 +659,7 @@ object FinancialEngine {
         val bestCaseAge = if (hitAges.isNotEmpty()) hitAges[(hitAges.size * 0.05).toInt().coerceIn(0, hitAges.size - 1)] else null
         val worstCaseAge = if (hitAges.isNotEmpty()) hitAges[(hitAges.size * 0.95).toInt().coerceIn(0, hitAges.size - 1)] else null
 
-        return MonteCarloResult(
+        val result = MonteCarloResult(
             successRatePct = successRatePct,
             medianFireAge = medianFireAge,
             bestCaseAge = bestCaseAge,
@@ -610,6 +667,10 @@ object FinancialEngine {
             fanPoints = fanPoints,
             probabilityTable = probTable
         )
+
+        cachedMcKey = currentKey
+        cachedMcResult = result
+        return result
     }
 
     fun calculate(settings: SettingsEntity, actionStates: Map<String, Boolean> = emptyMap()): FullCalculationState {
@@ -631,7 +692,7 @@ object FinancialEngine {
         val spouseInc = spouseOwnIncomeAnnual(settings.baseYear, settings)
         val spouseEligible = settings.includeSpouseCredit &&
                 settings.hasChildUnder3 &&
-                (spouseInc <= 68000.0)
+                (spouseInc <= settings.spouseIncomeLimitAnnual)
 
         val childBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >= (settings.minWageMonthly * 6.0)
 
@@ -641,7 +702,7 @@ object FinancialEngine {
 
         val taxHelper = TaxReturnHelperData(
             year = settings.baseYear,
-            taxpayerCredit = 30840.0,
+            taxpayerCredit = settings.taxpayerCreditAnnual,
             spouseCredit = spouseCreditVal,
             childBonus = childBonusVal,
             retirementDeductionBase = annualRetirementDeduction(settings),

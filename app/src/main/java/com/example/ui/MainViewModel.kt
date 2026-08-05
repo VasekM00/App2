@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -75,7 +77,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (swrOver != null) effectiveSettings = effectiveSettings.copy(safeWithdrawalRatePct = swrOver)
 
         FinancialEngine.calculate(effectiveSettings, actions)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).conflate().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = FinancialEngine.calculate(SettingsEntity())

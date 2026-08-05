@@ -14,11 +14,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.martinufinancials.fire"
+    applicationId = "com.aistudio.martinufinancials.fire2"
     minSdk = 24
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 3
+    versionName = "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -32,22 +32,40 @@ android {
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      val debugKs = file("${rootDir}/debug.keystore")
+      if (debugKs.exists()) {
+        storeFile = debugKs
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
-      signingConfig = if (releaseKeystore.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debugConfig")
+      val debugKeystore = file("${rootDir}/debug.keystore")
+      signingConfig = if (releaseKeystore.exists()) {
+        signingConfigs.getByName("release")
+      } else if (debugKeystore.exists()) {
+        signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfigs.getByName("debug")
+      }
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      val debugKeystore = file("${rootDir}/debug.keystore")
+      signingConfig = if (debugKeystore.exists()) {
+        signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfigs.getByName("debug")
+      }
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

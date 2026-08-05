@@ -64,12 +64,23 @@ data class SettingsEntity(
     val otherDiscretionaryMonthly: Double = 1500.0,
     // Tax parameters
     val taxRatePct: Double = 15.0,
+    val taxRateSecondPct: Double = 23.0,
+    val taxSecondBracketThresholdAnnual: Double = 1582812.0,
+    val taxpayerCreditAnnual: Double = 30840.0,
     val taxDeductionCeilingAnnual: Double = 48000.0,
     val spouseTaxCreditAnnual: Double = 24840.0,
+    val spouseIncomeLimitAnnual: Double = 68000.0,
     val childTaxBonusAnnual: Double = 15204.0,
     val includeSpouseCredit: Boolean = true,
     val hasChildUnder3: Boolean = true,
     val minWageMonthly: Double = 22400.0,
+    val dpsDeductionThresholdMonthly: Double = 1700.0,
+    val dpsStandardSubsidyMaxMonthly: Double = 340.0,
+    val dpsYouthSubsidyMaxMonthly: Double = 680.0,
+    val dpsMinDepositForSubsidy: Double = 500.0,
+    val dpsYouthAgeLimit: Int = 30,
+    val dpsSubsidyRateStandardPct: Double = 20.0,
+    val dpsSubsidyRateYouthPct: Double = 40.0,
     // Child expenses
     val childExpensesEnabled: Boolean = true,
     val childBirthYear: Int = 2024,
@@ -79,7 +90,7 @@ data class SettingsEntity(
     val childTeenMonthly: Double = 13000.0,
     val childUniMonthly: Double = 10000.0,
     val rentGrowthPct: Double = 4.0,
-    val monteCarloN: Int = 1000,
+    val monteCarloN: Int = 400,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]"
 )

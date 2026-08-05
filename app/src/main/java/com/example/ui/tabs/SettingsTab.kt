@@ -270,11 +270,11 @@ fun SettingsTab(
                             TaxSummaryRow(
                                 label = "Spouse Income (Calculated)",
                                 status = com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseOwnIncome),
-                                isGood = state.taxReturnHelper.spouseOwnIncome <= 68000.0
+                                isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                             )
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             TaxSummaryRow(
-                                label = "Spouse Tax Credit (<68k income & child <3)",
+                                label = "Spouse Tax Credit (<${(s.spouseIncomeLimitAnnual / 1000).toInt()}k income & child <3)",
                                 status = if (state.taxReturnHelper.spouseEligible) "Eligible (+${com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseCredit)})" else "Not Eligible",
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
@@ -296,14 +296,31 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Tax Parameters
-                    SettingsGroupCard(title = "Tax Parameters") {
-                        NumberSettingField(label = "Tax Rate (%)", value = s.taxRatePct, onValueChange = { onUpdateSettings(s.copy(taxRatePct = it)) })
-                        NumberSettingField(label = "Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
+                    SettingsGroupCard(title = "Tax Rates & Thresholds (Future-Proof)") {
+                        NumberSettingField(label = "Base Income Tax Rate (%)", value = s.taxRatePct, onValueChange = { onUpdateSettings(s.copy(taxRatePct = it)) })
+                        NumberSettingField(label = "Higher Bracket Tax Rate (%)", value = s.taxRateSecondPct, onValueChange = { onUpdateSettings(s.copy(taxRateSecondPct = it)) })
+                        NumberSettingField(label = "Higher Bracket Threshold Annual (CZK)", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
+                        NumberSettingField(label = "Basic Taxpayer Credit Annual (CZK)", value = s.taxpayerCreditAnnual, onValueChange = { onUpdateSettings(s.copy(taxpayerCreditAnnual = it)) })
+                        NumberSettingField(label = "Retirement Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
                         NumberSettingField(label = "Spouse Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
+                        NumberSettingField(label = "Spouse Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
                         NumberSettingField(label = "Child Tax Bonus Annual (CZK)", value = s.childTaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(childTaxBonusAnnual = it)) })
                         BooleanSettingField(label = "Include Spouse Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
                         BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { onUpdateSettings(s.copy(hasChildUnder3 = it)) })
                         NumberSettingField(label = "Min Wage Monthly (CZK)", value = s.minWageMonthly, onValueChange = { onUpdateSettings(s.copy(minWageMonthly = it)) })
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Pension Reform & Subsidies
+                    SettingsGroupCard(title = "Pension Subsidies & Reform Rules") {
+                        NumberSettingField(label = "DPS Deduction Threshold Monthly (CZK)", value = s.dpsDeductionThresholdMonthly, onValueChange = { onUpdateSettings(s.copy(dpsDeductionThresholdMonthly = it)) })
+                        NumberSettingField(label = "DPS Min Deposit For Subsidy Monthly (CZK)", value = s.dpsMinDepositForSubsidy, onValueChange = { onUpdateSettings(s.copy(dpsMinDepositForSubsidy = it)) })
+                        NumberSettingField(label = "DPS Standard State Subsidy Max Monthly (CZK)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsStandardSubsidyMaxMonthly = it)) })
+                        NumberSettingField(label = "DPS Standard Subsidy Rate (%)", value = s.dpsSubsidyRateStandardPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateStandardPct = it)) })
+                        NumberSettingField(label = "DPS Youth Age Limit (Years)", value = s.dpsYouthAgeLimit.toDouble(), onValueChange = { onUpdateSettings(s.copy(dpsYouthAgeLimit = it.toInt())) })
+                        NumberSettingField(label = "DPS Youth State Subsidy Max Monthly (CZK)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsYouthSubsidyMaxMonthly = it)) })
+                        NumberSettingField(label = "DPS Youth Subsidy Rate (%)", value = s.dpsSubsidyRateYouthPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateYouthPct = it)) })
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
