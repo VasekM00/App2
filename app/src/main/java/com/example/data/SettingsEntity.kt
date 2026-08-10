@@ -81,9 +81,16 @@ data class SettingsEntity(
     val dpsYouthAgeLimit: Int = 30,
     val dpsSubsidyRateStandardPct: Double = 20.0,
     val dpsSubsidyRateYouthPct: Double = 40.0,
-    // Child expenses
+    // Child expenses & Multi-child settings
     val childExpensesEnabled: Boolean = true,
-    val childBirthYear: Int = 2024,
+    val child1Enabled: Boolean = true,
+    val child1BirthYear: Int = 2024,
+    val child2Enabled: Boolean = true,
+    val child2BirthYear: Int = 2027,
+    val childBirthYear: Int = 2024, // Legacy alias for backward compatibility
+    val child1TaxBonusAnnual: Double = 15204.0,
+    val child2TaxBonusAnnual: Double = 22320.0,
+    val child3PlusTaxBonusAnnual: Double = 27840.0,
     val childToddlerMonthly: Double = 4800.0,
     val childPreschoolMonthly: Double = 6500.0,
     val childSchoolMonthly: Double = 8500.0,
@@ -91,6 +98,15 @@ data class SettingsEntity(
     val childUniMonthly: Double = 10000.0,
     val rentGrowthPct: Double = 4.0,
     val monteCarloN: Int = 400,
+    // Option 2: Housing & Mortgage Buy vs Rent Analysis
+    val enableMortgageSimulation: Boolean = false,
+    val mortgagePurchaseYear: Int = 2028,
+    val propertyPrice: Double = 7000000.0,
+    val downPaymentPct: Double = 20.0,
+    val mortgageInterestRatePct: Double = 4.5,
+    val mortgageTenureYears: Int = 30,
+    val propertyAppreciationPct: Double = 3.5,
+    val maintenanceAndTaxAnnualPct: Double = 1.0,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]"
 )

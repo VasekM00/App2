@@ -84,6 +84,8 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 
+import com.example.ui.components.HousingCostAndEquityChart
+
 data class LifeGoalItem(
     val id: String,
     val name: String,
@@ -103,7 +105,7 @@ fun PlanTab(
     modifier: Modifier = Modifier
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
-    val subTabs = listOf("FIRE Roadmap & Tasks", "Life Goals Simulator", "Pension (Lepší Penzijko)")
+    val subTabs = listOf("FIRE Roadmap & Tasks", "Housing: Buy vs Rent", "Life Goals Simulator", "Pension (Lepší Penzijko)")
 
     Column(
         modifier = modifier
@@ -118,7 +120,7 @@ fun PlanTab(
                 Tab(
                     selected = selectedSubTab == index,
                     onClick = { selectedSubTab = index },
-                    text = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) },
+                    text = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
                     modifier = Modifier.testTag("plan_subtab_$index")
                 )
             }
@@ -126,8 +128,9 @@ fun PlanTab(
 
         when (selectedSubTab) {
             0 -> FireRoadmapSubTab(state, actionStates, onToggleAction)
-            1 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
-            2 -> PensionSubTab(state)
+            1 -> HousingBuyVsRentSubTab(state, onUpdateSettings)
+            2 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
+            3 -> PensionSubTab(state)
         }
     }
 }
@@ -873,6 +876,196 @@ private fun PensionRow(label: String, value: String, isBold: Boolean = false) {
             text = value,
             style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = BrandTeal)
             else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+        )
+    }
+}
+
+@Composable
+private fun HousingBuyVsRentSubTab(
+    state: FullCalculationState,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+) {
+    val scrollState = rememberScrollState()
+    val ha = state.housingAnalysis
+    val s = state.settings
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Overview Header & Mode Toggle
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Home, contentDescription = null, tint = BrandTeal)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Housing: Buy vs. Rent Analysis",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    AssistChip(
+                        onClick = {
+                            onUpdateSettings?.invoke(s.copy(enableMortgageSimulation = !s.enableMortgageSimulation))
+                        },
+                        label = { Text(if (ha.enabled) "Mortgage Active" else "Rent Active", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (ha.enabled) BrandTeal.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = if (ha.enabled) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Evaluate long-term wealth impact of property acquisition at year ${ha.purchaseYear} (${fmtCompact(ha.propertyPrice)} CZK price) vs. lifelong renting with 3-4% CPI inflation.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+        }
+
+        // Side-by-Side Net Worth at Age 60 Comparison
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Projected Net Worth at Age 60",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Renting Strategy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                fmtCompact(ha.netWorthAt60Renting),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            )
+                            Text("Liquid ETFs only", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Buying Strategy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                fmtCompact(ha.netWorthAt60Buying),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = BrandTeal
+                                )
+                            )
+                            Text("ETFs + Property Equity", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val isBuyAdv = ha.advantageAt60 >= 0
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isBuyAdv) GoodGreen.copy(alpha = 0.15f) else GoodGreen.copy(alpha = 0.1f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = if (isBuyAdv) GoodGreen else BrandTeal,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = if (isBuyAdv) "Buying provides a +${fmtCompact(ha.advantageAt60)} net worth advantage at age 60 due to inflation-hedged property equity."
+                            else "Renting provides a +${fmtCompact(-ha.advantageAt60)} advantage due to higher early ETF compounding.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Mortgage & Outlay Breakdown Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Mortgage & Monthly Housing Structure",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                HousingMetricRow("Property Price (${ha.purchaseYear}):", fmtCompact(ha.propertyPrice))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Down Payment (${s.downPaymentPct.toInt()}%):", fmtCompact(ha.downPaymentAmount))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Loan Amount:", fmtCompact(ha.loanAmount))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Monthly Mortgage Payment (${s.mortgageInterestRatePct}%):", "${fmtCZK(ha.monthlyMortgagePayment)}/mo")
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Monthly Maintenance & Tax (${s.maintenanceAndTaxAnnualPct}%):", "${fmtCZK(ha.monthlyMaintenanceCost)}/mo")
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Total Initial Monthly Housing Cost:", "${fmtCZK(ha.totalInitialMonthlyHousingCost)}/mo", isBold = true)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Rent at Year ${ha.purchaseYear}:", "${fmtCZK(ha.currentMonthlyRentAtPurchase)}/mo")
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                HousingMetricRow("Total 30-Year Mortgage Interest Paid:", fmtCompact(ha.totalInterestPaid30Y), isBold = true, color = BrandGold)
+            }
+        }
+
+        // Cost & Equity Chart
+        HousingCostAndEquityChart(points = ha.monthlyCostComparisonPoints)
+    }
+}
+
+@Composable
+private fun HousingMetricRow(label: String, value: String, isBold: Boolean = false, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+            else MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = value,
+            style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = color)
+            else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, color = color)
         )
     }
 }

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.domain.FullCalculationState
 import com.example.ui.components.MonteCarloFanChart
+import com.example.ui.components.StressComparisonChart
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.util.Formatters.fmtCZK
@@ -345,6 +346,83 @@ private fun SensitivitySubTab(
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+        // Multi-Scenario Chart
+        StressComparisonChart(scenarios = state.stressScenarios)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Scenario Breakdown Cards
+        Text(
+            text = "Economic Stress Regimes Breakdown",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        state.stressScenarios.forEach { scenario ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .testTag("stress_scenario_card_${scenario.id}"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (scenario.id == "baseline") MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${scenario.iconEmoji} ${scenario.name}",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = scenario.fireAge?.let { "FIRE Age: $it" } ?: "FIRE: Exceeds 35y",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                    Text(
+                        text = scenario.description,
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    ProjectionMetricRow(
+                        label = "Market Return / Inflation:",
+                        value = "${String.format("%.1f%%", scenario.nominalReturnPct)} / ${String.format("%.1f%%", scenario.cpiInflationPct)} CPI"
+                    )
+                    ProjectionMetricRow(
+                        label = "Today's FIRE Target:",
+                        value = fmtCompact(scenario.fireTargetToday)
+                    )
+                    ProjectionMetricRow(
+                        label = "Monte Carlo Success Rate:",
+                        value = "${String.format("%.1f%%", scenario.successRatePct)}"
+                    )
+                    ProjectionMetricRow(
+                        label = "Emergency Reserve Survival:",
+                        value = "${String.format("%.1f", scenario.emergencySurvivalMonths)} months"
+                    )
+                    ProjectionMetricRow(
+                        label = "Net Worth at Age 60:",
+                        value = fmtCompact(scenario.netWorthAt60),
+                        isBold = true,
+                        highlightColor = BrandTeal
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),

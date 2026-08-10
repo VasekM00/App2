@@ -48,8 +48,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.HousingYearComparisonPoint
 import com.example.domain.MonteCarloPoint
 import com.example.domain.PortfolioYearPoint
+import com.example.domain.StressScenarioResult
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -756,5 +758,322 @@ fun CashFlowProjectionChart(
         }
     }
 }
+
+@Composable
+fun StressComparisonChart(
+    scenarios: List<StressScenarioResult>,
+    modifier: Modifier = Modifier
+) {
+    if (scenarios.isEmpty()) return
+
+    val scenarioColors = listOf(
+        BrandTeal,                     // Baseline
+        GoodGreen,                     // Bull
+        BadRed,                        // Stagflation
+        BrandGold,                     // Crash
+        Color(0xFF9C27B0)              // Inflation Shock
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("stress_comparison_chart_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Stress & Scenario Multi-Trajectory Comparison",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+            Text(
+                text = "Comparing portfolio growth across economic regimes over 35 years",
+                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Legend
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                scenarios.chunked(3).forEach { rowScenarios ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        rowScenarios.forEachIndexed { idx, sc ->
+                            val colorIdx = scenarios.indexOf(sc) % scenarioColors.size
+                            val color = scenarioColors[colorIdx]
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "${sc.iconEmoji} ${sc.name}", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val firstTraj = scenarios.first().trajectory
+            val maxVal = (scenarios.flatMap { it.trajectory }.maxOfOrNull { it.portfolio } ?: 1000000.0).coerceAtLeast(100.0) * 1.1
+            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+
+            val paddingLeft = 110f
+            val paddingBottom = 60f
+
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 24f
+                    isAntiAlias = true
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val plotW = w - paddingLeft
+                    val plotH = h - paddingBottom
+
+                    // Y-Axis
+                    val ySteps = 4
+                    for (i in 0..ySteps) {
+                        val valAtStep = maxVal * i / ySteps
+                        val y = plotH - (plotH * i / ySteps)
+
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(paddingLeft, y),
+                            end = Offset(w, y),
+                            strokeWidth = 1.5f
+                        )
+
+                        drawContext.canvas.nativeCanvas.drawText(
+                            fmtCompact(valAtStep),
+                            10f,
+                            y + 8f,
+                            textPaint
+                        )
+                    }
+
+                    // X-Axis
+                    val stepX = if (firstTraj.size > 1) plotW / (firstTraj.size - 1).toFloat() else plotW
+                    val xStepCount = 5
+                    for (i in 0 until firstTraj.size step max(1, firstTraj.size / xStepCount)) {
+                        val pt = firstTraj[i]
+                        val x = paddingLeft + (i * stepX)
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(x, plotH),
+                            end = Offset(x, plotH + 8f),
+                            strokeWidth = 2f
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "${pt.year}",
+                            x - 25f,
+                            plotH + 36f,
+                            textPaint
+                        )
+                    }
+
+                    drawContext.canvas.save()
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+
+                    scenarios.forEachIndexed { sIdx, scenario ->
+                        val color = scenarioColors[sIdx % scenarioColors.size]
+                        val path = Path()
+                        scenario.trajectory.forEachIndexed { i, pt ->
+                            val x = paddingLeft + (i * stepX)
+                            val y = plotH - (plotH * (pt.portfolio / maxVal)).toFloat()
+                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        drawPath(
+                            path = path,
+                            color = color,
+                            style = Stroke(
+                                width = if (scenario.id == "baseline") 5f else 3f,
+                                cap = StrokeCap.Round,
+                                pathEffect = if (scenario.id == "crash") PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) else null
+                            )
+                        )
+                    }
+
+                    drawContext.canvas.restore()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HousingCostAndEquityChart(
+    points: List<HousingYearComparisonPoint>,
+    modifier: Modifier = Modifier
+) {
+    if (points.isEmpty()) return
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("housing_cost_equity_chart_card"),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Monthly Housing Cost Crossover & Equity Accrual",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+            Text(
+                text = "Rent grows with inflation (3-4%/yr) vs. Fixed Mortgage payment + Maintenance",
+                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Legend
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(BadRed, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "Monthly Rent Cost", style = MaterialTheme.typography.labelSmall)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(BrandTeal, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "Monthly Buy Cost", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val maxCost = (points.flatMap { listOf(it.rentMonthly, it.buyMonthly) }.maxOrNull() ?: 50000.0).coerceAtLeast(100.0) * 1.15
+            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+
+            val paddingLeft = 110f
+            val paddingBottom = 60f
+
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 24f
+                    isAntiAlias = true
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val plotW = w - paddingLeft
+                    val plotH = h - paddingBottom
+
+                    // Y-Axis
+                    val ySteps = 4
+                    for (i in 0..ySteps) {
+                        val valAtStep = maxCost * i / ySteps
+                        val y = plotH - (plotH * i / ySteps)
+
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(paddingLeft, y),
+                            end = Offset(w, y),
+                            strokeWidth = 1.5f
+                        )
+
+                        drawContext.canvas.nativeCanvas.drawText(
+                            fmtCompact(valAtStep),
+                            10f,
+                            y + 8f,
+                            textPaint
+                        )
+                    }
+
+                    // X-Axis
+                    val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
+                    val xStepCount = 5
+                    for (i in 0 until points.size step max(1, points.size / xStepCount)) {
+                        val pt = points[i]
+                        val x = paddingLeft + (i * stepX)
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(x, plotH),
+                            end = Offset(x, plotH + 8f),
+                            strokeWidth = 2f
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "${pt.year}",
+                            x - 25f,
+                            plotH + 36f,
+                            textPaint
+                        )
+                    }
+
+                    drawContext.canvas.save()
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+
+                    // Rent Path
+                    val rentPath = Path()
+                    points.forEachIndexed { i, pt ->
+                        val x = paddingLeft + (i * stepX)
+                        val y = plotH - (plotH * (pt.rentMonthly / maxCost)).toFloat()
+                        if (i == 0) rentPath.moveTo(x, y) else rentPath.lineTo(x, y)
+                    }
+                    drawPath(
+                        path = rentPath,
+                        color = BadRed,
+                        style = Stroke(width = 4f, cap = StrokeCap.Round)
+                    )
+
+                    // Buy Path
+                    val buyPath = Path()
+                    points.forEachIndexed { i, pt ->
+                        val x = paddingLeft + (i * stepX)
+                        val y = plotH - (plotH * (pt.buyMonthly / maxCost)).toFloat()
+                        if (i == 0) buyPath.moveTo(x, y) else buyPath.lineTo(x, y)
+                    }
+                    drawPath(
+                        path = buyPath,
+                        color = BrandTeal,
+                        style = Stroke(width = 4f, cap = StrokeCap.Round)
+                    )
+
+                    drawContext.canvas.restore()
+                }
+            }
+        }
+    }
+}
+
 
 

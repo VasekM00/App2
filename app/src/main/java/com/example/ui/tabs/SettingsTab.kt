@@ -325,15 +325,47 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Child Settings & Expenses
-                    SettingsGroupCard(title = "Child Settings & Expenses") {
-                        BooleanSettingField(label = "Enable Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
-                        NumberSettingField(label = "Child Birth Year", value = s.childBirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(childBirthYear = it.toInt())) })
+                    // Child Settings & Expenses (2 Children Support)
+                    SettingsGroupCard(title = "Child & Family Planning (2 Children)") {
+                        BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        
+                        BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { onUpdateSettings(s.copy(child1Enabled = it)) })
+                        NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt(), childBirthYear = it.toInt())) })
+                        NumberSettingField(label = "Child 1 Tax Bonus Annual (CZK)", value = s.child1TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child1TaxBonusAnnual = it)) })
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        BooleanSettingField(label = "Include Child 2", checked = s.child2Enabled, onCheckedChange = { onUpdateSettings(s.copy(child2Enabled = it)) })
+                        NumberSettingField(label = "Child 2 Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
+                        NumberSettingField(label = "Child 2 Tax Bonus Annual (CZK)", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text(
+                            text = "Stage Expense Estimates (per Child)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         NumberSettingField(label = "Toddler Monthly (CZK)", value = s.childToddlerMonthly, onValueChange = { onUpdateSettings(s.copy(childToddlerMonthly = it)) })
                         NumberSettingField(label = "Preschool Monthly (CZK)", value = s.childPreschoolMonthly, onValueChange = { onUpdateSettings(s.copy(childPreschoolMonthly = it)) })
                         NumberSettingField(label = "School Monthly (CZK)", value = s.childSchoolMonthly, onValueChange = { onUpdateSettings(s.copy(childSchoolMonthly = it)) })
                         NumberSettingField(label = "Teen Monthly (CZK)", value = s.childTeenMonthly, onValueChange = { onUpdateSettings(s.copy(childTeenMonthly = it)) })
                         NumberSettingField(label = "Uni Monthly (CZK)", value = s.childUniMonthly, onValueChange = { onUpdateSettings(s.copy(childUniMonthly = it)) })
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Housing & Mortgage Buy vs Rent Settings
+                    SettingsGroupCard(title = "Housing & Mortgage (Buy vs. Rent)") {
+                        BooleanSettingField(label = "Enable Property Purchase / Mortgage", checked = s.enableMortgageSimulation, onCheckedChange = { onUpdateSettings(s.copy(enableMortgageSimulation = it)) })
+                        NumberSettingField(label = "Purchase Year", value = s.mortgagePurchaseYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(mortgagePurchaseYear = it.toInt())) })
+                        NumberSettingField(label = "Property Purchase Price (CZK)", value = s.propertyPrice, onValueChange = { onUpdateSettings(s.copy(propertyPrice = it)) })
+                        NumberSettingField(label = "Down Payment (%)", value = s.downPaymentPct, onValueChange = { onUpdateSettings(s.copy(downPaymentPct = it)) })
+                        NumberSettingField(label = "Mortgage Interest Rate (%)", value = s.mortgageInterestRatePct, onValueChange = { onUpdateSettings(s.copy(mortgageInterestRatePct = it)) })
+                        NumberSettingField(label = "Mortgage Tenure (Years)", value = s.mortgageTenureYears.toDouble(), onValueChange = { onUpdateSettings(s.copy(mortgageTenureYears = it.toInt())) })
+                        NumberSettingField(label = "Property Annual Appreciation (%)", value = s.propertyAppreciationPct, onValueChange = { onUpdateSettings(s.copy(propertyAppreciationPct = it)) })
+                        NumberSettingField(label = "Maintenance & Property Tax Annual (%)", value = s.maintenanceAndTaxAnnualPct, onValueChange = { onUpdateSettings(s.copy(maintenanceAndTaxAnnualPct = it)) })
                     }
                 }
                 4 -> {
