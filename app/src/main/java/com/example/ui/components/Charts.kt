@@ -42,13 +42,13 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.domain.HousingYearComparisonPoint
 import com.example.domain.MonteCarloPoint
 import com.example.domain.PortfolioYearPoint
 import com.example.domain.StressScenarioResult
@@ -65,6 +65,9 @@ fun NetWorthChart(
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
+
+    val cTeal = BrandTeal
+    val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -152,7 +155,7 @@ fun NetWorthChart(
             ) * 1.1
 
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
             val paddingLeft = 110f // Space for Y-Axis labels
             val paddingBottom = 60f // Space for X-Axis labels
@@ -286,7 +289,7 @@ fun NetWorthChart(
                     // Draw Portfolio path
                     drawPath(
                         path = portfolioPath,
-                        color = BrandTeal,
+                        color = cTeal,
                         style = Stroke(width = 6f, cap = StrokeCap.Round)
                     )
 
@@ -295,7 +298,7 @@ fun NetWorthChart(
                         val fx = paddingLeft + panOffsetX + (fireReachedIndex * stepX)
                         val fy = plotH - (plotH * (data[fireReachedIndex].portfolio / maxVal)).toFloat()
                         drawCircle(color = BrandGold, radius = 12f, center = Offset(fx, fy))
-                        drawCircle(color = Color.White, radius = 6f, center = Offset(fx, fy))
+                        drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
 
                     // Draw Selected Point Highlight Line and Marker
@@ -303,14 +306,14 @@ fun NetWorthChart(
                         val sx = paddingLeft + panOffsetX + (idx * stepX)
                         val sy = plotH - (plotH * (data[idx].portfolio / maxVal)).toFloat()
                         drawLine(
-                            color = BrandTeal.copy(alpha = 0.5f),
+                            color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
                             end = Offset(sx, plotH),
                             strokeWidth = 2f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
                         )
-                        drawCircle(color = BrandTeal, radius = 14f, center = Offset(sx, sy))
-                        drawCircle(color = Color.White, radius = 7f, center = Offset(sx, sy))
+                        drawCircle(color = cTeal, radius = 14f, center = Offset(sx, sy))
+                        drawCircle(color = cCardSurface, radius = 7f, center = Offset(sx, sy))
                     }
 
                     drawContext.canvas.restore()
@@ -383,6 +386,10 @@ fun MonteCarloFanChart(
 ) {
     if (points.isEmpty()) return
 
+    val cTeal = BrandTeal
+    val cGreen = GoodGreen
+    val cRed = BadRed
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -405,7 +412,7 @@ fun MonteCarloFanChart(
 
             val maxVal = points.maxOf { maxOf(it.p95, it.target) } * 1.1
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
             val paddingLeft = 110f
             val paddingBottom = 60f
@@ -496,7 +503,7 @@ fun MonteCarloFanChart(
 
                     drawPath(
                         path = fillPath,
-                        color = BrandTeal.copy(alpha = 0.18f)
+                        color = cTeal.copy(alpha = 0.18f)
                     )
 
                     // P95 Line (Green)
@@ -506,7 +513,7 @@ fun MonteCarloFanChart(
                         val y = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
                         if (i == 0) p95Path.moveTo(x, y) else p95Path.lineTo(x, y)
                     }
-                    drawPath(p95Path, GoodGreen, style = Stroke(width = 3f))
+                    drawPath(p95Path, cGreen, style = Stroke(width = 3f))
 
                     // P5 Line (Red)
                     val p5Path = Path()
@@ -515,7 +522,7 @@ fun MonteCarloFanChart(
                         val y = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
                         if (i == 0) p5Path.moveTo(x, y) else p5Path.lineTo(x, y)
                     }
-                    drawPath(p5Path, BadRed, style = Stroke(width = 3f))
+                    drawPath(p5Path, cRed, style = Stroke(width = 3f))
 
                     // P50 Median Line (Teal Thick)
                     val p50Path = Path()
@@ -524,7 +531,7 @@ fun MonteCarloFanChart(
                         val y = plotH - (plotH * (pt.p50 / maxVal)).toFloat()
                         if (i == 0) p50Path.moveTo(x, y) else p50Path.lineTo(x, y)
                     }
-                    drawPath(p50Path, BrandTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+                    drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
 
                     drawContext.canvas.restore()
                 }
@@ -539,6 +546,8 @@ fun CashFlowProjectionChart(
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
+
+    val cTeal = BrandTeal
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -601,7 +610,7 @@ fun CashFlowProjectionChart(
 
             val maxVal = (data.maxOf { maxOf(it.reinvestAnnual, it.investedAnnual) } * 1.25).coerceAtLeast(100000.0)
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
             val paddingLeft = 110f
             val paddingBottom = 60f
@@ -700,7 +709,7 @@ fun CashFlowProjectionChart(
                         val y = plotH - (plotH * (pt.investedAnnual / maxVal)).toFloat()
                         if (i == 0) addedPath.moveTo(x, y) else addedPath.lineTo(x, y)
                     }
-                    drawPath(addedPath, BrandTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+                    drawPath(addedPath, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
 
                     // Reinvested Annual path (Gold)
                     val reinvestedPath = Path()
@@ -716,13 +725,13 @@ fun CashFlowProjectionChart(
                         val sx = paddingLeft + panOffsetX + (idx * stepX)
                         val sy = plotH - (plotH * (data[idx].investedAnnual / maxVal)).toFloat()
                         drawLine(
-                            color = BrandTeal.copy(alpha = 0.5f),
+                            color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
                             end = Offset(sx, plotH),
                             strokeWidth = 2f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
                         )
-                        drawCircle(color = BrandTeal, radius = 12f, center = Offset(sx, sy))
+                        drawCircle(color = cTeal, radius = 12f, center = Offset(sx, sy))
                     }
 
                     drawContext.canvas.restore()
@@ -766,10 +775,14 @@ fun StressComparisonChart(
 ) {
     if (scenarios.isEmpty()) return
 
+    val cTeal = BrandTeal
+    val cGreen = GoodGreen
+    val cRed = BadRed
+
     val scenarioColors = listOf(
-        BrandTeal,                     // Baseline
-        GoodGreen,                     // Bull
-        BadRed,                        // Stagflation
+        cTeal,                         // Baseline
+        cGreen,                        // Bull
+        cRed,                          // Stagflation
         BrandGold,                     // Crash
         Color(0xFF9C27B0)              // Inflation Shock
     )
@@ -823,7 +836,7 @@ fun StressComparisonChart(
             val firstTraj = scenarios.first().trajectory
             val maxVal = (scenarios.flatMap { it.trajectory }.maxOfOrNull { it.portfolio } ?: 1000000.0).coerceAtLeast(100.0) * 1.1
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
             val paddingLeft = 110f
             val paddingBottom = 60f
@@ -913,160 +926,6 @@ fun StressComparisonChart(
                             )
                         )
                     }
-
-                    drawContext.canvas.restore()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun HousingCostAndEquityChart(
-    points: List<HousingYearComparisonPoint>,
-    modifier: Modifier = Modifier
-) {
-    if (points.isEmpty()) return
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("housing_cost_equity_chart_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Monthly Housing Cost Crossover & Equity Accrual",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "Rent grows with inflation (3-4%/yr) vs. Fixed Mortgage payment + Maintenance",
-                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Legend
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).background(BadRed, CircleShape))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Monthly Rent Cost", style = MaterialTheme.typography.labelSmall)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).background(BrandTeal, CircleShape))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Monthly Buy Cost", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val maxCost = (points.flatMap { listOf(it.rentMonthly, it.buyMonthly) }.maxOrNull() ?: 50000.0).coerceAtLeast(100.0) * 1.15
-            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).hashCode()
-
-            val paddingLeft = 110f
-            val paddingBottom = 60f
-
-            val textPaint = remember(textColor) {
-                android.graphics.Paint().apply {
-                    color = textColor
-                    textSize = 24f
-                    isAntiAlias = true
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                ) {
-                    val w = size.width
-                    val h = size.height
-                    val plotW = w - paddingLeft
-                    val plotH = h - paddingBottom
-
-                    // Y-Axis
-                    val ySteps = 4
-                    for (i in 0..ySteps) {
-                        val valAtStep = maxCost * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
-
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(paddingLeft, y),
-                            end = Offset(w, y),
-                            strokeWidth = 1.5f
-                        )
-
-                        drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(valAtStep),
-                            10f,
-                            y + 8f,
-                            textPaint
-                        )
-                    }
-
-                    // X-Axis
-                    val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
-                    val xStepCount = 5
-                    for (i in 0 until points.size step max(1, points.size / xStepCount)) {
-                        val pt = points[i]
-                        val x = paddingLeft + (i * stepX)
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(x, plotH),
-                            end = Offset(x, plotH + 8f),
-                            strokeWidth = 2f
-                        )
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "${pt.year}",
-                            x - 25f,
-                            plotH + 36f,
-                            textPaint
-                        )
-                    }
-
-                    drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
-
-                    // Rent Path
-                    val rentPath = Path()
-                    points.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val y = plotH - (plotH * (pt.rentMonthly / maxCost)).toFloat()
-                        if (i == 0) rentPath.moveTo(x, y) else rentPath.lineTo(x, y)
-                    }
-                    drawPath(
-                        path = rentPath,
-                        color = BadRed,
-                        style = Stroke(width = 4f, cap = StrokeCap.Round)
-                    )
-
-                    // Buy Path
-                    val buyPath = Path()
-                    points.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val y = plotH - (plotH * (pt.buyMonthly / maxCost)).toFloat()
-                        if (i == 0) buyPath.moveTo(x, y) else buyPath.lineTo(x, y)
-                    }
-                    drawPath(
-                        path = buyPath,
-                        color = BrandTeal,
-                        style = Stroke(width = 4f, cap = StrokeCap.Round)
-                    )
 
                     drawContext.canvas.restore()
                 }

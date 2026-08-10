@@ -1,5 +1,11 @@
 package com.example.ui.tabs
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -353,20 +361,6 @@ fun SettingsTab(
                         NumberSettingField(label = "Teen Monthly (CZK)", value = s.childTeenMonthly, onValueChange = { onUpdateSettings(s.copy(childTeenMonthly = it)) })
                         NumberSettingField(label = "Uni Monthly (CZK)", value = s.childUniMonthly, onValueChange = { onUpdateSettings(s.copy(childUniMonthly = it)) })
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Housing & Mortgage Buy vs Rent Settings
-                    SettingsGroupCard(title = "Housing & Mortgage (Buy vs. Rent)") {
-                        BooleanSettingField(label = "Enable Property Purchase / Mortgage", checked = s.enableMortgageSimulation, onCheckedChange = { onUpdateSettings(s.copy(enableMortgageSimulation = it)) })
-                        NumberSettingField(label = "Purchase Year", value = s.mortgagePurchaseYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(mortgagePurchaseYear = it.toInt())) })
-                        NumberSettingField(label = "Property Purchase Price (CZK)", value = s.propertyPrice, onValueChange = { onUpdateSettings(s.copy(propertyPrice = it)) })
-                        NumberSettingField(label = "Down Payment (%)", value = s.downPaymentPct, onValueChange = { onUpdateSettings(s.copy(downPaymentPct = it)) })
-                        NumberSettingField(label = "Mortgage Interest Rate (%)", value = s.mortgageInterestRatePct, onValueChange = { onUpdateSettings(s.copy(mortgageInterestRatePct = it)) })
-                        NumberSettingField(label = "Mortgage Tenure (Years)", value = s.mortgageTenureYears.toDouble(), onValueChange = { onUpdateSettings(s.copy(mortgageTenureYears = it.toInt())) })
-                        NumberSettingField(label = "Property Annual Appreciation (%)", value = s.propertyAppreciationPct, onValueChange = { onUpdateSettings(s.copy(propertyAppreciationPct = it)) })
-                        NumberSettingField(label = "Maintenance & Property Tax Annual (%)", value = s.maintenanceAndTaxAnnualPct, onValueChange = { onUpdateSettings(s.copy(maintenanceAndTaxAnnualPct = it)) })
-                    }
                 }
                 4 -> {
                     val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
@@ -616,19 +610,48 @@ private fun TaxSummaryRow(label: String, status: String, isGood: Boolean) {
 }
 
 @Composable
-private fun SettingsGroupCard(title: String, content: @Composable () -> Unit) {
+private fun SettingsGroupCard(
+    title: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Collapse section" else "Expand section",
+                        tint = BrandTeal
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    content()
+                }
+            }
         }
     }
 }

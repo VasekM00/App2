@@ -1,9 +1,13 @@
 package com.example.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Clean Premium Minimalist Light Palette
-val BrandTeal = Color(0xFF000000) // Replaced with stark black for premium feel
+// Clean Premium Minimalist Theme Palette (Adaptive)
+val BrandTeal: Color
+    @Composable get() = MaterialTheme.colorScheme.primary
+
 val BrandGold = Color(0xFFFACC15) // Vibrant Yellow accent
 val BrandBlue = Color(0xFF2563EB) // Royal blue accent
 val BrandLavender = Color(0xFFF1F5F9) // Replaced with Slate 100
@@ -11,9 +15,14 @@ val BrandLavenderDark = Color(0xFFE2E8F0) // Replaced with Slate 200
 val BrandPurpleDeep = Color(0xFF0F172A) // Replaced with Slate 900
 val BrandPurpleText = Color(0xFF334155) // Replaced with Slate 700
 
-val GoodGreen = Color(0xFF16A34A)
-val WarnAmber = Color(0xFFD97706)
-val BadRed = Color(0xFFDC2626)
+val GoodGreen: Color
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) GoodGreenDark else Color(0xFF16A34A)
+
+val WarnAmber: Color
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) WarnAmberDark else Color(0xFFD97706)
+
+val BadRed: Color
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BadRedDark else Color(0xFFDC2626)
 
 val SurfaceLight = Color(0xFFFFFFFF)
 val BackgroundLight = Color(0xFFF8FAFC) // Slate 50

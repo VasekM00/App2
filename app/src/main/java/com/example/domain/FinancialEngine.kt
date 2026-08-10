@@ -221,35 +221,6 @@ data class StressScenarioResult(
     val trajectory: List<PortfolioYearPoint>
 )
 
-data class HousingYearComparisonPoint(
-    val year: Int,
-    val age: Int,
-    val rentMonthly: Double,
-    val buyMonthly: Double,
-    val propertyValue: Double,
-    val remainingLoan: Double,
-    val propertyEquity: Double
-)
-
-data class HousingBuyVsRentResult(
-    val enabled: Boolean,
-    val purchaseYear: Int,
-    val propertyPrice: Double,
-    val downPaymentAmount: Double,
-    val loanAmount: Double,
-    val monthlyMortgagePayment: Double,
-    val monthlyMaintenanceCost: Double,
-    val totalInitialMonthlyHousingCost: Double,
-    val currentMonthlyRentAtPurchase: Double,
-    val initialMonthlyDifference: Double,
-    val totalInterestPaid30Y: Double,
-    val propertyValueAt60: Double,
-    val netWorthAt60Renting: Double,
-    val netWorthAt60Buying: Double,
-    val advantageAt60: Double,
-    val monthlyCostComparisonPoints: List<HousingYearComparisonPoint>
-)
-
 data class FullCalculationState(
     val settings: SettingsEntity,
     val fireBaseTargetToday: Double,
@@ -266,7 +237,6 @@ data class FullCalculationState(
     val taxReturnHelper: TaxReturnHelperData,
     val monteCarlo: MonteCarloResult,
     val stressScenarios: List<StressScenarioResult>,
-    val housingAnalysis: HousingBuyVsRentResult,
     val savingsRatePct: Double,
     val totalLivingCostMonthly: Double,
     val netWorthTotal: Double,
@@ -287,8 +257,7 @@ object FinancialEngine {
 
     fun fireTargetBase(settings: SettingsEntity, age: Int = settings.primaryAge): Double {
         if (settings.fireTargetOverride > 0) return settings.fireTargetOverride
-        val swr = settings.safeWithdrawalRatePct / 100.0
-        if (swr <= 0.0) return Double.MAX_VALUE
+        val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
 
         val annualLifestyle = settings.lifestyleCostAtFireMonthly * 12.0
         val annualStatePension = settings.statePensionMonthly * 12.0
@@ -865,104 +834,6 @@ object FinancialEngine {
         return list
     }
 
-    fun calculateHousingBuyVsRent(settings: SettingsEntity, rentingNetWorthAt60: Double): HousingBuyVsRentResult {
-        val purchaseYear = settings.mortgagePurchaseYear
-        val price = settings.propertyPrice
-        val downPct = settings.downPaymentPct / 100.0
-        val downPayment = price * downPct
-        val loan = price * (1.0 - downPct)
-
-        val interestRateMonthly = (settings.mortgageInterestRatePct / 100.0) / 12.0
-        val nPayments = settings.mortgageTenureYears * 12
-
-        val monthlyMortgage = if (interestRateMonthly > 0 && nPayments > 0) {
-            val factor = Math.pow(1.0 + interestRateMonthly, nPayments.toDouble())
-            loan * (interestRateMonthly * factor) / (factor - 1.0)
-        } else {
-            if (nPayments > 0) loan / nPayments else 0.0
-        }
-
-        val monthlyMaintenance = (price * (settings.maintenanceAndTaxAnnualPct / 100.0)) / 12.0
-        val initialBuyCost = monthlyMortgage + monthlyMaintenance
-
-        val yearsFromBaseToPurchase = (purchaseYear - settings.baseYear).coerceAtLeast(0)
-        val rentAtPurchase = settings.rentMonthly * Math.pow(1.0 + settings.rentGrowthPct / 100.0, yearsFromBaseToPurchase.toDouble())
-        val initialDiff = initialBuyCost - rentAtPurchase
-        val totalInterest = (monthlyMortgage * nPayments) - loan
-
-        val age60Year = settings.baseYear + (60 - settings.primaryAge)
-        val points = mutableListOf<HousingYearComparisonPoint>()
-
-        for (yr in settings.baseYear..age60Year) {
-            val age = settings.primaryAge + (yr - settings.baseYear)
-            val yrsFromBase = yr - settings.baseYear
-            val rentMonthly = settings.rentMonthly * Math.pow(1.0 + settings.rentGrowthPct / 100.0, yrsFromBase.toDouble())
-
-            val isPurchased = yr >= purchaseYear
-            val yrsSincePurchase = if (isPurchased) yr - purchaseYear else 0
-
-            val propVal = if (isPurchased) {
-                price * Math.pow(1.0 + settings.propertyAppreciationPct / 100.0, yrsSincePurchase.toDouble())
-            } else 0.0
-
-            val loanBal = if (isPurchased && yrsSincePurchase < settings.mortgageTenureYears) {
-                val monthsPaid = yrsSincePurchase * 12
-                if (interestRateMonthly > 0) {
-                    val factorTotal = Math.pow(1.0 + interestRateMonthly, nPayments.toDouble())
-                    val factorPaid = Math.pow(1.0 + interestRateMonthly, monthsPaid.toDouble())
-                    (loan * (factorTotal - factorPaid) / (factorTotal - 1.0)).coerceAtLeast(0.0)
-                } else {
-                    (loan - (monthlyMortgage * monthsPaid)).coerceAtLeast(0.0)
-                }
-            } else 0.0
-
-            val buyMonthlyCost = if (isPurchased) {
-                if (yrsSincePurchase < settings.mortgageTenureYears) monthlyMortgage + monthlyMaintenance else monthlyMaintenance
-            } else rentMonthly
-
-            val equity = (propVal - loanBal).coerceAtLeast(0.0)
-
-            points.add(
-                HousingYearComparisonPoint(
-                    year = yr,
-                    age = age,
-                    rentMonthly = rentMonthly,
-                    buyMonthly = buyMonthlyCost,
-                    propertyValue = propVal,
-                    remainingLoan = loanBal,
-                    propertyEquity = equity
-                )
-            )
-        }
-
-        val point60 = points.lastOrNull()
-        val propVal60 = point60?.propertyValue ?: 0.0
-        val loan60 = point60?.remainingLoan ?: 0.0
-        val equity60 = propVal60 - loan60
-
-        val buyingNetWorth60 = rentingNetWorthAt60 - downPayment + equity60
-        val advantage = buyingNetWorth60 - rentingNetWorthAt60
-
-        return HousingBuyVsRentResult(
-            enabled = settings.enableMortgageSimulation,
-            purchaseYear = purchaseYear,
-            propertyPrice = price,
-            downPaymentAmount = downPayment,
-            loanAmount = loan,
-            monthlyMortgagePayment = monthlyMortgage,
-            monthlyMaintenanceCost = monthlyMaintenance,
-            totalInitialMonthlyHousingCost = initialBuyCost,
-            currentMonthlyRentAtPurchase = rentAtPurchase,
-            initialMonthlyDifference = initialDiff,
-            totalInterestPaid30Y = totalInterest,
-            propertyValueAt60 = propVal60,
-            netWorthAt60Renting = rentingNetWorthAt60,
-            netWorthAt60Buying = buyingNetWorth60,
-            advantageAt60 = advantage,
-            monthlyCostComparisonPoints = points
-        )
-    }
-
     fun calculate(settings: SettingsEntity, actionStates: Map<String, Boolean> = emptyMap()): FullCalculationState {
         val fireBase = fireTargetBase(settings)
         val dual = buildLiquidPortfolio(settings, true)
@@ -1009,9 +880,6 @@ object FinancialEngine {
 
         val monteCarlo = runMonteCarlo(settings)
         val stressScenarios = calculateStressScenarios(settings)
-        val pointAt60 = dual.firstOrNull { it.age >= 60 } ?: dual.lastOrNull()
-        val nw60Renting = pointAt60?.portfolio ?: 0.0
-        val housingAnalysis = calculateHousingBuyVsRent(settings, nw60Renting)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {
             ((investMonthly + settings.familySavingsMonthly) / currentIncome.totalMonthly) * 100.0
@@ -1052,7 +920,6 @@ object FinancialEngine {
             taxReturnHelper = taxHelper,
             monteCarlo = monteCarlo,
             stressScenarios = stressScenarios,
-            housingAnalysis = housingAnalysis,
             savingsRatePct = savingsRate,
             totalLivingCostMonthly = livingCostTotal,
             netWorthTotal = netWorth,
