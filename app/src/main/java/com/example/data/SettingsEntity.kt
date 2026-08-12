@@ -70,7 +70,6 @@ data class SettingsEntity(
     val taxDeductionCeilingAnnual: Double = 48000.0,
     val spouseTaxCreditAnnual: Double = 24840.0,
     val spouseIncomeLimitAnnual: Double = 68000.0,
-    val childTaxBonusAnnual: Double = 15204.0,
     val includeSpouseCredit: Boolean = true,
     val hasChildUnder3: Boolean = true,
     val minWageMonthly: Double = 22400.0,
@@ -87,7 +86,6 @@ data class SettingsEntity(
     val child1BirthYear: Int = 2024,
     val child2Enabled: Boolean = true,
     val child2BirthYear: Int = 2027,
-    val childBirthYear: Int = 2024, // Legacy alias for backward compatibility
     val child1TaxBonusAnnual: Double = 15204.0,
     val child2TaxBonusAnnual: Double = 22320.0,
     val child3PlusTaxBonusAnnual: Double = 27840.0,
@@ -98,15 +96,6 @@ data class SettingsEntity(
     val childUniMonthly: Double = 10000.0,
     val rentGrowthPct: Double = 4.0,
     val monteCarloN: Int = 400,
-    // Option 2: Housing & Mortgage Buy vs Rent Analysis
-    val enableMortgageSimulation: Boolean = false,
-    val mortgagePurchaseYear: Int = 2028,
-    val propertyPrice: Double = 7000000.0,
-    val downPaymentPct: Double = 20.0,
-    val mortgageInterestRatePct: Double = 4.5,
-    val mortgageTenureYears: Int = 30,
-    val propertyAppreciationPct: Double = 3.5,
-    val maintenanceAndTaxAnnualPct: Double = 1.0,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]"
 )

@@ -1,6 +1,5 @@
 package com.example.ui.tabs
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +30,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -160,7 +159,7 @@ private fun FireRoadmapSubTab(
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.TrendingUp,
+                        imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                         contentDescription = null,
                         tint = BrandTeal,
                         modifier = Modifier.padding(end = 8.dp)
@@ -493,7 +492,7 @@ private fun LifeGoalsSimulatorSubTab(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.TrendingUp,
+                            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                             contentDescription = null,
                             tint = BrandGold,
                             modifier = Modifier.padding(end = 8.dp)

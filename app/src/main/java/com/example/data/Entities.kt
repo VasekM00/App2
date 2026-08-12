@@ -13,6 +13,7 @@ data class LedgerEntryEntity(
     val yearMonth: String, // e.g., "2026-04"
     val incVaclav: Double = 0.0,
     val incEleonora: Double = 0.0,
+    val incUnforeseen: Double = 0.0,
     val expRent: Double = 0.0,
     val expGroceries: Double = 0.0,
     val expOther: Double = 0.0,

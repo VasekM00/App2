@@ -1,10 +1,5 @@
 package com.example.ui
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -268,18 +263,14 @@ fun MainScreen(
                     }
                 } else {
                     // Active Tab Content
-                    Crossfade(
-                        targetState = selectedTab,
-                        animationSpec = tween(durationMillis = 150),
-                        modifier = Modifier.weight(1f)
-                    ) { tabIndex ->
-                        when (tabIndex) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        when (selectedTab) {
                             0 -> OverviewTab(state = state)
                             1 -> CashFlowTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
-                                onAddLedgerEntry = { ym, incV, incE, expR, expG, expO, notes ->
-                                    viewModel.addLedgerEntry(ym, incV, incE, expR, expG, expO, notes)
+                                onAddLedgerEntry = { ym, incV, incE, incU, expR, expL, notes ->
+                                    viewModel.addLedgerEntry(ym, incV, incE, incU, expR, expL, notes)
                                 },
                                 onUpdateLedgerEntry = { entry ->
                                     viewModel.updateLedgerEntry(entry)

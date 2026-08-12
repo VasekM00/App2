@@ -1,10 +1,5 @@
 package com.example.ui.tabs
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,12 +33,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +66,7 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import java.util.UUID
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsTab(
     state: FullCalculationState,
@@ -76,6 +77,7 @@ fun SettingsTab(
 ) {
     val scrollState = rememberScrollState()
     val s = state.settings
+    val tealColor = BrandTeal
     
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
@@ -157,13 +159,8 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Eleonora Income Settings
-                    SettingsGroupCard(title = "Eleonora Income Settings") {
-                        NumberSettingField(label = "Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                        NumberSettingField(label = "Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
-                        NumberSettingField(label = "Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
-                        NumberSettingField(label = "Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
-                        NumberSettingField(label = "Reinvested (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                    // Eleonora Active Income (Today)
+                    SettingsGroupCard(title = "Eleonora Active Income (Today)") {
                         NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
                         NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
                         BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
@@ -171,96 +168,194 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Gifts, Savings & Lump Sums
-                    SettingsGroupCard(title = "Gifts, Savings & Lump Sums") {
+                    // Eleonora Future Return to Work Milestone
+                    SettingsGroupCard(
+                        title = "🔮 Future Milestones: Eleonora Return to Work (${s.eReturnYear}+)",
+                        initiallyExpanded = false
+                    ) {
+                        NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
+                        NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
+                        NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
+                        NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
+                        NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Gifts, Savings & Future Lump Sums
+                    SettingsGroupCard(title = "Family Gifts & Monthly Savings") {
                         NumberSettingField(label = "Family Gift Monthly (CZK)", value = s.familyGiftMonthly, onValueChange = { onUpdateSettings(s.copy(familyGiftMonthly = it)) })
                         NumberSettingField(label = "Family Savings Monthly (CZK)", value = s.familySavingsMonthly, onValueChange = { onUpdateSettings(s.copy(familySavingsMonthly = it)) })
-                        NumberSettingField(label = "Lump Sum Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
-                        NumberSettingField(label = "Lump Sum Amount (CZK)", value = s.lumpSumAmount, onValueChange = { onUpdateSettings(s.copy(lumpSumAmount = it)) })
-                        BooleanSettingField(label = "Include Lump Sum", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingsGroupCard(
+                        title = "🔮 Future Milestones: Planned Lump Sum (${s.lumpSumYear})",
+                        initiallyExpanded = false
+                    ) {
+                        BooleanSettingField(label = "Include Lump Sum Event", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
+                        NumberSettingField(label = "Planned Lump Sum Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
+                        NumberSettingField(label = "Planned Lump Sum Amount (CZK)", value = s.lumpSumAmount, onValueChange = { onUpdateSettings(s.copy(lumpSumAmount = it)) })
                     }
                 }
                 2 -> {
-                    // Václav's Portfolio & Accounts
-                    SettingsGroupCard(title = "Václav's Investments & Accounts") {
-                        NumberSettingField(
-                            label = "Portu / ETF Liquid Portfolio (CZK)",
-                            value = s.liquidPortfolioCurrent,
-                            onValueChange = { onUpdateSettings(s.copy(liquidPortfolioCurrent = it)) },
-                            testTagStr = "input_liquid_port"
-                        )
-                        NumberSettingField(label = "Portu / ETF Monthly DCA (CZK)", value = s.portuDcaMonthly, onValueChange = { onUpdateSettings(s.copy(portuDcaMonthly = it)) })
-                        NumberSettingField(label = "DPS Balance Current (CZK)", value = s.dpsBalanceCurrent, onValueChange = { onUpdateSettings(s.copy(dpsBalanceCurrent = it)) })
-                        NumberSettingField(label = "DPS Monthly Own Contribution (CZK)", value = s.dpsOwnContributionMonthly, onValueChange = { onUpdateSettings(s.copy(dpsOwnContributionMonthly = it)) })
-                        NumberSettingField(label = "DIP Balance Current (CZK)", value = s.dipBalanceCurrent, onValueChange = { onUpdateSettings(s.copy(dipBalanceCurrent = it)) })
-                        NumberSettingField(label = "DIP Monthly Contribution (CZK)", value = s.dipContributionMonthly, onValueChange = { onUpdateSettings(s.copy(dipContributionMonthly = it)) })
-                        NumberSettingField(label = "Employer Retirement Annual (CZK)", value = s.employerRetirementAnnual, onValueChange = { onUpdateSettings(s.copy(employerRetirementAnnual = it)) })
-                    }
+                    var invSubTab by remember { mutableIntStateOf(0) }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Eleonora's Portfolio & Accounts
-                    SettingsGroupCard(title = "Eleonora's Investments & Accounts") {
-                        NumberSettingField(
-                            label = "Eleonora's Portu / ETF Liquid Portfolio (CZK)",
-                            value = s.eLiquidPortfolioCurrent,
-                            onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
+                    SecondaryTabRow(
+                        selectedTabIndex = invSubTab,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    ) {
+                        Tab(
+                            selected = invSubTab == 0,
+                            onClick = { invSubTab = 0 },
+                            text = { Text("Current Balances", fontWeight = FontWeight.SemiBold) },
+                            modifier = Modifier.testTag("settings_inv_subtab_balances")
                         )
-                        NumberSettingField(
-                            label = "Eleonora's Portu / ETF Monthly DCA (CZK)",
-                            value = s.ePortuDcaMonthly,
-                            onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
+                        Tab(
+                            selected = invSubTab == 1,
+                            onClick = { invSubTab = 1 },
+                            text = { Text("Monthly DCA Flow", fontWeight = FontWeight.SemiBold) },
+                            modifier = Modifier.testTag("settings_inv_subtab_dca")
                         )
-                        NumberSettingField(
-                            label = "Eleonora's DPS Balance Current (CZK)",
-                            value = s.eDpsBalanceCurrent,
-                            onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
-                        )
-                        NumberSettingField(
-                            label = "Eleonora's DPS Monthly Contribution (CZK)",
-                            value = s.eDpsOwnContributionMonthly,
-                            onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
-                        )
-                        NumberSettingField(
-                            label = "Eleonora's DIP Balance Current (CZK)",
-                            value = s.eDipBalanceCurrent,
-                            onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
-                        )
-                        NumberSettingField(
-                            label = "Eleonora's DIP Monthly Contribution (CZK)",
-                            value = s.eDipContributionMonthly,
-                            onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
-                        )
-                        NumberSettingField(
-                            label = "Eleonora's Employer Retirement Annual (CZK)",
-                            value = s.eEmployerRetirementAnnual,
-                            onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
+                        Tab(
+                            selected = invSubTab == 2,
+                            onClick = { invSubTab = 2 },
+                            text = { Text("Assumptions", fontWeight = FontWeight.SemiBold) },
+                            modifier = Modifier.testTag("settings_inv_subtab_assumptions")
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    when (invSubTab) {
+                        0 -> {
+                            // Václav's Balances
+                            SettingsGroupCard(title = "Václav's Current Balances 💼") {
+                                NumberSettingField(
+                                    label = "Portu / ETF Liquid Portfolio Balance (CZK)",
+                                    value = s.liquidPortfolioCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(liquidPortfolioCurrent = it)) },
+                                    testTagStr = "input_liquid_port"
+                                )
+                                NumberSettingField(
+                                    label = "DIP Balance Current (CZK)",
+                                    value = s.dipBalanceCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(dipBalanceCurrent = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "DPS Pension Balance Current (CZK)",
+                                    value = s.dpsBalanceCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(dpsBalanceCurrent = it)) }
+                                )
+                            }
 
-                    // Emergency Reserve & Cash
-                    SettingsGroupCard(title = "Cash & Emergency Reserve") {
-                        NumberSettingField(
-                            label = "Savings & Bank Accounts (CZK)",
-                            value = s.emergencyReserveCurrent,
-                            onValueChange = { onUpdateSettings(s.copy(emergencyReserveCurrent = it)) }
-                        )
-                        NumberSettingField(
-                            label = "Savings / Reserve Target (CZK)",
-                            value = s.emergencyReserveTarget,
-                            onValueChange = { onUpdateSettings(s.copy(emergencyReserveTarget = it)) }
-                        )
-                    }
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                            // Eleonora's Balances
+                            SettingsGroupCard(title = "Eleonora's Current Balances 💼") {
+                                NumberSettingField(
+                                    label = "Eleonora's Liquid Portfolio Balance (CZK)",
+                                    value = s.eLiquidPortfolioCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Eleonora's DIP Balance Current (CZK)",
+                                    value = s.eDipBalanceCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Eleonora's DPS Pension Balance Current (CZK)",
+                                    value = s.eDpsBalanceCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
+                                )
+                            }
 
-                    // Investment Parameters
-                    SettingsGroupCard(title = "Global Return & Fee Assumptions") {
-                        NumberSettingField(label = "Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
-                        NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) })
-                        NumberSettingField(label = "DPS Annual Fee (%) [Cap 0.5%]", value = s.dpsAnnualFeePct, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Emergency Reserve & Cash
+                            SettingsGroupCard(title = "Cash & Emergency Reserve 🏦") {
+                                NumberSettingField(
+                                    label = "Savings & Bank Accounts (CZK)",
+                                    value = s.emergencyReserveCurrent,
+                                    onValueChange = { onUpdateSettings(s.copy(emergencyReserveCurrent = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Savings / Reserve Target (CZK)",
+                                    value = s.emergencyReserveTarget,
+                                    onValueChange = { onUpdateSettings(s.copy(emergencyReserveTarget = it)) }
+                                )
+                            }
+                        }
+                        1 -> {
+                            // Václav's Monthly Investments
+                            SettingsGroupCard(title = "Václav's Monthly Investments (DCA) 🔄") {
+                                NumberSettingField(
+                                    label = "Portu / ETF Monthly DCA (CZK)",
+                                    value = s.portuDcaMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(portuDcaMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "DIP Monthly Contribution (CZK)",
+                                    value = s.dipContributionMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(dipContributionMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "DPS Monthly Own Contribution (CZK)",
+                                    value = s.dpsOwnContributionMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(dpsOwnContributionMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Employer Retirement Annual Benefit (CZK)",
+                                    value = s.employerRetirementAnnual,
+                                    onValueChange = { onUpdateSettings(s.copy(employerRetirementAnnual = it)) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Eleonora's Monthly Investments
+                            SettingsGroupCard(title = "Eleonora's Monthly Investments (DCA) 🔄") {
+                                NumberSettingField(
+                                    label = "Eleonora's Portu / ETF Monthly DCA (CZK)",
+                                    value = s.ePortuDcaMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Eleonora's DIP Monthly Contribution (CZK)",
+                                    value = s.eDipContributionMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Eleonora's DPS Monthly Contribution (CZK)",
+                                    value = s.eDpsOwnContributionMonthly,
+                                    onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Eleonora's Employer Retirement Annual Benefit (CZK)",
+                                    value = s.eEmployerRetirementAnnual,
+                                    onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
+                                )
+                            }
+                        }
+                        2 -> {
+                            // Return & Fee Assumptions
+                            SettingsGroupCard(title = "Global Return & Fee Assumptions 📊") {
+                                NumberSettingField(
+                                    label = "Portfolio Nominal Return (%)",
+                                    value = s.portfolioNominalReturnPct,
+                                    onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "DPS Gross Return (%)",
+                                    value = s.dpsGrossReturnPct,
+                                    onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "DPS Annual Fee (%) [Cap 0.5%]",
+                                    value = s.dpsAnnualFeePct,
+                                    onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) }
+                                )
+                            }
+                        }
                     }
                 }
                 3 -> {
@@ -312,7 +407,6 @@ fun SettingsTab(
                         NumberSettingField(label = "Retirement Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
                         NumberSettingField(label = "Spouse Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
                         NumberSettingField(label = "Spouse Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
-                        NumberSettingField(label = "Child Tax Bonus Annual (CZK)", value = s.childTaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(childTaxBonusAnnual = it)) })
                         BooleanSettingField(label = "Include Spouse Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
                         BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { onUpdateSettings(s.copy(hasChildUnder3 = it)) })
                         NumberSettingField(label = "Min Wage Monthly (CZK)", value = s.minWageMonthly, onValueChange = { onUpdateSettings(s.copy(minWageMonthly = it)) })
@@ -333,22 +427,16 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Child Settings & Expenses (2 Children Support)
-                    SettingsGroupCard(title = "Child & Family Planning (2 Children)") {
+                    // Child Settings & Expenses (Active Today)
+                    SettingsGroupCard(title = "Child & Family Expenses (Active Today)") {
                         BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
                         
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         
                         BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { onUpdateSettings(s.copy(child1Enabled = it)) })
-                        NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt(), childBirthYear = it.toInt())) })
+                        NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt())) })
                         NumberSettingField(label = "Child 1 Tax Bonus Annual (CZK)", value = s.child1TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child1TaxBonusAnnual = it)) })
                         
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        BooleanSettingField(label = "Include Child 2", checked = s.child2Enabled, onCheckedChange = { onUpdateSettings(s.copy(child2Enabled = it)) })
-                        NumberSettingField(label = "Child 2 Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
-                        NumberSettingField(label = "Child 2 Tax Bonus Annual (CZK)", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
-
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         Text(
                             text = "Stage Expense Estimates (per Child)",
@@ -361,6 +449,18 @@ fun SettingsTab(
                         NumberSettingField(label = "Teen Monthly (CZK)", value = s.childTeenMonthly, onValueChange = { onUpdateSettings(s.copy(childTeenMonthly = it)) })
                         NumberSettingField(label = "Uni Monthly (CZK)", value = s.childUniMonthly, onValueChange = { onUpdateSettings(s.copy(childUniMonthly = it)) })
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Future Child 2 Event
+                    SettingsGroupCard(
+                        title = "🔮 Future Milestones: Child 2 (Planned Birth ${s.child2BirthYear})",
+                        initiallyExpanded = false
+                    ) {
+                        BooleanSettingField(label = "Include Child 2 Planned Event", checked = s.child2Enabled, onCheckedChange = { onUpdateSettings(s.copy(child2Enabled = it)) })
+                        NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
+                        NumberSettingField(label = "Child 2 Tax Bonus Annual (CZK)", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
+                    }
                 }
                 4 -> {
                     val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
@@ -369,14 +469,13 @@ fun SettingsTab(
                     SettingsGroupCard(title = "Monthly Living Expenses (CZK)") {
                         NumberSettingField(label = "Rent", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) })
                         NumberSettingField(label = "Rent Growth (%)", value = s.rentGrowthPct, onValueChange = { onUpdateSettings(s.copy(rentGrowthPct = it)) })
-                        NumberSettingField(label = "Groceries", value = s.groceriesMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it)) })
+                        NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly + s.otherDiscretionaryMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it, otherDiscretionaryMonthly = 0.0)) })
                         NumberSettingField(label = "Cafes & Restaurants", value = s.cafesMonthly, onValueChange = { onUpdateSettings(s.copy(cafesMonthly = it)) })
                         NumberSettingField(label = "Therapy / Physio", value = s.therapyMonthly, onValueChange = { onUpdateSettings(s.copy(therapyMonthly = it)) })
                         NumberSettingField(label = "Charity", value = s.charityMonthly, onValueChange = { onUpdateSettings(s.copy(charityMonthly = it)) })
                         NumberSettingField(label = "Entertainment", value = s.entertainmentMonthly, onValueChange = { onUpdateSettings(s.copy(entertainmentMonthly = it)) })
                         NumberSettingField(label = "Transport", value = s.transportMonthly, onValueChange = { onUpdateSettings(s.copy(transportMonthly = it)) })
                         NumberSettingField(label = "Subscriptions", value = s.subscriptionsMonthly, onValueChange = { onUpdateSettings(s.copy(subscriptionsMonthly = it)) })
-                        NumberSettingField(label = "Other Discretionary", value = s.otherDiscretionaryMonthly, onValueChange = { onUpdateSettings(s.copy(otherDiscretionaryMonthly = it)) })
 
                         if (customCategories.isNotEmpty()) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -444,6 +543,53 @@ fun SettingsTab(
                     }
                 }
                 5 -> {
+                    // About & Version Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "About Application",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "App Version",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Surface(
+                                    color = tealColor.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "v5.4",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = tealColor
+                                        ),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Czech Financial & FIRE Planning Suite",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Reset Card
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -642,11 +788,7 @@ private fun SettingsGroupCard(
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+            if (expanded) {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
                     content()
@@ -663,7 +805,21 @@ private fun NumberSettingField(
     onValueChange: (Double) -> Unit,
     testTagStr: String = ""
 ) {
-    var textValue by remember(value) { mutableStateOf(if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()) }
+    fun formatVal(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+
+    var textValue by remember { mutableStateOf(formatVal(value)) }
+    var isFocused by remember { mutableStateOf(false) }
+
+    // Sync external state changes when not actively being edited
+    LaunchedEffect(value) {
+        if (!isFocused) {
+            val currentParsed = textValue.replace(',', '.').toDoubleOrNull()
+            if (currentParsed == null || currentParsed != value) {
+                textValue = formatVal(value)
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -679,12 +835,18 @@ private fun NumberSettingField(
             value = textValue,
             onValueChange = { input ->
                 textValue = input
-                input.toDoubleOrNull()?.let { onValueChange(it) }
+                val sanitized = input.replace(',', '.').trim()
+                if (sanitized.isEmpty()) {
+                    onValueChange(0.0)
+                } else {
+                    sanitized.toDoubleOrNull()?.let { onValueChange(it) }
+                }
             },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth(0.45f)
+                .onFocusChanged { isFocused = it.isFocused }
                 .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
         )
     }

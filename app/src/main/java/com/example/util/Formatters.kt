@@ -12,17 +12,17 @@ object Formatters {
         maximumFractionDigits = 0
     }
 
-    fun fmtCZK(value: Double): String {
-        if (value.isNaN() || value.isInfinite()) return "-- Kč"
-        return "${czkFormat.format(value.roundToInt())} Kč"
+    fun fmtCZK(value: Double, symbol: String = "Kč"): String {
+        if (value.isNaN() || value.isInfinite()) return "--\u00A0$symbol"
+        return "${czkFormat.format(value.roundToInt())}\u00A0$symbol"
     }
 
-    fun fmtCompact(value: Double): String {
-        if (value.isNaN() || value.isInfinite()) return "-- Kč"
+    fun fmtCompact(value: Double, symbol: String = "Kč"): String {
+        if (value.isNaN() || value.isInfinite()) return "--\u00A0$symbol"
         val absVal = abs(value)
         return when {
-            absVal >= 1_000_000 -> String.format(czkLocale, "%.2fM Kč", value / 1_000_000.0)
-            else -> fmtCZK(value)
+            absVal >= 1_000_000 -> String.format(czkLocale, "%.2fM\u00A0$symbol", value / 1_000_000.0)
+            else -> fmtCZK(value, symbol)
         }
     }
 

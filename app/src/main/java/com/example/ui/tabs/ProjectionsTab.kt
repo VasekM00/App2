@@ -22,10 +22,12 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,10 +98,18 @@ fun ProjectionsTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InvestmentsSubTab(state: FullCalculationState) {
     val scrollState = rememberScrollState()
     val s = state.settings
+    var selectedViewMode by remember { mutableIntStateOf(0) } // 0 = All, 1 = Balances, 2 = Monthly DCA
+
+    val vaclavTotalBal by remember(s) { derivedStateOf { s.liquidPortfolioCurrent + s.dipBalanceCurrent + s.dpsBalanceCurrent } }
+    val vaclavTotalDca by remember(s) { derivedStateOf { s.portuDcaMonthly + s.dipContributionMonthly + s.dpsOwnContributionMonthly } }
+    val eTotalBal by remember(s) { derivedStateOf { s.eLiquidPortfolioCurrent + s.eDipBalanceCurrent + s.eDpsBalanceCurrent } }
+    val eTotalDca by remember(s) { derivedStateOf { s.ePortuDcaMonthly + s.eDipContributionMonthly + s.eDpsOwnContributionMonthly } }
+    val empMonthly by remember(s) { derivedStateOf { (s.employerRetirementAnnual + s.eEmployerRetirementAnnual) / 12.0 } }
 
     Column(
         modifier = Modifier
@@ -107,37 +117,124 @@ private fun InvestmentsSubTab(state: FullCalculationState) {
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
-        // Combined Household Portfolio Summary Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+        // View filter tabs
+        SecondaryTabRow(
+            selectedTabIndex = selectedViewMode,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Household Combined Portfolio",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Combined DCA: ${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ProjectionMetricRow("Liquid Portu/ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent), isBold = true)
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(s.dpsBalanceCurrent + s.eDpsBalanceCurrent))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(s.dipBalanceCurrent + s.eDipBalanceCurrent))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(s.emergencyReserveCurrent))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total Net Worth", fmtCZK(state.netWorthTotal), isBold = true, highlightColor = BrandTeal)
-            }
+            Tab(
+                selected = selectedViewMode == 0,
+                onClick = { selectedViewMode = 0 },
+                text = { Text("All Overview", fontWeight = FontWeight.SemiBold) },
+                modifier = Modifier.testTag("inv_filter_all")
+            )
+            Tab(
+                selected = selectedViewMode == 1,
+                onClick = { selectedViewMode = 1 },
+                text = { Text("Balances Only", fontWeight = FontWeight.SemiBold) },
+                modifier = Modifier.testTag("inv_filter_balances")
+            )
+            Tab(
+                selected = selectedViewMode == 2,
+                onClick = { selectedViewMode = 2 },
+                text = { Text("Monthly DCA", fontWeight = FontWeight.SemiBold) },
+                modifier = Modifier.testTag("inv_filter_dca")
+            )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // 1. Current Account Balances Card
+        if (selectedViewMode == 0 || selectedViewMode == 1) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "💼 Current Portfolio Balances",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Accumulated Assets",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    ProjectionMetricRow("Liquid Portu/ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(s.dipBalanceCurrent + s.eDipBalanceCurrent))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(s.dpsBalanceCurrent + s.eDpsBalanceCurrent))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(s.emergencyReserveCurrent))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("Total Portfolio Net Worth", fmtCZK(state.netWorthTotal), isBold = true, highlightColor = BrandTeal)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // 2. Monthly Investment DCA Flow Card
+        if (selectedViewMode == 0 || selectedViewMode == 2) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🔄 Monthly Investment Contributions (DCA)",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Monthly Inflows",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    ProjectionMetricRow("Portu / ETF Monthly DCA", "${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo")
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("DIP Monthly Contribution", "${fmtCZK(s.dipContributionMonthly + s.eDipContributionMonthly)} / mo")
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    ProjectionMetricRow("DPS Monthly Own Contribution", "${fmtCZK(s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly)} / mo")
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    if (empMonthly > 0) {
+                        ProjectionMetricRow("Employer Benefit (Monthly Equiv.)", "${fmtCZK(empMonthly)} / mo")
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    }
+                    ProjectionMetricRow("Total Combined Monthly Investment", "${fmtCZK(state.investMonthlyTotal)} / mo", isBold = true, highlightColor = BrandTeal)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         // Side-by-Side Account Breakdown (Václav vs. Eleonora)
         Row(
@@ -150,23 +247,35 @@ private fun InvestmentsSubTab(state: FullCalculationState) {
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "Václav's Accounts 👨‍💼",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                        text = "Václav 👨‍💼",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text("Portu DCA: ${fmtCZK(s.portuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("Portu Current: ${fmtCZK(s.liquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    if (selectedViewMode == 0 || selectedViewMode == 1) {
+                        Text("💼 CURRENT BALANCES", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("• Portu: ${fmtCZK(s.liquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("• DIP: ${fmtCZK(s.dipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("• DPS: ${fmtCZK(s.dpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("Total Balances: ${fmtCZK(vaclavTotalBal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandTeal)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
-                    Text("DIP DCA: ${fmtCZK(s.dipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("DIP Current: ${fmtCZK(s.dipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    if (selectedViewMode == 0) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
 
-                    Text("DPS DCA: ${fmtCZK(s.dpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("DPS Current: ${fmtCZK(s.dpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                    if (selectedViewMode == 0 || selectedViewMode == 2) {
+                        Text("🔄 MONTHLY DCA FLOW", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("• Portu: ${fmtCZK(s.portuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("• DIP: ${fmtCZK(s.dipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("• DPS: ${fmtCZK(s.dpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("Total Monthly: ${fmtCZK(vaclavTotalDca)}/mo", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandTeal)
+                    }
                 }
             }
 
@@ -176,23 +285,35 @@ private fun InvestmentsSubTab(state: FullCalculationState) {
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "Eleonora's Accounts 👩‍💼",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                        text = "Eleonora 👩‍💼",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text("Portu DCA: ${fmtCZK(s.ePortuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("Portu Current: ${fmtCZK(s.eLiquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    if (selectedViewMode == 0 || selectedViewMode == 1) {
+                        Text("💼 CURRENT BALANCES", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("• Portu: ${fmtCZK(s.eLiquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("• DIP: ${fmtCZK(s.eDipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("• DPS: ${fmtCZK(s.eDpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                        Text("Total Balances: ${fmtCZK(eTotalBal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandGold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
-                    Text("DIP DCA: ${fmtCZK(s.eDipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("DIP Current: ${fmtCZK(s.eDipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    if (selectedViewMode == 0) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
 
-                    Text("DPS DCA: ${fmtCZK(s.eDpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("DPS Current: ${fmtCZK(s.eDpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
+                    if (selectedViewMode == 0 || selectedViewMode == 2) {
+                        Text("🔄 MONTHLY DCA FLOW", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("• Portu: ${fmtCZK(s.ePortuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("• DIP: ${fmtCZK(s.eDipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("• DPS: ${fmtCZK(s.eDpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
+                        Text("Total Monthly: ${fmtCZK(eTotalDca)}/mo", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandGold)
+                    }
                 }
             }
         }

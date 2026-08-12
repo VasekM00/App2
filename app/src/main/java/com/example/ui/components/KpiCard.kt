@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BrandTeal
@@ -62,11 +63,15 @@ fun KpiCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
+                        fontSize = 19.sp,
                         color = MaterialTheme.colorScheme.onSurface
-                    )
+                    ),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(

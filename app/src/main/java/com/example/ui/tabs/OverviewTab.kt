@@ -59,12 +59,12 @@ fun OverviewTab(
             val itemWidth = Modifier.fillMaxWidth(0.48f)
 
             KpiCard(
-                title = "Vaclav net / mo",
-                value = fmtCZK(state.currentIncome.vaclavNet),
-                hint = "Current salary level",
+                title = "Family net / mo",
+                value = fmtCZK(state.currentIncome.totalMonthly),
+                hint = "Combined family income",
                 accentColor = BrandTeal,
                 modifier = itemWidth,
-                testTagStr = "kpi_vaclav_net"
+                testTagStr = "kpi_family_net"
             )
 
             KpiCard(

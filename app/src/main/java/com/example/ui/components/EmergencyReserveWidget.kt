@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,7 +55,6 @@ fun EmergencyReserveWidget(
     val targetAmount = monthlyExpense * targetMonths
 
     val progress = (currentLiquidCash / targetAmount).coerceIn(0.0, 1.0).toFloat()
-    val animatedProgress by animateFloatAsState(targetValue = progress, label = "ReserveProgress")
 
     val monthsCovered = currentLiquidCash / monthlyExpense
 
@@ -160,7 +158,7 @@ fun EmergencyReserveWidget(
             Spacer(modifier = Modifier.height(6.dp))
 
             LinearProgressIndicator(
-                progress = { animatedProgress },
+                progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp)

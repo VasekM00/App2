@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.martinufinancials.fire2"
     minSdk = 24
     targetSdk = 34
-    versionCode = 3
-    versionName = "1.2"
+    versionCode = 54
+    versionName = "5.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

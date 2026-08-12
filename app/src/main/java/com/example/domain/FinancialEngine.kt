@@ -366,7 +366,7 @@ object FinancialEngine {
         }
     }
 
-    fun totalLivingCostMonthly(settings: SettingsEntity): Double {
+    fun totalLivingCostMonthly(settings: SettingsEntity, year: Int = settings.baseYear): Double {
         var base = settings.rentMonthly + settings.groceriesMonthly + settings.cafesMonthly +
                 settings.therapyMonthly + settings.charityMonthly + settings.entertainmentMonthly +
                 settings.transportMonthly + settings.subscriptionsMonthly + settings.otherDiscretionaryMonthly
@@ -376,10 +376,10 @@ object FinancialEngine {
 
         if (settings.childExpensesEnabled) {
             if (settings.child1Enabled) {
-                base += childMonthlyExpense(settings.child1BirthYear, settings.baseYear, settings)
+                base += childMonthlyExpense(settings.child1BirthYear, year, settings)
             }
             if (settings.child2Enabled) {
-                base += childMonthlyExpense(settings.child2BirthYear, settings.baseYear, settings)
+                base += childMonthlyExpense(settings.child2BirthYear, year, settings)
             }
         }
         return base
@@ -452,8 +452,11 @@ object FinancialEngine {
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
         val fee = min(settings.dpsAnnualFeePct, 0.5) // Statutory 0.5% cap
-        val monthlyRateDPS = (settings.dpsGrossReturnPct - fee) / 100.0 / 12.0
-        val monthlyRateETF = settings.portfolioNominalReturnPct / 100.0 / 12.0
+        val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
+        val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
+
+        val annualRateETF = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
+        val monthlyRateETF = (1.0 + annualRateETF).pow(1.0 / 12.0) - 1.0
 
         val own = settings.dpsOwnContributionMonthly + settings.eDpsOwnContributionMonthly
         val emp = (settings.employerRetirementAnnual + settings.eEmployerRetirementAnnual) / 12.0
@@ -527,7 +530,8 @@ object FinancialEngine {
             )
         }
 
-        val monthlyRate = settings.portfolioNominalReturnPct / 100.0 / 12.0
+        val annualRateDIP = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
+        val monthlyRate = (1.0 + annualRateDIP).pow(1.0 / 12.0) - 1.0
         var dipBal = settings.dipBalanceCurrent + settings.eDipBalanceCurrent
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
@@ -834,7 +838,11 @@ object FinancialEngine {
         return list
     }
 
-    fun calculate(settings: SettingsEntity, actionStates: Map<String, Boolean> = emptyMap()): FullCalculationState {
+    fun calculate(
+        settings: SettingsEntity,
+        actionStates: Map<String, Boolean> = emptyMap(),
+        runMonteCarlo: Boolean = true
+    ): FullCalculationState {
         val fireBase = fireTargetBase(settings)
         val dual = buildLiquidPortfolio(settings, true)
         val single = buildLiquidPortfolio(settings, false)
@@ -878,7 +886,7 @@ object FinancialEngine {
             spouseEligible = spouseEligible
         )
 
-        val monteCarlo = runMonteCarlo(settings)
+        val monteCarlo = if (runMonteCarlo) runMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
         val stressScenarios = calculateStressScenarios(settings)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {

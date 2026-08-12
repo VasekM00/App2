@@ -80,7 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.flowOn(Dispatchers.Default).conflate().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = FinancialEngine.calculate(SettingsEntity())
+        initialValue = FinancialEngine.calculate(SettingsEntity(), runMonteCarlo = false)
     )
 
     fun updateSettings(newSettings: SettingsEntity) {
@@ -94,9 +94,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         yearMonth: String,
         incVaclav: Double,
         incEleonora: Double,
+        incUnforeseen: Double,
         expRent: Double,
-        expGroc: Double,
-        expOther: Double,
+        expLiving: Double,
         notes: String
     ) {
         viewModelScope.launch {
@@ -104,9 +104,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 yearMonth = yearMonth,
                 incVaclav = incVaclav,
                 incEleonora = incEleonora,
+                incUnforeseen = incUnforeseen,
                 expRent = expRent,
-                expGroceries = expGroc,
-                expOther = expOther,
+                expGroceries = expLiving,
+                expOther = 0.0,
                 notes = notes
             )
             repository.addLedgerEntry(entry)
@@ -143,23 +144,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val rawLine = line!!.trim()
                     if (rawLine.isBlank()) continue
                     val tokens = rawLine.split(",")
-                    if (tokens.size >= 7) {
+                    if (tokens.size >= 6) {
                         val ym = tokens[0].trim()
                         val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
                         val incE = tokens[2].trim().toDoubleOrNull() ?: 0.0
-                        val expR = tokens[3].trim().toDoubleOrNull() ?: 0.0
-                        val expG = tokens[4].trim().toDoubleOrNull() ?: 0.0
-                        val expO = tokens[5].trim().toDoubleOrNull() ?: 0.0
-                        val notes = tokens[6].trim()
+                        val incExtra = if (tokens.size >= 8) tokens[3].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                        val expR = if (tokens.size >= 8) tokens[4].trim().toDoubleOrNull() ?: 0.0 else tokens[3].trim().toDoubleOrNull() ?: 0.0
+                        val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
+                        val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                        val notes = tokens.last().trim()
                         if (ym.isNotEmpty()) {
                             entriesToInsert.add(
                                 LedgerEntryEntity(
                                     yearMonth = ym,
                                     incVaclav = incV,
                                     incEleonora = incE,
+                                    incUnforeseen = incExtra,
                                     expRent = expR,
-                                    expGroceries = expG,
-                                    expOther = expO,
+                                    expGroceries = expG + expO,
+                                    expOther = 0.0,
                                     notes = notes
                                 )
                             )
