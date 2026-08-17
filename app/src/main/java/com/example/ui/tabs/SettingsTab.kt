@@ -933,7 +933,7 @@ private fun SettingsGroupCard(
     badgeColor: androidx.compose.ui.graphics.Color = BrandTeal,
     content: @Composable () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),

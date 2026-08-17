@@ -868,13 +868,19 @@ fun LedgerChart(entries: List<LedgerEntryEntity>, modifier: Modifier = Modifier)
     val expColor = androidx.compose.ui.graphics.Color(0xFFE57373)
 
     Card(
-        modifier = modifier.fillMaxWidth().height(180.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = modifier.fillMaxWidth().height(195.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Last 6 Months", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
+            CardHeaderPill(
+                title = "Last 6 Months Trend",
+                subtitle = "Income vs expense historical flow",
+                badgeText = "HISTORY",
+                accentColor = BrandTeal
+            )
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1038,12 +1044,15 @@ private fun SummarySubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = if (selectedMonth == "Current Baseline") "Monthly Cash Flow Summary" else "Summary for $selectedMonth",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = if (selectedMonth == "Current Baseline") "Monthly Cash Flow Summary" else "Summary for $selectedMonth",
+                    subtitle = "Income, living expenses & net monthly surplus",
+                    badgeText = "SUMMARY",
+                    accentColor = BrandTeal
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1107,35 +1116,18 @@ private fun SummarySubTab(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Variance vs Baseline Budget",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (surplusDiff >= 0) BrandTeal.copy(alpha = 0.15f) else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = if (surplusDiff >= 0) "+${fmtCompact(surplusDiff)} Net" else "${fmtCompact(surplusDiff)} Net",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (surplusDiff >= 0) BrandTeal else MaterialTheme.colorScheme.error,
-                                    fontFamily = FontFamily.Monospace
-                                ),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
+                    CardHeaderPill(
+                        title = "Variance vs Baseline Budget",
+                        subtitle = "Performance deviation against baseline target",
+                        badgeText = if (surplusDiff >= 0) "+${fmtCompact(surplusDiff)} Net" else "${fmtCompact(surplusDiff)} Net",
+                        accentColor = if (surplusDiff >= 0) GoodGreen else MaterialTheme.colorScheme.error
+                    )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
                         modifier = Modifier
@@ -1184,26 +1176,33 @@ private fun SummarySubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Income Breakdown",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Income Breakdown",
+                    subtitle = "Monthly take-home earnings & cash inflows",
+                    badgeText = "INCOME",
+                    accentColor = GoodGreen
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 if (entry != null) {
-                    IncomeRow(label = "Vaclav Net Income", value = fmtCZK(entry.incVaclav))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora Net Income", value = fmtCZK(entry.incEleonora))
+                    IncomeRow(label = "${state.settings.primaryName} Net Income", value = fmtCZK(entry.incVaclav))
+                    if (!state.settings.isSingleHousehold) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        IncomeRow(label = "${state.settings.spouseName} Net Income", value = fmtCZK(entry.incEleonora))
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Other Income", value = fmtCZK(entry.incUnforeseen))
                 } else {
                     val inc = state.currentIncome
-                    IncomeRow(label = "Vaclav Net Salary", value = fmtCZK(inc.vaclavNet))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
+                    IncomeRow(label = "${state.settings.primaryName} Net Salary", value = fmtCZK(inc.vaclavNet))
+                    if (!state.settings.isSingleHousehold) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        IncomeRow(label = "${state.settings.spouseName} Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Lecturing & Vouchers", value = fmtCZK(inc.lecturing + inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1230,14 +1229,17 @@ private fun SummarySubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Living Expenses Breakdown",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Living Expenses Breakdown",
+                    subtitle = "Monthly necessities, lifestyle & child allocations",
+                    badgeText = "EXPENSES",
+                    accentColor = BrandTeal
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 if (entry != null) {
                     ExpenseItem("Rent", entry.expRent)
@@ -1285,20 +1287,23 @@ private fun SummarySubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Savings & Investment Allocations",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Savings & Investment Allocations",
+                    subtitle = "Automated wealth accumulation flows",
+                    badgeText = "DCA FLOW",
+                    accentColor = BrandTeal
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 val s = state.settings
-                IncomeRow(label = "Portu / Stock ETFs (Vaclav)", value = fmtCZK(s.portuDcaMonthly))
-                if (s.ePortuDcaMonthly > 0) {
+                IncomeRow(label = "Portu / Stock ETFs (${s.primaryName})", value = fmtCZK(s.portuDcaMonthly))
+                if (!s.isSingleHousehold && s.ePortuDcaMonthly > 0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Portu / Stock ETFs (Eleonora)", value = fmtCZK(s.ePortuDcaMonthly))
+                    IncomeRow(label = "Portu / Stock ETFs (${s.spouseName})", value = fmtCZK(s.ePortuDcaMonthly))
                 }
                 if (s.dpsOwnContributionMonthly > 0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
