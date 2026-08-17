@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,16 +103,16 @@ fun MainScreen(
     val ledgerEntries by viewModel.ledgerEntries.collectAsState()
     val actionStates by viewModel.actionStates.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var targetCashFlowSubTab by remember { mutableIntStateOf(0) }
-    var targetProjectionsSubTab by remember { mutableIntStateOf(0) }
-    var targetPlanSubTab by remember { mutableIntStateOf(0) }
-    var targetSettingsSubTab by remember { mutableIntStateOf(0) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
+    var targetProjectionsSubTab by rememberSaveable { mutableIntStateOf(0) }
+    var targetPlanSubTab by rememberSaveable { mutableIntStateOf(0) }
+    var targetSettingsSubTab by rememberSaveable { mutableIntStateOf(0) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
-    var searchQuery by remember { mutableStateOf("") }
-    var showReformDialog by remember { mutableStateOf(false) }
-    var showExportReportDialog by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showReformDialog by rememberSaveable { mutableStateOf(false) }
+    var showExportReportDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 

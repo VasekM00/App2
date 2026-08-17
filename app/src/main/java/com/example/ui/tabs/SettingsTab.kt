@@ -52,6 +52,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,7 +113,7 @@ fun SettingsTab(
     var newCategoryName by remember { mutableStateOf("") }
     var newCategoryAmount by remember { mutableStateOf("") }
 
-    var selectedTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab) }
+    var selectedTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab) }
     val tabs = listOf("General", "Income", "Expenses", "Investments", "Taxes & Family", "Data")
 
     Column(

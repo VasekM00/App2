@@ -160,10 +160,10 @@ fun NetWorthChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val maxVal = maxOf(
-                data.maxOf { it.portfolio },
-                data.maxOf { it.target }
-            ) * 1.1
+            val maxVal = (maxOf(
+                data.maxOfOrNull { it.portfolio } ?: 0.0,
+                data.maxOfOrNull { it.target } ?: 0.0
+            ) * 1.1).coerceAtLeast(100.0)
 
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
@@ -200,8 +200,8 @@ fun NetWorthChart(
                             detectTapGestures { offset ->
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
-                                val stepX = chartWidth / (data.size - 1).toFloat()
-                                val clickedIdx = (relativeX / stepX).toInt().coerceIn(0, data.size - 1)
+                                val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
+                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
                                 selectedPointIndex = clickedIdx
                             }
                         }
@@ -245,7 +245,7 @@ fun NetWorthChart(
 
                     // Draw X-Axis Year Labels
                     val chartWidth = plotW * zoomScale
-                    val stepX = chartWidth / (data.size - 1).toFloat()
+                    val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
 
                     val xStepCount = 5
                     for (i in 0 until data.size step max(1, data.size / xStepCount)) {
@@ -434,7 +434,7 @@ fun MonteCarloFanChart(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val maxVal = points.maxOf { maxOf(it.p95, it.target) } * 1.1
+            val maxVal = ((points.maxOfOrNull { maxOf(it.p95, it.target) } ?: 0.0) * 1.1).coerceAtLeast(100.0)
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
@@ -464,7 +464,7 @@ fun MonteCarloFanChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    val stepX = plotW / (points.size - 1).toFloat()
+                    val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
 
                     // Draw Y-Axis lines and numeric labels
                     val ySteps = 4
@@ -682,8 +682,8 @@ fun CashFlowProjectionChart(
                             detectTapGestures { offset ->
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
-                                val stepX = chartWidth / (data.size - 1).toFloat()
-                                val clickedIdx = (relativeX / stepX).toInt().coerceIn(0, data.size - 1)
+                                val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
+                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
                                 selectedIndex = clickedIdx
                             }
                         }
@@ -716,7 +716,7 @@ fun CashFlowProjectionChart(
 
                     // X-Axis
                     val chartWidth = plotW * zoomScale
-                    val stepX = chartWidth / (data.size - 1).toFloat()
+                    val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
 
                     val xStepCount = 5
                     for (i in 0 until data.size step max(1, data.size / xStepCount)) {

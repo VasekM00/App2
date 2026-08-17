@@ -54,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +106,7 @@ fun CashFlowTab(
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var selectedSubTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
+    var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
     val subTabs = listOf("Budget & Incomes", "Monthly Ledger")
     var showAddDialog by remember { mutableStateOf(false) }
     var duplicateFromEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
@@ -787,35 +788,35 @@ private fun AddLedgerEntryDialog(
                     value = incV,
                     onValueChange = { incV = it },
                     label = { Text("Vaclav Net Income") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_v")
                 )
                 OutlinedTextField(
                     value = incE,
                     onValueChange = { incE = it },
                     label = { Text("Eleonora Net Income") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
                 )
                 OutlinedTextField(
                     value = incU,
                     onValueChange = { incU = it },
                     label = { Text("Other Income") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = expR,
                     onValueChange = { expR = it },
                     label = { Text("Rent Expense") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = expL,
                     onValueChange = { expL = it },
                     label = { Text("Groceries & Daily Living Expenses") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(

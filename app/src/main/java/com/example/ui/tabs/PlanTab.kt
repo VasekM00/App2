@@ -69,6 +69,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,7 +122,7 @@ fun PlanTab(
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var selectedSubTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
+    var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
     val subTabs = listOf("Czech Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
 
     Column(
@@ -1092,14 +1093,14 @@ private fun LifeGoalsSimulatorSubTab(
                         value = targetAmountStr,
                         onValueChange = { targetAmountStr = it },
                         label = { Text("Target Capital (CZK)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = currentSavedStr,
                         onValueChange = { currentSavedStr = it },
                         label = { Text("Current Savings (CZK)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

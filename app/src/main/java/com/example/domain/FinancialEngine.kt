@@ -284,7 +284,7 @@ object FinancialEngine {
 
     fun annuityFactor(rate: Double, years: Int): Double {
         if (years <= 0) return 0.0
-        if (rate <= 0.0) return years.toDouble()
+        if (abs(rate) < 1e-9) return years.toDouble()
         return (1.0 - (1.0 + rate).pow(-years)) / rate
     }
 
