@@ -48,12 +48,16 @@ import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.ColorPill
 import com.example.ui.components.MonteCarloFanChart
 import com.example.ui.components.NetWorthChart
 import com.example.ui.components.ScenarioSimulatorChips
 import com.example.ui.components.StressComparisonChart
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
@@ -130,9 +134,11 @@ private fun TrajectorySubTab(state: FullCalculationState) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "🎯 FIRE Trajectory & Milestone Assumptions",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "FIRE Trajectory Assumptions",
+                    subtitle = "Withdrawal rates, inflation & pension targets",
+                    badgeText = "MILESTONES",
+                    accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -226,12 +232,14 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "💼 Current Portfolio Balances",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Portfolio Balances",
+                    subtitle = "Liquid investments, DIP & pension capital",
+                    badgeText = "ASSETS",
+                    accentColor = BrandTeal
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 ProjectionMetricRow("Liquid Portu/ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -253,12 +261,14 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "🔄 Monthly Investment Contributions (DCA)",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Monthly DCA Contributions",
+                    subtitle = "Recurring automated investing cadence",
+                    badgeText = "SAVINGS",
+                    accentColor = GoodGreen
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 ProjectionMetricRow("Portu / ETF Monthly DCA", "${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo")
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -287,14 +297,27 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "Václav 👨‍💼",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Václav",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                        )
+                        ColorPill(
+                            text = "ACCUMULATING",
+                            color = BrandTeal,
+                            fontSize = 8.5.sp,
+                            horizontalPadding = 5.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text("💼 BALANCES", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
-                    Spacer(modifier = Modifier.height(2.dp))
+                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("• Portu: ${fmtCZK(s.liquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
                     Text("• DIP: ${fmtCZK(s.dipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
                     Text("• DPS: ${fmtCZK(s.dpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
@@ -302,8 +325,8 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                    Text("🔄 MONTHLY DCA", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary))
-                    Spacer(modifier = Modifier.height(2.dp))
+                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("• Portu: ${fmtCZK(s.portuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
                     Text("• DIP: ${fmtCZK(s.dipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
                     Text("• DPS: ${fmtCZK(s.dpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
@@ -319,14 +342,27 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "Eleonora 👩‍💼",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Eleonora",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                        )
+                        ColorPill(
+                            text = "ACCUMULATING",
+                            color = BrandGold,
+                            fontSize = 8.5.sp,
+                            horizontalPadding = 5.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text("💼 BALANCES", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
-                    Spacer(modifier = Modifier.height(2.dp))
+                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("• Portu: ${fmtCZK(s.eLiquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
                     Text("• DIP: ${fmtCZK(s.eDipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
                     Text("• DPS: ${fmtCZK(s.eDpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
@@ -334,8 +370,8 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                    Text("🔄 MONTHLY DCA", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary))
-                    Spacer(modifier = Modifier.height(2.dp))
+                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("• Portu: ${fmtCZK(s.ePortuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
                     Text("• DIP: ${fmtCZK(s.eDipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
                     Text("• DPS: ${fmtCZK(s.eDpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
@@ -352,11 +388,13 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "🇨🇿 Lepší penzijko & DIP Tax Shield",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Lepší penzijko & DIP Tax Shield",
+                    subtitle = "Czech statutory fee caps & youth incentives",
+                    badgeText = "CZ REFORM",
+                    accentColor = BrandGold
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 ProjectionMetricRow("0.5% TER Statutory Fee Cap", "Active (0.5% max)")
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -397,11 +435,13 @@ private fun MonteCarloAndStressSubTab(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "🎲 Monte Carlo Simulation Summary (1,000 Runs)",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Monte Carlo 1,000 Runs",
+                    subtitle = "Confidence distribution across market sequences",
+                    badgeText = "${mc.successRatePct.toInt()}% PROBABILITY",
+                    accentColor = BrandTeal
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 ProjectionMetricRow("Overall Success Rate", fmtPct(mc.successRatePct), isBold = true, highlightColor = BrandTeal)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -425,10 +465,20 @@ private fun MonteCarloAndStressSubTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Economic Stress Regimes Breakdown",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Economic Stress Regimes",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+            ColorPill(
+                text = "${state.stressScenarios.size} SCENARIOS",
+                color = BadRed,
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold,
+                horizontalPadding = 6.dp,
+                verticalPadding = 2.dp
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
 
         state.stressScenarios.forEach { scenario ->
@@ -454,12 +504,13 @@ private fun MonteCarloAndStressSubTab(
                             text = "${scenario.iconEmoji} ${scenario.name}",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
-                        Text(
-                            text = scenario.fireAge?.let { "FIRE Age: $it" } ?: "FIRE: Exceeds 35y",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                        ColorPill(
+                            text = scenario.fireAge?.let { "FIRE: Age $it" } ?: "FIRE: > 35y",
+                            color = if (scenario.fireAge != null) GoodGreen else BadRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
                         )
                     }
                     Text(

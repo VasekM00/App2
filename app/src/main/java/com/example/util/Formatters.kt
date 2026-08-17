@@ -35,13 +35,13 @@ object Formatters {
     fun fmtNum(value: Double): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        return czkFormat.format(displayVal.roundToInt())
+        return czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
     }
 
     fun fmtCZK(value: Double, symbol: String = "Kč"): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        val formatted = czkFormat.format(displayVal.roundToInt())
+        val formatted = czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
         return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
     }
 
@@ -67,7 +67,7 @@ object Formatters {
             }
             else -> {
                 val displayVal = roundToDisplay(value)
-                czkFormat.format(displayVal.roundToInt())
+                czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
             }
         }
         return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
@@ -75,15 +75,17 @@ object Formatters {
 
     fun fmtPct(value: Double, digits: Int? = null): String {
         if (value.isNaN() || value.isInfinite()) return "--%"
-        if (digits != null) {
-            return String.format(czkLocale, "%.${digits}f%%", value)
-        }
-        val isWhole = (value % 1.0) == 0.0
-        return if (isWhole) {
-            String.format(czkLocale, "%.0f%%", value)
+        val formatted = if (digits != null) {
+            String.format(czkLocale, "%.${digits}f%%", value)
         } else {
-            String.format(czkLocale, "%.1f%%", value)
+            val isWhole = (value % 1.0) == 0.0
+            if (isWhole) {
+                String.format(czkLocale, "%.0f%%", value)
+            } else {
+                String.format(czkLocale, "%.1f%%", value)
+            }
         }
+        return formatted.replace(' ', '\u00A0')
     }
 }
 

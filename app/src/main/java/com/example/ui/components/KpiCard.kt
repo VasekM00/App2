@@ -62,16 +62,16 @@ fun KpiCard(
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
-                Text(
+                ColorPill(
                     text = title.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.1.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    color = accentColor,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    horizontalPadding = 6.dp,
+                    verticalPadding = 2.dp,
+                    cornerRadius = 6.dp
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = value,
                     style = MaterialTheme.typography.titleLarge.copy(

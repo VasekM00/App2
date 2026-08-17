@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
 import com.example.domain.FullCalculationState
+import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.ColorPill
 import com.example.ui.components.KpiCard
 import com.example.ui.components.NetWorthChart
 import com.example.ui.theme.BrandBlue
@@ -159,8 +161,8 @@ fun OverviewTab(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(GoodGreen.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -168,15 +170,24 @@ fun OverviewTab(
                                 imageVector = Icons.AutoMirrored.Filled.ListAlt,
                                 contentDescription = null,
                                 tint = GoodGreen,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text(
-                                text = "Year $currentYear Execution Checklist",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Execution Checklist",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                                ColorPill(
+                                    text = "YEAR $currentYear",
+                                    color = GoodGreen,
+                                    fontSize = 9.sp,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp
+                                )
+                            }
                             Text(
                                 text = "$completedActionsCount of ${ActionMeta.items.size} optimization moves completed",
                                 style = MaterialTheme.typography.bodySmall.copy(
@@ -188,21 +199,15 @@ fun OverviewTab(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = GoodGreen.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "${((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}%",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoodGreen,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp
-                                ),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                        ColorPill(
+                            text = "${((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}% DONE",
+                            color = GoodGreen,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            horizontalPadding = 7.dp,
+                            verticalPadding = 3.dp
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
                             onClick = { isActionBannerExpanded = !isActionBannerExpanded },
@@ -297,11 +302,13 @@ fun OverviewTab(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Strategic Summary",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Strategic Highlights",
+                    subtitle = "Monthly dynamics & tax efficiency",
+                    badgeText = "KEY STATS",
+                    accentColor = BrandTeal
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 SummaryRow(label = "Monthly surplus", value = fmtCZK(state.currentIncome.totalMonthly - state.totalLivingCostMonthly))
                 Spacer(modifier = Modifier.height(8.dp))
                 SummaryRow(label = "Emergency coverage", value = "${String.format("%.1f", state.emergencyCoverageMonths)} months")

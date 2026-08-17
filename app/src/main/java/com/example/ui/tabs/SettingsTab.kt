@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -61,12 +62,28 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
 import com.example.domain.FullCalculationState
 import com.example.domain.parseCustomExpenses
 import com.example.domain.serializeCustomExpenses
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Share
+import com.example.util.BackupManager
+import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtPct
+import com.example.ui.components.ColorPill
 import com.example.ui.theme.BadRed
+import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
@@ -85,9 +102,13 @@ fun SettingsTab(
     val scrollState = rememberScrollState()
     val s = state.settings
     val tealColor = BrandTeal
+    val context = LocalContext.current
     
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
+    var showImportJsonDialog by remember { mutableStateOf(false) }
+    var importJsonText by remember { mutableStateOf("") }
+    var importErrorMessage by remember { mutableStateOf<String?>(null) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
     var newCategoryAmount by remember { mutableStateOf("") }
@@ -124,7 +145,7 @@ fun SettingsTab(
             when (selectedTab) {
                 0 -> {
                     // Base Settings
-                    SettingsGroupCard(title = "General Settings", initiallyExpanded = false) {
+                    SettingsGroupCard(title = "General Settings", initiallyExpanded = false, badgeText = "SYSTEM", badgeColor = BrandTeal) {
                         NumberSettingField(
                             label = "Base Year",
                             value = s.baseYear.toDouble(),
@@ -149,7 +170,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // FIRE Target Settings
-                    SettingsGroupCard(title = "FIRE Target & Parameters", initiallyExpanded = false) {
+                    SettingsGroupCard(title = "FIRE Target & Parameters", initiallyExpanded = false, badgeText = "TARGETS", badgeColor = BrandTeal) {
                         NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
                         NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                         NumberSettingField(label = "FIRE Target Override (CZK) [0=auto]", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
@@ -161,7 +182,7 @@ fun SettingsTab(
                 }
                 1 -> {
                     // Vaclav Income Settings
-                    SettingsGroupCard(title = "Vaclav Income Settings", initiallyExpanded = true) {
+                    SettingsGroupCard(title = "Vaclav Income Settings", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandTeal) {
                         NumberSettingField(label = "Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
                         NumberSettingField(label = "Annual September Raise (CZK)", value = s.vRaiseAnnual, onValueChange = { onUpdateSettings(s.copy(vRaiseAnnual = it)) })
                         NumberSettingField(label = "Annual Bonus (CZK)", value = s.vBonusAnnual, onValueChange = { onUpdateSettings(s.copy(vBonusAnnual = it)) })
@@ -171,7 +192,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Eleonora Active Income (Today)
-                    SettingsGroupCard(title = "Eleonora Active Income (Today)", initiallyExpanded = true) {
+                    SettingsGroupCard(title = "Eleonora Active Income (Today)", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandGold) {
                         NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
                         NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
                         BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
@@ -181,8 +202,10 @@ fun SettingsTab(
 
                     // Eleonora Future Return to Work Milestone
                     SettingsGroupCard(
-                        title = "🔮 Future Milestones: Eleonora Return to Work (${s.eReturnYear}+)",
-                        initiallyExpanded = false
+                        title = "Future Return to Work (${s.eReturnYear}+)",
+                        initiallyExpanded = false,
+                        badgeText = "MILESTONE",
+                        badgeColor = BrandGold
                     ) {
                         NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
                         NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
@@ -194,15 +217,17 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Gifts & Secondary Inflow
-                    SettingsGroupCard(title = "Family Support Gift", initiallyExpanded = true) {
+                    SettingsGroupCard(title = "Family Support Gift", initiallyExpanded = true, badgeText = "INFLOW", badgeColor = GoodGreen) {
                         NumberSettingField(label = "Family Gift Monthly (CZK)", value = s.familyGiftMonthly, onValueChange = { onUpdateSettings(s.copy(familyGiftMonthly = it)) })
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsGroupCard(
-                        title = "🔮 Future Milestones: Planned Lump Sum (${s.lumpSumYear})",
-                        initiallyExpanded = false
+                        title = "Planned Lump Sum (${s.lumpSumYear})",
+                        initiallyExpanded = false,
+                        badgeText = "INFLOW",
+                        badgeColor = GoodGreen
                     ) {
                         BooleanSettingField(label = "Include Lump Sum Event", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
                         NumberSettingField(label = "Planned Lump Sum Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
@@ -577,8 +602,82 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Backup & Snapshot Card
+                    SettingsGroupCard(title = "Data Backup & Snapshots 💾", initiallyExpanded = true, badgeText = "BACKUP", badgeColor = BrandTeal) {
+                        Text(
+                            text = "Export your entire financial model as JSON or copy a summary to keep your records safe.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val json = BackupManager.serializeSettingsToJson(s)
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("FIRE Settings JSON", json)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Settings JSON copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export JSON", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    importJsonText = ""
+                                    importErrorMessage = null
+                                    showImportJsonDialog = true
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Import JSON", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                val summary = buildString {
+                                    appendLine("📊 Financial Summary (${s.baseYear})")
+                                    appendLine("• Net Worth: ${fmtCZK(state.netWorthTotal)}")
+                                    appendLine("• Monthly Expenses: ${fmtCZK(state.totalLivingCostMonthly)}")
+                                    appendLine("• Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
+                                    appendLine("• FIRE Target: ${fmtCZK(state.fireBaseTargetToday)} (${fmtPct(s.safeWithdrawalRatePct)} SWR)")
+                                    appendLine("• Dual FIRE ETA: ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+                                    appendLine("• Emergency Reserve: ${fmtCZK(s.emergencyReserveCurrent)} (${String.format("%.1f", state.emergencyCoverageMonths)} months)")
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Financial Summary", summary)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Summary copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Copy Financial Snapshot Summary", fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Reset Card
-                    SettingsGroupCard(title = "Reset & Restore Data", initiallyExpanded = false) {
+                    SettingsGroupCard(title = "Reset & Danger Zone", initiallyExpanded = false) {
                         Button(
                             onClick = { showResetDialog = true },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
@@ -609,6 +708,61 @@ fun SettingsTab(
                 }
             }
         }
+    }
+
+    if (showImportJsonDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportJsonDialog = false },
+            title = { Text("Import Settings JSON", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Paste your exported JSON settings snippet below to restore your configuration:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = importJsonText,
+                        onValueChange = {
+                            importJsonText = it
+                            importErrorMessage = null
+                        },
+                        label = { Text("JSON Data") },
+                        minLines = 6,
+                        maxLines = 10,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (importErrorMessage != null) {
+                        Text(
+                            text = importErrorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.error)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val restored = BackupManager.deserializeSettingsFromJson(importJsonText, s)
+                        if (restored != null) {
+                            onUpdateSettings(restored)
+                            showImportJsonDialog = false
+                            Toast.makeText(context, "Settings successfully restored! 🎉", Toast.LENGTH_SHORT).show()
+                        } else {
+                            importErrorMessage = "Invalid JSON format. Please check the pasted data."
+                        }
+                    }
+                ) {
+                    Text("Apply & Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportJsonDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
     
     if (showResetDialog) {
@@ -737,13 +891,16 @@ private fun SettingsGroupCard(
     title: String,
     initiallyExpanded: Boolean = false,
     collapsible: Boolean = true,
+    badgeText: String? = null,
+    badgeColor: androidx.compose.ui.graphics.Color = BrandTeal,
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -753,11 +910,25 @@ private fun SettingsGroupCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    if (badgeText != null) {
+                        ColorPill(
+                            text = badgeText,
+                            color = badgeColor,
+                            fontSize = 9.sp,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
+                }
                 if (collapsible) {
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(

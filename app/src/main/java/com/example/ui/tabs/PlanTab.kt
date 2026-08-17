@@ -46,6 +46,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -87,7 +88,10 @@ import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.domain.parseCustomLifeGoals
 import com.example.domain.serializeCustomLifeGoals
+import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.ColorPill
 import com.example.ui.components.KpiCard
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -181,7 +185,7 @@ private fun RoadmapAndGoalsSubTab(
         }
 
         when (selectedView) {
-            0 -> FireRoadmapSubTab(state, actionStates, onToggleAction)
+            0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings)
             1 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
         }
     }
@@ -191,7 +195,8 @@ private fun RoadmapAndGoalsSubTab(
 private fun FireRoadmapSubTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean>,
-    onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit
+    onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
     val currentYear = state.settings.baseYear
@@ -204,9 +209,9 @@ private fun FireRoadmapSubTab(
 
     val primaryProgress = if (targetWorth > 0) ((investableNetWorth / targetWorth) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
-    // Filter modes: 0 -> All Strategy, 1 -> Milestones & Phases, 2 -> Action Checklist
+    // Filter modes: 0 -> Milestones & Phases, 1 -> Action Checklist
     var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionLabels = listOf("All Strategy", "🎯 Milestones & Phases", "✅ Checklist")
+    val sectionLabels = listOf("🎯 Milestones & Phases", "✅ Action Checklist")
 
     val completedActionsCount = ActionMeta.items.count { meta ->
         actionStates["${currentYear}_${meta.id}"] == true
@@ -302,45 +307,60 @@ private fun FireRoadmapSubTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1.05f)) {
                         Text(
                             text = "Investable Capital",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(investableNetWorth),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(modifier = Modifier.weight(1.05f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Target Capital (Today)",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(targetWorth),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
                                 color = BrandTeal
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column(modifier = Modifier.weight(0.9f), horizontalAlignment = Alignment.End) {
                         Text(
                             text = "Monthly SWR Flow",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(monthlyPassiveIncome),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
                                 color = GoodGreen
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -376,18 +396,14 @@ private fun FireRoadmapSubTab(
             }
         }
 
-        // 2. Section 1: FIRE Milestones Hierarchy
-        if (selectedSection == 0 || selectedSection == 1) {
-            FireMilestonesComparisonCard(state = state)
-        }
-
-        // 3. Section 2: 3-Phase Roadmap Timeline
-        if (selectedSection == 0 || selectedSection == 1) {
+        // 2. Section 1: FIRE Milestones Hierarchy & Roadmap Timeline
+        if (selectedSection == 0) {
+            FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings)
             RoadmapTimelineCard(state = state, fireYear = fireYear, targetWorth = targetWorth, monthlyPassiveIncome = monthlyPassiveIncome)
         }
 
-        // 4. Section 3: High-Leverage Execution Checklist
-        if (selectedSection == 0 || selectedSection == 2) {
+        // 3. Section 2: High-Leverage Execution Checklist
+        if (selectedSection == 1) {
             ActionChecklistCard(
                 currentYear = currentYear,
                 actionStates = actionStates,
@@ -638,8 +654,8 @@ private fun ActionChecklistCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(GoodGreen.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -647,15 +663,24 @@ private fun ActionChecklistCard(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = GoodGreen,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
-                        Text(
-                            text = "Execution Checklist ($currentYear)",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Execution Checklist",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            ColorPill(
+                                text = "YEAR $currentYear",
+                                color = GoodGreen,
+                                fontSize = 9.sp,
+                                horizontalPadding = 6.dp,
+                                verticalPadding = 2.dp
+                            )
+                        }
                         Text(
                             text = "High-impact tax & optimization moves for this year",
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -666,21 +691,15 @@ private fun ActionChecklistCard(
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = GoodGreen.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "$completedCount / ${ActionMeta.items.size} Done",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = GoodGreen,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                ColorPill(
+                    text = "$completedCount / ${ActionMeta.items.size} DONE",
+                    color = GoodGreen,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    horizontalPadding = 8.dp,
+                    verticalPadding = 4.dp
+                )
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1182,16 +1201,14 @@ private fun PensionSubTab(state: FullCalculationState) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "DIP Tax Deduction Matrix",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Tax deduction levels under the 48,000 CZK combined annual ceiling",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CardHeaderPill(
+                    title = "DIP Tax Deduction Matrix",
+                    subtitle = "Tax deductions under the 48,000 CZK combined annual ceiling",
+                    badgeText = "DIP SHIELD",
+                    accentColor = GoodGreen
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 state.dip.scenarios.forEach { scenario ->
                     Row(
@@ -1237,7 +1254,8 @@ private fun PensionSubTab(state: FullCalculationState) {
 
 @Composable
 private fun FireMilestonesComparisonCard(
-    state: FullCalculationState
+    state: FullCalculationState,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
     val investableNetWorth = state.settings.liquidPortfolioCurrent + state.settings.eLiquidPortfolioCurrent +
@@ -1277,18 +1295,15 @@ private fun FireMilestonesComparisonCard(
 
     // Current unlocked level determination
     val currentLevel = when {
-        milestones.fatFire.isAchieved -> "Level 4: Fat FIRE Achieved 💎"
-        milestones.standardFire.isAchieved -> "Level 3: Standard FIRE Achieved 🛡️"
-        milestones.leanFire.isAchieved -> "Level 2: Lean FIRE Achieved 🏠"
-        milestones.coastFire.isAchieved -> "Level 1: Coast FIRE Achieved 🌱"
-        else -> "Level 0: Building Foundation 🌱"
+        milestones.fatFire.isAchieved -> "Level 4: Fat FIRE 💎"
+        milestones.standardFire.isAchieved -> "Level 3: Standard FIRE 🛡️"
+        milestones.leanFire.isAchieved -> "Level 2: Lean FIRE 🏠"
+        milestones.coastFire.isAchieved -> "Level 1: Coast FIRE 🌱"
+        else -> "Level 0: Accumulation 🌱"
     }
 
-    // Selected milestone is driven by the 4-step segmented ladder
     val defaultTargetId = items.firstOrNull { !it.milestone.isAchieved }?.milestone?.id ?: items.last().milestone.id
     var selectedMilestoneId by remember { mutableStateOf(defaultTargetId) }
-    var showAllTiers by remember { mutableStateOf(false) }
-
     val activeConfig = items.find { it.milestone.id == selectedMilestoneId } ?: items.first()
 
     Card(
@@ -1299,67 +1314,23 @@ private fun FireMilestonesComparisonCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(BrandGold.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Flag,
-                            contentDescription = null,
-                            tint = BrandGold,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "FIRE Milestone Hierarchy",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "Coast → Lean → Standard → Fat FIRE ladder",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
-                }
+        Column(modifier = Modifier.padding(16.dp)) {
+            CardHeaderPill(
+                title = "FIRE Milestone Matrix",
+                subtitle = "Capital requirements & passive cash flow comparison",
+                badgeText = "4 TIERS",
+                badgeColor = BrandGold,
+                icon = Icons.Default.Flag,
+                accentColor = BrandGold
+            )
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.clickable { showAllTiers = !showAllTiers }
-                ) {
-                    Text(
-                        text = if (showAllTiers) "Focused View" else "Compare All",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = BrandTeal,
-                            fontSize = 10.5.sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Current Status Banner
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -1369,9 +1340,12 @@ private fun FireMilestonesComparisonCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "Current Status:",
+                            text = "Status:",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium
@@ -1383,83 +1357,195 @@ private fun FireMilestonesComparisonCard(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
-                    Text(
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    ColorPill(
                         text = "Net: ${fmtCompact(investableNetWorth)}",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = BrandTeal
-                        )
+                        color = BrandTeal,
+                        fontSize = 10.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        horizontalPadding = 7.dp,
+                        verticalPadding = 2.dp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Interactive Stepper / Ladder Segment Track
+            // Matrix Table Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items.forEach { config ->
-                    val isSelected = selectedMilestoneId == config.milestone.id
-                    val isAchieved = config.milestone.isAchieved
+                Text(
+                    text = "TIER",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1.15f)
+                )
+                Text(
+                    text = "TARGET",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1.15f)
+                )
+                Text(
+                    text = "SWR",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1.1f)
+                )
+                Text(
+                    text = "STATUS",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(0.85f)
+                )
+            }
 
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) config.accentColor.copy(alpha = 0.18f)
-                        else if (isAchieved) GoodGreen.copy(alpha = 0.10f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = if (isSelected) BorderStroke(1.5.dp, config.accentColor) else null,
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 1.dp)
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Matrix Table Rows
+            items.forEach { config ->
+                val isSelected = selectedMilestoneId == config.milestone.id
+                val m = config.milestone
+                val roundedTarget = roundTo10k(m.targetAmountToday)
+                val roundedSWR = roundTo1k(m.monthlyPassiveIncome)
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) config.accentColor.copy(alpha = 0.12f)
+                    else if (m.isAchieved) GoodGreen.copy(alpha = 0.05f)
+                    else Color.Transparent,
+                    border = if (isSelected) BorderStroke(1.dp, config.accentColor.copy(alpha = 0.6f)) else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            selectedMilestoneId = m.id
+                        }
+                ) {
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable {
-                                selectedMilestoneId = config.milestone.id
-                            }
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        // Tier Name + Icon
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1.15f)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                if (isAchieved) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = GoodGreen,
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                }
+                            Icon(
+                                imageVector = config.icon,
+                                contentDescription = null,
+                                tint = config.accentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
                                 Text(
                                     text = config.shortLabel,
-                                    style = MaterialTheme.typography.labelSmall.copy(
+                                    style = MaterialTheme.typography.bodySmall.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        color = if (isSelected) config.accentColor
-                                        else if (isAchieved) GoodGreen
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                        color = if (isSelected) config.accentColor else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = m.badgeLabel,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 8.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${config.milestone.progressPct.toInt()}%",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
+                        }
+
+                        // Target Capital
+                        Text(
+                            text = fmtCompact(roundedTarget),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.5.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.weight(1.15f)
+                        )
+
+                        // SWR
+                        Text(
+                            text = fmtCompact(roundedSWR),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.5.sp,
+                                color = config.accentColor
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.weight(1.1f)
+                        )
+
+                        // Status / ETA
+                        Box(
+                            modifier = Modifier.weight(0.85f),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            if (m.isAchieved) {
+                                ColorPill(
+                                    text = "DONE",
+                                    color = GoodGreen,
+                                    icon = Icons.Default.Check,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isAchieved) GoodGreen else config.accentColor
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 2.dp,
+                                    cornerRadius = 6.dp
                                 )
-                            )
+                            } else {
+                                ColorPill(
+                                    text = m.estimatedAge?.let { "Age $it" } ?: "2050+",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 2.dp,
+                                    cornerRadius = 6.dp
+                                )
+                            }
                         }
                     }
                 }
@@ -1467,27 +1553,228 @@ private fun FireMilestonesComparisonCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Either display the single Active Focused Card (clean, breathable) or All 4 if toggled
-            if (!showAllTiers) {
-                CleanMilestoneItemCard(
-                    config = activeConfig,
-                    investableNetWorth = investableNetWorth,
-                    swrPct = state.settings.safeWithdrawalRatePct,
-                    isExpanded = true,
-                    onToggleExpand = {}
-                )
-            } else {
-                items.forEach { config ->
-                    CleanMilestoneItemCard(
-                        config = config,
-                        investableNetWorth = investableNetWorth,
-                        swrPct = state.settings.safeWithdrawalRatePct,
-                        isExpanded = selectedMilestoneId == config.milestone.id,
-                        onToggleExpand = {
-                            selectedMilestoneId = config.milestone.id
+            // Selected Tier Detail Card
+            val activeM = activeConfig.milestone
+            val activeTarget = roundTo10k(activeM.targetAmountToday)
+            val activeGap = (activeTarget - investableNetWorth).coerceAtLeast(0.0)
+            val progressFloat = (activeM.progressPct / 100.0).toFloat().coerceIn(0f, 1f)
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = activeConfig.accentColor.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, activeConfig.accentColor.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Active Target: ${activeM.name}",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            ColorPill(
+                                text = "${activeM.progressPct.toInt()}%",
+                                color = if (activeM.isAchieved) GoodGreen else activeConfig.accentColor,
+                                fontSize = 9.5.sp,
+                                horizontalPadding = 6.dp,
+                                verticalPadding = 2.dp
+                            )
                         }
-                    )
+
+                        if (activeM.isAchieved) {
+                            ColorPill(
+                                text = "+${fmtCompact(investableNetWorth - activeTarget)} Surplus",
+                                color = GoodGreen,
+                                fontSize = 10.sp,
+                                horizontalPadding = 7.dp,
+                                verticalPadding = 3.dp
+                            )
+                        } else {
+                            Text(
+                                text = "${fmtCompact(activeGap)} gap",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    LinearProgressIndicator(
+                        progress = { progressFloat },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = if (activeM.isAchieved) GoodGreen else activeConfig.accentColor,
+                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Detail Metrics Summary Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Target Capital",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = fmtCZK(activeTarget),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.5.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Monthly SWR Flow",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.5.sp,
+                                    color = activeConfig.accentColor
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = if (activeM.isAchieved) "Portfolio Surplus" else "Remaining Gap",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.5.sp,
+                                    color = if (activeM.isAchieved) GoodGreen else MaterialTheme.colorScheme.onSurface
+                                ),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = activeM.description,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (activeM.id == "coast") {
+                            "• Compound interest alone turns current capital into full financial independence without future savings."
+                        } else if (activeM.isAchieved) {
+                            "• Milestone unlocked! Your current portfolio exceeds this threshold."
+                        } else {
+                            "• At ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR, reaching ${fmtCZK(activeTarget)} generates sustainable passive cash flow of ${fmtCZK(roundTo1k(activeM.monthlyPassiveIncome))} / month."
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+
+                    if (onUpdateSettings != null && activeM.id != "coast") {
+                        val isCurrentOverride = state.settings.fireTargetOverride > 0 &&
+                                (kotlin.math.abs(state.settings.fireTargetOverride - activeTarget) < 1.0)
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = activeConfig.accentColor.copy(alpha = 0.25f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isCurrentOverride) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ColorPill(
+                                        text = "⭐ Active Primary FIRE Goal",
+                                        color = BrandGold,
+                                        fontSize = 10.sp,
+                                        horizontalPadding = 7.dp,
+                                        verticalPadding = 3.dp
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        onUpdateSettings(state.settings.copy(fireTargetOverride = 0.0))
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Reset to Auto",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Make this your target:",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.5.sp
+                                    )
+                                )
+                                Button(
+                                    onClick = {
+                                        onUpdateSettings(state.settings.copy(fireTargetOverride = activeTarget))
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = activeConfig.accentColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(
+                                        text = "Set as Primary Goal (${fmtCompact(activeTarget)})",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1501,252 +1788,5 @@ private data class MilestoneConfig(
     val shortLabel: String,
     val levelIndex: Int
 )
-
-@Composable
-private fun CleanMilestoneItemCard(
-    config: MilestoneConfig,
-    investableNetWorth: Double,
-    swrPct: Double,
-    isExpanded: Boolean,
-    onToggleExpand: () -> Unit
-) {
-    val m = config.milestone
-    val roundedTarget = roundTo10k(m.targetAmountToday)
-    val roundedSWR = roundTo1k(m.monthlyPassiveIncome)
-    val progressFloat = (m.progressPct / 100.0).toFloat().coerceIn(0f, 1f)
-    val remainingGap = (roundedTarget - investableNetWorth).coerceAtLeast(0.0)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onToggleExpand() }
-            .animateContentSize(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isExpanded) config.accentColor.copy(alpha = 0.06f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        ),
-        border = if (isExpanded) BorderStroke(1.dp, config.accentColor.copy(alpha = 0.6f))
-        else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Row 1: Icon, Title, Badge, and Status Pill
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(config.accentColor.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = config.icon,
-                            contentDescription = null,
-                            tint = config.accentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = m.name,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = config.accentColor.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = m.badgeLabel,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = config.accentColor,
-                                        fontSize = 9.sp
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Right Status Badge
-                if (m.isAchieved) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = GoodGreen.copy(alpha = 0.15f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = GoodGreen,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "ACHIEVED",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoodGreen,
-                                    fontSize = 10.sp
-                                )
-                            )
-                        }
-                    }
-                } else if (m.estimatedAge != null) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = "Est. Age ${m.estimatedAge} (${m.estimatedYear})",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 10.sp
-                            ),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Row 2: Metrics Grid (Target Capital | Monthly Passive | Gap/Surplus)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Target Capital Today",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                    Text(
-                        text = fmtCZK(roundedTarget),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (m.id == "coast") "Target SWR at Full FIRE" else "Monthly SWR Flow",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                    Text(
-                        text = fmtCZK(roundedSWR),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = config.accentColor
-                        )
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = if (m.isAchieved) "Capital Surplus" else "Remaining Gap",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                    Text(
-                        text = if (m.isAchieved) "+${fmtCompact(investableNetWorth - roundedTarget)}"
-                        else fmtCompact(remainingGap),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (m.isAchieved) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Row 3: Progress Indicator
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                LinearProgressIndicator(
-                    progress = { progressFloat },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = if (m.isAchieved) GoodGreen else config.accentColor,
-                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                )
-                Text(
-                    text = "${m.progressPct.toInt()}%",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = if (m.isAchieved) GoodGreen else config.accentColor
-                    )
-                )
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            // Expanded Breakdown Details
-            AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        thickness = 0.5.dp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = m.description,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (m.id == "coast") {
-                            "• Compound interest alone turns current capital into full financial independence without future savings."
-                        } else if (m.isAchieved) {
-                            "• Milestone unlocked! Your current portfolio exceeds this threshold."
-                        } else {
-                            "• At ${fmtPct(swrPct)} SWR, reaching ${fmtCZK(roundedTarget)} generates sustainable passive cash flow of ${fmtCZK(roundedSWR)} / month."
-                        },
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 10.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
 
 

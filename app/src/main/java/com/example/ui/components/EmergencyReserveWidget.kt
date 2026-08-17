@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.ui.theme.BadRed
+import com.example.ui.components.ColorPill
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.WarnAmber
 import android.content.Context
@@ -108,23 +109,25 @@ fun EmergencyReserveWidget(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
-                        Text(
-                            text = "Emergency Fund & Runway",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Emergency Fund & Runway",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
                         Text(
                             text = "${String.format("%.1f", monthsCovered)} Months of Living Expenses Covered",
                             style = MaterialTheme.typography.bodySmall,
@@ -133,29 +136,16 @@ fun EmergencyReserveWidget(
                     }
                 }
 
-                // Status Badge
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = statusColor.copy(alpha = 0.15f),
-                    contentColor = statusColor
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = statusIcon,
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
-                }
+                // Status Pill Badge
+                ColorPill(
+                    text = statusText,
+                    color = statusColor,
+                    icon = statusIcon,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    horizontalPadding = 8.dp,
+                    verticalPadding = 4.dp
+                )
             }
 
             Spacer(modifier = Modifier.height(14.dp))

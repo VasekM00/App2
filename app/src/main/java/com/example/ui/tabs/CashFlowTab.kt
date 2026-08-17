@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -65,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.domain.FullCalculationState
+import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.ColorPill
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
@@ -102,7 +106,7 @@ fun CashFlowTab(
     modifier: Modifier = Modifier
 ) {
     var selectedSubTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
-    val subTabs = listOf("Budget & Incomes", "Monthly Records & Ledger")
+    val subTabs = listOf("Budget & Incomes", "Monthly Ledger")
     var showAddDialog by remember { mutableStateOf(false) }
     var duplicateFromEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var editingEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
@@ -120,7 +124,14 @@ fun CashFlowTab(
                 Tab(
                     selected = selectedSubTab == index,
                     onClick = { selectedSubTab = index },
-                    text = { Text(title, fontWeight = FontWeight.SemiBold) },
+                    text = {
+                        Text(
+                            text = title,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     modifier = Modifier.testTag("cashflow_subtab_$index")
                 )
             }
@@ -205,9 +216,11 @@ private fun IncomeSubTab(state: FullCalculationState) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Household Monthly Income Breakdown",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Monthly Income Breakdown",
+                    subtitle = "Combined household inflows",
+                    badgeText = "INFLOWS",
+                    accentColor = GoodGreen
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -279,9 +292,11 @@ private fun SpendingSubTab(state: FullCalculationState) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Current Monthly Living Costs",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                CardHeaderPill(
+                    title = "Monthly Living Costs",
+                    subtitle = "Baseline budget & essential expenses",
+                    badgeText = "EXPENSES",
+                    accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -362,14 +377,27 @@ private fun LedgerSubTab(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Monthly Records", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Monthly Records", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (entries.isNotEmpty()) {
+                        ColorPill(
+                            text = "${entries.size} MONTHS",
+                            color = BrandTeal,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (latestEntry != null) {
                         AssistChip(
@@ -513,17 +541,26 @@ private fun LedgerCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = entry.yearMonth,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ColorPill(
+                        text = entry.yearMonth,
+                        color = BrandTeal,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        horizontalPadding = 7.dp,
+                        verticalPadding = 3.dp
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Surplus: ${fmtCZK(netFlow)}",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (netFlow >= 0) BrandTeal else MaterialTheme.colorScheme.error
-                        )
+                    ColorPill(
+                        text = (if (netFlow >= 0) "+ " else "") + fmtCZK(netFlow),
+                        color = if (netFlow >= 0) GoodGreen else MaterialTheme.colorScheme.error,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        horizontalPadding = 7.dp,
+                        verticalPadding = 3.dp
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
@@ -572,10 +609,11 @@ private fun LedgerCard(
 
             // Monthly Difference / Variance Indicators Row
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // Expense Variance Badge
                 val expBadgeColor = if (expDiff > 50) MaterialTheme.colorScheme.error else if (expDiff < -50) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
@@ -874,8 +912,8 @@ private fun BudgetAndIncomesSubTab(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .horizontalScroll(rememberScrollState()),
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             sections.forEachIndexed { index, name ->

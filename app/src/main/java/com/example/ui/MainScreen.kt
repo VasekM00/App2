@@ -129,7 +129,7 @@ fun MainScreen(
         NavTabItem("Overview", Icons.Default.Dashboard, "nav_overview"),
         NavTabItem("Cash Flow", Icons.Default.Payments, "nav_cashflow"),
         NavTabItem("Projections", Icons.Default.Assessment, "nav_projections"),
-        NavTabItem("Strategy & Reform", Icons.Default.Checklist, "nav_plan")
+        NavTabItem("Strategy", Icons.Default.Checklist, "nav_plan")
     )
 
     val searchCatalog = remember {

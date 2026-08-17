@@ -91,8 +91,18 @@ fun NetWorthChart(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    ColorPill(
+                        text = "GROWTH TRAJECTORY",
+                        color = cTeal,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 2.dp,
+                        cornerRadius = 6.dp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Net Worth Growth Trajectory",
+                        text = "Net Worth Trajectory",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
@@ -158,13 +168,14 @@ fun NetWorthChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
-            val paddingLeft = 110f // Space for Y-Axis labels
-            val paddingBottom = 60f // Space for X-Axis labels
+            val paddingLeft = 85f // Space for Y-Axis labels
+            val paddingRight = 32f // Space on right to prevent clipping of curve and labels
+            val paddingBottom = 50f // Space for X-Axis labels
 
             val textPaint = remember(textColor) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 24f
+                    textSize = 22f
                     isAntiAlias = true
                 }
             }
@@ -187,7 +198,7 @@ fun NetWorthChart(
                         }
                         .pointerInput(data, zoomScale, panOffsetX) {
                             detectTapGestures { offset ->
-                                val chartWidth = (size.width - paddingLeft) * zoomScale
+                                val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
                                 val stepX = chartWidth / (data.size - 1).toFloat()
                                 val clickedIdx = (relativeX / stepX).toInt().coerceIn(0, data.size - 1)
@@ -197,7 +208,7 @@ fun NetWorthChart(
                 ) {
                     val w = size.width
                     val h = size.height
-                    val plotW = w - paddingLeft
+                    val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
 
                     // Draw Y-Axis lines and numeric labels
@@ -211,7 +222,7 @@ fun NetWorthChart(
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
-                            end = Offset(w, y),
+                            end = Offset(w - paddingRight, y),
                             strokeWidth = 1.5f
                         )
 
@@ -240,7 +251,7 @@ fun NetWorthChart(
                     for (i in 0 until data.size step max(1, data.size / xStepCount)) {
                         val pt = data[i]
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        if (x in paddingLeft..w) {
+                        if (x in paddingLeft..(w - paddingRight + 10f)) {
                             // Tick mark
                             drawLine(
                                 color = gridColor,
@@ -248,10 +259,12 @@ fun NetWorthChart(
                                 end = Offset(x, plotH + 8f),
                                 strokeWidth = 2f
                             )
+                            val labelText = "${pt.year}"
+                            val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
-                                "${pt.year}",
-                                x - 25f,
-                                plotH + 36f,
+                                labelText,
+                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                plotH + 34f,
                                 textPaint
                             )
                         }
@@ -259,7 +272,7 @@ fun NetWorthChart(
 
                     // Clip chart plotting within the axes space
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
 
                     // Build Target Path (Dashed Gold)
                     val targetPath = Path()
@@ -400,8 +413,18 @@ fun MonteCarloFanChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            ColorPill(
+                text = "MONTE CARLO PROBABILITY",
+                color = BrandTeal,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                horizontalPadding = 6.dp,
+                verticalPadding = 2.dp,
+                cornerRadius = 6.dp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Monte Carlo Multi-Run Simulation Fan",
+                text = "Multi-Run Simulation Fan",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
@@ -415,13 +438,14 @@ fun MonteCarloFanChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
-            val paddingLeft = 110f
-            val paddingBottom = 60f
+            val paddingLeft = 85f
+            val paddingRight = 32f
+            val paddingBottom = 50f
 
             val textPaint = remember(textColor) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 24f
+                    textSize = 22f
                     isAntiAlias = true
                 }
             }
@@ -438,7 +462,7 @@ fun MonteCarloFanChart(
                 ) {
                     val w = size.width
                     val h = size.height
-                    val plotW = w - paddingLeft
+                    val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
                     val stepX = plotW / (points.size - 1).toFloat()
 
@@ -452,7 +476,7 @@ fun MonteCarloFanChart(
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
-                            end = Offset(w, y),
+                            end = Offset(w - paddingRight, y),
                             strokeWidth = 1.5f
                         )
 
@@ -475,17 +499,19 @@ fun MonteCarloFanChart(
                             end = Offset(x, plotH + 8f),
                             strokeWidth = 2f
                         )
+                        val labelText = "${pt.year}"
+                        val textWidth = textPaint.measureText(labelText)
                         drawContext.canvas.nativeCanvas.drawText(
-                            "${pt.year}",
-                            x - 25f,
-                            plotH + 36f,
+                            labelText,
+                            (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                            plotH + 34f,
                             textPaint
                         )
                     }
 
                     // Clip plot area
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
 
                     // P95 -> P5 Area Shade
                     val fillPath = Path()
@@ -569,6 +595,16 @@ fun CashFlowProjectionChart(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    ColorPill(
+                        text = "DCA & ACCUMULATION",
+                        color = GoodGreen,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 2.dp,
+                        cornerRadius = 6.dp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Cash Flow & DCA Trajectory",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
@@ -614,13 +650,14 @@ fun CashFlowProjectionChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
-            val paddingLeft = 110f
-            val paddingBottom = 60f
+            val paddingLeft = 85f
+            val paddingRight = 32f
+            val paddingBottom = 50f
 
             val textPaint = remember(textColor) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 24f
+                    textSize = 22f
                     isAntiAlias = true
                 }
             }
@@ -643,7 +680,7 @@ fun CashFlowProjectionChart(
                         }
                         .pointerInput(data, zoomScale, panOffsetX) {
                             detectTapGestures { offset ->
-                                val chartWidth = (size.width - paddingLeft) * zoomScale
+                                val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
                                 val stepX = chartWidth / (data.size - 1).toFloat()
                                 val clickedIdx = (relativeX / stepX).toInt().coerceIn(0, data.size - 1)
@@ -653,7 +690,7 @@ fun CashFlowProjectionChart(
                 ) {
                     val w = size.width
                     val h = size.height
-                    val plotW = w - paddingLeft
+                    val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
 
                     // Y-Axis
@@ -665,7 +702,7 @@ fun CashFlowProjectionChart(
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
-                            end = Offset(w, y),
+                            end = Offset(w - paddingRight, y),
                             strokeWidth = 1.5f
                         )
 
@@ -685,24 +722,26 @@ fun CashFlowProjectionChart(
                     for (i in 0 until data.size step max(1, data.size / xStepCount)) {
                         val pt = data[i]
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        if (x in paddingLeft..w) {
+                        if (x in paddingLeft..(w - paddingRight + 10f)) {
                             drawLine(
                                 color = gridColor,
                                 start = Offset(x, plotH),
                                 end = Offset(x, plotH + 8f),
                                 strokeWidth = 2f
                             )
+                            val labelText = "${pt.year}"
+                            val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
-                                "${pt.year}",
-                                x - 25f,
-                                plotH + 36f,
+                                labelText,
+                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                plotH + 34f,
                                 textPaint
                             )
                         }
                     }
 
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
 
                     // Invested Annual path (Teal)
                     val addedPath = Path()
@@ -799,6 +838,16 @@ fun StressComparisonChart(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            ColorPill(
+                text = "MACRO STRESS SCENARIOS",
+                color = BadRed,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                horizontalPadding = 6.dp,
+                verticalPadding = 2.dp,
+                cornerRadius = 6.dp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Stress & Scenario Multi-Trajectory Comparison",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
@@ -841,13 +890,14 @@ fun StressComparisonChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
-            val paddingLeft = 110f
-            val paddingBottom = 60f
+            val paddingLeft = 85f
+            val paddingRight = 32f
+            val paddingBottom = 50f
 
             val textPaint = remember(textColor) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 24f
+                    textSize = 22f
                     isAntiAlias = true
                 }
             }
@@ -864,7 +914,7 @@ fun StressComparisonChart(
                 ) {
                     val w = size.width
                     val h = size.height
-                    val plotW = w - paddingLeft
+                    val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
 
                     // Y-Axis
@@ -876,7 +926,7 @@ fun StressComparisonChart(
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
-                            end = Offset(w, y),
+                            end = Offset(w - paddingRight, y),
                             strokeWidth = 1.5f
                         )
 
@@ -894,22 +944,26 @@ fun StressComparisonChart(
                     for (i in 0 until firstTraj.size step max(1, firstTraj.size / xStepCount)) {
                         val pt = firstTraj[i]
                         val x = paddingLeft + (i * stepX)
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(x, plotH),
-                            end = Offset(x, plotH + 8f),
-                            strokeWidth = 2f
-                        )
-                        drawContext.canvas.nativeCanvas.drawText(
-                            "${pt.year}",
-                            x - 25f,
-                            plotH + 36f,
-                            textPaint
-                        )
+                        if (x in paddingLeft..(w - paddingRight + 10f)) {
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(x, plotH),
+                                end = Offset(x, plotH + 8f),
+                                strokeWidth = 2f
+                            )
+                            val labelText = "${pt.year}"
+                            val textWidth = textPaint.measureText(labelText)
+                            drawContext.canvas.nativeCanvas.drawText(
+                                labelText,
+                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                plotH + 34f,
+                                textPaint
+                            )
+                        }
                     }
 
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
 
                     scenarios.forEachIndexed { sIdx, scenario ->
                         val color = scenarioColors[sIdx % scenarioColors.size]
