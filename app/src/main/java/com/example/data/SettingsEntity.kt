@@ -61,33 +61,33 @@ data class SettingsEntity(
     val transportMonthly: Double = 650.0,
     val subscriptionsMonthly: Double = 584.0,
     val otherDiscretionaryMonthly: Double = 1500.0,
-    // Tax parameters
-    val taxRatePct: Double = 15.0,
-    val taxRateSecondPct: Double = 23.0,
-    val taxSecondBracketThresholdAnnual: Double = 1582812.0,
-    val taxpayerCreditAnnual: Double = 30840.0,
-    val taxDeductionCeilingAnnual: Double = 48000.0,
-    val spouseTaxCreditAnnual: Double = 24840.0,
-    val spouseIncomeLimitAnnual: Double = 68000.0,
+    // Statutory & Tax parameters (Czech Tax Act No. 586/1992 Coll. & 2026/2027 Lepší penzijko)
+    val taxRatePct: Double = 15.0, // ZDP § 16 basic bracket
+    val taxRateSecondPct: Double = 23.0, // ZDP § 16 higher bracket
+    val taxSecondBracketThresholdAnnual: Double = 1582812.0, // 36x average wage
+    val taxpayerCreditAnnual: Double = 30840.0, // ZDP § 35ba(1)(a)
+    val taxDeductionCeilingAnnual: Double = 48000.0, // ZDP § 15 & § 15a combined DPS + DIP ceiling
+    val spouseTaxCreditAnnual: Double = 24840.0, // ZDP § 35ba(1)(b)
+    val spouseIncomeLimitAnnual: Double = 68000.0, // ZDP § 35ba(1)(b) income ceiling
     val includeSpouseCredit: Boolean = true,
     val hasChildUnder3: Boolean = true,
     val minWageMonthly: Double = 22400.0,
-    val dpsDeductionThresholdMonthly: Double = 1700.0,
-    val dpsStandardSubsidyMaxMonthly: Double = 340.0,
-    val dpsYouthSubsidyMaxMonthly: Double = 680.0,
-    val dpsMinDepositForSubsidy: Double = 500.0,
+    val dpsDeductionThresholdMonthly: Double = 1700.0, // ZDP § 15(5)
+    val dpsStandardSubsidyMaxMonthly: Double = 340.0, // Lepší penzijko 20% cap
+    val dpsYouthSubsidyMaxMonthly: Double = 680.0, // Lepší penzijko 40% youth cap (<30y)
+    val dpsMinDepositForSubsidy: Double = 500.0, // Lepší penzijko min deposit
     val dpsYouthAgeLimit: Int = 30,
     val dpsSubsidyRateStandardPct: Double = 20.0,
     val dpsSubsidyRateYouthPct: Double = 40.0,
-    // Child expenses & Multi-child settings
+    // Child expenses & Multi-child settings (ZDP § 35c)
     val childExpensesEnabled: Boolean = true,
     val child1Enabled: Boolean = true,
     val child1BirthYear: Int = 2024,
     val child2Enabled: Boolean = true,
     val child2BirthYear: Int = 2027,
-    val child1TaxBonusAnnual: Double = 15204.0,
-    val child2TaxBonusAnnual: Double = 22320.0,
-    val child3PlusTaxBonusAnnual: Double = 27840.0,
+    val child1TaxBonusAnnual: Double = 15204.0, // ZDP § 35c 1st child
+    val child2TaxBonusAnnual: Double = 22320.0, // ZDP § 35c 2nd child
+    val child3PlusTaxBonusAnnual: Double = 27840.0, // ZDP § 35c 3rd+ child
     val childToddlerMonthly: Double = 4800.0,
     val childPreschoolMonthly: Double = 6500.0,
     val childSchoolMonthly: Double = 8500.0,
@@ -95,6 +95,8 @@ data class SettingsEntity(
     val childUniMonthly: Double = 10000.0,
     val rentGrowthPct: Double = 4.0,
     val monteCarloN: Int = 400,
+    val monteCarloVolatilityPct: Double = 15.0,
+    val monteCarloSeed: Long = 42L,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]",
     val deletedCategoriesJson: String = "[]"
