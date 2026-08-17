@@ -86,7 +86,6 @@ import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)

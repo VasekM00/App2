@@ -88,6 +88,34 @@ object BackupManager {
         json.put("childTeenMonthly", s.childTeenMonthly)
         json.put("childUniMonthly", s.childUniMonthly)
 
+        // Statutory & Tax parameters (Czech Tax Act No. 586/1992 Coll.)
+        json.put("taxRatePct", s.taxRatePct)
+        json.put("taxRateSecondPct", s.taxRateSecondPct)
+        json.put("taxSecondBracketThresholdAnnual", s.taxSecondBracketThresholdAnnual)
+        json.put("taxpayerCreditAnnual", s.taxpayerCreditAnnual)
+        json.put("taxDeductionCeilingAnnual", s.taxDeductionCeilingAnnual)
+        json.put("spouseTaxCreditAnnual", s.spouseTaxCreditAnnual)
+        json.put("spouseIncomeLimitAnnual", s.spouseIncomeLimitAnnual)
+        json.put("includeSpouseCredit", s.includeSpouseCredit)
+        json.put("hasChildUnder3", s.hasChildUnder3)
+        json.put("minWageMonthly", s.minWageMonthly)
+
+        // DPS Reform parameters (Lepší penzijko)
+        json.put("dpsGrossReturnPct", s.dpsGrossReturnPct)
+        json.put("dpsAnnualFeePct", s.dpsAnnualFeePct)
+        json.put("dpsDeductionThresholdMonthly", s.dpsDeductionThresholdMonthly)
+        json.put("dpsStandardSubsidyMaxMonthly", s.dpsStandardSubsidyMaxMonthly)
+        json.put("dpsYouthSubsidyMaxMonthly", s.dpsYouthSubsidyMaxMonthly)
+        json.put("dpsMinDepositForSubsidy", s.dpsMinDepositForSubsidy)
+        json.put("dpsYouthAgeLimit", s.dpsYouthAgeLimit)
+        json.put("dpsSubsidyRateStandardPct", s.dpsSubsidyRateStandardPct)
+        json.put("dpsSubsidyRateYouthPct", s.dpsSubsidyRateYouthPct)
+
+        // Monte Carlo configuration
+        json.put("monteCarloN", s.monteCarloN)
+        json.put("monteCarloVolatilityPct", s.monteCarloVolatilityPct)
+        json.put("monteCarloSeed", s.monteCarloSeed)
+
         return json.toString(2)
     }
 
@@ -168,7 +196,35 @@ object BackupManager {
                 childPreschoolMonthly = json.optDouble("childPreschoolMonthly", fallback.childPreschoolMonthly),
                 childSchoolMonthly = json.optDouble("childSchoolMonthly", fallback.childSchoolMonthly),
                 childTeenMonthly = json.optDouble("childTeenMonthly", fallback.childTeenMonthly),
-                childUniMonthly = json.optDouble("childUniMonthly", fallback.childUniMonthly)
+                childUniMonthly = json.optDouble("childUniMonthly", fallback.childUniMonthly),
+
+                // Statutory & Tax parameters
+                taxRatePct = json.optDouble("taxRatePct", fallback.taxRatePct),
+                taxRateSecondPct = json.optDouble("taxRateSecondPct", fallback.taxRateSecondPct),
+                taxSecondBracketThresholdAnnual = json.optDouble("taxSecondBracketThresholdAnnual", fallback.taxSecondBracketThresholdAnnual),
+                taxpayerCreditAnnual = json.optDouble("taxpayerCreditAnnual", fallback.taxpayerCreditAnnual),
+                taxDeductionCeilingAnnual = json.optDouble("taxDeductionCeilingAnnual", fallback.taxDeductionCeilingAnnual),
+                spouseTaxCreditAnnual = json.optDouble("spouseTaxCreditAnnual", fallback.spouseTaxCreditAnnual),
+                spouseIncomeLimitAnnual = json.optDouble("spouseIncomeLimitAnnual", fallback.spouseIncomeLimitAnnual),
+                includeSpouseCredit = json.optBoolean("includeSpouseCredit", fallback.includeSpouseCredit),
+                hasChildUnder3 = json.optBoolean("hasChildUnder3", fallback.hasChildUnder3),
+                minWageMonthly = json.optDouble("minWageMonthly", fallback.minWageMonthly),
+
+                // DPS Reform parameters
+                dpsGrossReturnPct = json.optDouble("dpsGrossReturnPct", fallback.dpsGrossReturnPct),
+                dpsAnnualFeePct = json.optDouble("dpsAnnualFeePct", fallback.dpsAnnualFeePct),
+                dpsDeductionThresholdMonthly = json.optDouble("dpsDeductionThresholdMonthly", fallback.dpsDeductionThresholdMonthly),
+                dpsStandardSubsidyMaxMonthly = json.optDouble("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly),
+                dpsYouthSubsidyMaxMonthly = json.optDouble("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly),
+                dpsMinDepositForSubsidy = json.optDouble("dpsMinDepositForSubsidy", fallback.dpsMinDepositForSubsidy),
+                dpsYouthAgeLimit = json.optInt("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit),
+                dpsSubsidyRateStandardPct = json.optDouble("dpsSubsidyRateStandardPct", fallback.dpsSubsidyRateStandardPct),
+                dpsSubsidyRateYouthPct = json.optDouble("dpsSubsidyRateYouthPct", fallback.dpsSubsidyRateYouthPct),
+
+                // Monte Carlo configuration
+                monteCarloN = json.optInt("monteCarloN", fallback.monteCarloN),
+                monteCarloVolatilityPct = json.optDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
+                monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed)
             )
         } catch (_: Exception) {
             null

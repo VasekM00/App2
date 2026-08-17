@@ -115,7 +115,7 @@ fun NetWorthChart(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { zoomScale = (zoomScale * 1.25f).coerceAtMost(4.0f) },
-                        modifier = Modifier.size(32.dp).testTag("chart_zoom_in")
+                        modifier = Modifier.size(48.dp).testTag("chart_zoom_in")
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Zoom In")
                     }
@@ -124,7 +124,7 @@ fun NetWorthChart(
                             zoomScale = (zoomScale / 1.25f).coerceAtLeast(1.0f)
                             if (zoomScale == 1.0f) panOffsetX = 0.0f
                         },
-                        modifier = Modifier.size(32.dp).testTag("chart_zoom_out")
+                        modifier = Modifier.size(48.dp).testTag("chart_zoom_out")
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Zoom Out")
                     }
@@ -134,7 +134,7 @@ fun NetWorthChart(
                             panOffsetX = 0.0f
                             selectedPointIndex = null
                         },
-                        modifier = Modifier.size(32.dp).testTag("chart_zoom_reset")
+                        modifier = Modifier.size(48.dp).testTag("chart_zoom_reset")
                     ) {
                         Icon(Icons.Default.RestartAlt, contentDescription = "Reset Zoom")
                     }
@@ -618,7 +618,7 @@ fun CashFlowProjectionChart(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { zoomScale = (zoomScale * 1.25f).coerceAtMost(4.0f) },
-                        modifier = Modifier.size(32.dp).testTag("cf_zoom_in")
+                        modifier = Modifier.size(48.dp).testTag("cf_zoom_in")
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Zoom In")
                     }
@@ -627,7 +627,7 @@ fun CashFlowProjectionChart(
                             zoomScale = (zoomScale / 1.25f).coerceAtLeast(1.0f)
                             if (zoomScale == 1.0f) panOffsetX = 0.0f
                         },
-                        modifier = Modifier.size(32.dp).testTag("cf_zoom_out")
+                        modifier = Modifier.size(48.dp).testTag("cf_zoom_out")
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Zoom Out")
                     }
@@ -637,7 +637,7 @@ fun CashFlowProjectionChart(
                             panOffsetX = 0.0f
                             selectedIndex = null
                         },
-                        modifier = Modifier.size(32.dp).testTag("cf_zoom_reset")
+                        modifier = Modifier.size(48.dp).testTag("cf_zoom_reset")
                     ) {
                         Icon(Icons.Default.RestartAlt, contentDescription = "Reset Zoom")
                     }

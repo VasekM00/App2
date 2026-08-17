@@ -609,7 +609,6 @@ object FinancialEngine {
         return mag * cos(theta)
     }
 
-    private fun sin(rad: Double) = kotlin.math.sin(rad)
 
     private data class MonteCarloKey(
         val settings: SettingsEntity,
@@ -635,8 +634,8 @@ object FinancialEngine {
 
         val sims = settings.monteCarloN.coerceIn(100, 400)
         val meanReturn = settings.portfolioNominalReturnPct / 100.0
-        val sigma = 0.15
-        val random = Random(42) // Fixed seed for stable UI state
+        val sigma = settings.monteCarloVolatilityPct / 100.0
+        val random = Random(settings.monteCarloSeed)
 
         val baseYear = settings.baseYear
         val baseAge = settings.primaryAge

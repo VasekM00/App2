@@ -50,7 +50,6 @@ import com.example.util.Formatters.fmtCompact
 import com.example.ui.theme.BrandGoldDarkTheme
 import com.example.ui.theme.BrandLavenderDarkTheme
 
-import androidx.compose.material.icons.filled.Description
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
