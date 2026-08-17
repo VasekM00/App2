@@ -23,9 +23,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,21 +55,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtCompact
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-
 import com.example.ui.components.CashFlowProjectionChart
+import kotlin.math.abs
+
+fun nextYearMonth(ym: String): String {
+    val parts = ym.split("-")
+    if (parts.size == 2) {
+        val y = parts[0].toIntOrNull() ?: 2026
+        val m = parts[1].toIntOrNull() ?: 8
+        return if (m >= 12) {
+            "${y + 1}-01"
+        } else {
+            String.format("%04d-%02d", y, m + 1)
+        }
+    }
+    return "2026-09"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,11 +98,13 @@ fun CashFlowTab(
     onUpdateLedgerEntry: (LedgerEntryEntity) -> Unit = {},
     onDeleteLedgerEntry: (Long) -> Unit,
     onImportCsv: (Uri) -> Unit = {},
+    initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var selectedSubTab by remember { mutableIntStateOf(0) }
-    val subTabs = listOf("Summary", "Income", "Spending", "Ledger")
+    var selectedSubTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
+    val subTabs = listOf("Budget & Incomes", "Monthly Records & Ledger")
     var showAddDialog by remember { mutableStateOf(false) }
+    var duplicateFromEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var editingEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
 
     Column(
@@ -101,12 +127,18 @@ fun CashFlowTab(
         }
 
         when (selectedSubTab) {
-            0 -> SummarySubTab(state = state, ledgerEntries = ledgerEntries)
-            1 -> IncomeSubTab(state = state)
-            2 -> SpendingSubTab(state = state)
-            3 -> LedgerSubTab(
+            0 -> BudgetAndIncomesSubTab(state = state, ledgerEntries = ledgerEntries)
+            1 -> LedgerSubTab(
+                state = state,
                 entries = ledgerEntries,
-                onAddClick = { showAddDialog = true },
+                onAddClick = {
+                    duplicateFromEntry = null
+                    showAddDialog = true
+                },
+                onDuplicateEntry = { entry ->
+                    duplicateFromEntry = entry
+                    showAddDialog = true
+                },
                 onEditEntry = { entry -> editingEntry = entry },
                 onDelete = onDeleteLedgerEntry,
                 onImportCsv = onImportCsv
@@ -117,10 +149,16 @@ fun CashFlowTab(
     if (showAddDialog) {
         AddLedgerEntryDialog(
             state = state,
-            onDismiss = { showAddDialog = false },
+            entries = ledgerEntries,
+            duplicateFrom = duplicateFromEntry,
+            onDismiss = {
+                showAddDialog = false
+                duplicateFromEntry = null
+            },
             onSave = { ym, incV, incE, incU, expR, expL, notes ->
                 onAddLedgerEntry(ym, incV, incE, incU, expR, expL, notes)
                 showAddDialog = false
+                duplicateFromEntry = null
             }
         )
     }
@@ -128,6 +166,7 @@ fun CashFlowTab(
     editingEntry?.let { entry ->
         AddLedgerEntryDialog(
             state = state,
+            entries = ledgerEntries,
             initialEntry = entry,
             onDismiss = { editingEntry = null },
             onSave = { ym, incV, incE, incU, expR, expL, notes ->
@@ -205,17 +244,20 @@ private fun IncomeSubTab(state: FullCalculationState) {
 private fun IncomeRow(label: String, value: String, isBold: Boolean = false) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = if (isBold) MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-            else MaterialTheme.typography.bodyMedium
+            else MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f).padding(end = 8.dp)
         )
         Text(
             text = value,
             style = if (isBold) MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+            else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
         )
     }
 }
@@ -277,12 +319,14 @@ private fun ExpenseItem(label: String, value: Double, isBold: Boolean = false, h
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-            else MaterialTheme.typography.bodySmall
+            else MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f).padding(end = 8.dp)
         )
         Text(
             text = fmtCZK(value),
@@ -290,15 +334,18 @@ private fun ExpenseItem(label: String, value: Double, isBold: Boolean = false, h
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 color = highlightColor ?: MaterialTheme.colorScheme.onSurface
-            ) else MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+            ) else MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
         )
     }
 }
 
 @Composable
 private fun LedgerSubTab(
+    state: FullCalculationState,
     entries: List<LedgerEntryEntity>,
     onAddClick: () -> Unit,
+    onDuplicateEntry: (LedgerEntryEntity) -> Unit,
     onEditEntry: (LedgerEntryEntity) -> Unit,
     onDelete: (Long) -> Unit,
     onImportCsv: (Uri) -> Unit
@@ -307,6 +354,10 @@ private fun LedgerSubTab(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { onImportCsv(it) }
+    }
+
+    val latestEntry = remember(entries) {
+        entries.maxByOrNull { it.yearMonth }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -319,11 +370,31 @@ private fun LedgerSubTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Monthly Records", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                TextButton(
-                    onClick = { launcher.launch("text/comma-separated-values") },
-                    modifier = Modifier.testTag("import_csv_button")
-                ) {
-                    Text("Import CSV")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (latestEntry != null) {
+                        AssistChip(
+                            onClick = { onDuplicateEntry(latestEntry) },
+                            label = { Text("Duplicate Latest", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = BrandTeal.copy(alpha = 0.12f),
+                                labelColor = BrandTeal
+                            ),
+                            modifier = Modifier.testTag("duplicate_latest_button")
+                        )
+                    }
+                    TextButton(
+                        onClick = { launcher.launch("text/comma-separated-values") },
+                        modifier = Modifier.testTag("import_csv_button")
+                    ) {
+                        Text("Import CSV")
+                    }
                 }
             }
 
@@ -346,7 +417,7 @@ private fun LedgerSubTab(
                     )
                 }
             } else {
-                LedgerChart(entries = entries, modifier = Modifier.padding(16.dp))
+                LedgerChart(entries = entries, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -355,8 +426,10 @@ private fun LedgerSubTab(
                 ) {
                     items(entries, key = { it.id }) { entry ->
                         LedgerCard(
+                            state = state,
                             entry = entry,
                             onClick = { onEditEntry(entry) },
+                            onDuplicate = { onDuplicateEntry(entry) },
                             onDelete = { onDelete(entry.id) }
                         )
                     }
@@ -383,13 +456,48 @@ private fun LedgerSubTab(
 
 @Composable
 private fun LedgerCard(
+    state: FullCalculationState,
     entry: LedgerEntryEntity,
     onClick: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
     val totalInc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
     val totalExp = entry.expRent + entry.expGroceries + entry.expOther
     val netFlow = totalInc - totalExp
+
+    val baselineExp = state.totalLivingCostMonthly
+    val baselineInc = state.currentIncome.totalMonthly
+    val baselineSurplus = baselineInc - baselineExp
+
+    val expDiff = totalExp - baselineExp
+    val incDiff = totalInc - baselineInc
+    val surplusDiff = netFlow - baselineSurplus
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Entry") },
+            text = { Text("Are you sure you want to delete the ledger record for ${entry.yearMonth}?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Card(
         modifier = Modifier
@@ -399,62 +507,130 @@ private fun LedgerCard(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = entry.yearMonth,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = entry.yearMonth,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text(
-                        text = "Surplus: ${com.example.util.Formatters.fmtCZK(netFlow)}",
+                        text = "Surplus: ${fmtCZK(netFlow)}",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = if (netFlow >= 0) com.example.ui.theme.BrandTeal else MaterialTheme.colorScheme.error
+                            color = if (netFlow >= 0) BrandTeal else MaterialTheme.colorScheme.error
                         )
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onDuplicate,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("duplicate_ledger_entry_${entry.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Duplicate This Month",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("delete_ledger_entry_${entry.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Ledger Entry",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Income: ${fmtCZK(totalInc)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "Living Expenses: ${fmtCZK(totalExp)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            // Monthly Difference / Variance Indicators Row
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Expense Variance Badge
+                val expBadgeColor = if (expDiff > 50) MaterialTheme.colorScheme.error else if (expDiff < -50) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                val expBgColor = if (expDiff > 50) MaterialTheme.colorScheme.error.copy(alpha = 0.12f) else if (expDiff < -50) GoodGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = expBgColor
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (expDiff > 50) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                            contentDescription = null,
+                            tint = expBadgeColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (expDiff > 50) "Exp: +${fmtCompact(expDiff)} (Over)" else if (expDiff < -50) "Exp: -${fmtCompact(abs(expDiff))} (Saved)" else "Exp: On budget",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = expBadgeColor,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        )
+                    }
+                }
+
+                // Surplus Variance Badge
+                val surplusBadgeColor = if (surplusDiff >= 0) BrandTeal else MaterialTheme.colorScheme.error
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = surplusBadgeColor.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        text = "Income: ${com.example.util.Formatters.fmtCZK(totalInc)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        text = "Living Expenses: ${com.example.util.Formatters.fmtCZK(totalExp)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                if (entry.notes.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Notes: ${entry.notes}",
-                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        text = "Net: ${if (surplusDiff >= 0) "+" else ""}${fmtCompact(surplusDiff)} vs plan",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = surplusBadgeColor,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.testTag("delete_ledger_entry_${entry.id}")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Ledger Entry",
-                    tint = MaterialTheme.colorScheme.error
+            if (entry.notes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Notes: ${entry.notes}",
+                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
             }
         }
@@ -464,26 +640,105 @@ private fun LedgerCard(
 @Composable
 private fun AddLedgerEntryDialog(
     state: FullCalculationState,
+    entries: List<LedgerEntryEntity> = emptyList(),
     initialEntry: LedgerEntryEntity? = null,
+    duplicateFrom: LedgerEntryEntity? = null,
     onDismiss: () -> Unit,
     onSave: (String, Double, Double, Double, Double, Double, String) -> Unit
 ) {
     val defaultRent = state.settings.rentMonthly.toInt().toString()
     val defaultLiving = (state.settings.groceriesMonthly + state.settings.otherDiscretionaryMonthly).toInt().toString()
+    val defaultVaclav = state.currentIncome.vaclavNet.toInt().toString()
+    val defaultEleonora = state.currentIncome.eleonoraSalary.takeIf { it > 0 }?.toInt()?.toString()
+        ?: state.currentIncome.benefit.toInt().toString()
 
-    var ym by remember { mutableStateOf(initialEntry?.yearMonth ?: "2026-08") }
-    var incV by remember { mutableStateOf(initialEntry?.incVaclav?.toInt()?.toString() ?: "35000") }
-    var incE by remember { mutableStateOf(initialEntry?.incEleonora?.toInt()?.toString() ?: "0") }
-    var incU by remember { mutableStateOf(initialEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
-    var expR by remember { mutableStateOf(initialEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
-    var expL by remember { mutableStateOf(initialEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: defaultLiving) }
-    var notes by remember { mutableStateOf(initialEntry?.notes ?: "") }
+    val sourceEntry = initialEntry ?: duplicateFrom
+    val defaultYm = if (duplicateFrom != null) {
+        nextYearMonth(duplicateFrom.yearMonth)
+    } else if (initialEntry != null) {
+        initialEntry.yearMonth
+    } else {
+        val latest = entries.maxByOrNull { it.yearMonth }
+        if (latest != null) nextYearMonth(latest.yearMonth) else "${state.settings.baseYear}-08"
+    }
+
+    var ym by remember { mutableStateOf(defaultYm) }
+    var incV by remember { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: defaultVaclav) }
+    var incE by remember { mutableStateOf(sourceEntry?.incEleonora?.toInt()?.toString() ?: defaultEleonora) }
+    var incU by remember { mutableStateOf(sourceEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
+    var expR by remember { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
+    var expL by remember { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: defaultLiving) }
+    var notes by remember { mutableStateOf(sourceEntry?.notes ?: "") }
+
+    val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialEntry == null) "Add Monthly Ledger Record" else "Edit Monthly Ledger Record", fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                text = if (initialEntry != null) "Edit Monthly Ledger Record"
+                else if (duplicateFrom != null) "Duplicate Record (${duplicateFrom.yearMonth})"
+                else "Add Monthly Ledger Record",
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                // Quick Prefill helper buttons
+                if (initialEntry == null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (latestEntry != null) {
+                            AssistChip(
+                                onClick = {
+                                    ym = nextYearMonth(latestEntry.yearMonth)
+                                    incV = latestEntry.incVaclav.toInt().toString()
+                                    incE = latestEntry.incEleonora.toInt().toString()
+                                    incU = latestEntry.incUnforeseen.toInt().toString()
+                                    expR = latestEntry.expRent.toInt().toString()
+                                    expL = (latestEntry.expGroceries + latestEntry.expOther).toInt().toString()
+                                    notes = latestEntry.notes
+                                },
+                                label = { Text("⚡ Copy Latest (${latestEntry.yearMonth})", fontSize = 11.sp) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = BrandTeal.copy(alpha = 0.12f),
+                                    labelColor = BrandTeal
+                                )
+                            )
+                        }
+
+                        AssistChip(
+                            onClick = {
+                                incV = defaultVaclav
+                                incE = defaultEleonora
+                                incU = "0"
+                                expR = defaultRent
+                                expL = defaultLiving
+                            },
+                            label = { Text("⚙️ Baseline Budget", fontSize = 11.sp) }
+                        )
+
+                        AssistChip(
+                            onClick = {
+                                incV = "0"
+                                incE = "0"
+                                incU = "0"
+                                expR = "0"
+                                expL = "0"
+                                notes = ""
+                            },
+                            label = { Text("🧹 Clear", fontSize = 11.sp) }
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = ym,
                     onValueChange = { ym = it },
@@ -608,6 +863,55 @@ fun LedgerChart(entries: List<LedgerEntryEntity>, modifier: Modifier = Modifier)
 }
 
 @Composable
+private fun BudgetAndIncomesSubTab(
+    state: FullCalculationState,
+    ledgerEntries: List<LedgerEntryEntity>
+) {
+    var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details, 3 = Cash Flow Projection
+    val sections = listOf("Overview", "Incomes", "Expenses", "Projections")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            sections.forEachIndexed { index, name ->
+                val isSelected = selectedSection == index
+                AssistChip(
+                    onClick = { selectedSection = index },
+                    label = { Text(name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.testTag("budget_section_$index")
+                )
+            }
+        }
+
+        when (selectedSection) {
+            0 -> SummarySubTab(state = state, ledgerEntries = ledgerEntries)
+            1 -> IncomeSubTab(state = state)
+            2 -> SpendingSubTab(state = state)
+            3 -> {
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(16.dp)
+                ) {
+                    CashFlowProjectionChart(data = state.dualTrajectory)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummarySubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>
@@ -638,8 +942,7 @@ private fun SummarySubTab(
     val netFlow = totalInc - totalExp
     val savingsRatePct = if (totalInc > 0) (netFlow / totalInc) * 100.0 else 0.0
     val investmentsMonthly = state.investMonthlyTotal
-    val familySavingsMonthly = state.settings.familySavingsMonthly
-    val unallocatedSurplus = (netFlow - investmentsMonthly - familySavingsMonthly).coerceAtLeast(0.0)
+    val unallocatedSurplus = (netFlow - investmentsMonthly).coerceAtLeast(0.0)
 
     Column(
         modifier = Modifier
@@ -743,9 +1046,92 @@ private fun SummarySubTab(
                     totalIncome = totalInc,
                     expenses = totalExp,
                     investments = investmentsMonthly,
-                    familySavings = familySavingsMonthly,
                     unallocated = unallocatedSurplus
                 )
+            }
+        }
+
+        // Monthly Difference / Variance vs Baseline Budget Indicator Card (when viewing a specific recorded month)
+        if (entry != null) {
+            val baselineInc = state.currentIncome.totalMonthly
+            val baselineExp = state.totalLivingCostMonthly
+            val baselineSurplus = baselineInc - baselineExp
+            val incDiff = totalInc - baselineInc
+            val expDiff = totalExp - baselineExp
+            val surplusDiff = netFlow - baselineSurplus
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Variance vs Baseline Budget",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (surplusDiff >= 0) BrandTeal.copy(alpha = 0.15f) else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = if (surplusDiff >= 0) "+${fmtCompact(surplusDiff)} Net" else "${fmtCompact(surplusDiff)} Net",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (surplusDiff >= 0) BrandTeal else MaterialTheme.colorScheme.error,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        MetricStatBox(
+                            label = "Income Variance",
+                            value = "${if (incDiff >= 0) "+" else ""}${fmtCZK(incDiff)}",
+                            valueColor = if (incDiff >= 0) GoodGreen else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        MetricStatBox(
+                            label = "Expense Variance",
+                            value = "${if (expDiff > 0) "+" else ""}${fmtCZK(expDiff)}",
+                            valueColor = if (expDiff <= 0) GoodGreen else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        MetricStatBox(
+                            label = "Surplus Variance",
+                            value = "${if (surplusDiff >= 0) "+" else ""}${fmtCZK(surplusDiff)}",
+                            valueColor = if (surplusDiff >= 0) BrandTeal else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = if (surplusDiff >= 0) {
+                            "In $selectedMonth, you saved ${fmtCZK(abs(expDiff))} ${if (expDiff <= 0) "more" else "less"} on expenses and had a net surplus ${fmtCZK(surplusDiff)} above plan."
+                        } else {
+                            "In $selectedMonth, net cash surplus was ${fmtCZK(abs(surplusDiff))} below your baseline target."
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
             }
         }
 
@@ -815,14 +1201,29 @@ private fun SummarySubTab(
                     ExpenseItem("Groceries & Daily Living", entry.expGroceries + entry.expOther)
                 } else {
                     val s = state.settings
-                    ExpenseItem("Rent", s.rentMonthly)
-                    ExpenseItem("Groceries & Daily Living", s.groceriesMonthly + s.otherDiscretionaryMonthly)
-                    ExpenseItem("Cafes & Restaurants", s.cafesMonthly)
-                    ExpenseItem("Therapy / Physio", s.therapyMonthly)
-                    ExpenseItem("Charity", s.charityMonthly)
-                    ExpenseItem("Entertainment", s.entertainmentMonthly)
-                    ExpenseItem("Transport", s.transportMonthly)
-                    ExpenseItem("Subscriptions", s.subscriptionsMonthly)
+                    val deletedSet = com.example.domain.parseDeletedCategories(s.deletedCategoriesJson)
+                    if (!deletedSet.contains("rent")) ExpenseItem("Rent", s.rentMonthly)
+                    if (!deletedSet.contains("groceries")) ExpenseItem("Groceries & Daily Living", s.groceriesMonthly + s.otherDiscretionaryMonthly)
+                    if (!deletedSet.contains("cafes")) ExpenseItem("Cafes & Restaurants", s.cafesMonthly)
+                    if (!deletedSet.contains("therapy")) ExpenseItem("Therapy / Physio", s.therapyMonthly)
+                    if (!deletedSet.contains("charity")) ExpenseItem("Charity", s.charityMonthly)
+                    if (!deletedSet.contains("entertainment")) ExpenseItem("Entertainment", s.entertainmentMonthly)
+                    if (!deletedSet.contains("transport")) ExpenseItem("Transport", s.transportMonthly)
+                    if (!deletedSet.contains("subscriptions")) ExpenseItem("Subscriptions", s.subscriptionsMonthly)
+
+                    if (s.childExpensesEnabled) {
+                        if (s.child1Enabled) {
+                            ExpenseItem("Child 1 Expenses", com.example.domain.FinancialEngine.childMonthlyExpense(s.child1BirthYear, s.baseYear, s))
+                        }
+                        if (s.child2Enabled) {
+                            ExpenseItem("Child 2 Expenses", com.example.domain.FinancialEngine.childMonthlyExpense(s.child2BirthYear, s.baseYear, s))
+                        }
+                    }
+
+                    val customCategories = com.example.domain.parseCustomExpenses(s.customExpensesJson)
+                    customCategories.forEach { customItem ->
+                        ExpenseItem(customItem.name, customItem.amount)
+                    }
                 }
 
                 HorizontalDivider(
@@ -864,8 +1265,6 @@ private fun SummarySubTab(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Long-Term Investment Product (DIP)", value = fmtCZK(s.dipContributionMonthly))
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Family Cash Savings Account", value = fmtCZK(s.familySavingsMonthly))
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -875,7 +1274,7 @@ private fun SummarySubTab(
 
                 IncomeRow(
                     label = "TOTAL MONTHLY ALLOCATIONS",
-                    value = fmtCZK(investmentsMonthly + familySavingsMonthly),
+                    value = fmtCZK(investmentsMonthly),
                     isBold = true
                 )
             }
@@ -890,22 +1289,26 @@ private fun MetricStatBox(
     modifier: Modifier = Modifier,
     valueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(vertical = 10.dp, horizontal = 6.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
         Column(
+            modifier = Modifier
+                .padding(vertical = 10.dp, horizontal = 6.dp)
+                .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.5.sp,
+                    letterSpacing = 0.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -915,6 +1318,7 @@ private fun MetricStatBox(
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
+                    fontSize = 13.5.sp,
                     color = valueColor
                 ),
                 maxLines = 1,
@@ -929,17 +1333,14 @@ private fun CashAllocationBar(
     totalIncome: Double,
     expenses: Double,
     investments: Double,
-    familySavings: Double,
     unallocated: Double
 ) {
     val expRatio = if (totalIncome > 0) (expenses / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
     val invRatio = if (totalIncome > 0) (investments / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
-    val savRatio = if (totalIncome > 0) (familySavings / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
     val unallocRatio = if (totalIncome > 0) (unallocated.coerceAtLeast(0.0) / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
 
     val expColor = androidx.compose.ui.graphics.Color(0xFFE57373)
     val invColor = BrandTeal
-    val savColor = androidx.compose.ui.graphics.Color(0xFF81C784)
     val unallocColor = androidx.compose.ui.graphics.Color(0xFFFFB74D)
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -976,14 +1377,6 @@ private fun CashAllocationBar(
                         .background(invColor)
                 )
             }
-            if (savRatio > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(savRatio)
-                        .fillMaxHeight()
-                        .background(savColor)
-                )
-            }
             if (unallocRatio > 0f) {
                 Box(
                     modifier = Modifier
@@ -999,7 +1392,6 @@ private fun CashAllocationBar(
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             AllocationLegendItem("Living Expenses", expenses, expRatio, expColor)
             AllocationLegendItem("Investments (ETFs/DPS/DIP)", investments, invRatio, invColor)
-            AllocationLegendItem("Family Cash Savings", familySavings, savRatio, savColor)
             if (unallocated > 0) {
                 AllocationLegendItem("Surplus Buffer", unallocated, unallocRatio, unallocColor)
             }

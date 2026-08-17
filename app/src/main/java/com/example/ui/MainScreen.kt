@@ -2,6 +2,7 @@ package com.example.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,7 +79,16 @@ data class NavTabItem(
 data class SearchResult(
     val title: String,
     val category: String,
-    val tabIndex: Int
+    val tabIndex: Int,
+    val subTabIndex: Int = 0
+)
+
+data class SearchIndexEntry(
+    val title: String,
+    val category: String,
+    val tabIndex: Int,
+    val subTabIndex: Int,
+    val keywords: List<String>
 )
 
 @Composable
@@ -92,6 +103,12 @@ fun MainScreen(
     val actionStates by viewModel.actionStates.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
+    var targetCashFlowSubTab by remember { mutableIntStateOf(0) }
+    var targetProjectionsSubTab by remember { mutableIntStateOf(0) }
+    var targetPlanSubTab by remember { mutableIntStateOf(0) }
+    var targetSettingsSubTab by remember { mutableIntStateOf(0) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
     var searchQuery by remember { mutableStateOf("") }
     var showReformDialog by remember { mutableStateOf(false) }
     var showExportReportDialog by remember { mutableStateOf(false) }
@@ -112,38 +129,43 @@ fun MainScreen(
         NavTabItem("Overview", Icons.Default.Dashboard, "nav_overview"),
         NavTabItem("Cash Flow", Icons.Default.Payments, "nav_cashflow"),
         NavTabItem("Projections", Icons.Default.Assessment, "nav_projections"),
-        NavTabItem("Plan", Icons.Default.Checklist, "nav_plan"),
-        NavTabItem("Settings", Icons.Default.Settings, "nav_settings")
+        NavTabItem("Strategy & Reform", Icons.Default.Checklist, "nav_plan")
     )
+
+    val searchCatalog = remember {
+        listOf(
+            SearchIndexEntry("Emergency Cash Reserve & Runway", "Overview", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
+            SearchIndexEntry("FIRE Milestones & Freedom Score", "Overview", 0, 0, listOf("freedom", "score", "milestone", "coast", "lean", "standard", "barista", "overview")),
+            SearchIndexEntry("Monthly Budget & Surplus Summary", "Cash Flow > Budget & Incomes", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
+            SearchIndexEntry("Vaclav & Eleonora Salaries, Raises & Bonuses", "Cash Flow > Budget & Incomes", 1, 0, listOf("income", "salary", "bonus", "raise", "vaclav", "eleonora", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
+            SearchIndexEntry("Living Expenses, Rent & Groceries", "Cash Flow > Budget & Incomes", 1, 0, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
+            SearchIndexEntry("Historical Ledger Records & CSV Import", "Cash Flow > Monthly Records & Ledger", 1, 1, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
+            SearchIndexEntry("FIRE Target, SWR & 35-Year Trajectory", "Projections > 35y Trajectory", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory")),
+            SearchIndexEntry("What-If Live Sandbox & Investment Balances", "Projections > What-If Sandbox", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders")),
+            SearchIndexEntry("Monte Carlo Multi-Run Simulation & Macro Stress Scenarios", "Projections > Monte Carlo & Stress", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
+            SearchIndexEntry("Lepší Penzijko Reform, DPS & DIP Tax Shield", "Strategy & Reform > Czech Tax & Pension", 3, 0, listOf("pension", "dps", "dip", "reform", "lepsí penzijko", "youth", "40%", "tax shield", "deduction", "employer match", "early withdrawal")),
+            SearchIndexEntry("FIRE Roadmap, Annual Action Checklist & Life Goals", "Strategy & Reform > Roadmap & Goals", 3, 1, listOf("roadmap", "action", "checklist", "tasks", "phase", "timeline", "life goals", "goal", "down payment", "real estate", "house")),
+            SearchIndexEntry("Base Year, Inflation & Horizon Settings", "Settings > General", 4, 0, listOf("base year", "cpi", "inflation", "birth year", "settings", "general", "macro")),
+            SearchIndexEntry("Salary, Raise & Bonus Parameters", "Settings > Income", 4, 1, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings")),
+            SearchIndexEntry("Expense Categories & Custom Budgets", "Settings > Expenses", 4, 2, listOf("expense settings", "custom category", "delete category", "add category", "rent setting", "groceries setting")),
+            SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "Settings > Investments", 4, 3, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings")),
+            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > Taxes & Family", 4, 4, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "spouse tax relief", "child tax credit", "czech tax")),
+            SearchIndexEntry("Preset Profiles, CSV Export & Data Management", "Settings > Data", 4, 5, listOf("presets", "backup", "restore", "reset", "clear data", "export csv", "import csv", "data"))
+        )
+    }
 
     // Search filtering items
     val searchResults = remember(searchQuery) {
         if (searchQuery.isBlank()) emptyList()
         else {
-            val q = searchQuery.lowercase()
-            val list = mutableListOf<SearchResult>()
-            if ("income".contains(q) || "salary".contains(q) || "vaclav".contains(q)) {
-                list.add(SearchResult("Vaclav Salary & Income", "Cash Flow > Income", 1))
+            val q = searchQuery.lowercase().trim()
+            searchCatalog.filter { entry ->
+                entry.title.lowercase().contains(q) ||
+                entry.category.lowercase().contains(q) ||
+                entry.keywords.any { it.contains(q) }
+            }.map {
+                SearchResult(it.title, it.category, it.tabIndex, it.subTabIndex)
             }
-            if ("rent".contains(q) || "groceries".contains(q) || "spending".contains(q) || "cost".contains(q)) {
-                list.add(SearchResult("Living Expenses & Rent", "Cash Flow > Spending", 1))
-            }
-            if ("fire".contains(q) || "target".contains(q) || "swr".contains(q)) {
-                list.add(SearchResult("FIRE Target & SWR Model", "Projections > FIRE", 2))
-            }
-            if ("monte carlo".contains(q) || "p50".contains(q) || "simulation".contains(q)) {
-                list.add(SearchResult("Monte Carlo 1,000-Run Fan Chart", "Projections > Monte Carlo", 2))
-            }
-            if ("pension".contains(q) || "dps".contains(q) || "dip".contains(q) || "reform".contains(q)) {
-                list.add(SearchResult("Lepší Penzijko DPS / DIP Reform", "Plan > Pension", 3))
-            }
-            if ("action".contains(q) || "tax return".contains(q) || "checklist".contains(q)) {
-                list.add(SearchResult("Action Items Checklist", "Plan > Actions", 3))
-            }
-            if ("settings".contains(q) || "portfolio".contains(q) || "cpi".contains(q)) {
-                list.add(SearchResult("Portfolio & CPI Settings", "Settings", 4))
-            }
-            list
         }
     }
 
@@ -191,7 +213,8 @@ fun MainScreen(
                         isDarkTheme = isDarkTheme,
                         onToggleDarkTheme = onToggleDarkTheme,
                         onOpenReformDialog = { showReformDialog = true },
-                        onOpenExportReportDialog = { showExportReportDialog = true }
+                        onOpenExportReportDialog = { showExportReportDialog = true },
+                        onOpenSettings = { showSettingsDialog = true }
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -246,7 +269,17 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                selectedTab = result.tabIndex
+                                                if (result.tabIndex == 4) {
+                                                    targetSettingsSubTab = result.subTabIndex
+                                                    showSettingsDialog = true
+                                                } else {
+                                                    selectedTab = result.tabIndex
+                                                    when (result.tabIndex) {
+                                                        1 -> targetCashFlowSubTab = result.subTabIndex
+                                                        2 -> targetProjectionsSubTab = result.subTabIndex
+                                                        3 -> targetPlanSubTab = result.subTabIndex
+                                                    }
+                                                }
                                                 searchQuery = ""
                                             }
                                             .padding(12.dp),
@@ -265,7 +298,14 @@ fun MainScreen(
                     // Active Tab Content
                     Box(modifier = Modifier.weight(1f)) {
                         when (selectedTab) {
-                            0 -> OverviewTab(state = state)
+                            0 -> OverviewTab(
+                                state = state,
+                                actionStates = actionStates,
+                                onToggleAction = { year, id, isDone ->
+                                    viewModel.toggleAction(year, id, isDone)
+                                },
+                                onNavigateToPlan = { selectedTab = 3 }
+                            )
                             1 -> CashFlowTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
@@ -276,12 +316,14 @@ fun MainScreen(
                                     viewModel.updateLedgerEntry(entry)
                                 },
                                 onDeleteLedgerEntry = { id -> viewModel.deleteLedgerEntry(id) },
-                                onImportCsv = { uri -> viewModel.importCsvData(uri) }
+                                onImportCsv = { uri -> viewModel.importCsvData(uri) },
+                                initialSubTab = targetCashFlowSubTab
                             )
                             2 -> ProjectionsTab(
                                 state = state,
                                 onSensitivityChange = { r, c, s -> viewModel.setSensitivityOverrides(r, c, s) },
-                                onApplySettings = { viewModel.updateSettings(it) }
+                                onApplySettings = { viewModel.updateSettings(it) },
+                                initialSubTab = targetProjectionsSubTab
                             )
                             3 -> PlanTab(
                                 state = state,
@@ -289,13 +331,64 @@ fun MainScreen(
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
                                 },
-                                onUpdateSettings = { viewModel.updateSettings(it) }
+                                onUpdateSettings = { viewModel.updateSettings(it) },
+                                initialSubTab = targetPlanSubTab
                             )
-                            4 -> SettingsTab(
+                        }
+                    }
+                }
+            }
+
+            // Settings Modal Dialog / Fullsheet
+            if (showSettingsDialog) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { showSettingsDialog = false },
+                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Settings & Parameters",
+                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                                androidx.compose.material3.TextButton(
+                                    onClick = { showSettingsDialog = false },
+                                    modifier = Modifier.testTag("close_settings_button")
+                                ) {
+                                    Text("Done", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            HorizontalDivider()
+
+                            SettingsTab(
                                 state = state,
                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                 onResetDefaults = { viewModel.resetSettingsToDefault() },
-                                onClearAllData = { viewModel.clearAllUserData() }
+                                onClearAllData = { viewModel.clearAllUserData() },
+                                initialSubTab = targetSettingsSubTab,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

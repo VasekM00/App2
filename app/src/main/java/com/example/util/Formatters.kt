@@ -12,18 +12,65 @@ object Formatters {
         maximumFractionDigits = 0
     }
 
+    fun roundToDisplay(value: Double): Double {
+        if (value.isNaN() || value.isInfinite()) return 0.0
+        val absVal = abs(value)
+        return if (absVal >= 200.0) {
+            kotlin.math.round(value / 10.0) * 10.0
+        } else {
+            value
+        }
+    }
+
+    fun roundTo10k(value: Double): Double {
+        if (value.isNaN() || value.isInfinite()) return 0.0
+        return kotlin.math.round(value / 10_000.0) * 10_000.0
+    }
+
+    fun roundTo1k(value: Double): Double {
+        if (value.isNaN() || value.isInfinite()) return 0.0
+        return kotlin.math.round(value / 1_000.0) * 1_000.0
+    }
+
+    fun fmtNum(value: Double): String {
+        if (value.isNaN() || value.isInfinite()) return "--"
+        val displayVal = roundToDisplay(value)
+        return czkFormat.format(displayVal.roundToInt())
+    }
+
     fun fmtCZK(value: Double, symbol: String = "Kč"): String {
-        if (value.isNaN() || value.isInfinite()) return "--\u00A0$symbol"
-        return "${czkFormat.format(value.roundToInt())}\u00A0$symbol"
+        if (value.isNaN() || value.isInfinite()) return "--"
+        val displayVal = roundToDisplay(value)
+        val formatted = czkFormat.format(displayVal.roundToInt())
+        return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
     }
 
     fun fmtCompact(value: Double, symbol: String = "Kč"): String {
-        if (value.isNaN() || value.isInfinite()) return "--\u00A0$symbol"
+        if (value.isNaN() || value.isInfinite()) return "--"
         val absVal = abs(value)
-        return when {
-            absVal >= 1_000_000 -> String.format(czkLocale, "%.2fM\u00A0$symbol", value / 1_000_000.0)
-            else -> fmtCZK(value, symbol)
+        val numStr = when {
+            absVal >= 1_000_000 -> {
+                val mil = value / 1_000_000.0
+                if (abs(mil - mil.roundToInt()) < 0.05) {
+                    String.format(czkLocale, "%.0fM", mil)
+                } else {
+                    String.format(czkLocale, "%.1fM", mil)
+                }
+            }
+            absVal >= 100_000 -> {
+                val k = value / 1_000.0
+                if (abs(k - k.roundToInt()) < 0.05) {
+                    String.format(czkLocale, "%.0fk", k)
+                } else {
+                    String.format(czkLocale, "%.0fk", k)
+                }
+            }
+            else -> {
+                val displayVal = roundToDisplay(value)
+                czkFormat.format(displayVal.roundToInt())
+            }
         }
+        return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
     }
 
     fun fmtPct(value: Double, digits: Int? = null): String {
@@ -35,7 +82,8 @@ object Formatters {
         return if (isWhole) {
             String.format(czkLocale, "%.0f%%", value)
         } else {
-            String.format(czkLocale, "%.2f%%", value)
+            String.format(czkLocale, "%.1f%%", value)
         }
     }
 }
+

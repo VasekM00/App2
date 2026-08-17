@@ -42,7 +42,6 @@ data class SettingsEntity(
     val eDipBalanceCurrent: Double = 0.0,
     val eDipContributionMonthly: Double = 0.0,
     val eEmployerRetirementAnnual: Double = 0.0,
-    val familySavingsMonthly: Double = 4000.0,
     val emergencyReserveCurrent: Double = 200000.0,
     val emergencyReserveTarget: Double = 250000.0,
     val lifestyleCostAtFireMonthly: Double = 33000.0,
@@ -97,5 +96,6 @@ data class SettingsEntity(
     val rentGrowthPct: Double = 4.0,
     val monteCarloN: Int = 400,
     val customExpensesJson: String = "[]",
-    val customGoalsJson: String = "[]"
+    val customGoalsJson: String = "[]",
+    val deletedCategoriesJson: String = "[]"
 )

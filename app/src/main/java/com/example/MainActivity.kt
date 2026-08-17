@@ -22,14 +22,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val prefs = remember { context.getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE) }
             val systemDark = isSystemInDarkTheme()
-            var isDarkTheme by remember { mutableStateOf(systemDark) }
+            var isDarkTheme by remember {
+                mutableStateOf(prefs.getBoolean("is_dark_theme", systemDark))
+            }
 
             MartinuFinancialsTheme(darkTheme = isDarkTheme) {
                 MainScreen(
                     viewModel = viewModel,
                     isDarkTheme = isDarkTheme,
-                    onToggleDarkTheme = { isDarkTheme = !isDarkTheme }
+                    onToggleDarkTheme = {
+                        val next = !isDarkTheme
+                        isDarkTheme = next
+                        prefs.edit().putBoolean("is_dark_theme", next).apply()
+                    }
                 )
             }
         }

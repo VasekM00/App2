@@ -8,8 +8,15 @@ import androidx.compose.ui.graphics.Color
 val BrandTeal: Color
     @Composable get() = MaterialTheme.colorScheme.primary
 
-val BrandGold = Color(0xFFFACC15) // Vibrant Yellow accent
-val BrandBlue = Color(0xFF2563EB) // Royal blue accent
+val BrandGoldLight = Color(0xFFD97706) // Rich Warm Amber (high contrast on white light mode)
+val BrandGoldDarkTheme = Color(0xFFFBBF24) // Radiant Warm Gold (high contrast on dark mode)
+
+val BrandGold: Color
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BrandGoldDarkTheme else BrandGoldLight
+
+val BrandBlue: Color
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BrandBlueDarkTheme else Color(0xFF2563EB)
+
 val BrandLavender = Color(0xFFF1F5F9) // Replaced with Slate 100
 val BrandLavenderDark = Color(0xFFE2E8F0) // Replaced with Slate 200
 val BrandPurpleDeep = Color(0xFF0F172A) // Replaced with Slate 900
@@ -35,7 +42,6 @@ val BorderLight = Color(0xFFE2E8F0)
 // Clean Premium Minimalist Dark Palette
 val BrandLavenderDarkTheme = Color(0xFF0F172A) // Deep Slate
 val BrandPurpleDarkTheme = Color(0xFF1E293B) 
-val BrandGoldDarkTheme = Color(0xFFFDE047) // Bright yellow accent
 val BrandBlueDarkTheme = Color(0xFF60A5FA)
 
 val GoodGreenDark = Color(0xFF4ADE80)

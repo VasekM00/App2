@@ -83,10 +83,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = FinancialEngine.calculate(SettingsEntity(), runMonteCarlo = false)
     )
 
-    fun updateSettings(newSettings: SettingsEntity) {
+    fun updateSettings(newSettings: SettingsEntity, showSnackbar: Boolean = false) {
         viewModelScope.launch {
             repository.saveSettings(newSettings)
-            _uiEvent.emit(UiMessage.ShowSnackbar("Settings saved successfully"))
+            if (showSnackbar) {
+                _uiEvent.emit(UiMessage.ShowSnackbar("Settings saved successfully"))
+            }
         }
     }
 
@@ -137,39 +139,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiEvent.emit(UiMessage.ShowSnackbar("Error: Unable to open CSV file"))
                     return@launch
                 }
-                val reader = java.io.BufferedReader(java.io.InputStreamReader(inputStream))
                 val entriesToInsert = mutableListOf<LedgerEntryEntity>()
-                var line: String? = reader.readLine() // Skip header
-                while (run { line = reader.readLine(); line } != null) {
-                    val rawLine = line!!.trim()
-                    if (rawLine.isBlank()) continue
-                    val tokens = rawLine.split(",")
-                    if (tokens.size >= 6) {
-                        val ym = tokens[0].trim()
-                        val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
-                        val incE = tokens[2].trim().toDoubleOrNull() ?: 0.0
-                        val incExtra = if (tokens.size >= 8) tokens[3].trim().toDoubleOrNull() ?: 0.0 else 0.0
-                        val expR = if (tokens.size >= 8) tokens[4].trim().toDoubleOrNull() ?: 0.0 else tokens[3].trim().toDoubleOrNull() ?: 0.0
-                        val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
-                        val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
-                        val notes = tokens.last().trim()
-                        if (ym.isNotEmpty()) {
-                            entriesToInsert.add(
-                                LedgerEntryEntity(
-                                    yearMonth = ym,
-                                    incVaclav = incV,
-                                    incEleonora = incE,
-                                    incUnforeseen = incExtra,
-                                    expRent = expR,
-                                    expGroceries = expG + expO,
-                                    expOther = 0.0,
-                                    notes = notes
-                                )
-                            )
+                inputStream.use { stream ->
+                    java.io.BufferedReader(java.io.InputStreamReader(stream)).use { reader ->
+                        var line: String? = reader.readLine() // Skip header
+                        while (run { line = reader.readLine(); line } != null) {
+                            val rawLine = line!!.trim()
+                            if (rawLine.isBlank()) continue
+                            val tokens = rawLine.split(",")
+                            if (tokens.size >= 6) {
+                                val ym = tokens[0].trim()
+                                val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
+                                val incE = tokens[2].trim().toDoubleOrNull() ?: 0.0
+                                val incExtra = if (tokens.size >= 8) tokens[3].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                                val expR = if (tokens.size >= 8) tokens[4].trim().toDoubleOrNull() ?: 0.0 else tokens[3].trim().toDoubleOrNull() ?: 0.0
+                                val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
+                                val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                                val notes = tokens.last().trim()
+                                if (ym.isNotEmpty()) {
+                                    entriesToInsert.add(
+                                        LedgerEntryEntity(
+                                            yearMonth = ym,
+                                            incVaclav = incV,
+                                            incEleonora = incE,
+                                            incUnforeseen = incExtra,
+                                            expRent = expR,
+                                            expGroceries = expG + expO,
+                                            expOther = 0.0,
+                                            notes = notes
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                reader.close()
                 if (entriesToInsert.isNotEmpty()) {
                     repository.addLedgerEntries(entriesToInsert)
                     _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${entriesToInsert.size} entries!"))

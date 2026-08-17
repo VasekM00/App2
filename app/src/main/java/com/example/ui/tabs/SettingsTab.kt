@@ -1,6 +1,7 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -40,9 +43,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +79,7 @@ fun SettingsTab(
     onUpdateSettings: (SettingsEntity) -> Unit,
     onResetDefaults: () -> Unit,
     onClearAllData: () -> Unit,
+    initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -85,8 +92,8 @@ fun SettingsTab(
     var newCategoryName by remember { mutableStateOf("") }
     var newCategoryAmount by remember { mutableStateOf("") }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("General", "Income", "Investments", "Taxes & Family", "Expenses", "Data")
+    var selectedTab by remember(initialSubTab) { mutableIntStateOf(initialSubTab) }
+    val tabs = listOf("General", "Income", "Expenses", "Investments", "Taxes & Family", "Data")
 
     Column(
         modifier = modifier
@@ -117,16 +124,20 @@ fun SettingsTab(
             when (selectedTab) {
                 0 -> {
                     // Base Settings
-                    SettingsGroupCard(title = "General Settings") {
+                    SettingsGroupCard(title = "General Settings", initiallyExpanded = false) {
                         NumberSettingField(
                             label = "Base Year",
                             value = s.baseYear.toDouble(),
-                            onValueChange = { onUpdateSettings(s.copy(baseYear = it.toInt())) }
+                            onValueChange = { yr ->
+                                val y = yr.toInt()
+                                onUpdateSettings(s.copy(baseYear = y, primaryAge = y - com.example.domain.PRIMARY_BIRTH_YEAR))
+                            }
                         )
                         NumberSettingField(
-                            label = "Primary Age",
-                            value = s.primaryAge.toDouble(),
-                            onValueChange = { onUpdateSettings(s.copy(primaryAge = it.toInt())) }
+                            label = "Birth Year (Hardcoded: 2000)",
+                            value = com.example.domain.PRIMARY_BIRTH_YEAR.toDouble(),
+                            onValueChange = { /* hardcoded as requested */ },
+                            readOnly = true
                         )
                         NumberSettingField(
                             label = "CPI Inflation (%)",
@@ -138,7 +149,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // FIRE Target Settings
-                    SettingsGroupCard(title = "FIRE Target & Parameters") {
+                    SettingsGroupCard(title = "FIRE Target & Parameters", initiallyExpanded = false) {
                         NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
                         NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                         NumberSettingField(label = "FIRE Target Override (CZK) [0=auto]", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
@@ -150,7 +161,7 @@ fun SettingsTab(
                 }
                 1 -> {
                     // Vaclav Income Settings
-                    SettingsGroupCard(title = "Vaclav Income Settings") {
+                    SettingsGroupCard(title = "Vaclav Income Settings", initiallyExpanded = true) {
                         NumberSettingField(label = "Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
                         NumberSettingField(label = "Annual September Raise (CZK)", value = s.vRaiseAnnual, onValueChange = { onUpdateSettings(s.copy(vRaiseAnnual = it)) })
                         NumberSettingField(label = "Annual Bonus (CZK)", value = s.vBonusAnnual, onValueChange = { onUpdateSettings(s.copy(vBonusAnnual = it)) })
@@ -160,7 +171,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Eleonora Active Income (Today)
-                    SettingsGroupCard(title = "Eleonora Active Income (Today)") {
+                    SettingsGroupCard(title = "Eleonora Active Income (Today)", initiallyExpanded = true) {
                         NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
                         NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
                         BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
@@ -182,10 +193,9 @@ fun SettingsTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Gifts, Savings & Future Lump Sums
-                    SettingsGroupCard(title = "Family Gifts & Monthly Savings") {
+                    // Gifts & Secondary Inflow
+                    SettingsGroupCard(title = "Family Support Gift", initiallyExpanded = true) {
                         NumberSettingField(label = "Family Gift Monthly (CZK)", value = s.familyGiftMonthly, onValueChange = { onUpdateSettings(s.copy(familyGiftMonthly = it)) })
-                        NumberSettingField(label = "Family Savings Monthly (CZK)", value = s.familySavingsMonthly, onValueChange = { onUpdateSettings(s.copy(familySavingsMonthly = it)) })
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -200,6 +210,85 @@ fun SettingsTab(
                     }
                 }
                 2 -> {
+                    val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
+                    val deletedSet = remember(s.deletedCategoriesJson) { com.example.domain.parseDeletedCategories(s.deletedCategoriesJson) }
+
+                    fun deleteBuiltInKey(key: String, newSettings: SettingsEntity): SettingsEntity {
+                        val newSet = deletedSet + key
+                        return newSettings.copy(deletedCategoriesJson = com.example.domain.serializeDeletedCategories(newSet))
+                    }
+
+                    // Living Costs Settings
+                    SettingsGroupCard(title = "Monthly Living Expenses (CZK)", initiallyExpanded = true, collapsible = true) {
+                        if (!deletedSet.contains("rent")) {
+                            NumberSettingField(label = "Rent", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("rent", s.copy(rentMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("groceries")) {
+                            NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("groceries", s.copy(groceriesMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("other_discretionary") && s.otherDiscretionaryMonthly > 0.0) {
+                            NumberSettingField(label = "Other Discretionary", value = s.otherDiscretionaryMonthly, onValueChange = { onUpdateSettings(s.copy(otherDiscretionaryMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("other_discretionary", s.copy(otherDiscretionaryMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("cafes")) {
+                            NumberSettingField(label = "Cafes & Restaurants", value = s.cafesMonthly, onValueChange = { onUpdateSettings(s.copy(cafesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("cafes", s.copy(cafesMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("therapy")) {
+                            NumberSettingField(label = "Therapy / Physio", value = s.therapyMonthly, onValueChange = { onUpdateSettings(s.copy(therapyMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("therapy", s.copy(therapyMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("charity")) {
+                            NumberSettingField(label = "Charity", value = s.charityMonthly, onValueChange = { onUpdateSettings(s.copy(charityMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("charity", s.copy(charityMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("entertainment")) {
+                            NumberSettingField(label = "Entertainment", value = s.entertainmentMonthly, onValueChange = { onUpdateSettings(s.copy(entertainmentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("entertainment", s.copy(entertainmentMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("transport")) {
+                            NumberSettingField(label = "Transport", value = s.transportMonthly, onValueChange = { onUpdateSettings(s.copy(transportMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("transport", s.copy(transportMonthly = 0.0))) })
+                        }
+                        if (!deletedSet.contains("subscriptions")) {
+                            NumberSettingField(label = "Subscriptions", value = s.subscriptionsMonthly, onValueChange = { onUpdateSettings(s.copy(subscriptionsMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("subscriptions", s.copy(subscriptionsMonthly = 0.0))) })
+                        }
+
+                        if (customCategories.isNotEmpty()) {
+                            customCategories.forEach { item ->
+                                key(item.id) {
+                                    NumberSettingField(
+                                        label = item.name,
+                                        value = item.amount,
+                                        onValueChange = { updatedVal ->
+                                            val updatedList = customCategories.map {
+                                                if (it.id == item.id) it.copy(amount = updatedVal) else it
+                                            }
+                                            onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
+                                        },
+                                        onDelete = {
+                                            val updatedList = customCategories.filter { it.id != item.id }
+                                            onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                newCategoryName = ""
+                                newCategoryAmount = ""
+                                showAddCategoryDialog = true
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("add_custom_category_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text("+ Add Category")
+                        }
+                    }
+                }
+                3 -> {
                     var invSubTab by remember { mutableIntStateOf(0) }
 
                     SecondaryTabRow(
@@ -229,7 +318,7 @@ fun SettingsTab(
                     when (invSubTab) {
                         0 -> {
                             // Václav's Balances
-                            SettingsGroupCard(title = "Václav's Current Balances 💼") {
+                            SettingsGroupCard(title = "Václav's Current Balances 💼", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Portu / ETF Liquid Portfolio Balance (CZK)",
                                     value = s.liquidPortfolioCurrent,
@@ -251,7 +340,7 @@ fun SettingsTab(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Eleonora's Balances
-                            SettingsGroupCard(title = "Eleonora's Current Balances 💼") {
+                            SettingsGroupCard(title = "Eleonora's Current Balances 💼", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Eleonora's Liquid Portfolio Balance (CZK)",
                                     value = s.eLiquidPortfolioCurrent,
@@ -272,7 +361,7 @@ fun SettingsTab(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Emergency Reserve & Cash
-                            SettingsGroupCard(title = "Cash & Emergency Reserve 🏦") {
+                            SettingsGroupCard(title = "Cash & Emergency Reserve 🏦", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Savings & Bank Accounts (CZK)",
                                     value = s.emergencyReserveCurrent,
@@ -287,7 +376,7 @@ fun SettingsTab(
                         }
                         1 -> {
                             // Václav's Monthly Investments
-                            SettingsGroupCard(title = "Václav's Monthly Investments (DCA) 🔄") {
+                            SettingsGroupCard(title = "Václav's Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Portu / ETF Monthly DCA (CZK)",
                                     value = s.portuDcaMonthly,
@@ -313,7 +402,7 @@ fun SettingsTab(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Eleonora's Monthly Investments
-                            SettingsGroupCard(title = "Eleonora's Monthly Investments (DCA) 🔄") {
+                            SettingsGroupCard(title = "Eleonora's Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Eleonora's Portu / ETF Monthly DCA (CZK)",
                                     value = s.ePortuDcaMonthly,
@@ -338,7 +427,7 @@ fun SettingsTab(
                         }
                         2 -> {
                             // Return & Fee Assumptions
-                            SettingsGroupCard(title = "Global Return & Fee Assumptions 📊") {
+                            SettingsGroupCard(title = "Global Return & Fee Assumptions 📊", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Portfolio Nominal Return (%)",
                                     value = s.portfolioNominalReturnPct,
@@ -358,48 +447,37 @@ fun SettingsTab(
                         }
                     }
                 }
-                3 -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Czech Tax Return Helper Summary 🇨🇿",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            TaxSummaryRow(
-                                label = "Spouse Income (Calculated)",
-                                status = com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseOwnIncome),
-                                isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            TaxSummaryRow(
-                                label = "Spouse Tax Credit (<${(s.spouseIncomeLimitAnnual / 1000).toInt()}k income & child <3)",
-                                status = if (state.taxReturnHelper.spouseEligible) "Eligible (+${com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseCredit)})" else "Not Eligible",
-                                isGood = state.taxReturnHelper.spouseEligible
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            TaxSummaryRow(
-                                label = "Child Tax Bonus (Sleva na dítě)",
-                                status = "Eligible (+${com.example.util.Formatters.fmtCZK(state.taxReturnHelper.childBonus)})",
-                                isGood = true
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            TaxSummaryRow(
-                                label = "Estimated Annual DIP Tax Saving",
-                                status = fmtCZK(state.taxReturnHelper.dipSaving),
-                                isGood = true
-                            )
-                        }
+                4 -> {
+                    SettingsGroupCard(title = "Czech Tax Return Helper Summary 🇨🇿", initiallyExpanded = false) {
+                        TaxSummaryRow(
+                            label = "Spouse Income (Calculated)",
+                            status = com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseOwnIncome),
+                            isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        TaxSummaryRow(
+                            label = "Spouse Tax Credit (<${(s.spouseIncomeLimitAnnual / 1000).toInt()}k income & child <3)",
+                            status = if (state.taxReturnHelper.spouseEligible) "Eligible (+${com.example.util.Formatters.fmtCZK(state.taxReturnHelper.spouseCredit)})" else "Not Eligible",
+                            isGood = state.taxReturnHelper.spouseEligible
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        TaxSummaryRow(
+                            label = "Child Tax Bonus (Sleva na dítě)",
+                            status = "Eligible (+${com.example.util.Formatters.fmtCZK(state.taxReturnHelper.childBonus)})",
+                            isGood = true
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        TaxSummaryRow(
+                            label = "Estimated Annual DIP Tax Saving",
+                            status = fmtCZK(state.taxReturnHelper.dipSaving),
+                            isGood = true
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Tax Parameters
-                    SettingsGroupCard(title = "Tax Rates & Thresholds (Future-Proof)") {
+                    SettingsGroupCard(title = "Tax Rates & Thresholds (Future-Proof)", initiallyExpanded = false) {
                         NumberSettingField(label = "Base Income Tax Rate (%)", value = s.taxRatePct, onValueChange = { onUpdateSettings(s.copy(taxRatePct = it)) })
                         NumberSettingField(label = "Higher Bracket Tax Rate (%)", value = s.taxRateSecondPct, onValueChange = { onUpdateSettings(s.copy(taxRateSecondPct = it)) })
                         NumberSettingField(label = "Higher Bracket Threshold Annual (CZK)", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
@@ -415,7 +493,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Pension Reform & Subsidies
-                    SettingsGroupCard(title = "Pension Subsidies & Reform Rules") {
+                    SettingsGroupCard(title = "Pension Subsidies & Reform Rules", initiallyExpanded = false) {
                         NumberSettingField(label = "DPS Deduction Threshold Monthly (CZK)", value = s.dpsDeductionThresholdMonthly, onValueChange = { onUpdateSettings(s.copy(dpsDeductionThresholdMonthly = it)) })
                         NumberSettingField(label = "DPS Min Deposit For Subsidy Monthly (CZK)", value = s.dpsMinDepositForSubsidy, onValueChange = { onUpdateSettings(s.copy(dpsMinDepositForSubsidy = it)) })
                         NumberSettingField(label = "DPS Standard State Subsidy Max Monthly (CZK)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsStandardSubsidyMaxMonthly = it)) })
@@ -428,7 +506,7 @@ fun SettingsTab(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Child Settings & Expenses (Active Today)
-                    SettingsGroupCard(title = "Child & Family Expenses (Active Today)") {
+                    SettingsGroupCard(title = "Child & Family Expenses (Active Today)", initiallyExpanded = false) {
                         BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
                         
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -462,172 +540,70 @@ fun SettingsTab(
                         NumberSettingField(label = "Child 2 Tax Bonus Annual (CZK)", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
                     }
                 }
-                4 -> {
-                    val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
-
-                    // Living Costs Settings
-                    SettingsGroupCard(title = "Monthly Living Expenses (CZK)") {
-                        NumberSettingField(label = "Rent", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) })
-                        NumberSettingField(label = "Rent Growth (%)", value = s.rentGrowthPct, onValueChange = { onUpdateSettings(s.copy(rentGrowthPct = it)) })
-                        NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly + s.otherDiscretionaryMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it, otherDiscretionaryMonthly = 0.0)) })
-                        NumberSettingField(label = "Cafes & Restaurants", value = s.cafesMonthly, onValueChange = { onUpdateSettings(s.copy(cafesMonthly = it)) })
-                        NumberSettingField(label = "Therapy / Physio", value = s.therapyMonthly, onValueChange = { onUpdateSettings(s.copy(therapyMonthly = it)) })
-                        NumberSettingField(label = "Charity", value = s.charityMonthly, onValueChange = { onUpdateSettings(s.copy(charityMonthly = it)) })
-                        NumberSettingField(label = "Entertainment", value = s.entertainmentMonthly, onValueChange = { onUpdateSettings(s.copy(entertainmentMonthly = it)) })
-                        NumberSettingField(label = "Transport", value = s.transportMonthly, onValueChange = { onUpdateSettings(s.copy(transportMonthly = it)) })
-                        NumberSettingField(label = "Subscriptions", value = s.subscriptionsMonthly, onValueChange = { onUpdateSettings(s.copy(subscriptionsMonthly = it)) })
-
-                        if (customCategories.isNotEmpty()) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                            Text(
-                                text = "Custom Expense Categories",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            customCategories.forEach { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = item.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    NumberSettingField(
-                                        label = "",
-                                        value = item.amount,
-                                        onValueChange = { updatedVal ->
-                                            val updatedList = customCategories.map {
-                                                if (it.id == item.id) it.copy(amount = updatedVal) else it
-                                            }
-                                            onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
-                                        }
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            val updatedList = customCategories.filter { it.id != item.id }
-                                            onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete category",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedButton(
-                            onClick = {
-                                newCategoryName = ""
-                                newCategoryAmount = ""
-                                showAddCategoryDialog = true
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("add_custom_category_button"),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                            Text("+ Add Custom Expense Category")
-                        }
-                    }
-                }
                 5 -> {
                     // About & Version Card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                    SettingsGroupCard(title = "About Application", initiallyExpanded = false) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "About Application",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                text = "App Version",
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                color = tealColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text(
-                                    text = "App Version",
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = "v${com.example.BuildConfig.VERSION_NAME}",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = tealColor
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
-                                Surface(
-                                    color = tealColor.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "v5.4",
-                                        style = MaterialTheme.typography.labelLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = tealColor
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Czech Financial & FIRE Planning Suite",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Czech Financial & FIRE Planning Suite",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Reset Card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Reset & Restore Data",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { showResetDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("reset_defaults_button")
-                            ) {
-                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                Text("Reset All Settings to Defaults")
-                            }
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { showClearDataDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("clear_all_data_button")
-                            ) {
-                                Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null)
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                Text("Clear All Data (Ledger, Settings, Plan)")
-                            }
+                    SettingsGroupCard(title = "Reset & Restore Data", initiallyExpanded = false) {
+                        Button(
+                            onClick = { showResetDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("reset_defaults_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text("Reset All Settings to Defaults")
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { showClearDataDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("clear_all_data_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null)
+                            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                            Text("Clear All Data (Ledger, Settings, Plan)")
                         }
                     }
                 }
@@ -684,7 +660,7 @@ fun SettingsTab(
     if (showAddCategoryDialog) {
         AlertDialog(
             onDismissRequest = { showAddCategoryDialog = false },
-            title = { Text("Add Custom Expense Category") },
+            title = { Text("Add Expense Category") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -711,8 +687,9 @@ fun SettingsTab(
             confirmButton = {
                 Button(
                     onClick = {
-                        val name = newCategoryName.ifBlank { "Custom Category" }
-                        val amt = newCategoryAmount.toDoubleOrNull() ?: 0.0
+                        val name = newCategoryName.ifBlank { "Expense Category" }
+                        val sanitizedAmt = newCategoryAmount.replace(',', '.').trim()
+                        val amt = sanitizedAmt.toDoubleOrNull() ?: 0.0
                         val currentList = parseCustomExpenses(s.customExpensesJson)
                         val newItem = CustomExpenseItem(id = UUID.randomUUID().toString(), name = name, amount = amt)
                         val updatedList = currentList + newItem
@@ -759,6 +736,7 @@ private fun TaxSummaryRow(label: String, status: String, isGood: Boolean) {
 private fun SettingsGroupCard(
     title: String,
     initiallyExpanded: Boolean = false,
+    collapsible: Boolean = true,
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
@@ -771,7 +749,7 @@ private fun SettingsGroupCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                    .then(if (collapsible) Modifier.clickable { expanded = !expanded } else Modifier),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -780,15 +758,17 @@ private fun SettingsGroupCard(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse section" else "Expand section",
-                        tint = BrandTeal
-                    )
+                if (collapsible) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "Collapse section" else "Expand section",
+                            tint = BrandTeal
+                        )
+                    }
                 }
             }
-            if (expanded) {
+            if (!collapsible || expanded) {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
                     content()
@@ -803,12 +783,24 @@ private fun NumberSettingField(
     label: String,
     value: Double,
     onValueChange: (Double) -> Unit,
-    testTagStr: String = ""
+    testTagStr: String = "",
+    onDelete: (() -> Unit)? = null,
+    readOnly: Boolean = false
 ) {
     fun formatVal(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
     var textValue by remember { mutableStateOf(formatVal(value)) }
     var isFocused by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    fun commitCurrentText() {
+        if (readOnly) return
+        val sanitized = textValue.replace(',', '.').trim()
+        val parsed = if (sanitized.isEmpty()) 0.0 else sanitized.toDoubleOrNull()
+        if (parsed != null && parsed != value) {
+            onValueChange(parsed)
+        }
+    }
 
     // Sync external state changes when not actively being edited
     LaunchedEffect(value) {
@@ -820,33 +812,80 @@ private fun NumberSettingField(
         }
     }
 
+    // Debounce commit while user is typing
+    LaunchedEffect(textValue) {
+        if (isFocused) {
+            delay(400)
+            commitCurrentText()
+        }
+    }
+
+    if (showDeleteConfirm && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Category") },
+            text = { Text("Are you sure you want to delete \"$label\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (onDelete != null) {
+                        Modifier.pointerInput(label) {
+                            detectTapGestures(
+                                onLongPress = {
+                                    showDeleteConfirm = true
+                                }
+                            )
+                        }
+                    } else Modifier
+                )
         )
         OutlinedTextField(
             value = textValue,
             onValueChange = { input ->
-                textValue = input
-                val sanitized = input.replace(',', '.').trim()
-                if (sanitized.isEmpty()) {
-                    onValueChange(0.0)
-                } else {
-                    sanitized.toDoubleOrNull()?.let { onValueChange(it) }
+                if (!readOnly) {
+                    textValue = input
                 }
             },
+            readOnly = readOnly,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardActions = KeyboardActions(onDone = { commitCurrentText() }),
             singleLine = true,
             modifier = Modifier
-                .fillMaxWidth(0.45f)
-                .onFocusChanged { isFocused = it.isFocused }
+                .width(130.dp)
+                .onFocusChanged {
+                    if (isFocused && !it.isFocused) {
+                        commitCurrentText()
+                    }
+                    isFocused = it.isFocused
+                }
                 .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
         )
     }

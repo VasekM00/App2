@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +42,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
+import com.example.ui.theme.BadRed
+import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.WarnAmber
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import com.example.util.Formatters.fmtCompact
 
 @Composable
@@ -48,20 +54,36 @@ fun EmergencyReserveWidget(
     state: FullCalculationState,
     modifier: Modifier = Modifier
 ) {
-    var targetMonths by remember { mutableIntStateOf(6) }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE) }
+    var selectedTargetMode by remember {
+        mutableStateOf(prefs.getString("emergency_reserve_mode", "6M") ?: "6M")
+    }
 
     val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
     val currentLiquidCash = state.settings.emergencyReserveCurrent
-    val targetAmount = monthlyExpense * targetMonths
 
-    val progress = (currentLiquidCash / targetAmount).coerceIn(0.0, 1.0).toFloat()
+    val targetAmount = when (selectedTargetMode) {
+        "3M" -> monthlyExpense * 3
+        "6M" -> monthlyExpense * 6
+        "9M" -> monthlyExpense * 9
+        "12M" -> monthlyExpense * 12
+        "Target" -> if (state.settings.emergencyReserveTarget > 0.0) state.settings.emergencyReserveTarget else monthlyExpense * 6
+        else -> monthlyExpense * 6
+    }
 
+    val progress = (currentLiquidCash / targetAmount.coerceAtLeast(1.0)).coerceIn(0.0, 1.0).toFloat()
     val monthsCovered = currentLiquidCash / monthlyExpense
+    val targetMonthsEquivalent = targetAmount / monthlyExpense
+
+    val cGreen = GoodGreen
+    val cAmber = WarnAmber
+    val cRed = BadRed
 
     val (statusText, statusColor, statusIcon) = when {
-        monthsCovered >= targetMonths.toDouble() -> Triple("Fully Funded", Color(0xFF2E6B40), Icons.Default.CheckCircle)
-        monthsCovered >= (targetMonths.toDouble() * 0.5) -> Triple("Building Reserve", Color(0xFF8B5700), Icons.Default.Info)
-        else -> Triple("Low Reserve", Color(0xFFB03232), Icons.Default.Warning)
+        currentLiquidCash >= targetAmount -> Triple("Fully Funded", cGreen, Icons.Default.CheckCircle)
+        currentLiquidCash >= (targetAmount * 0.5) -> Triple("Building Reserve", cAmber, Icons.Default.Info)
+        else -> Triple("Low Reserve", cRed, Icons.Default.Warning)
     }
 
     Card(
@@ -72,6 +94,7 @@ fun EmergencyReserveWidget(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -147,7 +170,7 @@ fun EmergencyReserveWidget(
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
                 Text(
-                    text = "Target (${targetMonths}M): ${fmtCompact(targetAmount)}",
+                    text = "Target ($selectedTargetMode): ${fmtCompact(targetAmount)}",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -181,17 +204,20 @@ fun EmergencyReserveWidget(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(3, 6, 9, 12).forEach { months ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("3M", "6M", "9M", "12M", "Target").forEach { mode ->
                         FilterChip(
-                            selected = targetMonths == months,
-                            onClick = { targetMonths = months },
-                            label = { Text("${months}M", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            selected = selectedTargetMode == mode,
+                            onClick = {
+                                selectedTargetMode = mode
+                                prefs.edit().putString("emergency_reserve_mode", mode).apply()
+                            },
+                            label = { Text(mode, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                             ),
-                            modifier = Modifier.testTag("reserve_chip_${months}m")
+                            modifier = Modifier.testTag("reserve_chip_${mode.lowercase()}")
                         )
                     }
                 }

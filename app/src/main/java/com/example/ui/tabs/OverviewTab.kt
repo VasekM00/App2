@@ -1,5 +1,10 @@
 package com.example.ui.tabs
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,19 +15,41 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.ActionMeta
 import com.example.domain.FullCalculationState
 import com.example.ui.components.KpiCard
 import com.example.ui.components.NetWorthChart
@@ -39,9 +66,17 @@ import com.example.ui.components.EmergencyReserveWidget
 @Composable
 fun OverviewTab(
     state: FullCalculationState,
+    actionStates: Map<String, Boolean> = emptyMap(),
+    onToggleAction: ((year: Int, actionId: String, currentIsDone: Boolean) -> Unit)? = null,
+    onNavigateToPlan: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val currentYear = state.settings.baseYear
+    val completedActionsCount = ActionMeta.items.count { meta ->
+        actionStates["${currentYear}_${meta.id}"] == true
+    }
+    var isActionBannerExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -70,7 +105,7 @@ fun OverviewTab(
             KpiCard(
                 title = "Base FIRE target",
                 value = fmtCompact(state.fireBaseTargetToday),
-                hint = "Target in today's CZK",
+                hint = "Today's purchasing power",
                 accentColor = BrandGold,
                 modifier = itemWidth,
                 testTagStr = "kpi_fire_target"
@@ -95,10 +130,157 @@ fun OverviewTab(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Collapsible Action Checklist Banner
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("overview_action_banner"),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isActionBannerExpanded = !isActionBannerExpanded },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(GoodGreen.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ListAlt,
+                                contentDescription = null,
+                                tint = GoodGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Year $currentYear Execution Checklist",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "$completedActionsCount of ${ActionMeta.items.size} optimization moves completed",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = GoodGreen.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "${((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoodGreen,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp
+                                ),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = { isActionBannerExpanded = !isActionBannerExpanded },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isActionBannerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isActionBannerExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = isActionBannerExpanded) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(bottom = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        ActionMeta.items.forEach { meta ->
+                            val key = "${currentYear}_${meta.id}"
+                            val isDone = actionStates[key] == true
+                            val impact = state.actionsImpacts[meta.id] ?: 0.0
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onToggleAction?.invoke(currentYear, meta.id, isDone)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isDone,
+                                    onCheckedChange = {
+                                        onToggleAction?.invoke(currentYear, meta.id, isDone)
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = GoodGreen,
+                                        uncheckedColor = MaterialTheme.colorScheme.outline
+                                    ),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = meta.title,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = if (isDone) FontWeight.Normal else FontWeight.SemiBold,
+                                            color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    )
+                                    if (impact > 0) {
+                                        Text(
+                                            text = "+${fmtCZK(impact)} / yr impact",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 10.sp,
+                                                color = GoodGreen,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // Emergency Reserve & Runway Goal Tracker Widget
-        EmergencyReserveWidget(state = state)
+        EmergencyReserveWidget(
+            state = state
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -111,7 +293,8 @@ fun OverviewTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(

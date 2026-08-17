@@ -32,7 +32,7 @@ fun ReformDialog(
         title = {
             Column {
                 Text(
-                    text = "WHAT'S NEW · V5.4",
+                    text = "WHAT'S NEW · V${com.example.BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = BrandGold,
                         fontWeight = FontWeight.Bold,
@@ -50,7 +50,7 @@ fun ReformDialog(
             Column {
                 ReformBulletPoint(
                     title = "40% Doubled Youth Subsidy (<30 yrs)",
-                    desc = "Automatically calculates 680 CZK/mo state subsidy for Vaclav (age 26) through age 29."
+                    desc = "Automatically models doubled state subsidy up to 680 CZK/mo for eligible deposits under the youth age limit."
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 ReformBulletPoint(

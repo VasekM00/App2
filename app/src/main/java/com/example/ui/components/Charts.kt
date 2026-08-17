@@ -67,6 +67,7 @@ fun NetWorthChart(
     if (data.isEmpty()) return
 
     val cTeal = BrandTeal
+    val cGold = BrandGold
     val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
@@ -138,11 +139,11 @@ fun NetWorthChart(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(modifier = Modifier.size(10.dp).background(BrandTeal, CircleShape))
+                Box(modifier = Modifier.size(10.dp).background(cTeal, CircleShape))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(text = "Portfolio", style = MaterialTheme.typography.labelSmall)
                 Spacer(modifier = Modifier.width(12.dp))
-                Box(modifier = Modifier.size(10.dp).background(BrandGold, CircleShape))
+                Box(modifier = Modifier.size(10.dp).background(cGold, CircleShape))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall)
             }
@@ -279,7 +280,7 @@ fun NetWorthChart(
                     // Draw Target path
                     drawPath(
                         path = targetPath,
-                        color = BrandGold,
+                        color = cGold,
                         style = Stroke(
                             width = 4f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))
@@ -297,7 +298,7 @@ fun NetWorthChart(
                     if (fireReachedIndex >= 0) {
                         val fx = paddingLeft + panOffsetX + (fireReachedIndex * stepX)
                         val fy = plotH - (plotH * (data[fireReachedIndex].portfolio / maxVal)).toFloat()
-                        drawCircle(color = BrandGold, radius = 12f, center = Offset(fx, fy))
+                        drawCircle(color = cGold, radius = 12f, center = Offset(fx, fy))
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
 
@@ -347,7 +348,7 @@ fun NetWorthChart(
                                 text = pt.status,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = if (pt.status == "FIRE OK") GoodGreen else BrandGold
+                                    color = if (pt.status == "FIRE OK") GoodGreen else cGold
                                 )
                             )
                         }
@@ -368,7 +369,7 @@ fun NetWorthChart(
                                 text = "Target: ${fmtCompact(pt.target)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.Monospace,
-                                    color = BrandGold
+                                    color = cGold
                                 )
                             )
                         }
@@ -400,11 +401,11 @@ fun MonteCarloFanChart(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Monte Carlo 1,000-Run Fan Chart",
+                text = "Monte Carlo Multi-Run Simulation Fan",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "P95 Best Case, P50 Median, and P5 Worst Case Confidence Band",
+                text = "P95 Upper Bound, P50 Median, and P5 Lower Bound Confidence Band",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
@@ -548,6 +549,7 @@ fun CashFlowProjectionChart(
     if (data.isEmpty()) return
 
     val cTeal = BrandTeal
+    val cGold = BrandGold
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -718,7 +720,7 @@ fun CashFlowProjectionChart(
                         val y = plotH - (plotH * (pt.reinvestAnnual / maxVal)).toFloat()
                         if (i == 0) reinvestedPath.moveTo(x, y) else reinvestedPath.lineTo(x, y)
                     }
-                    drawPath(reinvestedPath, BrandGold, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f))))
+                    drawPath(reinvestedPath, cGold, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f))))
 
                     // Highlight line
                     selectedIndex?.let { idx ->
@@ -759,7 +761,7 @@ fun CashFlowProjectionChart(
                         )
                         Text(
                             text = "Eleonora Reinvested: ${fmtCompact(pt.reinvestAnnual)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, color = BrandGold)
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, color = cGold)
                         )
                     }
                 }
@@ -778,12 +780,13 @@ fun StressComparisonChart(
     val cTeal = BrandTeal
     val cGreen = GoodGreen
     val cRed = BadRed
+    val cGold = BrandGold
 
     val scenarioColors = listOf(
         cTeal,                         // Baseline
         cGreen,                        // Bull
         cRed,                          // Stagflation
-        BrandGold,                     // Crash
+        cGold,                         // Crash
         Color(0xFF9C27B0)              // Inflation Shock
     )
 

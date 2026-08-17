@@ -19,7 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -39,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
@@ -56,6 +60,7 @@ fun HeroHeader(
     onToggleDarkTheme: () -> Unit,
     onOpenReformDialog: () -> Unit,
     onOpenExportReportDialog: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -90,17 +95,8 @@ fun HeroHeader(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "PORTFOLIO OVERVIEW",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                letterSpacing = 2.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Wealth Dashboard",
-                            style = MaterialTheme.typography.headlineLarge.copy(
+                            text = "Financial Dashboard",
+                            style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
@@ -138,18 +134,35 @@ fun HeroHeader(
                                 tint = Color.White
                             )
                         }
+
+                        IconButton(
+                            onClick = onOpenSettings,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .testTag("open_settings_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 AssistChip(
                     onClick = onOpenReformDialog,
                     label = {
                         Text(
-                            text = "v5.4 · Pension Reform",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold
+                            text = "v${com.example.BuildConfig.VERSION_NAME} · Pension Reform",
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         )
                     },
                     leadingIcon = {
@@ -157,39 +170,39 @@ fun HeroHeader(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
                             tint = BrandGoldDarkTheme,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     },
                     colors = AssistChipDefaults.assistChipColors(
-                        containerColor = Color.White.copy(alpha = 0.15f),
+                        containerColor = Color.White.copy(alpha = 0.12f),
                         labelColor = Color.White
                     ),
-                    modifier = Modifier.testTag("reform_chip")
+                    modifier = Modifier
+                        .height(28.dp)
+                        .testTag("reform_chip")
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                FlowRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    MiniStatChip(
-                        label = "Base Year",
-                        value = "${state.settings.baseYear}"
-                    )
-                    MiniStatChip(
-                        label = "Primary Age",
-                        value = "${state.settings.primaryAge}"
-                    )
                     MiniStatChip(
                         label = "Net Worth",
                         value = fmtCompact(state.netWorthTotal),
-                        accentColor = BrandGoldDarkTheme
+                        accentColor = BrandGoldDarkTheme,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MiniStatChip(
+                        label = "Emerg. Reserve",
+                        value = fmtCompact(state.settings.emergencyReserveCurrent),
+                        modifier = Modifier.weight(1f)
                     )
                     MiniStatChip(
                         label = "Savings Rate",
-                        value = String.format("%.1f%%", state.savingsRatePct)
+                        value = String.format("%.1f%%", state.savingsRatePct),
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -201,32 +214,44 @@ fun HeroHeader(
 fun MiniStatChip(
     label: String,
     value: String,
-    accentColor: Color = Color.White
+    accentColor: Color = Color.White,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.White.copy(alpha = 0.1f),
-        contentColor = Color.White
+        color = Color.White.copy(alpha = 0.08f),
+        contentColor = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    letterSpacing = 1.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    color = accentColor
-                )
+                    color = accentColor,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

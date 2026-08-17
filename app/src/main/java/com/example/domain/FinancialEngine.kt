@@ -11,6 +11,10 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
 
+// --- Domain Constants ---
+const val PRIMARY_BIRTH_YEAR = 2000
+const val SPOUSE_BIRTH_YEAR = 2000
+
 // --- Data Classes for Calculations & Output UI ---
 
 data class YearlyIncome(
@@ -72,13 +76,35 @@ fun serializeCustomExpenses(items: List<CustomExpenseItem>): String {
     return array.toString()
 }
 
+fun parseDeletedCategories(jsonStr: String): Set<String> {
+    if (jsonStr.isBlank()) return emptySet()
+    return try {
+        val array = org.json.JSONArray(jsonStr)
+        val set = mutableSetOf<String>()
+        for (i in 0 until array.length()) {
+            set.add(array.getString(i))
+        }
+        set
+    } catch (e: Exception) {
+        emptySet()
+    }
+}
+
+fun serializeDeletedCategories(set: Set<String>): String {
+    val array = org.json.JSONArray()
+    set.forEach { array.put(it) }
+    return array.toString()
+}
+
+val DEFAULT_CUSTOM_LIFE_GOALS = listOf(
+    CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
+    CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
+    CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
+)
+
 fun parseCustomLifeGoals(jsonStr: String): List<CustomLifeGoalItem> {
     if (jsonStr.isBlank()) {
-        return listOf(
-            CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
-            CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
-            CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
-        )
+        return DEFAULT_CUSTOM_LIFE_GOALS
     }
     return try {
         val array = org.json.JSONArray(jsonStr)
@@ -96,19 +122,9 @@ fun parseCustomLifeGoals(jsonStr: String): List<CustomLifeGoalItem> {
                 )
             )
         }
-        if (list.isEmpty()) {
-            listOf(
-                CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
-                CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
-                CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
-            )
-        } else list
+        list
     } catch (e: Exception) {
-        listOf(
-            CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
-            CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),
-            CustomLifeGoalItem("3", "Sabbatical / Career Break", "star", 2030, 300_000.0, 80_000.0)
-        )
+        DEFAULT_CUSTOM_LIFE_GOALS
     }
 }
 
@@ -221,6 +237,26 @@ data class StressScenarioResult(
     val trajectory: List<PortfolioYearPoint>
 )
 
+data class FireMilestone(
+    val id: String,
+    val name: String,
+    val badgeLabel: String,
+    val description: String,
+    val targetAmountToday: Double,
+    val monthlyPassiveIncome: Double,
+    val progressPct: Double,
+    val isAchieved: Boolean,
+    val estimatedAge: Int?,
+    val estimatedYear: Int?
+)
+
+data class FireMilestonesSummary(
+    val coastFire: FireMilestone,
+    val leanFire: FireMilestone,
+    val standardFire: FireMilestone,
+    val fatFire: FireMilestone
+)
+
 data class FullCalculationState(
     val settings: SettingsEntity,
     val fireBaseTargetToday: Double,
@@ -237,6 +273,7 @@ data class FullCalculationState(
     val taxReturnHelper: TaxReturnHelperData,
     val monteCarlo: MonteCarloResult,
     val stressScenarios: List<StressScenarioResult>,
+    val fireMilestones: FireMilestonesSummary,
     val savingsRatePct: Double,
     val totalLivingCostMonthly: Double,
     val netWorthTotal: Double,
@@ -367,10 +404,18 @@ object FinancialEngine {
     }
 
     fun totalLivingCostMonthly(settings: SettingsEntity, year: Int = settings.baseYear): Double {
-        var base = settings.rentMonthly + settings.groceriesMonthly + settings.cafesMonthly +
-                settings.therapyMonthly + settings.charityMonthly + settings.entertainmentMonthly +
-                settings.transportMonthly + settings.subscriptionsMonthly + settings.otherDiscretionaryMonthly
-        
+        val deletedSet = parseDeletedCategories(settings.deletedCategoriesJson)
+        var base = 0.0
+        if (!deletedSet.contains("rent")) base += settings.rentMonthly
+        if (!deletedSet.contains("groceries")) base += settings.groceriesMonthly
+        if (!deletedSet.contains("other_discretionary")) base += settings.otherDiscretionaryMonthly
+        if (!deletedSet.contains("cafes")) base += settings.cafesMonthly
+        if (!deletedSet.contains("therapy")) base += settings.therapyMonthly
+        if (!deletedSet.contains("charity")) base += settings.charityMonthly
+        if (!deletedSet.contains("entertainment")) base += settings.entertainmentMonthly
+        if (!deletedSet.contains("transport")) base += settings.transportMonthly
+        if (!deletedSet.contains("subscriptions")) base += settings.subscriptionsMonthly
+
         val customItems = parseCustomExpenses(settings.customExpensesJson)
         base += customItems.sumOf { it.amount }
 
@@ -503,7 +548,7 @@ object FinancialEngine {
             margin = dpsBal - etfBal,
             balanceAt36 = balAt36,
             earlyWithdrawalLimitAt36 = balAt36 / 3.0,
-            youthSubsidyActive = settings.primaryAge < 30
+            youthSubsidyActive = settings.primaryAge < settings.dpsYouthAgeLimit
         )
     }
 
@@ -567,22 +612,7 @@ object FinancialEngine {
     private fun sin(rad: Double) = kotlin.math.sin(rad)
 
     private data class MonteCarloKey(
-        val monteCarloN: Int,
-        val portfolioNominalReturnPct: Double,
-        val cpiInflationPct: Double,
-        val safeWithdrawalRatePct: Double,
-        val liquidPortfolioCurrent: Double,
-        val eLiquidPortfolioCurrent: Double,
-        val portuDcaMonthly: Double,
-        val ePortuDcaMonthly: Double,
-        val baseYear: Int,
-        val primaryAge: Int,
-        val eReturnYear: Int,
-        val eStartingSalary: Double,
-        val eReinvestedPct: Double,
-        val lumpSumInclude: Boolean,
-        val lumpSumYear: Int,
-        val lumpSumAmount: Double,
+        val settings: SettingsEntity,
         val horizonYears: Int
     )
 
@@ -593,22 +623,7 @@ object FinancialEngine {
 
     fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35): MonteCarloResult {
         val currentKey = MonteCarloKey(
-            monteCarloN = settings.monteCarloN,
-            portfolioNominalReturnPct = settings.portfolioNominalReturnPct,
-            cpiInflationPct = settings.cpiInflationPct,
-            safeWithdrawalRatePct = settings.safeWithdrawalRatePct,
-            liquidPortfolioCurrent = settings.liquidPortfolioCurrent,
-            eLiquidPortfolioCurrent = settings.eLiquidPortfolioCurrent,
-            portuDcaMonthly = settings.portuDcaMonthly,
-            ePortuDcaMonthly = settings.ePortuDcaMonthly,
-            baseYear = settings.baseYear,
-            primaryAge = settings.primaryAge,
-            eReturnYear = settings.eReturnYear,
-            eStartingSalary = settings.eStartingSalary,
-            eReinvestedPct = settings.eReinvestedPct,
-            lumpSumInclude = settings.lumpSumInclude,
-            lumpSumYear = settings.lumpSumYear,
-            lumpSumAmount = settings.lumpSumAmount,
+            settings = settings,
             horizonYears = horizonYears
         )
 
@@ -890,7 +905,7 @@ object FinancialEngine {
         val stressScenarios = calculateStressScenarios(settings)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {
-            ((investMonthly + settings.familySavingsMonthly) / currentIncome.totalMonthly) * 100.0
+            (investMonthly / currentIncome.totalMonthly) * 100.0
         } else 0.0
 
         val netWorth = settings.liquidPortfolioCurrent + settings.eLiquidPortfolioCurrent +
@@ -912,6 +927,97 @@ object FinancialEngine {
             "ac12" to 0.0
         )
 
+        val investableNetWorth = settings.liquidPortfolioCurrent + settings.eLiquidPortfolioCurrent +
+                settings.dpsBalanceCurrent + settings.eDpsBalanceCurrent +
+                settings.dipBalanceCurrent + settings.eDipBalanceCurrent
+
+        val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.01)
+        val realReturnRate = ((settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0).coerceAtLeast(0.001)
+        val yearsToRetire = max(1, settings.statePensionAge - settings.primaryAge)
+
+        // 1. Coast FIRE
+        val coastRawTarget = fireBase / (1.0 + realReturnRate).pow(yearsToRetire)
+        val coastTarget = kotlin.math.round(coastRawTarget / 10_000.0) * 10_000.0
+        val coastProgress = if (coastTarget > 0) ((investableNetWorth / coastTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
+        val coastAchieved = investableNetWorth >= coastTarget
+        val coastPoint = if (coastAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= coastTarget }
+        val coastMilestone = FireMilestone(
+            id = "coast",
+            name = "Coast FIRE",
+            badgeLabel = "Compound Only",
+            description = "Existing investments grow to full FIRE target by age ${settings.statePensionAge} with 0 additional contributions.",
+            targetAmountToday = coastTarget,
+            monthlyPassiveIncome = kotlin.math.round(((fireBase * swr) / 12.0) / 1_000.0) * 1_000.0,
+            progressPct = coastProgress,
+            isAchieved = coastAchieved,
+            estimatedAge = if (coastAchieved) settings.primaryAge else coastPoint?.age,
+            estimatedYear = if (coastAchieved) settings.baseYear else coastPoint?.year
+        )
+
+        // 2. Lean FIRE (75% baseline living expenses)
+        val leanRawTarget = fireBase * 0.75
+        val leanTarget = kotlin.math.round(leanRawTarget / 10_000.0) * 10_000.0
+        val leanProgress = if (leanTarget > 0) ((investableNetWorth / leanTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
+        val leanAchieved = investableNetWorth >= leanTarget
+        val leanPoint = if (leanAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= leanTarget }
+        val leanMilestone = FireMilestone(
+            id = "lean",
+            name = "Lean FIRE",
+            badgeLabel = "Essential Baseline",
+            description = "Covers essential living costs (75% budget), basic housing, and groceries indefinitely.",
+            targetAmountToday = leanTarget,
+            monthlyPassiveIncome = kotlin.math.round(((leanTarget * swr) / 12.0) / 1_000.0) * 1_000.0,
+            progressPct = leanProgress,
+            isAchieved = leanAchieved,
+            estimatedAge = if (leanAchieved) settings.primaryAge else leanPoint?.age,
+            estimatedYear = if (leanAchieved) settings.baseYear else leanPoint?.year
+        )
+
+        // 3. Standard FIRE (100% baseline living expenses)
+        val standardRawTarget = fireBase
+        val standardTarget = kotlin.math.round(standardRawTarget / 10_000.0) * 10_000.0
+        val standardProgress = if (standardTarget > 0) ((investableNetWorth / standardTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
+        val standardAchieved = investableNetWorth >= standardTarget
+        val standardPoint = fireDualPoint
+        val standardMilestone = FireMilestone(
+            id = "standard",
+            name = "Standard FIRE",
+            badgeLabel = "Full Independence",
+            description = "Covers 100% of current comfortable household lifestyle without needing employment income.",
+            targetAmountToday = standardTarget,
+            monthlyPassiveIncome = kotlin.math.round(((standardTarget * swr) / 12.0) / 1_000.0) * 1_000.0,
+            progressPct = standardProgress,
+            isAchieved = standardAchieved,
+            estimatedAge = if (standardAchieved) settings.primaryAge else standardPoint?.age,
+            estimatedYear = if (standardAchieved) settings.baseYear else standardPoint?.year
+        )
+
+        // 4. Fat FIRE (130% baseline living expenses)
+        val fatRawTarget = fireBase * 1.30
+        val fatTarget = kotlin.math.round(fatRawTarget / 10_000.0) * 10_000.0
+        val fatProgress = if (fatTarget > 0) ((investableNetWorth / fatTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
+        val fatAchieved = investableNetWorth >= fatTarget
+        val fatPoint = if (fatAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= fatTarget }
+        val fatMilestone = FireMilestone(
+            id = "fat",
+            name = "Fat FIRE",
+            badgeLabel = "Luxury & Abundance",
+            description = "Covers an upgraded lifestyle (+30% spending buffer) with abundant travel and private amenities.",
+            targetAmountToday = fatTarget,
+            monthlyPassiveIncome = kotlin.math.round(((fatTarget * swr) / 12.0) / 1_000.0) * 1_000.0,
+            progressPct = fatProgress,
+            isAchieved = fatAchieved,
+            estimatedAge = if (fatAchieved) settings.primaryAge else fatPoint?.age,
+            estimatedYear = if (fatAchieved) settings.baseYear else fatPoint?.year
+        )
+
+        val fireMilestones = FireMilestonesSummary(
+            coastFire = coastMilestone,
+            leanFire = leanMilestone,
+            standardFire = standardMilestone,
+            fatFire = fatMilestone
+        )
+
         return FullCalculationState(
             settings = settings,
             fireBaseTargetToday = fireBase,
@@ -928,6 +1034,7 @@ object FinancialEngine {
             taxReturnHelper = taxHelper,
             monteCarlo = monteCarlo,
             stressScenarios = stressScenarios,
+            fireMilestones = fireMilestones,
             savingsRatePct = savingsRate,
             totalLivingCostMonthly = livingCostTotal,
             netWorthTotal = netWorth,
