@@ -15,10 +15,14 @@ import org.robolectric.RobolectricTestRunner
 class BackupManagerAndEngineAuditTest {
 
     @Test
-    fun `test BackupManager full roundtrip preserves all fields including tax and reform parameters`() {
+    fun `test BackupManager full roundtrip preserves all fields including profile, tax and reform parameters`() {
         val original = SettingsEntity(
             baseYear = 2027,
             primaryAge = 28,
+            primaryName = "Jan",
+            spouseName = "Marie",
+            isSingleHousehold = false,
+            dcaAnnualGrowthPct = 3.5,
             vSalary = 50000.0,
             vRaiseAnnual = 2000.0,
             vBonusAnnual = 30000.0,
@@ -116,6 +120,10 @@ class BackupManagerAndEngineAuditTest {
         restored?.let { r ->
             assertEquals(original.baseYear, r.baseYear)
             assertEquals(original.primaryAge, r.primaryAge)
+            assertEquals(original.primaryName, r.primaryName)
+            assertEquals(original.spouseName, r.spouseName)
+            assertEquals(original.isSingleHousehold, r.isSingleHousehold)
+            assertEquals(original.dcaAnnualGrowthPct, r.dcaAnnualGrowthPct, 0.001)
             assertEquals(original.vSalary, r.vSalary, 0.001)
             assertEquals(original.taxRatePct, r.taxRatePct, 0.001)
             assertEquals(original.taxRateSecondPct, r.taxRateSecondPct, 0.001)
@@ -161,5 +169,40 @@ class BackupManagerAndEngineAuditTest {
 
         assertTrue("Higher volatility should yield a wider P95-P5 fan spread", spreadHighVol > spreadBase)
         assertNotEquals("Different random seeds should yield slightly different fan trajectories", resBase.fanPoints.last().p50, resDiffSeed.fanPoints.last().p50, 0.001)
+    }
+
+    @Test
+    fun `test single household mode isolates primary income and excludes spouse assets`() {
+        val coupleSettings = SettingsEntity(isSingleHousehold = false)
+        val singleSettings = SettingsEntity(isSingleHousehold = true)
+
+        val coupleCalc = FinancialEngine.calculate(coupleSettings, runMonteCarlo = false)
+        val singleCalc = FinancialEngine.calculate(singleSettings, runMonteCarlo = false)
+
+        // Single income should not include spouse benefit or lecturing
+        assertEquals(35000.0 + 2090.0 + 16000.0, singleCalc.currentIncome.totalMonthly, 0.001)
+        assertTrue(coupleCalc.currentIncome.totalMonthly > singleCalc.currentIncome.totalMonthly)
+
+        // Single net worth should exclude Eleonora's 50k liquid starting balance
+        assertEquals(
+            singleSettings.liquidPortfolioCurrent + singleSettings.emergencyReserveCurrent +
+                    singleSettings.dpsBalanceCurrent + singleSettings.dipBalanceCurrent,
+            singleCalc.netWorthTotal,
+            0.001
+        )
+    }
+
+    @Test
+    fun `test DCA annual growth indexation accelerates 35-year wealth accumulation`() {
+        val staticDca = SettingsEntity(dcaAnnualGrowthPct = 0.0)
+        val indexedDca = SettingsEntity(dcaAnnualGrowthPct = 3.0)
+
+        val staticTraj = FinancialEngine.buildLiquidPortfolio(staticDca, dualIncome = false)
+        val indexedTraj = FinancialEngine.buildLiquidPortfolio(indexedDca, dualIncome = false)
+
+        assertTrue(
+            "Indexed DCA should yield a higher final 35-year portfolio balance",
+            indexedTraj.last().portfolio > staticTraj.last().portfolio
+        )
     }
 }

@@ -96,9 +96,9 @@ fun OverviewTab(
             val itemWidth = Modifier.fillMaxWidth(0.48f)
 
             KpiCard(
-                title = "Family net / mo",
+                title = if (state.settings.isSingleHousehold) "Monthly net income" else "Household net / mo",
                 value = fmtCZK(state.currentIncome.totalMonthly),
-                hint = "Combined family income",
+                hint = if (state.settings.isSingleHousehold) "Take-home + inflows" else "Combined family income",
                 accentColor = BrandTeal,
                 modifier = itemWidth,
                 testTagStr = "kpi_family_net"
@@ -113,10 +113,11 @@ fun OverviewTab(
                 testTagStr = "kpi_fire_target"
             )
 
+            val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
             KpiCard(
-                title = "FIRE age (dual)",
-                value = state.fireDualPoint?.let { "Age ${it.age}" } ?: ">60",
-                hint = state.fireDualPoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
+                title = if (state.settings.isSingleHousehold) "FIRE age" else "FIRE age (dual)",
+                value = firePoint?.let { "Age ${it.age}" } ?: ">60",
+                hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
                 modifier = itemWidth,
                 testTagStr = "kpi_fire_age"

@@ -9,6 +9,10 @@ object BackupManager {
         val json = JSONObject()
         json.put("baseYear", s.baseYear)
         json.put("primaryAge", s.primaryAge)
+        json.put("primaryName", s.primaryName)
+        json.put("spouseName", s.spouseName)
+        json.put("isSingleHousehold", s.isSingleHousehold)
+        json.put("dcaAnnualGrowthPct", s.dcaAnnualGrowthPct)
         
         // Income & Work
         json.put("vSalary", s.vSalary)
@@ -125,6 +129,10 @@ object BackupManager {
             fallback.copy(
                 baseYear = json.optInt("baseYear", fallback.baseYear),
                 primaryAge = json.optInt("primaryAge", fallback.primaryAge),
+                primaryName = json.optString("primaryName", fallback.primaryName),
+                spouseName = json.optString("spouseName", fallback.spouseName),
+                isSingleHousehold = json.optBoolean("isSingleHousehold", fallback.isSingleHousehold),
+                dcaAnnualGrowthPct = json.optDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
                 vSalary = json.optDouble("vSalary", fallback.vSalary),
                 vRaiseAnnual = json.optDouble("vRaiseAnnual", fallback.vRaiseAnnual),

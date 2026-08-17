@@ -94,10 +94,17 @@ fun HeroHeader(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Financial Dashboard",
+                            text = "Dobrý den, ${state.settings.primaryName}",
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
+                            )
+                        )
+                        Text(
+                            text = if (state.settings.isSingleHousehold) "Personal Wealth & FIRE Plan" else "${state.settings.primaryName} & ${state.settings.spouseName} · FIRE Blueprint",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontWeight = FontWeight.Medium
                             )
                         )
                     }

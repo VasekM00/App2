@@ -144,6 +144,38 @@ fun SettingsTab(
         ) {
             when (selectedTab) {
                 0 -> {
+                    // Profile & Household Structure
+                    SettingsGroupCard(title = "Profile & Household Structure", initiallyExpanded = true, badgeText = "PROFILE", badgeColor = BrandGold) {
+                        OutlinedTextField(
+                            value = s.primaryName,
+                            onValueChange = { onUpdateSettings(s.copy(primaryName = it)) },
+                            label = { Text("Primary Earner Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("settings_input_primary_name")
+                        )
+                        BooleanSettingField(
+                            label = "Single Earner Household Mode",
+                            checked = s.isSingleHousehold,
+                            onCheckedChange = { onUpdateSettings(s.copy(isSingleHousehold = it)) }
+                        )
+                        if (!s.isSingleHousehold) {
+                            OutlinedTextField(
+                                value = s.spouseName,
+                                onValueChange = { onUpdateSettings(s.copy(spouseName = it)) },
+                                label = { Text("Partner / Spouse Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("settings_input_spouse_name")
+                            )
+                        }
+                        NumberSettingField(
+                            label = "Annual DCA Contribution Growth (%)",
+                            value = s.dcaAnnualGrowthPct,
+                            onValueChange = { onUpdateSettings(s.copy(dcaAnnualGrowthPct = it)) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Base Settings
                     SettingsGroupCard(title = "General Settings", initiallyExpanded = false, badgeText = "SYSTEM", badgeColor = BrandTeal) {
                         NumberSettingField(
@@ -181,37 +213,39 @@ fun SettingsTab(
                     }
                 }
                 1 -> {
-                    // Vaclav Income Settings
-                    SettingsGroupCard(title = "Vaclav Income Settings", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandTeal) {
+                    // Primary Earner Income Settings
+                    SettingsGroupCard(title = "${s.primaryName} Income Settings", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandTeal) {
                         NumberSettingField(label = "Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
                         NumberSettingField(label = "Annual September Raise (CZK)", value = s.vRaiseAnnual, onValueChange = { onUpdateSettings(s.copy(vRaiseAnnual = it)) })
                         NumberSettingField(label = "Annual Bonus (CZK)", value = s.vBonusAnnual, onValueChange = { onUpdateSettings(s.copy(vBonusAnnual = it)) })
                         NumberSettingField(label = "Meal Vouchers Monthly (CZK)", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    if (!s.isSingleHousehold) {
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Eleonora Active Income (Today)
-                    SettingsGroupCard(title = "Eleonora Active Income (Today)", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandGold) {
-                        NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
-                        NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
-                        BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
-                    }
+                        // Spouse Active Income (Today)
+                        SettingsGroupCard(title = "${s.spouseName} Active Income (Today)", initiallyExpanded = true, badgeText = "ACTIVE", badgeColor = BrandGold) {
+                            NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
+                            NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
+                            BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
+                        }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Eleonora Future Return to Work Milestone
-                    SettingsGroupCard(
-                        title = "Future Return to Work (${s.eReturnYear}+)",
-                        initiallyExpanded = false,
-                        badgeText = "MILESTONE",
-                        badgeColor = BrandGold
-                    ) {
-                        NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                        NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
-                        NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
-                        NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
-                        NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                        // Spouse Future Return to Work Milestone
+                        SettingsGroupCard(
+                            title = "${s.spouseName} Future Return to Work (${s.eReturnYear}+)",
+                            initiallyExpanded = false,
+                            badgeText = "MILESTONE",
+                            badgeColor = BrandGold
+                        ) {
+                            NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
+                            NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
+                            NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
+                            NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
+                            NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -342,8 +376,8 @@ fun SettingsTab(
 
                     when (invSubTab) {
                         0 -> {
-                            // Václav's Balances
-                            SettingsGroupCard(title = "Václav's Current Balances 💼", initiallyExpanded = true) {
+                            // Primary Earner Balances
+                            SettingsGroupCard(title = "${s.primaryName}'s Current Balances 💼", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Portu / ETF Liquid Portfolio Balance (CZK)",
                                     value = s.liquidPortfolioCurrent,
@@ -362,25 +396,27 @@ fun SettingsTab(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            if (!s.isSingleHousehold) {
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                            // Eleonora's Balances
-                            SettingsGroupCard(title = "Eleonora's Current Balances 💼", initiallyExpanded = true) {
-                                NumberSettingField(
-                                    label = "Eleonora's Liquid Portfolio Balance (CZK)",
-                                    value = s.eLiquidPortfolioCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "Eleonora's DIP Balance Current (CZK)",
-                                    value = s.eDipBalanceCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "Eleonora's DPS Pension Balance Current (CZK)",
-                                    value = s.eDpsBalanceCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
-                                )
+                                // Spouse Balances
+                                SettingsGroupCard(title = "${s.spouseName}'s Current Balances 💼", initiallyExpanded = true) {
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s Liquid Portfolio Balance (CZK)",
+                                        value = s.eLiquidPortfolioCurrent,
+                                        onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
+                                    )
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s DIP Balance Current (CZK)",
+                                        value = s.eDipBalanceCurrent,
+                                        onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
+                                    )
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s DPS Pension Balance Current (CZK)",
+                                        value = s.eDpsBalanceCurrent,
+                                        onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -400,8 +436,8 @@ fun SettingsTab(
                             }
                         }
                         1 -> {
-                            // Václav's Monthly Investments
-                            SettingsGroupCard(title = "Václav's Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
+                            // Primary Earner Monthly Investments
+                            SettingsGroupCard(title = "${s.primaryName}'s Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
                                 NumberSettingField(
                                     label = "Portu / ETF Monthly DCA (CZK)",
                                     value = s.portuDcaMonthly,
@@ -424,30 +460,32 @@ fun SettingsTab(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            if (!s.isSingleHousehold) {
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                            // Eleonora's Monthly Investments
-                            SettingsGroupCard(title = "Eleonora's Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
-                                NumberSettingField(
-                                    label = "Eleonora's Portu / ETF Monthly DCA (CZK)",
-                                    value = s.ePortuDcaMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "Eleonora's DIP Monthly Contribution (CZK)",
-                                    value = s.eDipContributionMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "Eleonora's DPS Monthly Contribution (CZK)",
-                                    value = s.eDpsOwnContributionMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "Eleonora's Employer Retirement Annual Benefit (CZK)",
-                                    value = s.eEmployerRetirementAnnual,
-                                    onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
-                                )
+                                // Spouse Monthly Investments
+                                SettingsGroupCard(title = "${s.spouseName}'s Monthly Investments (DCA) 🔄", initiallyExpanded = true) {
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s Portu / ETF Monthly DCA (CZK)",
+                                        value = s.ePortuDcaMonthly,
+                                        onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
+                                    )
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s DIP Monthly Contribution (CZK)",
+                                        value = s.eDipContributionMonthly,
+                                        onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
+                                    )
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s DPS Monthly Contribution (CZK)",
+                                        value = s.eDpsOwnContributionMonthly,
+                                        onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
+                                    )
+                                    NumberSettingField(
+                                        label = "${s.spouseName}'s Employer Retirement Annual Benefit (CZK)",
+                                        value = s.eEmployerRetirementAnnual,
+                                        onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
+                                    )
+                                }
                             }
                         }
                         2 -> {

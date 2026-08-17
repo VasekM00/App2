@@ -225,9 +225,11 @@ private fun IncomeSubTab(state: FullCalculationState) {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                IncomeRow(label = "Vaclav Net Salary", value = fmtCZK(inc.vaclavNet))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Eleonora Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
+                IncomeRow(label = "${state.settings.primaryName} Net Salary", value = fmtCZK(inc.vaclavNet))
+                if (!state.settings.isSingleHousehold) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "${state.settings.spouseName} Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
+                }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Lecturing & Meal Vouchers", value = fmtCZK(inc.lecturing + inc.vouchers))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -787,17 +789,19 @@ private fun AddLedgerEntryDialog(
                 OutlinedTextField(
                     value = incV,
                     onValueChange = { incV = it },
-                    label = { Text("Vaclav Net Income") },
+                    label = { Text("${state.settings.primaryName} Net Income") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_v")
                 )
-                OutlinedTextField(
-                    value = incE,
-                    onValueChange = { incE = it },
-                    label = { Text("Eleonora Net Income") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
-                )
+                if (!state.settings.isSingleHousehold) {
+                    OutlinedTextField(
+                        value = incE,
+                        onValueChange = { incE = it },
+                        label = { Text("${state.settings.spouseName} Net Income") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
+                    )
+                }
                 OutlinedTextField(
                     value = incU,
                     onValueChange = { incU = it },
