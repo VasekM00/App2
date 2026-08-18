@@ -1,7 +1,9 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,9 +62,12 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCompact
 import kotlin.math.max
 
+import kotlin.math.pow
+
 @Composable
 fun NetWorthChart(
     data: List<PortfolioYearPoint>,
+    cpiInflationPct: Double = 3.0,
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
@@ -73,8 +79,23 @@ fun NetWorthChart(
     var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
+    var isRealPurchasingPower by remember { mutableStateOf(false) }
 
-    val fireReachedIndex = data.indexOfFirst { it.portfolio >= it.target }
+    val displayData = remember(data, isRealPurchasingPower, cpiInflationPct) {
+        if (!isRealPurchasingPower) {
+            data
+        } else {
+            data.mapIndexed { idx, pt ->
+                val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                pt.copy(
+                    portfolio = pt.portfolio / discount,
+                    target = pt.target / discount
+                )
+            }
+        }
+    }
+
+    val fireReachedIndex = displayData.indexOfFirst { it.portfolio >= it.target }
 
     Card(
         modifier = modifier
@@ -92,7 +113,7 @@ fun NetWorthChart(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     ColorPill(
-                        text = "GROWTH TRAJECTORY",
+                        text = if (isRealPurchasingPower) "TODAY'S PURCHASING POWER" else "GROWTH TRAJECTORY",
                         color = cTeal,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
@@ -106,7 +127,7 @@ fun NetWorthChart(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Pinch or use zoom controls to inspect year details",
+                        text = if (isRealPurchasingPower) "Discounted at ${String.format("%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal growth over 35-year investment horizon",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
@@ -141,28 +162,64 @@ fun NetWorthChart(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Legend
+            // Purchasing Power Toggle & Legend Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(modifier = Modifier.size(10.dp).background(cTeal, CircleShape))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "Portfolio", style = MaterialTheme.typography.labelSmall)
-                Spacer(modifier = Modifier.width(12.dp))
-                Box(modifier = Modifier.size(10.dp).background(cGold, CircleShape))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall)
+                // Nominal vs Real Toggle Pills
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                ) {
+                    Row(modifier = Modifier.padding(2.dp)) {
+                        val nominalBg = if (!isRealPurchasingPower) BrandTeal else Color.Transparent
+                        val nominalFg = if (!isRealPurchasingPower) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        val realBg = if (isRealPurchasingPower) BrandTeal else Color.Transparent
+                        val realFg = if (isRealPurchasingPower) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(nominalBg)
+                                .clickable { isRealPurchasingPower = false }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Nominal", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = nominalFg)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(realBg)
+                                .clickable { isRealPurchasingPower = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Real (Today's CZK)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = realFg)
+                        }
+                    }
+                }
+
+                // Legend
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "Portfolio", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             val maxVal = (maxOf(
-                data.maxOfOrNull { it.portfolio } ?: 0.0,
-                data.maxOfOrNull { it.target } ?: 0.0
+                displayData.maxOfOrNull { it.portfolio } ?: 0.0,
+                displayData.maxOfOrNull { it.target } ?: 0.0
             ) * 1.1).coerceAtLeast(100.0)
 
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
@@ -189,19 +246,19 @@ fun NetWorthChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(data, zoomScale) {
+                        .pointerInput(displayData, zoomScale) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
                                 val maxPan = (size.width * (zoomScale - 1f))
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
                             }
                         }
-                        .pointerInput(data, zoomScale, panOffsetX) {
+                        .pointerInput(displayData, zoomScale, panOffsetX) {
                             detectTapGestures { offset ->
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
-                                val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
-                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
+                                val stepX = if (displayData.size > 1) chartWidth / (displayData.size - 1).toFloat() else chartWidth
+                                val clickedIdx = if (displayData.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, displayData.size - 1) else 0
                                 selectedPointIndex = clickedIdx
                             }
                         }
@@ -245,11 +302,11 @@ fun NetWorthChart(
 
                     // Draw X-Axis Year Labels
                     val chartWidth = plotW * zoomScale
-                    val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
+                    val stepX = if (displayData.size > 1) chartWidth / (displayData.size - 1).toFloat() else chartWidth
 
                     val xStepCount = 5
-                    for (i in 0 until data.size step max(1, data.size / xStepCount)) {
-                        val pt = data[i]
+                    for (i in 0 until displayData.size step max(1, displayData.size / xStepCount)) {
+                        val pt = displayData[i]
                         val x = paddingLeft + panOffsetX + (i * stepX)
                         if (x in paddingLeft..(w - paddingRight + 10f)) {
                             // Tick mark
@@ -276,7 +333,7 @@ fun NetWorthChart(
 
                     // Build Target Path (Dashed Gold)
                     val targetPath = Path()
-                    data.forEachIndexed { i, pt ->
+                    displayData.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
                         val y = plotH - (plotH * (pt.target / maxVal)).toFloat()
                         if (i == 0) targetPath.moveTo(x, y) else targetPath.lineTo(x, y)
@@ -284,7 +341,7 @@ fun NetWorthChart(
 
                     // Build Portfolio Path (Solid Teal)
                     val portfolioPath = Path()
-                    data.forEachIndexed { i, pt ->
+                    displayData.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
                         val y = plotH - (plotH * (pt.portfolio / maxVal)).toFloat()
                         if (i == 0) portfolioPath.moveTo(x, y) else portfolioPath.lineTo(x, y)
@@ -310,7 +367,7 @@ fun NetWorthChart(
                     // Draw FIRE Milestone marker dot
                     if (fireReachedIndex >= 0) {
                         val fx = paddingLeft + panOffsetX + (fireReachedIndex * stepX)
-                        val fy = plotH - (plotH * (data[fireReachedIndex].portfolio / maxVal)).toFloat()
+                        val fy = plotH - (plotH * (displayData[fireReachedIndex].portfolio / maxVal)).toFloat()
                         drawCircle(color = cGold, radius = 12f, center = Offset(fx, fy))
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
@@ -318,7 +375,7 @@ fun NetWorthChart(
                     // Draw Selected Point Highlight Line and Marker
                     selectedPointIndex?.let { idx ->
                         val sx = paddingLeft + panOffsetX + (idx * stepX)
-                        val sy = plotH - (plotH * (data[idx].portfolio / maxVal)).toFloat()
+                        val sy = plotH - (plotH * (displayData[idx].portfolio / maxVal)).toFloat()
                         drawLine(
                             color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
@@ -335,7 +392,7 @@ fun NetWorthChart(
             }
 
             // Interactive Detail Tooltip Box
-            val activePoint = selectedPointIndex?.let { data.getOrNull(it) } ?: data.lastOrNull()
+            val activePoint = selectedPointIndex?.let { displayData.getOrNull(it) } ?: displayData.lastOrNull()
             activePoint?.let { pt ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
@@ -876,7 +933,7 @@ fun StressComparisonChart(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "${sc.iconEmoji} ${sc.name}", style = MaterialTheme.typography.labelSmall)
+                                Text(text = sc.name, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }

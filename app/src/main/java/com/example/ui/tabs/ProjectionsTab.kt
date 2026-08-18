@@ -123,7 +123,10 @@ private fun TrajectorySubTab(state: FullCalculationState) {
             .padding(16.dp)
     ) {
         // Primary 35-Year Trajectory Chart
-        NetWorthChart(data = state.dualTrajectory)
+        NetWorthChart(
+            data = state.dualTrajectory,
+            cpiInflationPct = state.settings.cpiInflationPct
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 

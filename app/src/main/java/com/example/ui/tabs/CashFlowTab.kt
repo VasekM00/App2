@@ -787,7 +787,7 @@ private fun AddLedgerEntryDialog(
                                     expL = (latestEntry.expGroceries + latestEntry.expOther).toInt().toString()
                                     notes = latestEntry.notes
                                 },
-                                label = { Text("⚡ Copy Latest (${latestEntry.yearMonth})", fontSize = 11.sp) },
+                                label = { Text("Copy Latest (${latestEntry.yearMonth})", fontSize = 11.sp) },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = BrandTeal.copy(alpha = 0.12f),
                                     labelColor = BrandTeal
@@ -803,7 +803,7 @@ private fun AddLedgerEntryDialog(
                                 expR = defaultRent
                                 expL = defaultLiving
                             },
-                            label = { Text("⚙️ Baseline Budget", fontSize = 11.sp) }
+                            label = { Text("Baseline Budget", fontSize = 11.sp) }
                         )
 
                         AssistChip(
@@ -815,7 +815,7 @@ private fun AddLedgerEntryDialog(
                                 expL = "0"
                                 notes = ""
                             },
-                            label = { Text("🧹 Clear", fontSize = 11.sp) }
+                            label = { Text("Clear", fontSize = 11.sp) }
                         )
                     }
                 }

@@ -70,6 +70,8 @@ fun OverviewTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean> = emptyMap(),
     onToggleAction: ((year: Int, actionId: String, currentIsDone: Boolean) -> Unit)? = null,
+    onNavigateToIncome: (() -> Unit)? = null,
+    onNavigateToProjections: (() -> Unit)? = null,
     onNavigateToPlan: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -87,7 +89,7 @@ fun OverviewTab(
             .padding(16.dp)
             .testTag("overview_tab")
     ) {
-        // 4 KPI Cards
+        // 4 Interactive KPI Cards
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -101,7 +103,8 @@ fun OverviewTab(
                 hint = if (state.settings.isSingleHousehold) "Take-home + inflows" else "Combined family income",
                 accentColor = BrandTeal,
                 modifier = itemWidth,
-                testTagStr = "kpi_family_net"
+                testTagStr = "kpi_family_net",
+                onClick = onNavigateToIncome
             )
 
             KpiCard(
@@ -110,7 +113,8 @@ fun OverviewTab(
                 hint = "Today's purchasing power",
                 accentColor = BrandGold,
                 modifier = itemWidth,
-                testTagStr = "kpi_fire_target"
+                testTagStr = "kpi_fire_target",
+                onClick = onNavigateToProjections
             )
 
             val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
@@ -120,7 +124,8 @@ fun OverviewTab(
                 hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
                 modifier = itemWidth,
-                testTagStr = "kpi_fire_age"
+                testTagStr = "kpi_fire_age",
+                onClick = onNavigateToProjections
             )
 
             KpiCard(
@@ -129,7 +134,8 @@ fun OverviewTab(
                 hint = "Liquid + reserve + pension",
                 accentColor = GoodGreen,
                 modifier = itemWidth,
-                testTagStr = "kpi_net_worth"
+                testTagStr = "kpi_net_worth",
+                onClick = onNavigateToProjections
             )
         }
 
@@ -291,7 +297,10 @@ fun OverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Net Worth Chart
-        NetWorthChart(data = state.dualTrajectory)
+        NetWorthChart(
+            data = state.dualTrajectory,
+            cpiInflationPct = state.settings.cpiInflationPct
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 

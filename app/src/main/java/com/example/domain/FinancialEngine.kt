@@ -363,7 +363,7 @@ object FinancialEngine {
         )
     }
 
-    // ★ LEPŠÍ PENZIJKO REFORM: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps
+    // Lepší penzijko Reform: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps
     fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null): Double {
         val minDeposit = settings?.dpsMinDepositForSubsidy ?: 500.0
         if (monthlyDeposit < minDeposit) return 0.0
@@ -502,7 +502,7 @@ object FinancialEngine {
         return list
     }
 
-    // ★ LEPŠÍ PENZIJKO REFORM PROJECTION: Capped 0.5% TER & 1/3 Partial Withdrawal at Age 36
+    // Lepší penzijko Reform Projection: Capped 0.5% TER & 1/3 Partial Withdrawal at Age 36
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
         val fee = min(settings.dpsAnnualFeePct, 0.5) // Statutory 0.5% cap
@@ -739,11 +739,11 @@ object FinancialEngine {
         val baseLivingCost = totalLivingCostMonthly(settings)
 
         val configs = listOf(
-            Triple("baseline", "Baseline Plan", "⚖️" to "Current baseline parameters (7% return, 3% CPI)"),
-            Triple("bull", "Bull Expansion", "🚀" to "High market growth (9% return, 2% CPI)"),
-            Triple("stagflation", "Stagflation Bear", "⛈️" to "Low growth & high inflation (4.5% return, 5% CPI, 6% rent growth)"),
-            Triple("crash", "Year-1 Crash (-25%)", "🔻" to "Immediate 25% market drawdown in Year 1, then standard growth"),
-            Triple("inflation_shock", "High Inflation Spike", "🔥" to "Persistent high inflation (6.5% return, 6% CPI, 7% rent growth)")
+            Triple("baseline", "Baseline Plan", "" to "Current baseline parameters (7% return, 3% CPI)"),
+            Triple("bull", "Bull Expansion", "" to "High market growth (9% return, 2% CPI)"),
+            Triple("stagflation", "Stagflation Bear", "" to "Low growth & high inflation (4.5% return, 5% CPI, 6% rent growth)"),
+            Triple("crash", "Year-1 Crash (-25%)", "" to "Immediate 25% market drawdown in Year 1, then standard growth"),
+            Triple("inflation_shock", "High Inflation Spike", "" to "Persistent high inflation (6.5% return, 6% CPI, 7% rent growth)")
         )
 
         return configs.map { (id, name, pair) ->

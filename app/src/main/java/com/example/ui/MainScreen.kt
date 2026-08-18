@@ -327,6 +327,16 @@ fun MainScreen(
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
                                 },
+                                onNavigateToIncome = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    targetCashFlowSubTab = 0
+                                    selectedTab = 1
+                                },
+                                onNavigateToProjections = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    targetProjectionsSubTab = 0
+                                    selectedTab = 2
+                                },
                                 onNavigateToPlan = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 3

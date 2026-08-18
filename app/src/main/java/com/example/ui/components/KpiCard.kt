@@ -17,6 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -32,12 +36,25 @@ fun KpiCard(
     hint: String,
     modifier: Modifier = Modifier,
     accentColor: Color = BrandTeal,
-    testTagStr: String = ""
+    testTagStr: String = "",
+    onClick: (() -> Unit)? = null
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier),
+            .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onClick()
+                        }
+                } else Modifier
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface

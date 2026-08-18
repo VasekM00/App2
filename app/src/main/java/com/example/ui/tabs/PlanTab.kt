@@ -176,7 +176,7 @@ private fun RoadmapAndGoalsSubTab(
         ) {
             AssistChip(
                 onClick = { selectedView = 0 },
-                label = { Text("📋 Action Checklist & Tasks", fontWeight = if (selectedView == 0) FontWeight.Bold else FontWeight.Normal) },
+                label = { Text("Action Checklist & Tasks", fontWeight = if (selectedView == 0) FontWeight.Bold else FontWeight.Normal) },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = if (selectedView == 0) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
                     labelColor = if (selectedView == 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -184,7 +184,7 @@ private fun RoadmapAndGoalsSubTab(
             )
             AssistChip(
                 onClick = { selectedView = 1 },
-                label = { Text("🎯 Life Goals Simulator", fontWeight = if (selectedView == 1) FontWeight.Bold else FontWeight.Normal) },
+                label = { Text("Life Goals Simulator", fontWeight = if (selectedView == 1) FontWeight.Bold else FontWeight.Normal) },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = if (selectedView == 1) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
                     labelColor = if (selectedView == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -219,7 +219,7 @@ private fun FireRoadmapSubTab(
 
     // Filter modes: 0 -> Milestones & Phases, 1 -> Action Checklist
     var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionLabels = listOf("🎯 Milestones & Phases", "✅ Action Checklist")
+    val sectionLabels = listOf("Milestones & Phases", "Action Checklist")
 
     val completedActionsCount = ActionMeta.items.count { meta ->
         actionStates["${currentYear}_${meta.id}"] == true
@@ -1314,11 +1314,11 @@ private fun FireMilestonesComparisonCard(
 
     // Current unlocked level determination
     val currentLevel = when {
-        milestones.fatFire.isAchieved -> "Level 4: Fat FIRE 💎"
-        milestones.standardFire.isAchieved -> "Level 3: Standard FIRE 🛡️"
-        milestones.leanFire.isAchieved -> "Level 2: Lean FIRE 🏠"
-        milestones.coastFire.isAchieved -> "Level 1: Coast FIRE 🌱"
-        else -> "Level 0: Accumulation 🌱"
+        milestones.fatFire.isAchieved -> "Level 4: Fat FIRE"
+        milestones.standardFire.isAchieved -> "Level 3: Standard FIRE"
+        milestones.leanFire.isAchieved -> "Level 2: Lean FIRE"
+        milestones.coastFire.isAchieved -> "Level 1: Coast FIRE"
+        else -> "Level 0: Accumulation"
     }
 
     val defaultTargetId = items.firstOrNull { !it.milestone.isAchieved }?.milestone?.id ?: items.last().milestone.id

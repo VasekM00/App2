@@ -41,7 +41,7 @@ fun ReformDialog(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Lepší Penzijko Reform 🇨🇿",
+                    text = "Lepší Penzijko Reform",
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
                 )
             }

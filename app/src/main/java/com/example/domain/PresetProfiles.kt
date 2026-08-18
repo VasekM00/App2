@@ -21,7 +21,7 @@ object PresetProfiles {
         title = "Czech Household (Baseline)",
         description = "Dual-income family with parental allowance, DPS with 2026 Lepší penzijko youth subsidy, DIP tax deductions, and planned return to work.",
         badge = "DEFAULT",
-        iconEmoji = "🏡",
+        iconEmoji = "",
         settings = SettingsEntity()
     )
 
@@ -30,7 +30,7 @@ object PresetProfiles {
         title = "Single Tech Professional",
         description = "Single earner with 65k CZK net income, high savings rate (35k/mo DCA), aggressive ETF growth, DIP tax deduction max-out, and solo lean lifestyle.",
         badge = "AGGRESSIVE",
-        iconEmoji = "💻",
+        iconEmoji = "",
         settings = SettingsEntity(
             vSalary = 65000.0,
             vRaiseAnnual = 2500.0,
@@ -76,7 +76,7 @@ object PresetProfiles {
         title = "Young Starter (<30y Lepší Penzijko)",
         description = "Early career professional (age 24) capturing the 40% youth state subsidy on DPS (up to 680 CZK/mo), starting DIP early, and accumulating first ETF capital.",
         badge = "REFORM FOCUS",
-        iconEmoji = "🌱",
+        iconEmoji = "",
         settings = SettingsEntity(
             primaryAge = 24,
             vSalary = 38000.0,
@@ -116,7 +116,7 @@ object PresetProfiles {
         title = "Accelerated Dual FIRE Couple",
         description = "Both partners working full-time with 95k CZK combined household income, 45k monthly investment rate, aggressive compounding, and Fat FIRE ambitions.",
         badge = "FAT FIRE",
-        iconEmoji = "⚡",
+        iconEmoji = "",
         settings = SettingsEntity(
             vSalary = 52000.0,
             vRaiseAnnual = 2000.0,
