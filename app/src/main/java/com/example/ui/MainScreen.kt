@@ -226,6 +226,20 @@ fun MainScreen(
                         onOpenSettings = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             selectedTab = 4
+                        },
+                        onNavigateToNetWorth = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = 2
+                            targetProjectionsSubTab = 0
+                        },
+                        onNavigateToEmergencyReserve = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = 0
+                        },
+                        onNavigateToSavingsRate = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = 1
+                            targetCashFlowSubTab = 0
                         }
                     )
 

@@ -38,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +62,9 @@ fun HeroHeader(
     onOpenReformDialog: () -> Unit,
     onOpenExportReportDialog: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onNavigateToNetWorth: () -> Unit = {},
+    onNavigateToEmergencyReserve: () -> Unit = {},
+    onNavigateToSavingsRate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -78,15 +83,26 @@ fun HeroHeader(
                 .background(
                     brush = Brush.linearGradient(
                         colors = if (isDarkTheme) {
-                            listOf(Color(0xFF0F172A), Color(0xFF1E293B))
+                            listOf(
+                                Color(0xFF0F172A),
+                                Color(0xFF1E293B),
+                                Color(0xFF0F172A)
+                            )
                         } else {
-                            listOf(Color(0xFF0F172A), Color(0xFF334155))
+                            listOf(
+                                Color(0xFF090D16),
+                                Color(0xFF1E293B),
+                                Color(0xFF0F172A)
+                            )
                         }
                     )
                 )
-                .padding(24.dp)
         ) {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -198,17 +214,20 @@ fun HeroHeader(
                         label = "Net Worth",
                         value = fmtCompact(state.netWorthTotal),
                         accentColor = BrandGoldDarkTheme,
-                        modifier = Modifier.weight(1f)
+                        onClick = onNavigateToNetWorth,
+                        modifier = Modifier.weight(1f).testTag("hero_stat_net_worth")
                     )
                     MiniStatChip(
-                        label = "Emerg. Reserve",
+                        label = "Emergency Reserve",
                         value = fmtCompact(state.settings.emergencyReserveCurrent),
-                        modifier = Modifier.weight(1f)
+                        onClick = onNavigateToEmergencyReserve,
+                        modifier = Modifier.weight(1f).testTag("hero_stat_emergency_reserve")
                     )
                     MiniStatChip(
                         label = "Savings Rate",
                         value = String.format("%.1f%%", state.savingsRatePct),
-                        modifier = Modifier.weight(1f)
+                        onClick = onNavigateToSavingsRate,
+                        modifier = Modifier.weight(1f).testTag("hero_stat_savings_rate")
                     )
                 }
             }
@@ -221,25 +240,34 @@ fun MiniStatChip(
     label: String,
     value: String,
     accentColor: Color = Color.White,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White.copy(alpha = 0.08f),
         contentColor = Color.White,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-        modifier = modifier
+        modifier = if (onClick != null) {
+            modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                }
+        } else modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 8.5.sp,
+                    fontSize = 8.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.6.sp,
+                    letterSpacing = 0.5.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
                 ),
@@ -253,7 +281,7 @@ fun MiniStatChip(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     color = accentColor,
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     textAlign = TextAlign.Center
                 ),
                 maxLines = 1,
