@@ -571,7 +571,8 @@ object FinancialEngine {
         val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
         val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
         val totalMonthlyDip = settings.dipContributionMonthly + eDipMonthly
-        val scenarios = levels.map { monthly ->
+        val levels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
+        val scenarios = levels.map { monthly: Double ->
             val mock = settings.copy(dipContributionMonthly = monthly)
             val asave = dipTaxSavingYear(mock)
             val risk = when {
