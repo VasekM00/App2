@@ -60,32 +60,44 @@ fun ScenarioSimulatorChips(
     val presets = listOf(
         FireScenarioPreset(
             id = "base_plan",
-            title = "Base Plan",
-            description = "Baseline · 7.0% return · 3.0% CPI · 4.0% SWR · Eleonora 2029 (22k CZK)",
+            title = "Base Plan (2 Children)",
+            description = "Child 1 (2024) & Child 2 (Jan 2027) · Eleonora 2030 (25k) · +37.5k/yr tax credit · 7% return",
             applyPreset = { s ->
                 s.copy(
+                    childExpensesEnabled = true,
+                    child1Enabled = true,
+                    child1BirthYear = 2024,
+                    child2Enabled = true,
+                    child2BirthYear = 2027,
+                    eReturnYear = 2030,
+                    eStartingSalary = 25000.0,
+                    eReinvestedPct = 75.0,
                     portfolioNominalReturnPct = 7.0,
                     cpiInflationPct = 3.0,
                     safeWithdrawalRatePct = 4.0,
                     portuDcaMonthly = 14000.0,
                     vRaiseAnnual = 1300.0,
-                    eReturnYear = 2029,
-                    eStartingSalary = 22000.0,
-                    eReinvestedPct = 75.0,
                     rentGrowthPct = 3.0,
                     monteCarloVolatilityPct = 15.0
                 )
             }
         ),
         FireScenarioPreset(
-            id = "aggressive_dca",
-            title = "Aggressive DCA",
-            description = "+5k/mo Portu DCA · +2.5k annual wage growth · 85% spouse reinvestment",
+            id = "career_boost",
+            title = "Career Acceleration (2030)",
+            description = "Eleonora returns 2030 with 38k net · Vaclav raises +2.5k/yr · 85% spouse reinvestment",
             applyPreset = { s ->
                 s.copy(
-                    portuDcaMonthly = 19000.0,
-                    vRaiseAnnual = 2500.0,
+                    childExpensesEnabled = true,
+                    child1Enabled = true,
+                    child1BirthYear = 2024,
+                    child2Enabled = true,
+                    child2BirthYear = 2027,
+                    eReturnYear = 2030,
+                    eStartingSalary = 38000.0,
                     eReinvestedPct = 85.0,
+                    vRaiseAnnual = 2500.0,
+                    portuDcaMonthly = 18000.0,
                     portfolioNominalReturnPct = 7.5
                 )
             }
@@ -96,6 +108,13 @@ fun ScenarioSimulatorChips(
             description = "5.0% CPI inflation · 5.0% rent growth · 5.5% equity return · 18% volatility",
             applyPreset = { s ->
                 s.copy(
+                    childExpensesEnabled = true,
+                    child1Enabled = true,
+                    child1BirthYear = 2024,
+                    child2Enabled = true,
+                    child2BirthYear = 2027,
+                    eReturnYear = 2030,
+                    eStartingSalary = 25000.0,
                     cpiInflationPct = 5.0,
                     rentGrowthPct = 5.0,
                     portfolioNominalReturnPct = 5.5,
@@ -104,28 +123,24 @@ fun ScenarioSimulatorChips(
             }
         ),
         FireScenarioPreset(
-            id = "family_child2",
-            title = "Family Expansion (Child 2)",
-            description = "Child 2 in 2028 · +22.3k/yr tax credit · Eleonora returns 2031 (25k CZK)",
+            id = "coast_fire",
+            title = "Coast FIRE at 40",
+            description = "Shift to coast mode at age 40 · 0 CZK new DCA · Portfolio compounds untouched",
             applyPreset = { s ->
                 s.copy(
                     childExpensesEnabled = true,
+                    child1Enabled = true,
+                    child1BirthYear = 2024,
                     child2Enabled = true,
-                    child2BirthYear = 2028,
-                    eReturnYear = 2031,
-                    eStartingSalary = 25000.0
-                )
-            }
-        ),
-        FireScenarioPreset(
-            id = "ultra_safe_fire",
-            title = "Ultra-Safe FIRE",
-            description = "3.25% SWR · 300k emergency reserve · 6.0% conservative return",
-            applyPreset = { s ->
-                s.copy(
-                    safeWithdrawalRatePct = 3.25,
-                    emergencyReserveTarget = 300000.0,
-                    portfolioNominalReturnPct = 6.0
+                    child2BirthYear = 2027,
+                    eReturnYear = 2030,
+                    eStartingSalary = 25000.0,
+                    portuDcaMonthly = 0.0,
+                    dipContributionMonthly = 0.0,
+                    dpsOwnContributionMonthly = 0.0,
+                    lifestyleCostAtFireMonthly = 35000.0,
+                    safeWithdrawalRatePct = 3.5,
+                    portfolioNominalReturnPct = 6.5
                 )
             }
         )
