@@ -177,6 +177,8 @@ private fun TrajectorySubTab(state: FullCalculationState) {
                 ProjectionMetricRow("State Pension Amount / mo", fmtCZK(state.settings.statePensionMonthly))
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
@@ -454,6 +456,8 @@ private fun PortfolioAccountsView(state: FullCalculationState) {
                 ProjectionMetricRow("Annual Tax Saved from DIP/DPS", fmtCZK(state.taxReturnHelper.dipSaving), isBold = true, highlightColor = BrandTeal)
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
@@ -592,6 +596,8 @@ private fun MonteCarloAndStressSubTab(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 

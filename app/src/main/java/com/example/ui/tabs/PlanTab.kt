@@ -520,6 +520,8 @@ private fun RoadmapTimelineCard(
                     "Full autonomy to pivot, consult, or retire"
                 )
             )
+
+            Spacer(modifier = Modifier.height(96.dp))
         }
     }
 }
@@ -1062,6 +1064,8 @@ private fun LifeGoalsSimulatorSubTab(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(96.dp))
         }
     }
 
@@ -1779,6 +1783,8 @@ private fun FireMilestonesComparisonCard(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 

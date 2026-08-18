@@ -317,6 +317,8 @@ fun OverviewTab(
                 SummaryRow(label = "Annual DIP tax saving", value = fmtCZK(state.taxReturnHelper.dipSaving))
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 

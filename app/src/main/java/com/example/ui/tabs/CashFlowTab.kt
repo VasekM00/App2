@@ -254,6 +254,8 @@ private fun IncomeSubTab(state: FullCalculationState) {
 
         // Visual Cash Flow Projection Chart
         CashFlowProjectionChart(data = state.dualTrajectory)
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
@@ -329,6 +331,8 @@ private fun SpendingSubTab(state: FullCalculationState) {
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
@@ -1328,6 +1332,8 @@ private fun SummarySubTab(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 

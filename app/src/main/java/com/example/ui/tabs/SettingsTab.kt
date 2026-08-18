@@ -745,6 +745,8 @@ fun SettingsTab(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(120.dp))
         }
     }
 
