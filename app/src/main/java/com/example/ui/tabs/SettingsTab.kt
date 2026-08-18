@@ -117,7 +117,7 @@ fun SettingsTab(
     var newCategoryAmount by remember { mutableStateOf("") }
 
     var selectedTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab) }
-    val tabs = listOf("General", "Income", "Expenses", "Investments", "Taxes & Family", "Data")
+    val tabs = listOf("General ⚙️", "Income 💰", "Expenses 🛒", "Investments 📈", "Taxes & Family 🇨🇿", "Data 💾")
     val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(selectedTab) {
@@ -178,11 +178,6 @@ fun SettingsTab(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("settings_input_spouse_name")
                             )
                         }
-                        NumberSettingField(
-                            label = "Annual DCA Contribution Growth (%)",
-                            value = s.dcaAnnualGrowthPct,
-                            onValueChange = { onUpdateSettings(s.copy(dcaAnnualGrowthPct = it)) }
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -220,6 +215,7 @@ fun SettingsTab(
                         NumberSettingField(label = "State Pension Monthly (CZK)", value = s.statePensionMonthly, onValueChange = { onUpdateSettings(s.copy(statePensionMonthly = it)) })
                         NumberSettingField(label = "State Pension Age", value = s.statePensionAge.toDouble(), onValueChange = { onUpdateSettings(s.copy(statePensionAge = it.toInt())) })
                         NumberSettingField(label = "Lifestyle Cost at FIRE (CZK/mo)", value = s.lifestyleCostAtFireMonthly, onValueChange = { onUpdateSettings(s.copy(lifestyleCostAtFireMonthly = it)) })
+                        NumberSettingField(label = "Portfolio Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
                         NumberSettingField(label = "Monte Carlo N (runs)", value = s.monteCarloN.toDouble(), onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
                     }
                 }
@@ -292,6 +288,7 @@ fun SettingsTab(
                     SettingsGroupCard(title = "Monthly Living Expenses (CZK)", initiallyExpanded = true, collapsible = true) {
                         if (!deletedSet.contains("rent")) {
                             NumberSettingField(label = "Rent", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("rent", s.copy(rentMonthly = 0.0))) })
+                            NumberSettingField(label = "Rent Annual Inflation Growth (%)", value = s.rentGrowthPct, onValueChange = { onUpdateSettings(s.copy(rentGrowthPct = it)) })
                         }
                         if (!deletedSet.contains("groceries")) {
                             NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("groceries", s.copy(groceriesMonthly = 0.0))) })
@@ -498,6 +495,15 @@ fun SettingsTab(
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            SettingsGroupCard(title = "DCA Indexation & Strategy 📈", initiallyExpanded = true) {
+                                NumberSettingField(
+                                    label = "Annual DCA Contribution Growth (%)",
+                                    value = s.dcaAnnualGrowthPct,
+                                    onValueChange = { onUpdateSettings(s.copy(dcaAnnualGrowthPct = it)) }
+                                )
+                            }
                         }
                         2 -> {
                             // Return & Fee Assumptions
@@ -516,6 +522,16 @@ fun SettingsTab(
                                     label = "DPS Annual Fee (%) [Cap 0.5%]",
                                     value = s.dpsAnnualFeePct,
                                     onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Portfolio Volatility (%)",
+                                    value = s.monteCarloVolatilityPct,
+                                    onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) }
+                                )
+                                NumberSettingField(
+                                    label = "Monte Carlo Simulation Runs (N)",
+                                    value = s.monteCarloN.toDouble(),
+                                    onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) }
                                 )
                             }
                         }
@@ -588,6 +604,7 @@ fun SettingsTab(
                         BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { onUpdateSettings(s.copy(child1Enabled = it)) })
                         NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt())) })
                         NumberSettingField(label = "Child 1 Tax Bonus Annual (CZK)", value = s.child1TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child1TaxBonusAnnual = it)) })
+                        NumberSettingField(label = "Child 3+ Tax Bonus Annual (CZK)", value = s.child3PlusTaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child3PlusTaxBonusAnnual = it)) })
                         
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         Text(
