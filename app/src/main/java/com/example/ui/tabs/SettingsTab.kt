@@ -652,42 +652,6 @@ fun SettingsTab(
                 }
                 5 -> {
                     item {
-                        // About & Version Card
-                        SettingsGroupCard(title = "About Application", initiallyExpanded = false) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "App Version",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Surface(
-                                    color = tealColor.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "v${com.example.BuildConfig.VERSION_NAME}",
-                                        style = MaterialTheme.typography.labelLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = tealColor
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Czech Financial & FIRE Planning Suite",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    item {
                         SettingsGroupCard(title = "Live Czech Economic & Regulatory Sync", initiallyExpanded = true) {
                             Text(
                                 text = "Fetch and benchmark live data from Český statistický úřad (ČSÚ), Česká národní banka (ČNB), and Czech tax/pension laws (ZDP).",

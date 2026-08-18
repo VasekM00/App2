@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,14 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -48,10 +43,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
-import com.example.util.Formatters.fmtCompact
 import com.example.ui.theme.BrandGoldDarkTheme
-import com.example.ui.theme.BrandLavenderDarkTheme
-
+import com.example.util.Formatters.fmtCompact
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -59,7 +52,7 @@ fun HeroHeader(
     state: FullCalculationState,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
-    onOpenReformDialog: () -> Unit,
+    onOpenReformDialog: () -> Unit = {},
     onOpenExportReportDialog: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onNavigateToNetWorth: () -> Unit = {},
@@ -101,29 +94,21 @@ fun HeroHeader(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 20.dp)
+                    .padding(horizontal = 20.dp, vertical = 18.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Financial Dashboard",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        )
-                        Text(
-                            text = if (state.settings.isSingleHousehold) "Personal Wealth & FIRE Plan" else "${state.settings.primaryName} & ${state.settings.spouseName} · FIRE Blueprint",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                    }
+                    Text(
+                        text = "Financial Dashboard",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -173,38 +158,7 @@ fun HeroHeader(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                AssistChip(
-                    onClick = onOpenReformDialog,
-                    label = {
-                        Text(
-                            text = "v${com.example.BuildConfig.VERSION_NAME} · Pension Reform",
-                            color = Color.White.copy(alpha = 0.9f),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = BrandGoldDarkTheme,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = Color.White.copy(alpha = 0.12f),
-                        labelColor = Color.White
-                    ),
-                    modifier = Modifier
-                        .height(28.dp)
-                        .testTag("reform_chip")
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
