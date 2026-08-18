@@ -60,6 +60,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -113,49 +115,82 @@ fun CashFlowTab(
     var duplicateFromEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var editingEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
 
-    Column(
+    val haptic = LocalHapticFeedback.current
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("cashflow_tab")
     ) {
-        SecondaryTabRow(
-            selectedTabIndex = selectedSubTab,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            subTabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedSubTab == index,
-                    onClick = { selectedSubTab = index },
-                    text = {
-                        Text(
-                            text = title,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            SecondaryTabRow(
+                selectedTabIndex = selectedSubTab,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                subTabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedSubTab == index,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedSubTab = index
+                        },
+                        text = {
+                            Text(
+                                text = title,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        modifier = Modifier.testTag("cashflow_subtab_$index")
+                    )
+                }
+            }
+
+            when (selectedSubTab) {
+                0 -> BudgetAndIncomesSubTab(state = state, ledgerEntries = ledgerEntries)
+                1 -> LedgerSubTab(
+                    state = state,
+                    entries = ledgerEntries,
+                    onAddClick = {
+                        duplicateFromEntry = null
+                        showAddDialog = true
                     },
-                    modifier = Modifier.testTag("cashflow_subtab_$index")
+                    onDuplicateEntry = { entry ->
+                        duplicateFromEntry = entry
+                        showAddDialog = true
+                    },
+                    onEditEntry = { entry -> editingEntry = entry },
+                    onDelete = onDeleteLedgerEntry,
+                    onImportCsv = onImportCsv
                 )
             }
         }
 
-        when (selectedSubTab) {
-            0 -> BudgetAndIncomesSubTab(state = state, ledgerEntries = ledgerEntries)
-            1 -> LedgerSubTab(
-                state = state,
-                entries = ledgerEntries,
-                onAddClick = {
+        if (selectedSubTab == 1) {
+            FloatingActionButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     duplicateFromEntry = null
                     showAddDialog = true
                 },
-                onDuplicateEntry = { entry ->
-                    duplicateFromEntry = entry
-                    showAddDialog = true
-                },
-                onEditEntry = { entry -> editingEntry = entry },
-                onDelete = onDeleteLedgerEntry,
-                onImportCsv = onImportCsv
-            )
+                containerColor = BrandTeal,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 24.dp)
+                    .testTag("fab_add_ledger_entry")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Entry")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("New Entry", fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 

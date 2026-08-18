@@ -76,6 +76,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -125,6 +127,8 @@ fun PlanTab(
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
     val subTabs = listOf("Czech Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
 
+    val haptic = LocalHapticFeedback.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -137,7 +141,10 @@ fun PlanTab(
             subTabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedSubTab == index,
-                    onClick = { selectedSubTab = index },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedSubTab = index
+                    },
                     text = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
                     modifier = Modifier.testTag("plan_subtab_$index")
                 )
@@ -640,6 +647,7 @@ private fun ActionChecklistCard(
     state: FullCalculationState,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -724,7 +732,10 @@ private fun ActionChecklistCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onToggleAction(currentYear, meta.id, isDone) }
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleAction(currentYear, meta.id, isDone)
+                        }
                         .testTag("action_card_${meta.id}")
                 ) {
                     Row(
@@ -735,7 +746,10 @@ private fun ActionChecklistCard(
                     ) {
                         Checkbox(
                             checked = isDone,
-                            onCheckedChange = { onToggleAction(currentYear, meta.id, isDone) },
+                            onCheckedChange = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleAction(currentYear, meta.id, isDone)
+                            },
                             colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
                             modifier = Modifier
                                 .size(24.dp)

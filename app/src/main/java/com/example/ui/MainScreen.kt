@@ -56,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -116,6 +118,8 @@ fun MainScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val haptic = LocalHapticFeedback.current
+
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collectLatest { event ->
             when (event) {
@@ -130,7 +134,8 @@ fun MainScreen(
         NavTabItem("Overview", Icons.Default.Dashboard, "nav_overview"),
         NavTabItem("Cash Flow", Icons.Default.Payments, "nav_cashflow"),
         NavTabItem("Projections", Icons.Default.Assessment, "nav_projections"),
-        NavTabItem("Strategy", Icons.Default.Checklist, "nav_plan")
+        NavTabItem("Strategy", Icons.Default.Checklist, "nav_plan"),
+        NavTabItem("Settings", Icons.Default.Settings, "nav_settings")
     )
 
     val searchCatalog = remember {
@@ -185,9 +190,12 @@ fun MainScreen(
                 tabs.forEachIndexed { index, tab ->
                     NavigationBarItem(
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = index
+                        },
                         icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
-                        label = { Text(text = tab.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                        label = { Text(text = tab.title, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -215,7 +223,10 @@ fun MainScreen(
                         onToggleDarkTheme = onToggleDarkTheme,
                         onOpenReformDialog = { showReformDialog = true },
                         onOpenExportReportDialog = { showExportReportDialog = true },
-                        onOpenSettings = { showSettingsDialog = true }
+                        onOpenSettings = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = 4
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -270,16 +281,13 @@ fun MainScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                if (result.tabIndex == 4) {
-                                                    targetSettingsSubTab = result.subTabIndex
-                                                    showSettingsDialog = true
-                                                } else {
-                                                    selectedTab = result.tabIndex
-                                                    when (result.tabIndex) {
-                                                        1 -> targetCashFlowSubTab = result.subTabIndex
-                                                        2 -> targetProjectionsSubTab = result.subTabIndex
-                                                        3 -> targetPlanSubTab = result.subTabIndex
-                                                    }
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                selectedTab = result.tabIndex
+                                                when (result.tabIndex) {
+                                                    1 -> targetCashFlowSubTab = result.subTabIndex
+                                                    2 -> targetProjectionsSubTab = result.subTabIndex
+                                                    3 -> targetPlanSubTab = result.subTabIndex
+                                                    4 -> targetSettingsSubTab = result.subTabIndex
                                                 }
                                                 searchQuery = ""
                                             }
@@ -305,7 +313,10 @@ fun MainScreen(
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
                                 },
-                                onNavigateToPlan = { selectedTab = 3 }
+                                onNavigateToPlan = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = 3
+                                }
                             )
                             1 -> CashFlowTab(
                                 state = state,
@@ -334,6 +345,13 @@ fun MainScreen(
                                 },
                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                 initialSubTab = targetPlanSubTab
+                            )
+                            4 -> SettingsTab(
+                                state = state,
+                                onUpdateSettings = { viewModel.updateSettings(it) },
+                                onResetDefaults = { viewModel.resetSettingsToDefault() },
+                                onClearAllData = { viewModel.clearAllUserData() },
+                                initialSubTab = targetSettingsSubTab
                             )
                         }
                     }

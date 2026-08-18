@@ -19,11 +19,14 @@ import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -115,6 +118,11 @@ fun SettingsTab(
 
     var selectedTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab) }
     val tabs = listOf("General", "Income", "Expenses", "Investments", "Taxes & Family", "Data")
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(selectedTab) {
+        scrollState.scrollTo(0)
+    }
 
     Column(
         modifier = modifier
@@ -130,7 +138,10 @@ fun SettingsTab(
             tabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedTab == index,
-                    onClick = { selectedTab = index },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedTab = index
+                    },
                     text = { Text(title, fontWeight = FontWeight.SemiBold) }
                 )
             }
@@ -1088,9 +1099,27 @@ private fun NumberSettingField(
             readOnly = readOnly,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             keyboardActions = KeyboardActions(onDone = { commitCurrentText() }),
+            trailingIcon = if (isFocused && textValue.isNotEmpty() && !readOnly) {
+                {
+                    IconButton(
+                        onClick = {
+                            textValue = ""
+                            onValueChange(0.0)
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else null,
             singleLine = true,
             modifier = Modifier
-                .width(130.dp)
+                .width(140.dp)
                 .onFocusChanged {
                     if (isFocused && !it.isFocused) {
                         commitCurrentText()
@@ -1108,6 +1137,7 @@ private fun BooleanSettingField(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1122,7 +1152,10 @@ private fun BooleanSettingField(
         )
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onCheckedChange(it)
+            },
             colors = SwitchDefaults.colors(checkedThumbColor = BrandTeal, checkedTrackColor = BrandTeal.copy(alpha = 0.5f))
         )
     }
