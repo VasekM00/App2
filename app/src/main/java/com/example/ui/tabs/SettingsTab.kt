@@ -80,10 +80,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Share
+import com.example.ui.components.LiveSyncDialog
 import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
@@ -102,6 +104,9 @@ fun SettingsTab(
     onUpdateSettings: (SettingsEntity) -> Unit,
     onResetDefaults: () -> Unit,
     onClearAllData: () -> Unit,
+    liveRegulatoryData: com.example.domain.CzechRegulatoryData? = null,
+    isSyncing: Boolean = false,
+    onSyncLiveCzechData: () -> Unit = {},
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -110,6 +115,7 @@ fun SettingsTab(
     val tealColor = BrandTeal
     val context = LocalContext.current
     
+    var showSyncDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
     var showImportJsonDialog by remember { mutableStateOf(false) }
@@ -682,10 +688,60 @@ fun SettingsTab(
                     }
 
                     item {
-                        // Backup & Snapshot Card
-                        SettingsGroupCard(title = "Data Backup & Snapshots", initiallyExpanded = true, badgeText = "BACKUP", badgeColor = BrandTeal) {
+                        SettingsGroupCard(title = "Live Czech Economic & Regulatory Sync", initiallyExpanded = true) {
                             Text(
-                                text = "Export your entire financial model as JSON or copy a summary to keep your records safe.",
+                                text = "Fetch and benchmark live data from Český statistický úřad (ČSÚ), Česká národní banka (ČNB), and Czech tax/pension laws (ZDP).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Status: ${if (liveRegulatoryData != null) "Verified Official Feeds" else "Ready to sync"}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                    Text(
+                                        text = liveDataSubtitle(liveRegulatoryData),
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onSyncLiveCzechData()
+                                    showSyncDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("sync_czech_benchmarks_button")
+                            ) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Check & Sync Live Benchmarks", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    item {
+                        // Export / Import Card
+                        SettingsGroupCard(title = "Export & Import Settings", initiallyExpanded = true) {
+                            Text(
+                                text = "Backup all your financial numbers or share settings across devices via JSON format.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -793,6 +849,20 @@ fun SettingsTab(
                 Spacer(modifier = Modifier.height(120.dp))
             }
         }
+    }
+
+    if (showSyncDialog) {
+        LiveSyncDialog(
+            currentSettings = s,
+            liveData = liveRegulatoryData,
+            isLoading = isSyncing,
+            onDismiss = { showSyncDialog = false },
+            onApplySettings = { updated ->
+                onUpdateSettings(updated)
+                showSyncDialog = false
+                Toast.makeText(context, "Official Czech benchmarks applied", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     if (showImportJsonDialog) {
@@ -1192,5 +1262,13 @@ private fun BooleanSettingField(
             },
             colors = SwitchDefaults.colors(checkedThumbColor = BrandTeal, checkedTrackColor = BrandTeal.copy(alpha = 0.5f))
         )
+    }
+}
+
+private fun liveDataSubtitle(data: com.example.domain.CzechRegulatoryData?): String {
+    return if (data != null) {
+        "ČSÚ CPI: ${data.csuCpiInflationPct}% · EUR: ${String.format("%.2f", data.eurCzkRate)} · USD: ${String.format("%.2f", data.usdCzkRate)}"
+    } else {
+        "Check live ČSÚ CPI, ČNB rates, and ZDP tax credits"
     }
 }

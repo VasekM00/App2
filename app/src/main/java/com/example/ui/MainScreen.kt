@@ -104,6 +104,8 @@ fun MainScreen(
     val state by viewModel.calculationState.collectAsState()
     val ledgerEntries by viewModel.ledgerEntries.collectAsState()
     val actionStates by viewModel.actionStates.collectAsState()
+    val liveRegulatoryData by viewModel.liveRegulatoryData.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -143,6 +145,7 @@ fun MainScreen(
             SearchIndexEntry("Emergency Cash Reserve & Runway", "Overview", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
             SearchIndexEntry("FIRE Milestones & Freedom Score", "Overview", 0, 0, listOf("freedom", "score", "milestone", "coast", "lean", "standard", "barista", "overview")),
             SearchIndexEntry("Monthly Budget & Surplus Summary", "Cash Flow > Budget & Incomes", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
+            SearchIndexEntry("Live Czech Economic & Regulatory Sync", "Settings > Data", 4, 5, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp")),
             SearchIndexEntry("Vaclav & Eleonora Salaries, Raises & Bonuses", "Cash Flow > Budget & Incomes", 1, 0, listOf("income", "salary", "bonus", "raise", "vaclav", "eleonora", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
             SearchIndexEntry("Living Expenses, Rent & Groceries", "Cash Flow > Budget & Incomes", 1, 0, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
             SearchIndexEntry("Historical Ledger Records & CSV Import", "Cash Flow > Monthly Records & Ledger", 1, 1, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
@@ -375,6 +378,9 @@ fun MainScreen(
                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                 onResetDefaults = { viewModel.resetSettingsToDefault() },
                                 onClearAllData = { viewModel.clearAllUserData() },
+                                liveRegulatoryData = liveRegulatoryData,
+                                isSyncing = isSyncing,
+                                onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
                                 initialSubTab = targetSettingsSubTab
                             )
                         }
@@ -430,6 +436,9 @@ fun MainScreen(
                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                 onResetDefaults = { viewModel.resetSettingsToDefault() },
                                 onClearAllData = { viewModel.clearAllUserData() },
+                                liveRegulatoryData = liveRegulatoryData,
+                                isSyncing = isSyncing,
+                                onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
                                 initialSubTab = targetSettingsSubTab,
                                 modifier = Modifier.weight(1f)
                             )

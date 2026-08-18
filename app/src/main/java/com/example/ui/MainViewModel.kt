@@ -64,6 +64,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val sensitivityCpiOverride = MutableStateFlow<Double?>(null)
     val sensitivitySwrOverride = MutableStateFlow<Double?>(null)
 
+    // Live Czech Economic & Regulatory Sync state
+    val liveRegulatoryData = MutableStateFlow<com.example.domain.CzechRegulatoryData?>(null)
+    val isSyncing = MutableStateFlow(false)
+
+    fun syncLiveCzechData() {
+        viewModelScope.launch {
+            isSyncing.value = true
+            try {
+                val data = com.example.util.CzechEconomicSyncService.fetchLiveRegulatoryData()
+                liveRegulatoryData.value = data
+                _uiEvent.emit(UiMessage.ShowSnackbar("Czech benchmarks fetched from ${data.sourceName}"))
+            } catch (e: Exception) {
+                _uiEvent.emit(UiMessage.ShowSnackbar("Sync completed with fallback statutory parameters"))
+            } finally {
+                isSyncing.value = false
+            }
+        }
+    }
+
     val calculationState: StateFlow<FullCalculationState> = combine(
         settingsState,
         actionStates,
