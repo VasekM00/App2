@@ -63,6 +63,10 @@ import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 
 import com.example.ui.components.EmergencyReserveWidget
+import com.example.ui.components.MetricInfo
+import com.example.ui.components.MetricInfoDialog
+import com.example.ui.components.infoTapHold
+import com.example.ui.components.rememberMetricInfoState
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -81,6 +85,46 @@ fun OverviewTab(
         actionStates["${currentYear}_${meta.id}"] == true
     }
     var isActionBannerExpanded by remember { mutableStateOf(false) }
+    val infoState = rememberMetricInfoState()
+
+    val incomeInfo = MetricInfo(
+        title = if (state.settings.isSingleHousehold) "Monthly Net Inflows" else "Household Net Inflows",
+        category = "Cash Flow & Inflows",
+        formulaOrRule = "Net Take-Home Pay + Meal Vouchers + Employer Pension Matching",
+        explanation = "Measures true monthly cash generation after all personal Czech taxes (15%/23%), social security (7.1%), and health insurance (4.5%). Employer contributions to DIP and DPS enter directly into tax-sheltered investment accounts without personal tax drag.",
+        statutoryReference = "§ 6 odst. 9 písm. d) ZDP (50k/yr employer limit)",
+        practicalImplication = "Maximizing tax-exempt employer matching provides an immediate 100% risk-free return on capital before market compounding.",
+        accentColor = BrandTeal
+    )
+
+    val fireTargetInfo = MetricInfo(
+        title = "Base FIRE Target Capital",
+        category = "Retirement Actuarial Target",
+        formulaOrRule = "Target = (Annual Living Burn - State Pension) / SWR + Bridge Deficit",
+        explanation = "Calculated in today's constant purchasing power (real CZK). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at age 65.",
+        statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act)",
+        practicalImplication = "Every 1,000 CZK/month reduction in permanent baseline living expenses reduces required FIRE capital by ~342,000 CZK at a 3.5% SWR.",
+        accentColor = BrandGold
+    )
+
+    val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
+    val fireAgeInfo = MetricInfo(
+        title = "Projected FIRE Horizon",
+        category = "Trajectory Milestone",
+        formulaOrRule = "Compound DCA + Organic Growth >= Dynamic FIRE Target",
+        explanation = "Determined dynamically by modeling when aggregate liquid brokerage investments, DIP, and accessible retirement assets surpass the required cost-of-living capital barrier under inflation and real return assumptions.",
+        practicalImplication = "Front-loading savings rate early compounds exponentially due to sequence-of-returns acceleration in initial accumulation years.",
+        accentColor = BrandBlue
+    )
+
+    val netWorthInfo = MetricInfo(
+        title = "Consolidated Net Worth",
+        category = "Balance Sheet",
+        formulaOrRule = "Liquid Brokerage + DIP + DPS + Emergency Cash",
+        explanation = "Represents consolidated financial capital. Excludes illiquid primary residential real estate equity to ensure strict FIRE withdrawal modeling against income-generating assets.",
+        practicalImplication = "Tracking liquid investment equity versus emergency cash preserves an optimal allocation between cash drag and compounding growth.",
+        accentColor = GoodGreen
+    )
 
     Column(
         modifier = modifier
@@ -89,7 +133,7 @@ fun OverviewTab(
             .padding(16.dp)
             .testTag("overview_tab")
     ) {
-        // 4 Interactive KPI Cards
+        // 4 Interactive KPI Cards (Tap / Hold for deep insight)
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -104,6 +148,8 @@ fun OverviewTab(
                 accentColor = BrandTeal,
                 modifier = itemWidth,
                 testTagStr = "kpi_family_net",
+                info = incomeInfo,
+                onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToIncome
             )
 
@@ -114,10 +160,11 @@ fun OverviewTab(
                 accentColor = BrandGold,
                 modifier = itemWidth,
                 testTagStr = "kpi_fire_target",
+                info = fireTargetInfo,
+                onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToProjections
             )
 
-            val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
             KpiCard(
                 title = if (state.settings.isSingleHousehold) "FIRE age" else "FIRE age (dual)",
                 value = firePoint?.let { "Age ${it.age}" } ?: ">60",
@@ -125,6 +172,8 @@ fun OverviewTab(
                 accentColor = BrandBlue,
                 modifier = itemWidth,
                 testTagStr = "kpi_fire_age",
+                info = fireAgeInfo,
+                onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToProjections
             )
 
@@ -135,6 +184,8 @@ fun OverviewTab(
                 accentColor = GoodGreen,
                 modifier = itemWidth,
                 testTagStr = "kpi_net_worth",
+                info = netWorthInfo,
+                onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToProjections
             )
         }
@@ -291,7 +342,8 @@ fun OverviewTab(
 
         // Emergency Reserve & Runway Goal Tracker Widget
         EmergencyReserveWidget(
-            state = state
+            state = state,
+            onShowInfo = { infoState.show(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -305,6 +357,26 @@ fun OverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Quick Highlights
+        val surplusVal = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+        val surplusInfo = MetricInfo(
+            title = "Monthly Capital Surplus",
+            category = "Cash Flow & DCA Engine",
+            formulaOrRule = "Surplus = Total Net Monthly Inflows - All Fixed/Variable Living Expenses",
+            explanation = "Represents your monthly discretionary investment firepower. In pure FIRE math, your savings rate (Surplus / Inflows) is the single most dominant lever governing years-to-financial-independence, outweighing investment returns during early accumulation.",
+            practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
+            accentColor = BrandTeal
+        )
+
+        val dipSavingInfo = MetricInfo(
+            title = "DIP & DPS Statutory Tax Shield",
+            category = "Czech Tax Optimization",
+            formulaOrRule = "Tax Refund = min(DIP + DPS Deposits - Subsidy Threshold, 48k CZK) × Tax Rate (15% / 23%)",
+            explanation = "Under § 15a of the Czech Income Tax Act (ZDP), taxpayers can deduct up to 48,000 CZK combined annually from their personal taxable base across qualifying Long-Term Investment Products (DIP) and Supplementary Pension Savings (DPS).",
+            statutoryReference = "§ 15 odst. 5 & § 15a Act No. 586/1992 Coll. (ZDP)",
+            practicalImplication = "Contributing 4,000 CZK/month into DIP unlocks the full 48k ceiling, providing an immediate risk-free 15% (7,200 CZK) or 23% (11,040 CZK) annual tax refund.",
+            accentColor = GoodGreen
+        )
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -314,35 +386,90 @@ fun OverviewTab(
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
                     title = "Strategic Highlights",
-                    subtitle = "Monthly dynamics & tax efficiency",
+                    subtitle = "Monthly dynamics & tax efficiency (Tap for deep insight)",
                     badgeText = "KEY STATS",
                     accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                SummaryRow(label = "Monthly surplus", value = fmtCZK(state.currentIncome.totalMonthly - state.totalLivingCostMonthly))
+                SummaryRow(
+                    label = "Monthly surplus",
+                    value = fmtCZK(surplusVal),
+                    info = surplusInfo,
+                    onShowInfo = { infoState.show(it) }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                SummaryRow(label = "Emergency coverage", value = "${String.format("%.1f", state.emergencyCoverageMonths)} months")
+                SummaryRow(
+                    label = "Emergency coverage",
+                    value = "${String.format("%.1f", state.emergencyCoverageMonths)} months",
+                    info = MetricInfo(
+                        title = "Emergency Coverage Ratio",
+                        category = "Risk Management",
+                        formulaOrRule = "Liquid Cash / Essential Monthly Budget",
+                        explanation = "Indicates resilience against unexpected cash shocks, medical costs, or job loss without having to liquidate long-term investments at market troughs.",
+                        practicalImplication = "Maintains psychological calm and prevents sequence-of-returns destruction.",
+                        accentColor = BrandTeal
+                    ),
+                    onShowInfo = { infoState.show(it) }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                SummaryRow(label = "Annual DIP tax saving", value = fmtCZK(state.taxReturnHelper.dipSaving))
+                SummaryRow(
+                    label = "Annual DIP tax saving",
+                    value = fmtCZK(state.taxReturnHelper.dipSaving),
+                    info = dipSavingInfo,
+                    onShowInfo = { infoState.show(it) }
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(96.dp))
     }
+
+    // Modal Metric Info Dialog
+    MetricInfoDialog(
+        info = infoState.currentInfo,
+        onDismiss = { infoState.dismiss() }
+    )
 }
 
 @Composable
-private fun SummaryRow(label: String, value: String) {
+private fun SummaryRow(
+    label: String,
+    value: String,
+    info: MetricInfo? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null
+) {
+    val clickModifier = if (info != null && onShowInfo != null) {
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .infoTapHold(info, onShowInfo)
+    } else Modifier
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(clickModifier)
+            .padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "• $label:",
-            style = MaterialTheme.typography.bodyMedium,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f).padding(end = 8.dp)
-        )
+        ) {
+            Text(
+                text = "• $label:",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (info != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Info available",
+                    tint = BrandTeal.copy(alpha = 0.5f),
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),

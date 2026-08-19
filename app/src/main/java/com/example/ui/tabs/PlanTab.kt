@@ -83,6 +83,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
@@ -125,7 +126,7 @@ fun PlanTab(
     modifier: Modifier = Modifier
 ) {
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
-    val subTabs = listOf("Czech Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
+    val subTabs = listOf("Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
 
     val haptic = LocalHapticFeedback.current
 
@@ -145,7 +146,15 @@ fun PlanTab(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         selectedSubTab = index
                     },
-                    text = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
+                    text = {
+                        Text(
+                            text = title,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     modifier = Modifier.testTag("plan_subtab_$index")
                 )
             }

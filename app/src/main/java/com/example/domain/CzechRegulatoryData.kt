@@ -15,6 +15,7 @@ data class CzechRegulatoryData(
     val csuNationalAverageWageMonthly: Double = 43967.0,
     val eurCzkRate: Double = 25.15,
     val usdCzkRate: Double = 23.25,
+    val rateDate: String = "",
     
     // Global Asset Benchmarks (Long-Term Realized Real CAGR)
     val msciWorld10yCagrPct: Double = 8.9,

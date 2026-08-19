@@ -37,24 +37,30 @@ fun KpiCard(
     modifier: Modifier = Modifier,
     accentColor: Color = BrandTeal,
     testTagStr: String = "",
+    info: MetricInfo? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
+
+    val clickModifier = if (onClick != null) {
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
+    } else if (info != null && onShowInfo != null) {
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .infoTapHold(info, onShowInfo)
+    } else Modifier
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
-            .then(
-                if (onClick != null) {
-                    Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onClick()
-                        }
-                } else Modifier
-            ),
+            .then(clickModifier),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface

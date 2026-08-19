@@ -27,6 +27,7 @@ object CzechEconomicSyncService {
     suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
         var eurRate = 25.15
         var usdRate = 23.25
+        var rateDate = ""
         var cpiInflation = 2.8
         var avgWage = 43967.0
         var sourceDescription = "Local Verified Statutory Registry"
@@ -36,6 +37,7 @@ object CzechEconomicSyncService {
             val fxRates = fetchCnbRates()
             if (fxRates.first > 0) eurRate = fxRates.first
             if (fxRates.second > 0) usdRate = fxRates.second
+            if (fxRates.third.isNotBlank()) rateDate = fxRates.third
             sourceDescription = "ČNB Daily API & Statutory Registry"
         } catch (e: Exception) {
             // Keep default robust fallback
@@ -63,6 +65,7 @@ object CzechEconomicSyncService {
             csuNationalAverageWageMonthly = avgWage,
             eurCzkRate = eurRate,
             usdCzkRate = usdRate,
+            rateDate = rateDate,
             msciWorld10yCagrPct = 8.9,
             sp50010yCagrPct = 12.1,
             baseTaxRatePct = 15.0,
@@ -148,7 +151,7 @@ object CzechEconomicSyncService {
         val isDeductionCeilingDiff = abs(current.taxDeductionCeilingAnnual - live.dipDpsCombinedCeilingAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Retirement Reform (§ 15/15a)",
+                category = "Retirement Framework (§ 15/15a)",
                 label = "DIP + DPS Combined Tax Deduction",
                 currentValueFormatted = fmtCZK(current.taxDeductionCeilingAnnual),
                 liveValueFormatted = fmtCZK(live.dipDpsCombinedCeilingAnnual),
@@ -157,11 +160,11 @@ object CzechEconomicSyncService {
             )
         )
 
-        // 6. Lepší penzijko DPS Youth Subsidy Cap
+        // 6. DPS Youth Subsidy Cap
         val isYouthSubsidyDiff = abs(current.dpsYouthSubsidyMaxMonthly - live.dpsYouthSubsidyMaxMonthly) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Lepší penzijko Reform",
+                category = "Pension Regulations (DPS)",
                 label = "DPS Youth Subsidy (<30 yrs)",
                 currentValueFormatted = "${fmtCZK(current.dpsYouthSubsidyMaxMonthly)}/mo",
                 liveValueFormatted = "${fmtCZK(live.dpsYouthSubsidyMaxMonthly)}/mo",
@@ -227,9 +230,10 @@ object CzechEconomicSyncService {
         return updated
     }
 
-    private fun fetchCnbRates(): Pair<Double, Double> {
+    private fun fetchCnbRates(): Triple<Double, Double, String> {
         var eur = 0.0
         var usd = 0.0
+        var rateDate = ""
         try {
             val content = fetchUrlContent(CNB_DAILY_RATES_URL, timeoutMs = 2500)
             if (!content.isNullOrBlank()) {
@@ -240,6 +244,8 @@ object CzechEconomicSyncService {
                         val item = ratesArray.getJSONObject(i)
                         val code = item.optString("currencyCode", "")
                         val rate = item.optDouble("rate", 0.0)
+                        val date = item.optString("validFor", "")
+                        if (date.isNotBlank() && rateDate.isBlank()) rateDate = date
                         if (code.equals("EUR", ignoreCase = true)) eur = rate
                         if (code.equals("USD", ignoreCase = true)) usd = rate
                     }
@@ -250,7 +256,11 @@ object CzechEconomicSyncService {
             try {
                 val txt = fetchUrlContent(CNB_TXT_FALLBACK_URL, timeoutMs = 2000)
                 if (!txt.isNullOrBlank()) {
-                    txt.lines().forEach { line ->
+                    val lines = txt.lines()
+                    if (lines.isNotEmpty() && lines[0].contains(".")) {
+                        rateDate = lines[0].split(" ")[0].trim()
+                    }
+                    lines.forEach { line ->
                         val parts = line.split("|")
                         if (parts.size >= 5) {
                             if (parts[3] == "EUR") eur = parts[4].replace(",", ".").toDoubleOrNull() ?: eur
@@ -260,7 +270,7 @@ object CzechEconomicSyncService {
                 }
             } catch (ignored: Exception) {}
         }
-        return Pair(eur, usd)
+        return Triple(eur, usd, rateDate)
     }
 
     private fun fetchUrlContent(urlString: String, timeoutMs: Int = 3000): String? {

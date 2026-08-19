@@ -138,6 +138,7 @@ fun CashFlowTab(
                             Text(
                                 text = title,
                                 fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

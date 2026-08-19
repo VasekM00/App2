@@ -54,7 +54,8 @@ import com.example.util.Formatters.fmtCompact
 @Composable
 fun EmergencyReserveWidget(
     state: FullCalculationState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE) }
@@ -88,6 +89,15 @@ fun EmergencyReserveWidget(
         else -> Triple("Low Reserve", cRed, Icons.Default.Warning)
     }
 
+    val reserveInfo = MetricInfo(
+        title = "Emergency Runway & Buffer",
+        category = "Liquidity & Risk Buffer",
+        formulaOrRule = "Runway = Liquid Reserve (${fmtCompact(currentLiquidCash)}) / Monthly Burn (${fmtCompact(monthlyExpense)})",
+        explanation = "Measures how many months your household can sustain full baseline expenditures with zero incoming salary. Storing this cash in high-yield savings (e.g. ČNB repo-rate linked accounts) insulates your long-term equity DCA portfolio from forced liquidation during market downturns.",
+        practicalImplication = "A 6-month buffer provides peace of mind while eliminating sequence-of-returns destruction during sudden market corrections.",
+        accentColor = MaterialTheme.colorScheme.primary
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -102,7 +112,12 @@ fun EmergencyReserveWidget(
         Column(modifier = Modifier.padding(16.dp)) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (onShowInfo != null) Modifier.infoTapHold(reserveInfo, onShowInfo)
+                        else Modifier
+                    ),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -150,7 +165,9 @@ fun EmergencyReserveWidget(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     horizontalPadding = 8.dp,
-                    verticalPadding = 4.dp
+                    verticalPadding = 4.dp,
+                    info = reserveInfo,
+                    onShowInfo = onShowInfo
                 )
             }
 

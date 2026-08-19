@@ -51,10 +51,18 @@ fun ColorPill(
     verticalPadding: Dp = 3.5.dp,
     cornerRadius: Dp = 8.dp,
     alpha: Float = 0.12f,
-    borderAlpha: Float = 0.28f
+    borderAlpha: Float = 0.28f,
+    info: MetricInfo? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
+    val clickModifier = if (info != null && onShowInfo != null) {
+        Modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .infoTapHold(info, onShowInfo)
+    } else Modifier
+
     Surface(
-        modifier = modifier,
+        modifier = modifier.then(clickModifier),
         shape = RoundedCornerShape(cornerRadius),
         color = color.copy(alpha = alpha),
         border = BorderStroke(1.dp, color.copy(alpha = borderAlpha))

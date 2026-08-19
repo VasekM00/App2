@@ -129,8 +129,9 @@ fun LiveSyncDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val datePrefix = if (liveData.rateDate.isNotBlank()) " (${liveData.rateDate})" else ""
                             Text(
-                                text = "ČNB FX: 1 EUR = ${String.format("%.2f", liveData.eurCzkRate)} CZK · 1 USD = ${String.format("%.2f", liveData.usdCzkRate)} CZK",
+                                text = "ČNB FX$datePrefix: 1 EUR = ${String.format("%.2f", liveData.eurCzkRate)} CZK · 1 USD = ${String.format("%.2f", liveData.usdCzkRate)} CZK",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp

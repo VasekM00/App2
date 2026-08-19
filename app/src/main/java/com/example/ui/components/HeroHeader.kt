@@ -52,7 +52,6 @@ fun HeroHeader(
     state: FullCalculationState,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
-    onOpenReformDialog: () -> Unit = {},
     onOpenExportReportDialog: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onNavigateToNetWorth: () -> Unit = {},
