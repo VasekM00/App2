@@ -959,26 +959,46 @@ private fun BudgetAndIncomesSubTab(
 ) {
     var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details
     val sections = listOf("Overview", "Incomes", "Expenses")
+    val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             sections.forEachIndexed { index, name ->
                 val isSelected = selectedSection == index
-                AssistChip(
-                    onClick = { selectedSection = index },
-                    label = { Text(name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.testTag("budget_section_$index")
-                )
+                Surface(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedSection = index
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .testTag("budget_section_$index")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
             }
         }
 

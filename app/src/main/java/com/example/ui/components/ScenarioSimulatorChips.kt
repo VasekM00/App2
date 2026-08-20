@@ -54,8 +54,14 @@ fun ScenarioSimulatorChips(
     onApplySettings: (SettingsEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedScenarioId by remember { mutableStateOf<String?>("base_plan") }
+    var selectedScenarioId by remember { mutableStateOf<String?>(null) }
+    var baselineSettings by remember { mutableStateOf(state.settings) }
     val haptic = LocalHapticFeedback.current
+
+    // Keep baseline settings in sync with current user settings when no scenario is active
+    if (selectedScenarioId == null) {
+        baselineSettings = state.settings
+    }
 
     val presets = listOf(
         FireScenarioPreset(
@@ -182,7 +188,7 @@ fun ScenarioSimulatorChips(
                 }
 
                 Text(
-                    text = "1-Tap Apply",
+                    text = if (selectedScenarioId != null) "Tap active to revert" else "1-Tap Apply",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = BrandTeal
                 )
@@ -201,9 +207,19 @@ fun ScenarioSimulatorChips(
                         selected = isSelected,
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedScenarioId = preset.id
-                            val newSettings = preset.applyPreset(state.settings)
-                            onApplySettings(newSettings)
+                            if (isSelected) {
+                                // 2nd tap: unselect and restore original baseline settings
+                                selectedScenarioId = null
+                                onApplySettings(baselineSettings)
+                            } else {
+                                // 1st tap: snapshot original baseline and apply selected preset
+                                if (selectedScenarioId == null) {
+                                    baselineSettings = state.settings
+                                }
+                                selectedScenarioId = preset.id
+                                val newSettings = preset.applyPreset(baselineSettings)
+                                onApplySettings(newSettings)
+                            }
                         },
                         label = {
                             Text(
@@ -227,17 +243,32 @@ fun ScenarioSimulatorChips(
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    color = BrandTeal.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Active Preset: ${activePreset.description}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Active: ${activePreset.description}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.weight(1f).padding(end = 6.dp)
+                        )
+                        Text(
+                            text = "Tap to reset",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = BrandTeal,
+                                fontSize = 10.5.sp
+                            )
+                        )
+                    }
                 }
             }
         }
