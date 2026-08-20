@@ -957,8 +957,8 @@ private fun BudgetAndIncomesSubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>
 ) {
-    var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details, 3 = Cash Flow Projection
-    val sections = listOf("Overview", "Incomes", "Expenses", "Projections")
+    var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details
+    val sections = listOf("Overview", "Incomes", "Expenses")
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -986,17 +986,6 @@ private fun BudgetAndIncomesSubTab(
             0 -> SummarySubTab(state = state, ledgerEntries = ledgerEntries)
             1 -> IncomeSubTab(state = state)
             2 -> SpendingSubTab(state = state)
-            3 -> {
-                val scrollState = rememberScrollState()
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(16.dp)
-                ) {
-                    CashFlowProjectionChart(data = state.dualTrajectory)
-                }
-            }
         }
     }
 }
