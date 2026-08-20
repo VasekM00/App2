@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -184,18 +186,23 @@ fun EmergencyReserveWidget(
             // Progress Bar & Stats
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Current: ${fmtCompact(currentLiquidCash)}",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Text(
                     text = "Target ($selectedTargetMode): ${fmtCompact(targetAmount)}",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    ),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -231,10 +238,18 @@ fun EmergencyReserveWidget(
                 Text(
                     text = "Goal Runway:",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     listOf("3M", "6M", "9M", "12M", "Target").forEach { mode ->
                         FilterChip(
                             selected = selectedTargetMode == mode,
@@ -242,7 +257,15 @@ fun EmergencyReserveWidget(
                                 selectedTargetMode = mode
                                 prefs.edit().putString("emergency_reserve_mode", mode).apply()
                             },
-                            label = { Text(mode, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            label = {
+                                Text(
+                                    text = mode,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
