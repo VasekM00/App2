@@ -95,7 +95,8 @@ fun ColorPill(
                     letterSpacing = 0.3.sp
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false,
+                overflow = TextOverflow.Clip
             )
         }
     }
@@ -216,7 +217,9 @@ fun CardHeaderPill(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
         ) {
             if (icon != null || iconEmoji != null) {
                 Box(
@@ -261,17 +264,15 @@ fun CardHeaderPill(
         }
 
         if (badgeText != null) {
-            Spacer(modifier = Modifier.width(8.dp))
             ColorPill(
                 text = badgeText,
                 color = badgeColor,
-                fontSize = 10.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 horizontalPadding = 8.dp,
                 verticalPadding = 4.dp
             )
         } else if (trailingContent != null) {
-            Spacer(modifier = Modifier.width(8.dp))
             trailingContent()
         }
     }

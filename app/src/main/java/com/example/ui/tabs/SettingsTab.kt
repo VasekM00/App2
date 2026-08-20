@@ -1017,32 +1017,38 @@ private fun SettingsGroupCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     if (badgeText != null) {
                         ColorPill(
                             text = badgeText,
                             color = badgeColor,
-                            fontSize = 9.sp,
-                            horizontalPadding = 6.dp,
-                            verticalPadding = 2.dp
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 8.dp,
+                            verticalPadding = 3.5.dp
                         )
                     }
-                }
-                if (collapsible) {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (expanded) "Collapse section" else "Expand section",
-                            tint = BrandTeal
-                        )
+                    if (collapsible) {
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (expanded) "Collapse section" else "Expand section",
+                                tint = BrandTeal
+                            )
+                        }
                     }
                 }
             }
