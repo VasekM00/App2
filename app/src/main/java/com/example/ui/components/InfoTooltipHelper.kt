@@ -230,7 +230,7 @@ fun MetricInfoDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "⚖️ Statutory Citation: ${info.statutoryReference}",
+                            text = "Statutory Citation: ${info.statutoryReference}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -245,7 +245,7 @@ fun MetricInfoDialog(
                 if (!info.practicalImplication.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "💡 Strategy Takeaway: ${info.practicalImplication}",
+                        text = "Strategy Takeaway: ${info.practicalImplication}",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = effectiveAccent,

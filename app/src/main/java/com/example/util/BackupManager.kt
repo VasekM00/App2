@@ -120,7 +120,7 @@ object BackupManager {
         json.put("monteCarloVolatilityPct", s.monteCarloVolatilityPct)
         json.put("monteCarloSeed", s.monteCarloSeed)
 
-        return json.toString(2)
+        return json.toString()
     }
 
     fun deserializeSettingsFromJson(jsonStr: String, fallback: SettingsEntity): SettingsEntity? {

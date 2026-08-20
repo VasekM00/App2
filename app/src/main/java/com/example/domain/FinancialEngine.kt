@@ -7,7 +7,6 @@ import kotlin.math.log
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -735,7 +734,7 @@ object FinancialEngine {
         return result
     }
 
-    fun calculateStressScenarios(settings: SettingsEntity): List<StressScenarioResult> {
+    fun calculateStressScenarios(settings: SettingsEntity, runMonteCarlo: Boolean = true): List<StressScenarioResult> {
         val baseLivingCost = totalLivingCostMonthly(settings)
 
         val configs = listOf(
@@ -785,7 +784,7 @@ object FinancialEngine {
             }
 
             val firePoint = trajectory.firstOrNull { it.portfolio >= it.target }
-            val mcResult = runMonteCarlo(mockSettings)
+            val successRate = if (runMonteCarlo) runMonteCarlo(mockSettings).successRatePct else 0.0
 
             val effectiveLivingCost = if (cpiPct > settings.cpiInflationPct) {
                 baseLivingCost * (1.0 + (cpiPct - settings.cpiInflationPct) / 100.0)
@@ -807,7 +806,7 @@ object FinancialEngine {
                 fireTargetToday = fireTarget,
                 fireAge = firePoint?.age,
                 fireYear = firePoint?.year,
-                successRatePct = mcResult.successRatePct,
+                successRatePct = successRate,
                 emergencySurvivalMonths = emergencySurvival,
                 netWorthAt60 = nwAt60,
                 trajectory = trajectory
@@ -919,7 +918,7 @@ object FinancialEngine {
         )
 
         val monteCarlo = if (runMonteCarlo) runMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
-        val stressScenarios = calculateStressScenarios(settings)
+        val stressScenarios = calculateStressScenarios(settings, runMonteCarlo = runMonteCarlo)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {
             (investMonthly / currentIncome.totalMonthly) * 100.0
