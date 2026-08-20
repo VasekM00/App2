@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -175,6 +176,8 @@ private fun RoadmapAndGoalsSubTab(
     onUpdateSettings: ((SettingsEntity) -> Unit)?
 ) {
     var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Life Goals Simulator
+    val views = listOf("Action Checklist & Tasks", "Life Goals Simulator")
+    val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -183,22 +186,38 @@ private fun RoadmapAndGoalsSubTab(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AssistChip(
-                onClick = { selectedView = 0 },
-                label = { Text("Action Checklist & Tasks", fontWeight = if (selectedView == 0) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (selectedView == 0) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
-                    labelColor = if (selectedView == 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
-            AssistChip(
-                onClick = { selectedView = 1 },
-                label = { Text("Life Goals Simulator", fontWeight = if (selectedView == 1) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (selectedView == 1) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
-                    labelColor = if (selectedView == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
+            views.forEachIndexed { index, name ->
+                val isSelected = selectedView == index
+                Surface(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedView = index
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .testTag("roadmap_view_$index")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.5.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
         }
 
         when (selectedView) {
@@ -306,16 +325,25 @@ private fun FireRoadmapSubTab(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Progress Bar
-                LinearProgressIndicator(
-                    progress = { (primaryProgress / 100.0).toFloat().coerceIn(0f, 1f) },
+                // Smooth Continuous Progress Bar (Zero trailing dots)
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = BrandTeal,
-                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
-                )
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                ) {
+                    val p = (primaryProgress / 100.0).toFloat().coerceIn(0f, 1f)
+                    if (p > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(BrandTeal)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -901,33 +929,36 @@ private fun LifeGoalsSimulatorSubTab(
                         text = "Goal Commitment vs Net Capacity",
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                     )
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                text = if (isOverBudget) "Over Capacity" else "${(capacityRatio * 100).toInt()}% Allocated",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (isOverBudget) MaterialTheme.colorScheme.errorContainer else GoodGreen.copy(alpha = 0.15f),
-                            labelColor = if (isOverBudget) MaterialTheme.colorScheme.onErrorContainer else GoodGreen
-                        )
+                    ColorPill(
+                        text = if (isOverBudget) "Over Capacity" else "${(capacityRatio * 100).toInt()}% Allocated",
+                        color = if (isOverBudget) MaterialTheme.colorScheme.error else GoodGreen,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 4.dp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                LinearProgressIndicator(
-                    progress = { capacityRatio.toFloat().coerceIn(0f, 1f) },
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp)),
-                    color = if (isOverBudget) MaterialTheme.colorScheme.error else BrandTeal,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    val p = capacityRatio.toFloat().coerceIn(0f, 1f)
+                    if (p > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(p)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(if (isOverBudget) MaterialTheme.colorScheme.error else BrandTeal)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -1042,15 +1073,25 @@ private fun LifeGoalsSimulatorSubTab(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    LinearProgressIndicator(
-                        progress = { progress.toFloat() },
+                    // Smooth Continuous Progress Bar (Zero trailing dots)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = BrandTeal,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        val p = progress.toFloat().coerceIn(0f, 1f)
+                        if (p > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(p)
+                                    .fillMaxHeight()
+                                    .clip(CircleShape)
+                                    .background(BrandTeal)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -1071,19 +1112,13 @@ private fun LifeGoalsSimulatorSubTab(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                text = "+${String.format("%.1f", goalFireDelay)} yrs to FIRE",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    ColorPill(
+                        text = "+${String.format("%.1f", goalFireDelay)} yrs to FIRE",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 4.dp
                     )
                 }
             }
@@ -1257,20 +1292,14 @@ private fun PensionSubTab(state: FullCalculationState) {
                             )
                         }
 
-                        AssistChip(
-                            onClick = {},
-                            label = {
-                                Text(
-                                    text = "Saves ${fmtCZK(scenario.annualTaxSaved)}/yr",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = BrandTeal.copy(alpha = 0.15f),
-                                labelColor = BrandTeal
-                            )
+                        ColorPill(
+                            text = "Saves ${fmtCZK(scenario.annualTaxSaved)}/yr",
+                            color = BrandTeal,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            horizontalPadding = 8.dp,
+                            verticalPadding = 4.dp
                         )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
@@ -1634,17 +1663,25 @@ private fun FireMilestonesComparisonCard(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LinearProgressIndicator(
-                        progress = { progressFloat },
+                    // Smooth Continuous Progress Bar (Zero trailing dots)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = if (activeM.isAchieved) GoodGreen else activeConfig.accentColor,
-                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                    )
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                    ) {
+                        val p = progressFloat.coerceIn(0f, 1f)
+                        if (p > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(p)
+                                    .fillMaxHeight()
+                                    .clip(CircleShape)
+                                    .background(if (activeM.isAchieved) GoodGreen else activeConfig.accentColor)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
