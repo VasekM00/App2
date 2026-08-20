@@ -328,8 +328,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Investable Capital",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(investableNetWorth),
@@ -346,8 +346,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Target Capital (Today)",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(targetWorth),
@@ -365,8 +365,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Monthly SWR Flow",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(monthlyPassiveIncome),
@@ -1660,8 +1660,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = fmtCZK(activeTarget),
@@ -1681,8 +1681,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
@@ -1703,8 +1703,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),

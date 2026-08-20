@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -140,19 +141,26 @@ fun EmergencyReserveWidget(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.padding(end = 6.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 6.dp)
+                    ) {
                         Text(
                             text = "Emergency Fund & Runway",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            ),
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = "${String.format("%.1f", monthsCovered)} Mo. Expenses Covered",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 2,
+                            softWrap = true
                         )
                     }
                 }
@@ -193,15 +201,24 @@ fun EmergencyReserveWidget(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            LinearProgressIndicator(
-                progress = { progress },
+            // Smooth Continuous Progress Bar (Zero trailing dots)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp)
-                    .clip(CircleShape),
-                color = statusColor,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-            )
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            ) {
+                if (progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 

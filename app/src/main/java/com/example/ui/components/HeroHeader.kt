@@ -224,8 +224,8 @@ fun MiniStatChip(
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
                 ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 2,
+                softWrap = true
             )
             Spacer(modifier = Modifier.height(3.dp))
             Text(
@@ -238,7 +238,7 @@ fun MiniStatChip(
                     textAlign = TextAlign.Center
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false
             )
         }
     }

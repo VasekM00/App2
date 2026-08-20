@@ -1400,8 +1400,8 @@ private fun MetricStatBox(
                     letterSpacing = 0.4.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 2,
+                softWrap = true
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -1413,7 +1413,7 @@ private fun MetricStatBox(
                     color = valueColor
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false
             )
         }
     }
