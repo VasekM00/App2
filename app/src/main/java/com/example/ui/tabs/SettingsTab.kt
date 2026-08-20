@@ -178,7 +178,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Profile & Household Structure",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = "PROFILE",
                             badgeColor = BrandGold
                         ) {
@@ -240,7 +240,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Earned & Side Incomes",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.currentIncome.totalMonthly) + "/mo",
                             badgeColor = GoodGreen
                         ) {
@@ -301,7 +301,7 @@ fun SettingsTab(
 
                         SettingsGroupCard(
                             title = "Monthly Living Expenses",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.totalLivingCostMonthly) + "/mo",
                             badgeColor = BadRed
                         ) {
@@ -421,7 +421,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Current Asset Balances & Cash Reserve",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.netWorthTotal),
                             badgeColor = BrandTeal
                         ) {
@@ -482,7 +482,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Monthly Investment Flows (DCA)",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.investMonthlyTotal) + "/mo",
                             badgeColor = GoodGreen
                         ) {
@@ -546,7 +546,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "FIRE Targets & Market Assumptions",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
                             badgeColor = BrandTeal
                         ) {
@@ -636,7 +636,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Live Czech Economic & Regulatory Sync",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = if (liveRegulatoryData != null) "SYNCED" else "OFFLINE",
                             badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold
                         ) {
@@ -681,7 +681,7 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Backup & Share Settings",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = "JSON",
                             badgeColor = BrandTeal
                         ) {
