@@ -33,7 +33,6 @@ object PresetProfiles {
         iconEmoji = "",
         settings = SettingsEntity(
             vSalary = 65000.0,
-            vRaiseAnnual = 2500.0,
             vBonusAnnual = 30000.0,
             vMealVouchersMonthly = 2200.0,
             eReturnYear = 2099, // Inactive
@@ -80,7 +79,6 @@ object PresetProfiles {
         settings = SettingsEntity(
             primaryAge = 24,
             vSalary = 38000.0,
-            vRaiseAnnual = 2000.0,
             vBonusAnnual = 15000.0,
             vMealVouchersMonthly = 1800.0,
             eReturnYear = 2099,
@@ -119,7 +117,6 @@ object PresetProfiles {
         iconEmoji = "",
         settings = SettingsEntity(
             vSalary = 52000.0,
-            vRaiseAnnual = 2000.0,
             vBonusAnnual = 25000.0,
             eReturnYear = 2026, // Active now
             eStartingSalary = 43000.0,

@@ -965,7 +965,7 @@ fun StressComparisonChart(
         cGreen,                        // Bull
         cRed,                          // Stagflation
         cGold,                         // Crash
-        Color(0xFF9C27B0)              // Inflation Shock
+        MaterialTheme.colorScheme.tertiary // Inflation Shock
     )
 
     Card(

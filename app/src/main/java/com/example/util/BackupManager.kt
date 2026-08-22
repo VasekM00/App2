@@ -16,7 +16,6 @@ object BackupManager {
         
         // Income & Work
         json.put("vSalary", s.vSalary)
-        json.put("vRaiseAnnual", s.vRaiseAnnual)
         json.put("vBonusAnnual", s.vBonusAnnual)
         json.put("vMealVouchersMonthly", s.vMealVouchersMonthly)
         json.put("vOtherInflowsMonthly", s.vOtherInflowsMonthly)
@@ -138,7 +137,6 @@ object BackupManager {
                 dcaAnnualGrowthPct = json.optDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
                 vSalary = json.optDouble("vSalary", fallback.vSalary),
-                vRaiseAnnual = json.optDouble("vRaiseAnnual", fallback.vRaiseAnnual),
                 vBonusAnnual = json.optDouble("vBonusAnnual", fallback.vBonusAnnual),
                 vMealVouchersMonthly = json.optDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
                 vOtherInflowsMonthly = json.optDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),

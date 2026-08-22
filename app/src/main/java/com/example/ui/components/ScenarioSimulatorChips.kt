@@ -82,7 +82,6 @@ fun ScenarioSimulatorChips(
                     cpiInflationPct = 3.0,
                     safeWithdrawalRatePct = 4.0,
                     portuDcaMonthly = 14000.0,
-                    vRaiseAnnual = 1300.0,
                     rentGrowthPct = 3.0,
                     monteCarloVolatilityPct = 15.0
                 )
@@ -91,7 +90,7 @@ fun ScenarioSimulatorChips(
         FireScenarioPreset(
             id = "career_boost",
             title = "Career Acceleration (2030)",
-            description = "Eleonora returns 2030 with 38k net · Vaclav raises +2.5k/yr · 85% Eleonora reinvestment",
+            description = "Eleonora returns 2030 with 38k net · 85% Eleonora reinvestment · 18k ETF DCA",
             applyPreset = { s ->
                 s.copy(
                     childExpensesEnabled = true,
@@ -102,7 +101,6 @@ fun ScenarioSimulatorChips(
                     eReturnYear = 2030,
                     eStartingSalary = 38000.0,
                     eReinvestedPct = 85.0,
-                    vRaiseAnnual = 2500.0,
                     portuDcaMonthly = 18000.0,
                     portfolioNominalReturnPct = 7.5
                 )

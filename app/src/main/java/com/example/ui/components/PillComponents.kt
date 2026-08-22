@@ -96,7 +96,7 @@ fun ColorPill(
                 ),
                 maxLines = 1,
                 softWrap = false,
-                overflow = TextOverflow.Clip
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

@@ -238,7 +238,8 @@ fun MiniStatChip(
                     textAlign = TextAlign.Center
                 ),
                 maxLines = 1,
-                softWrap = false
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

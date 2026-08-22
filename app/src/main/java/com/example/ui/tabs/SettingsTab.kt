@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,7 +81,6 @@ import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
 import com.example.domain.CustomLumpSumItem
 import com.example.domain.FullCalculationState
-import com.example.domain.PRIMARY_BIRTH_YEAR
 import com.example.domain.parseCustomExpenses
 import com.example.domain.parseCustomLumpSums
 import com.example.domain.parseDeletedCategories
@@ -224,17 +224,18 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                            val birthYear = s.baseYear - s.primaryAge
                             NumberSettingField(
                                 label = "Base Planning Year",
                                 value = s.baseYear.toDouble(),
                                 onValueChange = { yr ->
                                     val y = yr.toInt()
-                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = y - PRIMARY_BIRTH_YEAR))
+                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = y - birthYear))
                                 }
                             )
                             NumberSettingField(
-                                label = "Birth Year (2000)",
-                                value = PRIMARY_BIRTH_YEAR.toDouble(),
+                                label = "Birth Year ($birthYear)",
+                                value = birthYear.toDouble(),
                                 onValueChange = { },
                                 readOnly = true
                             )
@@ -526,7 +527,7 @@ fun SettingsTab(
                         ) {
                             Text(text = "Václav's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
-                                label = "Liquid Brokerage / ETF Portfolio (CZK)",
+                                label = "Brokerage / ETF Portfolio (CZK)",
                                 value = s.liquidPortfolioCurrent,
                                 onValueChange = { onUpdateSettings(s.copy(liquidPortfolioCurrent = it)) },
                                 testTagStr = "input_liquid_port"
@@ -545,7 +546,7 @@ fun SettingsTab(
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             Text(text = "Eleonora's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                             NumberSettingField(
-                                label = "Liquid Brokerage / ETF (CZK)",
+                                label = "Brokerage / ETF Portfolio (CZK)",
                                 value = s.eLiquidPortfolioCurrent,
                                 onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
                             )
@@ -585,7 +586,7 @@ fun SettingsTab(
                         ) {
                             Text(text = "Václav's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
-                                label = "Monthly Brokerage / ETF (CZK)",
+                                label = "Monthly Brokerage ETF DCA (CZK)",
                                 value = s.portuDcaMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(portuDcaMonthly = it)) }
                             )
@@ -600,7 +601,7 @@ fun SettingsTab(
                                 onValueChange = { onUpdateSettings(s.copy(dpsOwnContributionMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "Employer Retirement Annual Benefit (CZK)",
+                                label = "Employer Pension Benefit Annual (CZK)",
                                 value = s.employerRetirementAnnual,
                                 onValueChange = { onUpdateSettings(s.copy(employerRetirementAnnual = it)) }
                             )
@@ -608,22 +609,22 @@ fun SettingsTab(
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             Text(text = "Eleonora's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                             NumberSettingField(
-                                label = "Brokerage / ETF (CZK)",
+                                label = "Monthly Brokerage ETF DCA (CZK)",
                                 value = s.ePortuDcaMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "DIP Contribution (CZK)",
+                                label = "DIP Monthly Contribution (CZK)",
                                 value = s.eDipContributionMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "DPS Contribution (CZK)",
+                                label = "DPS Monthly Contribution (CZK)",
                                 value = s.eDpsOwnContributionMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "Employer Benefit (CZK)",
+                                label = "Employer Pension Benefit Annual (CZK)",
                                 value = s.eEmployerRetirementAnnual,
                                 onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
                             )
@@ -649,8 +650,8 @@ fun SettingsTab(
                             NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                             NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
                             NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) })
-                            NumberSettingField(label = "DPS Annual Fee (%) [Cap 0.5%]", value = s.dpsAnnualFeePct, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
-                            NumberSettingField(label = "FIRE Target Override (CZK) [0=auto]", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
+                            NumberSettingField(label = "DPS Annual Management Fee (%, cap 0.5%)", value = s.dpsAnnualFeePct, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
+                            NumberSettingField(label = "Manual FIRE Target Override (CZK, 0 = auto)", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
                             NumberSettingField(label = "Lifestyle Cost at FIRE (CZK/mo)", value = s.lifestyleCostAtFireMonthly, onValueChange = { onUpdateSettings(s.copy(lifestyleCostAtFireMonthly = it)) })
                             NumberSettingField(label = "State Pension Monthly (CZK)", value = s.statePensionMonthly, onValueChange = { onUpdateSettings(s.copy(statePensionMonthly = it)) })
                             NumberSettingField(label = "State Pension Age", value = s.statePensionAge.toDouble(), onValueChange = { onUpdateSettings(s.copy(statePensionAge = it.toInt())) })
@@ -681,12 +682,12 @@ fun SettingsTab(
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
                             TaxSummaryRow(
-                                label = "Child 1 Tax Bonus (2024)",
+                                label = "Child 1 Tax Bonus (§ 35c)",
                                 status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
                                 isGood = s.child1Enabled
                             )
                             TaxSummaryRow(
-                                label = "Child 2 Tax Bonus (Jan 2027)",
+                                label = "Child 2 Tax Bonus (§ 35c)",
                                 status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
                                 isGood = s.child2Enabled
                             )
@@ -707,7 +708,7 @@ fun SettingsTab(
                             NumberSettingField(label = "Higher Bracket Tax Rate (%)", value = s.taxRateSecondPct, onValueChange = { onUpdateSettings(s.copy(taxRateSecondPct = it)) })
                             NumberSettingField(label = "Higher Bracket Threshold Annual (CZK)", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
                             NumberSettingField(label = "Basic Taxpayer Credit Annual (CZK)", value = s.taxpayerCreditAnnual, onValueChange = { onUpdateSettings(s.copy(taxpayerCreditAnnual = it)) })
-                            NumberSettingField(label = "Retirement Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
+                            NumberSettingField(label = "Retirement Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
                             NumberSettingField(label = "Eleonora Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
                             NumberSettingField(label = "Eleonora Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
                             BooleanSettingField(label = "Include Eleonora Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
@@ -716,18 +717,18 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(text = "Statutory DPS Pension Subsidies", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                            NumberSettingField(label = "DPS Deduction Threshold Monthly (CZK)", value = s.dpsDeductionThresholdMonthly, onValueChange = { onUpdateSettings(s.copy(dpsDeductionThresholdMonthly = it)) })
-                            NumberSettingField(label = "DPS Min Deposit For Subsidy Monthly (CZK)", value = s.dpsMinDepositForSubsidy, onValueChange = { onUpdateSettings(s.copy(dpsMinDepositForSubsidy = it)) })
-                            NumberSettingField(label = "DPS Standard Subsidy Max Monthly (CZK)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsStandardSubsidyMaxMonthly = it)) })
+                            NumberSettingField(label = "DPS Tax Deduction Floor (CZK/mo)", value = s.dpsDeductionThresholdMonthly, onValueChange = { onUpdateSettings(s.copy(dpsDeductionThresholdMonthly = it)) })
+                            NumberSettingField(label = "DPS Min Subsidy Deposit (CZK/mo)", value = s.dpsMinDepositForSubsidy, onValueChange = { onUpdateSettings(s.copy(dpsMinDepositForSubsidy = it)) })
+                            NumberSettingField(label = "DPS Max Standard Subsidy (CZK/mo)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsStandardSubsidyMaxMonthly = it)) })
                             NumberSettingField(label = "DPS Standard Subsidy Rate (%)", value = s.dpsSubsidyRateStandardPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateStandardPct = it)) })
                             NumberSettingField(label = "DPS Youth Age Limit (Years)", value = s.dpsYouthAgeLimit.toDouble(), onValueChange = { onUpdateSettings(s.copy(dpsYouthAgeLimit = it.toInt())) })
-                            NumberSettingField(label = "DPS Youth Subsidy Max Monthly (CZK)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsYouthSubsidyMaxMonthly = it)) })
+                            NumberSettingField(label = "DPS Max Youth Subsidy (CZK/mo)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsYouthSubsidyMaxMonthly = it)) })
                             NumberSettingField(label = "DPS Youth Subsidy Rate (%)", value = s.dpsSubsidyRateYouthPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateYouthPct = it)) })
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(text = "Monte Carlo Stochastic Risk Engine", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                             NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
-                            NumberSettingField(label = "Simulation Runs (N)", value = s.monteCarloN.toDouble(), onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
+                            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
                         }
                     }
                 }
@@ -1325,7 +1326,7 @@ private fun NumberSettingField(
                 }
             },
             readOnly = readOnly,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { commitCurrentText() }),
             trailingIcon = if (isFocused && textValue.isNotEmpty() && !readOnly) {
                 {

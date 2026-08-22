@@ -54,7 +54,6 @@ class DataLayerIntegrityTest {
             isSingleHousehold = true,
             dcaAnnualGrowthPct = 4.2,
             vSalary = 65000.0,
-            vRaiseAnnual = 3000.0,
             vBonusAnnual = 50000.0,
             vMealVouchersMonthly = 3000.0,
             vOtherInflowsMonthly = 5000.0,

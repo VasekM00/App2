@@ -13,7 +13,6 @@ data class SettingsEntity(
     val isSingleHousehold: Boolean = false,
     val dcaAnnualGrowthPct: Double = 0.0,
     val vSalary: Double = 33500.0,
-    val vRaiseAnnual: Double = 0.0,
     val vBonusAnnual: Double = 0.0,
     val vMealVouchersMonthly: Double = 2090.0,
     val vOtherInflowsMonthly: Double = 0.0,
@@ -55,7 +54,7 @@ data class SettingsEntity(
     val statePensionAge: Int = 67,
     val safeWithdrawalRatePct: Double = 4.0,
     val safetyBufferPct: Double = 10.0,
-    val cpiInflationPct: Double = 3.0,
+    val cpiInflationPct: Double = 2.8, // Default matches ČSÚ live benchmark; updated by Live Sync
     val fireTargetOverride: Double = 0.0,
     // Monthly Living Costs
     val rentMonthly: Double = 21770.0,

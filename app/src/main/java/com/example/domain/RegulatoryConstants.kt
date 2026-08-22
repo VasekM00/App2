@@ -65,4 +65,18 @@ object RegulatoryConstants {
     // --- Minimální mzda v ČR ---
     const val STATUTORY_MIN_WAGE_MONTHLY_2026 = 22400.0
     const val STATUTORY_MIN_WAGE_LAW_REF = "Nařízení vlády o minimální mzdě 2026 (22 400 Kč/měsíc)"
+
+    // --- ZDP § 6 odst. 9 písm. m) - Osvobozený příspěvek zaměstnavatele na penzijní/životní spoření ---
+    // Zaměstnavatelský příspěvek do výše 50 000 Kč ročně je osvobozen od daně z příjmů a pojistného
+    const val STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL = 50000.0
+    const val STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_LAW_REF = "ZDP § 6 odst. 9 písm. m) (50 000 Kč/rok osvobozeno)"
+
+    // --- ZDP § 35c odst. 4 - Minimální příjem pro daňový bonus na dítě ---
+    // Pro uplatnění daňového bonusu musí poplatník dosáhnout alespoň 6násobku minimální mzdy za rok
+    const val STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER = 6.0
+    const val STATUTORY_CHILD_BONUS_MIN_WAGE_LAW_REF = "ZDP § 35c odst. 4 (min. příjem 6× minimální mzda ročně)"
+
+    // --- ČSÚ Live CPI Benchmark (default for fresh installs; overwritten by Live Sync) ---
+    // Meziroční inflace dle ČSÚ pro rok 2025/2026 (aktualizováno při Live Sync)
+    const val DEFAULT_CPI_BENCHMARK_PCT = 2.8
 }

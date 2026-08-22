@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import kotlin.math.roundToInt
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +87,7 @@ fun EmergencyReserveWidget(
     val cAmber = WarnAmber
     val cRed = BadRed
 
-    val pctCovered = ((currentLiquidCash / targetAmount.coerceAtLeast(1.0)) * 100).toInt()
+    val pctCovered = ((currentLiquidCash / targetAmount.coerceAtLeast(1.0)) * 100).roundToInt().coerceIn(0, 100)
 
     val (statusText, statusColor, statusIcon) = when {
         currentLiquidCash >= targetAmount -> Triple("Fully Funded ($pctCovered%)", cGreen, Icons.Default.CheckCircle)
@@ -195,7 +196,8 @@ fun EmergencyReserveWidget(
                     text = "Current: ${fmtCompact(currentLiquidCash)}",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "Target ($selectedTargetMode): ${fmtCompact(targetAmount)}",
@@ -204,7 +206,8 @@ fun EmergencyReserveWidget(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -265,7 +268,8 @@ fun EmergencyReserveWidget(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    softWrap = false
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(

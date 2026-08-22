@@ -24,7 +24,6 @@ class BackupManagerAndEngineAuditTest {
             isSingleHousehold = false,
             dcaAnnualGrowthPct = 3.5,
             vSalary = 50000.0,
-            vRaiseAnnual = 2000.0,
             vBonusAnnual = 30000.0,
             vMealVouchersMonthly = 2500.0,
             eReturnYear = 2030,

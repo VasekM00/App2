@@ -549,7 +549,7 @@ private fun PortfolioAccountsView(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow(
-                    label = "1/3 Early Withdrawal at Age 36",
+                    label = "30% Early Withdrawal at Age 36",
                     value = fmtCZK(state.dps.earlyWithdrawalLimitAt36),
                     info = earlyWithdrawalInfo,
                     onShowInfo = onShowInfo
@@ -563,7 +563,7 @@ private fun PortfolioAccountsView(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow(
-                    label = "DIP Tax Refund Base",
+                    label = "Retirement Deduction Base (§ 15a ZDP)",
                     value = fmtCZK(state.taxReturnHelper.retirementDeductionBase),
                     info = dipTaxShieldInfo,
                     onShowInfo = onShowInfo
@@ -654,14 +654,14 @@ private fun MonteCarloAndStressSubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
                     label = "Best Case FIRE Age (Top 5% market)",
-                    value = mc.bestCaseAge?.let { "Age $it" } ?: "--",
+                    value = mc.bestCaseAge?.let { "Age $it" } ?: "Beyond 35y",
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
                     label = "Conservative FIRE Age (95th %ile)",
-                    value = mc.worstCaseAge?.let { "Age $it" } ?: "--",
+                    value = mc.worstCaseAge?.let { "Age $it" } ?: "Beyond 35y",
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )

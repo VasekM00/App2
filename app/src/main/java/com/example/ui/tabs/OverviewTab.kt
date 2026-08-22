@@ -139,7 +139,7 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Household net / mo",
+                title = "Household Net / Mo",
                 value = fmtCZK(state.currentIncome.totalMonthly),
                 hint = "Combined family income",
                 accentColor = BrandTeal,
@@ -151,7 +151,7 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Base FIRE target",
+                title = "Base FIRE Target",
                 value = fmtCompact(state.fireBaseTargetToday),
                 hint = "Today's purchasing power",
                 accentColor = BrandGold,
@@ -170,8 +170,8 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Projected FIRE age",
-                value = firePoint?.let { "Age ${it.age}" } ?: ">60",
+                title = "Projected FIRE Age",
+                value = firePoint?.let { "Age ${it.age}" } ?: "Age >60",
                 hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f),
@@ -182,7 +182,7 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Net worth total",
+                title = "Net Worth Total",
                 value = fmtCompact(state.netWorthTotal),
                 hint = "Liquid + reserve + pension",
                 accentColor = GoodGreen,

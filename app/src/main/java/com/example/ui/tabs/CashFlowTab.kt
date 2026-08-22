@@ -74,8 +74,10 @@ import com.example.data.LedgerEntryEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.WarnAmber
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import android.net.Uri
@@ -1455,13 +1457,18 @@ private fun CashAllocationBar(
     investments: Double,
     unallocated: Double
 ) {
-    val expRatio = if (totalIncome > 0) (expenses / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
-    val invRatio = if (totalIncome > 0) (investments / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
-    val unallocRatio = if (totalIncome > 0) (unallocated.coerceAtLeast(0.0) / totalIncome).coerceIn(0.0, 1.0).toFloat() else 0f
+    // B6 fix: normalize against maxOf(totalIncome, expenses+investments) so bar always sums to 100%
+    // even in deficit months where DCA + expenses exceed take-home income.
+    val totalSpend = expenses + investments
+    val normalizer = if (totalIncome > 0) maxOf(totalIncome, totalSpend) else 1.0
+    val expRatio = (expenses / normalizer).coerceIn(0.0, 1.0).toFloat()
+    val invRatio = (investments / normalizer).coerceIn(0.0, 1.0).toFloat()
+    val unallocRatio = (unallocated.coerceAtLeast(0.0) / normalizer).coerceIn(0.0, 1.0).toFloat()
 
-    val expColor = androidx.compose.ui.graphics.Color(0xFFE57373)
+    // P6 fix: use theme tokens instead of hardcoded hex colors
+    val expColor = BadRed
     val invColor = BrandTeal
-    val unallocColor = androidx.compose.ui.graphics.Color(0xFFFFB74D)
+    val unallocColor = WarnAmber
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(

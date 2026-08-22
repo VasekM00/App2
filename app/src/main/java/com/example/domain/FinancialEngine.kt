@@ -10,9 +10,8 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-// --- Domain Constants ---
-const val PRIMARY_BIRTH_YEAR = 2000
-const val SPOUSE_BIRTH_YEAR = 2000
+// Birth years are derived dynamically from settings.baseYear - settings.primaryAge
+// No hardcoded constants — keeps projections accurate if age or base year changes
 
 // --- Data Classes for Calculations & Output UI ---
 
@@ -102,7 +101,7 @@ val DEFAULT_CUSTOM_LIFE_GOALS = listOf(
 )
 
 fun parseCustomLifeGoals(jsonStr: String): List<CustomLifeGoalItem> {
-    if (jsonStr.isBlank()) {
+    if (jsonStr.isBlank() || jsonStr.trim() == "[]") {
         return DEFAULT_CUSTOM_LIFE_GOALS
     }
     return try {
@@ -394,7 +393,7 @@ object FinancialEngine {
     fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold) return 0.0
         val sal = eleonoraSalaryMonthly(year, settings)
-        val lec = settings.eLecturingMonthly
+        val lec = if (settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
         return (sal + lec) * 12.0
     }
 
@@ -402,7 +401,7 @@ object FinancialEngine {
         val v = vaclavSalaryMonthly(year, settings)
         val e = eleonoraSalaryMonthly(year, settings)
         val b = eleonoraBenefitMonthly(year, settings)
-        val lec = if (!settings.isSingleHousehold) settings.eLecturingMonthly else 0.0
+        val lec = if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
         val gift = settings.familyGiftMonthly + (settings.annualOtherGifts / 12.0)
         val total = v + e + b + lec + gift + settings.vMealVouchersMonthly
 
@@ -557,10 +556,10 @@ object FinancialEngine {
         return list
     }
 
-    // Lepší penzijko Reform Projection: Capped 0.5% TER & 1/3 Partial Withdrawal at Age 36
+    // Lepší penzijko Reform Projection: Capped 0.5% TER & 30% Partial Withdrawal at Age 36
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val fee = min(settings.dpsAnnualFeePct, 0.5) // Statutory 0.5% cap
+        val fee = min(settings.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT) // Statutory 0.5% cap
         val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
         val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
 
@@ -572,7 +571,8 @@ object FinancialEngine {
         val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementAnnual else 0.0
 
         val own = settings.dpsOwnContributionMonthly + eDpsOwn
-        val emp = (min(settings.employerRetirementAnnual, 50000.0) + min(eEmp, 50000.0)) / 12.0
+        val emp = (min(settings.employerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) +
+                min(eEmp, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL)) / 12.0
 
         var dpsBal = settings.dpsBalanceCurrent + eDpsBal
         var etfBal = settings.dpsBalanceCurrent + eDpsBal
@@ -595,13 +595,14 @@ object FinancialEngine {
             etfBal = (etfBal + own + emp) * (1.0 + monthlyRateETF)
         }
 
-        val monthsTo36 = max(0, (36 - settings.primaryAge) * 12)
-        var balAt36 = settings.dpsBalanceCurrent + settings.eDpsBalanceCurrent
+        // B4 fix: balAt36 respects isSingleHousehold for Eleonora's balance
+        val monthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - settings.primaryAge) * 12)
+        var balAt36 = settings.dpsBalanceCurrent + eDpsBal  // eDpsBal already 0.0 in single mode
         if (monthsTo36 in 1..totalMonths) {
             for (m in 0 until monthsTo36) {
                 val currentAge = settings.primaryAge + (m / 12)
                 val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
-                val subE = dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings)
+                val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
                 balAt36 = (balAt36 + own + subV + subE + emp) * (1.0 + monthlyRateDPS)
             }
         }
@@ -615,7 +616,8 @@ object FinancialEngine {
             etfBalance = etfBal,
             margin = dpsBal - etfBal,
             balanceAt36 = balAt36,
-            earlyWithdrawalLimitAt36 = balAt36 / 3.0,
+            // B5 fix: statutory 30% withdrawal limit (not 1/3 = 33.3%)
+            earlyWithdrawalLimitAt36 = balAt36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0),
             youthSubsidyActive = settings.primaryAge < settings.dpsYouthAgeLimit
         )
     }
@@ -871,7 +873,9 @@ object FinancialEngine {
         val sy = settings.baseYear
         val age0 = settings.primaryAge
         val ret = settings.portfolioNominalReturnPct / 100.0
-        var bal = (settings.liquidPortfolioCurrent + settings.eLiquidPortfolioCurrent) * (1.0 - crashPct)
+        // B3 fix: respect isSingleHousehold for opening balance
+        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        var bal = (settings.liquidPortfolioCurrent + eLiquid) * (1.0 - crashPct)
         val initialTarget = fireTargetYear(sy, settings, age0)
 
         list.add(
@@ -889,8 +893,12 @@ object FinancialEngine {
 
         for (year in sy until (sy + 35)) {
             val age = age0 + (year - sy) + 1
-            val baseAnnual = (settings.portuDcaMonthly + settings.ePortuDcaMonthly) * 12.0
-            val reinvestAnnual = if (year >= settings.eReturnYear) {
+            // B3 fix: respect isSingleHousehold for DCA and apply dcaAnnualGrowthPct
+            val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
+            val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0)
+                (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(year - sy) else 1.0
+            val baseAnnual = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
+            val reinvestAnnual = if (!settings.isSingleHousehold && year >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(year, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
             val lump = lumpSumForYear(year, settings)
@@ -942,11 +950,18 @@ object FinancialEngine {
         val dip = buildDipProjection(settings)
 
         val spouseInc = spouseOwnIncomeAnnual(settings.baseYear, settings)
+        // B7: Validate child under 3 dynamically while respecting user toggle
+        val child1AgeAtBase = settings.baseYear - settings.child1BirthYear
+        val childAgeValid = if (settings.childExpensesEnabled && settings.child1Enabled) child1AgeAtBase < 3 else true
+        val hasChildUnder3 = settings.hasChildUnder3 && childAgeValid
+
         val spouseEligible = settings.includeSpouseCredit &&
-                settings.hasChildUnder3 &&
+                hasChildUnder3 &&
                 (spouseInc <= settings.spouseIncomeLimitAnnual)
 
-        val childBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >= (settings.minWageMonthly * 6.0)
+        // D3 fix: use named constant for 6x min wage multiplier (ZDP § 35c)
+        val childBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >=
+                (settings.minWageMonthly * RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER)
 
         val spouseCreditVal = if (spouseEligible) settings.spouseTaxCreditAnnual else 0.0
         val childBonusVal = if (childBonusOk && settings.childExpensesEnabled) {
@@ -985,7 +1000,8 @@ object FinancialEngine {
                 settings.dipBalanceCurrent + eDip
 
         val actionsImpacts = mapOf(
-            "ac1" to (if (!settings.isSingleHousehold) settings.eLecturingMonthly * 12.0 else 0.0),
+            // B1 fix: ac1 respects eIncludeLecturing toggle
+            "ac1" to (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly * 12.0 else 0.0),
             "ac2" to taxHelper.totalIncrementalValue,
             "ac3" to ((settings.liquidPortfolioCurrent + eLiquid) * 0.01),
             "ac4" to (settings.emergencyReserveCurrent * 0.04),
