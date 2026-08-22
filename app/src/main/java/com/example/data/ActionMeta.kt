@@ -9,7 +9,7 @@ data class ActionItemInfo(
 object ActionMeta {
     val items = listOf(
         ActionItemInfo("ac1", "Route lecturing income to Portu", "Every lecturing payment flows to Portu same day."),
-        ActionItemInfo("ac2", "File tax return with eligible claims", "Check wife tax credit and DIP deductions."),
+        ActionItemInfo("ac2", "File tax return with eligible claims", "Check Eleonora tax credit (§ 35ba) and DIP deductions."),
         ActionItemInfo("ac3", "Verify Portu allocation is 100% equity", "Avoid long-run return drags."),
         ActionItemInfo("ac4", "Keep emergency cash in >= 4% yield", "Idle cash and reserves should earn interest/yield."),
         ActionItemInfo("ac5", "Adjust DIP contribution level", "Stay liquid or optimize ceiling."),

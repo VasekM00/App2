@@ -198,7 +198,7 @@ fun SettingsTab(
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                                         )
                                         Text(
-                                            text = "Married Household · Primary & Wife",
+                                            text = "Married Household · Václav & Eleonora",
                                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         )
                                     }
@@ -256,7 +256,7 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
-                                text = "Eleonora's Incomes (Wife)",
+                                text = "Eleonora's Incomes",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                             )
                             NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
@@ -449,7 +449,7 @@ fun SettingsTab(
                             )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            Text(text = "Eleonora's Balances (Wife)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                            Text(text = "Eleonora's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                             NumberSettingField(
                                 label = "Liquid Brokerage / ETF (CZK)",
                                 value = s.eLiquidPortfolioCurrent,
@@ -512,7 +512,7 @@ fun SettingsTab(
                             )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                            Text(text = "Eleonora's DCA (Wife)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                            Text(text = "Eleonora's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                             NumberSettingField(
                                 label = "Brokerage / ETF (CZK)",
                                 value = s.ePortuDcaMonthly,
@@ -577,12 +577,12 @@ fun SettingsTab(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             TaxSummaryRow(
-                                label = "Wife Income (Eleonora)",
+                                label = "Eleonora Income",
                                 status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
                                 isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                             )
                             TaxSummaryRow(
-                                label = "Wife Tax Credit Eligible (§ 35ba)",
+                                label = "Eleonora Tax Credit Eligible (§ 35ba)",
                                 status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
@@ -614,9 +614,9 @@ fun SettingsTab(
                             NumberSettingField(label = "Higher Bracket Threshold Annual (CZK)", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
                             NumberSettingField(label = "Basic Taxpayer Credit Annual (CZK)", value = s.taxpayerCreditAnnual, onValueChange = { onUpdateSettings(s.copy(taxpayerCreditAnnual = it)) })
                             NumberSettingField(label = "Retirement Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
-                            NumberSettingField(label = "Wife Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
-                            NumberSettingField(label = "Wife Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
-                            BooleanSettingField(label = "Include Wife Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
+                            NumberSettingField(label = "Eleonora Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
+                            NumberSettingField(label = "Eleonora Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
+                            BooleanSettingField(label = "Include Eleonora Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
                             BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { onUpdateSettings(s.copy(hasChildUnder3 = it)) })
                             NumberSettingField(label = "Min Wage Monthly (CZK)", value = s.minWageMonthly, onValueChange = { onUpdateSettings(s.copy(minWageMonthly = it)) })
 

@@ -386,7 +386,7 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow("Liquid Brokerage / ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent))
+                ProjectionMetricRow("Brokerage / ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(s.dipBalanceCurrent + s.eDipBalanceCurrent))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -415,7 +415,7 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow("Monthly Brokerage / ETF Investment", "${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo")
+                ProjectionMetricRow("Monthly Brokerage / ETF DCA", "${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo")
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("DIP Monthly Contribution", "${fmtCZK(s.dipContributionMonthly + s.eDipContributionMonthly)} / mo")
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -434,14 +434,14 @@ private fun PortfolioAccountsView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Primary Earner Card (Václav)
+            // Václav Card
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -449,78 +449,78 @@ private fun PortfolioAccountsView(
                     ) {
                         Text(
                             text = "Václav",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                         )
                         ColorPill(
                             text = "ACCUMULATING",
                             color = BrandTeal,
-                            fontSize = 8.5.sp,
+                            fontSize = 8.sp,
                             horizontalPadding = 5.dp,
                             verticalPadding = 2.dp
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Brokerage / ETF: ${fmtCZK(s.liquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("• DIP: ${fmtCZK(s.dipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("• DPS: ${fmtCZK(s.dpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("Total: ${fmtCZK(vaclavTotalBal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandTeal)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.liquidPortfolioCurrent))
+                    AccountBreakdownItem(label = "DIP Account", value = fmtCZK(s.dipBalanceCurrent))
+                    AccountBreakdownItem(label = "DPS Pension", value = fmtCZK(s.dpsBalanceCurrent))
+                    AccountBreakdownItem(label = "Total Balance", value = fmtCZK(vaclavTotalBal), isBold = true, color = BrandTeal)
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Brokerage / ETF: ${fmtCZK(s.portuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("• DIP: ${fmtCZK(s.dipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("• DPS: ${fmtCZK(s.dpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("Total: ${fmtCZK(vaclavTotalDca)}/mo", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandTeal)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = "${fmtCZK(s.portuDcaMonthly)}/mo")
+                    AccountBreakdownItem(label = "DIP DCA", value = "${fmtCZK(s.dipContributionMonthly)}/mo")
+                    AccountBreakdownItem(label = "DPS DCA", value = "${fmtCZK(s.dpsOwnContributionMonthly)}/mo")
+                    AccountBreakdownItem(label = "Total DCA", value = "${fmtCZK(vaclavTotalDca)}/mo", isBold = true, color = GoodGreen)
                 }
             }
 
-            // Wife Card (Eleonora)
+            // Eleonora Card
             Card(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Eleonora (Wife)",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                            text = "Eleonora",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                         )
                         ColorPill(
                             text = "ACCUMULATING",
                             color = BrandGold,
-                            fontSize = 8.5.sp,
+                            fontSize = 8.sp,
                             horizontalPadding = 5.dp,
                             verticalPadding = 2.dp
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Brokerage / ETF: ${fmtCZK(s.eLiquidPortfolioCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("• DIP: ${fmtCZK(s.eDipBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("• DPS: ${fmtCZK(s.eDpsBalanceCurrent)}", style = MaterialTheme.typography.bodySmall)
-                    Text("Total: ${fmtCZK(eTotalBal)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandGold)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.eLiquidPortfolioCurrent))
+                    AccountBreakdownItem(label = "DIP Account", value = fmtCZK(s.eDipBalanceCurrent))
+                    AccountBreakdownItem(label = "DPS Pension", value = fmtCZK(s.eDpsBalanceCurrent))
+                    AccountBreakdownItem(label = "Total Balance", value = fmtCZK(eTotalBal), isBold = true, color = BrandGold)
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 8.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Brokerage / ETF: ${fmtCZK(s.ePortuDcaMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("• DIP: ${fmtCZK(s.eDipContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("• DPS: ${fmtCZK(s.eDpsOwnContributionMonthly)}/mo", style = MaterialTheme.typography.bodySmall)
-                    Text("Total: ${fmtCZK(eTotalDca)}/mo", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandGold)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = "${fmtCZK(s.ePortuDcaMonthly)}/mo")
+                    AccountBreakdownItem(label = "DIP DCA", value = "${fmtCZK(s.eDipContributionMonthly)}/mo")
+                    AccountBreakdownItem(label = "DPS DCA", value = "${fmtCZK(s.eDpsOwnContributionMonthly)}/mo")
+                    AccountBreakdownItem(label = "Total DCA", value = "${fmtCZK(eTotalDca)}/mo", isBold = true, color = GoodGreen)
                 }
             }
         }
@@ -836,6 +836,44 @@ private fun ProjectionMetricRow(
                 fontFamily = FontFamily.Monospace,
                 color = highlightColor ?: MaterialTheme.colorScheme.onSurface
             ) else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+        )
+    }
+}
+
+@Composable
+private fun AccountBreakdownItem(
+    label: String,
+    value: String,
+    isBold: Boolean = false,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 11.sp,
+                color = if (isBold) color else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+            ),
+            maxLines = 1,
+            softWrap = false
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.SemiBold,
+                color = color
+            ),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

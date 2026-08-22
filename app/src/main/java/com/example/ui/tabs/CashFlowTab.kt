@@ -265,7 +265,7 @@ private fun IncomeSubTab(state: FullCalculationState) {
 
                 IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Eleonora (Wife) Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
+                IncomeRow(label = "Eleonora's Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -853,7 +853,7 @@ private fun AddLedgerEntryDialog(
                 OutlinedTextField(
                     value = incE,
                     onValueChange = { incE = it },
-                    label = { Text("Eleonora (Wife) Net Income") },
+                    label = { Text("Eleonora Net Income") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
                 )
@@ -1255,14 +1255,14 @@ private fun SummarySubTab(
                 if (entry != null) {
                     IncomeRow(label = "Václav Net Income", value = fmtCZK(entry.incVaclav))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora (Wife) Net Income", value = fmtCZK(entry.incEleonora))
+                    IncomeRow(label = "Eleonora Net Income", value = fmtCZK(entry.incEleonora))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Other / Unforeseen Income", value = fmtCZK(entry.incUnforeseen))
                 } else {
                     val inc = state.currentIncome
                     IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora (Wife) Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
+                    IncomeRow(label = "Eleonora's Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

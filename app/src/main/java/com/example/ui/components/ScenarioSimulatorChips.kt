@@ -91,7 +91,7 @@ fun ScenarioSimulatorChips(
         FireScenarioPreset(
             id = "career_boost",
             title = "Career Acceleration (2030)",
-            description = "Eleonora returns 2030 with 38k net · Vaclav raises +2.5k/yr · 85% wife reinvestment",
+            description = "Eleonora returns 2030 with 38k net · Vaclav raises +2.5k/yr · 85% Eleonora reinvestment",
             applyPreset = { s ->
                 s.copy(
                     childExpensesEnabled = true,
