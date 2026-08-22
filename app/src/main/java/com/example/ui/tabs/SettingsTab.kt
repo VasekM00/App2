@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -63,6 +64,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -76,11 +78,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
+import com.example.domain.CustomLumpSumItem
 import com.example.domain.FullCalculationState
 import com.example.domain.PRIMARY_BIRTH_YEAR
 import com.example.domain.parseCustomExpenses
+import com.example.domain.parseCustomLumpSums
 import com.example.domain.parseDeletedCategories
 import com.example.domain.serializeCustomExpenses
+import com.example.domain.serializeCustomLumpSums
 import com.example.domain.serializeDeletedCategories
 import com.example.ui.components.ColorPill
 import com.example.ui.components.LiveSyncDialog
@@ -121,6 +126,10 @@ fun SettingsTab(
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
     var newCategoryAmount by remember { mutableStateOf("") }
+    var showAddLumpSumDialog by remember { mutableStateOf(false) }
+    var newLumpSumName by remember { mutableStateOf("") }
+    var newLumpSumYear by remember { mutableStateOf("") }
+    var newLumpSumAmount by remember { mutableStateOf("") }
 
     // Consolidated into 3 high-level cohesive hubs
     val clampedInitialTab = initialSubTab.coerceIn(0, 2)
@@ -249,10 +258,10 @@ fun SettingsTab(
                                 text = "Václav's Incomes",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
-                            NumberSettingField(label = "Gross Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
-                            NumberSettingField(label = "Annual September Raise (CZK)", value = s.vRaiseAnnual, onValueChange = { onUpdateSettings(s.copy(vRaiseAnnual = it)) })
+                            NumberSettingField(label = "Net Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
                             NumberSettingField(label = "Annual Bonus (CZK)", value = s.vBonusAnnual, onValueChange = { onUpdateSettings(s.copy(vBonusAnnual = it)) })
                             NumberSettingField(label = "Meal Vouchers Monthly (CZK)", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
+                            NumberSettingField(label = "Other Monthly Inflows / Side Income (CZK)", value = s.vOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(vOtherInflowsMonthly = it)) })
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
@@ -275,14 +284,99 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
-                                text = "Gifts & One-Off Events",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                                text = "Gifts & Lump Sum Inflows",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
                             NumberSettingField(label = "Family Support Gift Monthly (CZK)", value = s.familyGiftMonthly, onValueChange = { onUpdateSettings(s.copy(familyGiftMonthly = it)) })
-                            BooleanSettingField(label = "Include Lump Sum Event", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
+                            NumberSettingField(label = "Annual / Periodic Family Gifts (CZK)", value = s.annualOtherGifts, onValueChange = { onUpdateSettings(s.copy(annualOtherGifts = it)) })
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(
+                                text = "Primary Planned Lump Sum",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            BooleanSettingField(label = "Include Primary Lump Sum", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
                             if (s.lumpSumInclude) {
-                                NumberSettingField(label = "Planned Lump Sum Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
-                                NumberSettingField(label = "Planned Lump Sum Amount (CZK)", value = s.lumpSumAmount, onValueChange = { onUpdateSettings(s.copy(lumpSumAmount = it)) })
+                                NumberSettingField(label = "Planned Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
+                                NumberSettingField(label = "Planned Amount (CZK)", value = s.lumpSumAmount, onValueChange = { onUpdateSettings(s.copy(lumpSumAmount = it)) })
+                            }
+
+                            val customLumpSums = remember(s.customLumpSumsJson) { parseCustomLumpSums(s.customLumpSumsJson) }
+                            if (customLumpSums.isNotEmpty()) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                Text(
+                                    text = "Additional Lump Sum Inflows",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                customLumpSums.forEach { item ->
+                                    key(item.id) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "${item.name} (${item.year})",
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                                    )
+                                                    Text(
+                                                        text = fmtCZK(item.amount),
+                                                        style = MaterialTheme.typography.bodySmall.copy(color = GoodGreen, fontWeight = FontWeight.SemiBold)
+                                                    )
+                                                }
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Switch(
+                                                        checked = item.enabled,
+                                                        onCheckedChange = { enabledState ->
+                                                            val updated = customLumpSums.map {
+                                                                if (it.id == item.id) it.copy(enabled = enabledState) else it
+                                                            }
+                                                            onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
+                                                        },
+                                                        modifier = Modifier.scale(0.8f)
+                                                    )
+                                                    IconButton(
+                                                        onClick = {
+                                                            val updated = customLumpSums.filter { it.id != item.id }
+                                                            onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = "Delete lump sum",
+                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    newLumpSumName = ""
+                                    newLumpSumYear = "${s.baseYear + 5}"
+                                    newLumpSumAmount = ""
+                                    showAddLumpSumDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("+ Add Additional Lump Sum")
                             }
                         }
                     }
@@ -973,6 +1067,69 @@ fun SettingsTab(
             },
             dismissButton = {
                 TextButton(onClick = { showAddCategoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showAddLumpSumDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddLumpSumDialog = false },
+            title = { Text("Add Planned Lump Sum", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newLumpSumName,
+                        onValueChange = { newLumpSumName = it },
+                        label = { Text("Description (e.g. Inheritance / Property / Gift)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newLumpSumYear,
+                        onValueChange = { newLumpSumYear = it },
+                        label = { Text("Planned Year (e.g. 2032)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newLumpSumAmount,
+                        onValueChange = { newLumpSumAmount = it },
+                        label = { Text("Amount (CZK)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val name = newLumpSumName.trim().ifBlank { "Lump Sum" }
+                        val yr = newLumpSumYear.trim().toIntOrNull() ?: (s.baseYear + 5)
+                        val sanitizedAmt = newLumpSumAmount.replace(',', '.').trim()
+                        val amt = sanitizedAmt.toDoubleOrNull() ?: 0.0
+                        if (amt > 0.0) {
+                            val currentList = parseCustomLumpSums(s.customLumpSumsJson)
+                            val updated = currentList + CustomLumpSumItem(
+                                id = UUID.randomUUID().toString(),
+                                name = name,
+                                year = yr,
+                                amount = amt,
+                                enabled = true
+                            )
+                            onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
+                        }
+                        showAddLumpSumDialog = false
+                    }
+                ) {
+                    Text("Add Lump Sum")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddLumpSumDialog = false }) {
                     Text("Cancel")
                 }
             }

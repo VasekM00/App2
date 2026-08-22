@@ -33,18 +33,17 @@ class FinancialEngineExhaustiveAuditTest {
     fun `test 1 - income calculations with variable modifications`() {
         // Base case
         val income2026 = FinancialEngine.householdIncome(2026, defaultSettings)
-        assertEquals(35000.0, income2026.vaclavNet, 0.001)
+        assertEquals(33500.0, income2026.vaclavNet, 0.001)
         assertEquals(0.0, income2026.eleonoraSalary, 0.001)
         assertEquals(13000.0, income2026.benefit, 0.001)
         assertEquals(6900.0, income2026.lecturing, 0.001)
         assertEquals(2090.0, income2026.vouchers, 0.001)
         assertEquals(16000.0, income2026.gift, 0.001)
-        assertEquals(72990.0, income2026.totalMonthly, 0.001)
+        assertEquals(71490.0, income2026.totalMonthly, 0.001)
 
-        // Mutate Vaclav salary, raise, and bonus
+        // Mutate Vaclav salary, other inflows, and bonus
         val modifiedSettings = defaultSettings.copy(
             vSalary = 45000.0,
-            vRaiseAnnual = 2500.0,
             vBonusAnnual = 60000.0, // 5000/mo
             vMealVouchersMonthly = 3000.0,
             familyGiftMonthly = 20000.0,
@@ -68,10 +67,10 @@ class FinancialEngineExhaustiveAuditTest {
 
         // Year 2028 (Eleonora returns)
         val inc2028Mod = FinancialEngine.householdIncome(2028, modifiedSettings)
-        assertEquals(55000.0, inc2028Mod.vaclavNet, 0.001) // 45000 + 2*2500 + 5000
+        assertEquals(50000.0, inc2028Mod.vaclavNet, 0.001) // 45000 + 5000 bonus
         assertEquals(32000.0, inc2028Mod.eleonoraSalary, 0.001) // 30000 + 2000 bonus
         assertEquals(0.0, inc2028Mod.benefit, 0.001) // Parental benefit ends on return
-        assertEquals(110000.0, inc2028Mod.totalMonthly, 0.001)
+        assertEquals(105000.0, inc2028Mod.totalMonthly, 0.001)
 
         // Year 2029 (Eleonora with 5% salary growth)
         val inc2029Mod = FinancialEngine.householdIncome(2029, modifiedSettings)

@@ -272,6 +272,10 @@ private fun IncomeSubTab(state: FullCalculationState) {
                 IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
+                if (state.settings.vOtherInflowsMonthly > 0.0) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Other Monthly Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                }
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -1269,6 +1273,10 @@ private fun SummarySubTab(
                     IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
+                    if (state.settings.vOtherInflowsMonthly > 0.0) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        IncomeRow(label = "Other Monthly Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                    }
                 }
 
                 HorizontalDivider(

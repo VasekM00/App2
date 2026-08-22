@@ -105,11 +105,7 @@ class BuildAndHygieneTest {
         val declaredFields = SettingsEntity::class.java.declaredFields
             .filter { !Modifier.isStatic(it.modifiers) && !it.isSynthetic }
 
-        assertEquals(
-            "SettingsEntity must declare exactly 95 fields (1 id + 94 configuration parameters)",
-            95,
-            declaredFields.size
-        )
+        val nonIdFields = declaredFields.filter { it.name != "id" }
 
         val backupManagerFile = File(getMainJavaDir(), "com/example/util/BackupManager.kt")
         assertTrue("BackupManager.kt must exist at ${backupManagerFile.absolutePath}", backupManagerFile.exists())
@@ -122,11 +118,9 @@ class BuildAndHygieneTest {
         val jsonPutRegex = Regex("""json\.put\(\s*"([^"]+)"""")
         val serializedFields = jsonPutRegex.findAll(serializeFunctionBody).map { it.groupValues[1] }.toSet()
 
-        // Verify that all 94 non-id configuration fields from SettingsEntity are serialized
-        val nonIdFields = declaredFields.filter { it.name != "id" }
         assertEquals(
-            "BackupManager must serialize all 94 configuration fields",
-            94,
+            "SettingsEntity must declare exactly non-id configuration parameters matching BackupManager",
+            nonIdFields.size,
             serializedFields.size
         )
 

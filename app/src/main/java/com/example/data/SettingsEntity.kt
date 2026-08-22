@@ -12,10 +12,11 @@ data class SettingsEntity(
     val spouseName: String = "Eleonora",
     val isSingleHousehold: Boolean = false,
     val dcaAnnualGrowthPct: Double = 0.0,
-    val vSalary: Double = 35000.0,
-    val vRaiseAnnual: Double = 1300.0,
+    val vSalary: Double = 33500.0,
+    val vRaiseAnnual: Double = 0.0,
     val vBonusAnnual: Double = 0.0,
     val vMealVouchersMonthly: Double = 2090.0,
+    val vOtherInflowsMonthly: Double = 0.0,
     val eReturnYear: Int = 2029,
     val eStartingSalary: Double = 22000.0,
     val eBonusAnnual: Double = 0.0,
@@ -25,6 +26,7 @@ data class SettingsEntity(
     val eLecturingMonthly: Double = 6900.0,
     val eIncludeLecturing: Boolean = true,
     val familyGiftMonthly: Double = 16000.0,
+    val annualOtherGifts: Double = 0.0,
     val lumpSumYear: Int = 2030,
     val lumpSumAmount: Double = 500000.0,
     val lumpSumInclude: Boolean = true,
@@ -103,5 +105,6 @@ data class SettingsEntity(
     val monteCarloSeed: Long = 42L,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]",
+    val customLumpSumsJson: String = "[]",
     val deletedCategoriesJson: String = "[]"
 )

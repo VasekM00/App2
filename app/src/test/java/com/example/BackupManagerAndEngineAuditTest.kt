@@ -180,7 +180,7 @@ class BackupManagerAndEngineAuditTest {
         val singleCalc = FinancialEngine.calculate(singleSettings, runMonteCarlo = false)
 
         // Single income should not include spouse benefit or lecturing
-        assertEquals(35000.0 + 2090.0 + 16000.0, singleCalc.currentIncome.totalMonthly, 0.001)
+        assertEquals(33500.0 + 2090.0 + 16000.0, singleCalc.currentIncome.totalMonthly, 0.001)
         assertTrue(coupleCalc.currentIncome.totalMonthly > singleCalc.currentIncome.totalMonthly)
 
         // Single net worth should exclude Eleonora's 50k liquid starting balance

@@ -37,18 +37,16 @@ class FullSettingsReactivityAuditTest {
     }
 
     @Test
-    fun `assert reactivity of Primary Earner Incomes - vSalary, vRaiseAnnual, vBonusAnnual, vMealVouchersMonthly`() {
+    fun `assert reactivity of Primary Earner Incomes - vSalary, vOtherInflowsMonthly, vBonusAnnual, vMealVouchersMonthly`() {
         // vSalary
         val baseState = FinancialEngine.calculate(base)
         val higherSalaryState = FinancialEngine.calculate(base.copy(vSalary = 60000.0))
         assertTrue(higherSalaryState.currentIncome.vaclavNet > baseState.currentIncome.vaclavNet)
         assertEquals(60000.0, higherSalaryState.currentIncome.vaclavNet, 0.001)
 
-        // vRaiseAnnual
-        val inc2028Base = FinancialEngine.householdIncome(2028, base)
-        val inc2028HighRaise = FinancialEngine.householdIncome(2028, base.copy(vRaiseAnnual = 5000.0))
-        assertTrue(inc2028HighRaise.vaclavNet > inc2028Base.vaclavNet)
-        assertEquals(inc2028Base.vaclavNet + (5000.0 - base.vRaiseAnnual) * 2, inc2028HighRaise.vaclavNet, 0.001)
+        // vOtherInflowsMonthly
+        val otherInflowState = FinancialEngine.calculate(base.copy(vOtherInflowsMonthly = 8000.0))
+        assertEquals(base.vSalary + 8000.0, otherInflowState.currentIncome.vaclavNet, 0.001)
 
         // vBonusAnnual
         val bonusState = FinancialEngine.calculate(base.copy(vBonusAnnual = 120000.0)) // 10k/mo
@@ -97,15 +95,20 @@ class FullSettingsReactivityAuditTest {
         val withoutLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 0.0))
         assertEquals(0.0, withoutLecturing.currentIncome.lecturing, 0.001)
 
-        // familyGiftMonthly
-        val giftState = FinancialEngine.calculate(base.copy(familyGiftMonthly = 30000.0))
-        assertEquals(30000.0, giftState.currentIncome.gift, 0.001)
+        // familyGiftMonthly & annualOtherGifts
+        val giftState = FinancialEngine.calculate(base.copy(familyGiftMonthly = 30000.0, annualOtherGifts = 60000.0))
+        assertEquals(35000.0, giftState.currentIncome.gift, 0.001) // 30k + 60k/12 = 35k
 
-        // lumpSumYear, lumpSumAmount, lumpSumInclude
-        val stateWithoutLump = FinancialEngine.calculate(base.copy(lumpSumInclude = false))
-        val stateWithLump = FinancialEngine.calculate(base.copy(lumpSumInclude = true, lumpSumYear = 2030, lumpSumAmount = 1_000_000.0))
+        // lumpSumYear, lumpSumAmount, lumpSumInclude, and customLumpSumsJson
+        val stateWithoutLump = FinancialEngine.calculate(base.copy(lumpSumInclude = false, customLumpSumsJson = "[]"))
+        val stateWithLump = FinancialEngine.calculate(base.copy(
+            lumpSumInclude = true,
+            lumpSumYear = 2030,
+            lumpSumAmount = 1_000_000.0,
+            customLumpSumsJson = """[{"id":"custom1","name":"Bonus Inflow","year":2030,"amount":250000.0,"enabled":true}]"""
+        ))
         val lumpPoint = stateWithLump.dualTrajectory.first { it.year == 2031 }
-        assertEquals(1_000_000.0, lumpPoint.lumpSum, 0.001)
+        assertEquals(1_250_000.0, lumpPoint.lumpSum, 0.001) // 1M + 250k
         val noLumpPoint = stateWithoutLump.dualTrajectory.first { it.year == 2031 }
         assertEquals(0.0, noLumpPoint.lumpSum, 0.001)
     }

@@ -3,12 +3,15 @@ package com.example
 import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
 import com.example.domain.CustomLifeGoalItem
+import com.example.domain.CustomLumpSumItem
 import com.example.domain.DEFAULT_CUSTOM_LIFE_GOALS
 import com.example.domain.parseCustomExpenses
 import com.example.domain.parseCustomLifeGoals
+import com.example.domain.parseCustomLumpSums
 import com.example.domain.parseDeletedCategories
 import com.example.domain.serializeCustomExpenses
 import com.example.domain.serializeCustomLifeGoals
+import com.example.domain.serializeCustomLumpSums
 import com.example.domain.serializeDeletedCategories
 import com.example.util.BackupManager
 import org.json.JSONObject
@@ -54,6 +57,7 @@ class DataLayerIntegrityTest {
             vRaiseAnnual = 3000.0,
             vBonusAnnual = 50000.0,
             vMealVouchersMonthly = 3000.0,
+            vOtherInflowsMonthly = 5000.0,
             eReturnYear = 2031,
             eStartingSalary = 35000.0,
             eBonusAnnual = 20000.0,
@@ -63,6 +67,7 @@ class DataLayerIntegrityTest {
             eLecturingMonthly = 10000.0,
             eIncludeLecturing = false,
             familyGiftMonthly = 20000.0,
+            annualOtherGifts = 30000.0,
             lumpSumYear = 2033,
             lumpSumAmount = 1000000.0,
             lumpSumInclude = false,
@@ -137,6 +142,7 @@ class DataLayerIntegrityTest {
             monteCarloSeed = 12345L,
             customExpensesJson = """[{"id":"e1","name":"Gym","amount":1500.0}]""",
             customGoalsJson = """[{"id":"g1","name":"Car","iconName":"car","targetYear":2029,"targetAmountCzk":400000.0,"currentSavedCzk":100000.0}]""",
+            customLumpSumsJson = """[{"id":"l1","name":"Bonus","year":2031,"amount":300000.0,"enabled":true}]""",
             deletedCategoriesJson = """["therapyMonthly","charityMonthly"]"""
         )
 
@@ -244,5 +250,18 @@ class DataLayerIntegrityTest {
         val parsed = parseDeletedCategories(serialized)
 
         assertEquals("Serialized and parsed deleted categories should match original", originalSet, parsed)
+    }
+
+    // 2.13: CustomLumpSumItem round-trip
+    @Test
+    fun test2_13_customLumpSumItemRoundTrip() {
+        val originalList = listOf(
+            CustomLumpSumItem("l1", "Inheritance", 2032, 500000.0, true),
+            CustomLumpSumItem("l2", "Property Sale", 2035, 1200000.0, false)
+        )
+        val serialized = serializeCustomLumpSums(originalList)
+        val parsed = parseCustomLumpSums(serialized)
+
+        assertEquals("Serialized and parsed custom lump sums should match original", originalList, parsed)
     }
 }

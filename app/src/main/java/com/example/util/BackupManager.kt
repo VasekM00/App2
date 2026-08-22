@@ -19,6 +19,7 @@ object BackupManager {
         json.put("vRaiseAnnual", s.vRaiseAnnual)
         json.put("vBonusAnnual", s.vBonusAnnual)
         json.put("vMealVouchersMonthly", s.vMealVouchersMonthly)
+        json.put("vOtherInflowsMonthly", s.vOtherInflowsMonthly)
         json.put("eReturnYear", s.eReturnYear)
         json.put("eStartingSalary", s.eStartingSalary)
         json.put("eBonusAnnual", s.eBonusAnnual)
@@ -28,6 +29,7 @@ object BackupManager {
         json.put("eLecturingMonthly", s.eLecturingMonthly)
         json.put("eIncludeLecturing", s.eIncludeLecturing)
         json.put("familyGiftMonthly", s.familyGiftMonthly)
+        json.put("annualOtherGifts", s.annualOtherGifts)
         json.put("lumpSumYear", s.lumpSumYear)
         json.put("lumpSumAmount", s.lumpSumAmount)
         json.put("lumpSumInclude", s.lumpSumInclude)
@@ -75,6 +77,7 @@ object BackupManager {
         json.put("rentGrowthPct", s.rentGrowthPct)
         json.put("customExpensesJson", s.customExpensesJson)
         json.put("customGoalsJson", s.customGoalsJson)
+        json.put("customLumpSumsJson", s.customLumpSumsJson)
         json.put("deletedCategoriesJson", s.deletedCategoriesJson)
 
         // Children & Family
@@ -138,6 +141,7 @@ object BackupManager {
                 vRaiseAnnual = json.optDouble("vRaiseAnnual", fallback.vRaiseAnnual),
                 vBonusAnnual = json.optDouble("vBonusAnnual", fallback.vBonusAnnual),
                 vMealVouchersMonthly = json.optDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
+                vOtherInflowsMonthly = json.optDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),
                 eReturnYear = json.optInt("eReturnYear", fallback.eReturnYear),
                 eStartingSalary = json.optDouble("eStartingSalary", fallback.eStartingSalary),
                 eBonusAnnual = json.optDouble("eBonusAnnual", fallback.eBonusAnnual),
@@ -147,6 +151,7 @@ object BackupManager {
                 eLecturingMonthly = json.optDouble("eLecturingMonthly", fallback.eLecturingMonthly),
                 eIncludeLecturing = json.optBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
                 familyGiftMonthly = json.optDouble("familyGiftMonthly", fallback.familyGiftMonthly),
+                annualOtherGifts = json.optDouble("annualOtherGifts", fallback.annualOtherGifts),
                 lumpSumYear = json.optInt("lumpSumYear", fallback.lumpSumYear),
                 lumpSumAmount = json.optDouble("lumpSumAmount", fallback.lumpSumAmount),
                 lumpSumInclude = json.optBoolean("lumpSumInclude", fallback.lumpSumInclude),
@@ -190,6 +195,7 @@ object BackupManager {
                 rentGrowthPct = json.optDouble("rentGrowthPct", fallback.rentGrowthPct),
                 customExpensesJson = json.optString("customExpensesJson", fallback.customExpensesJson),
                 customGoalsJson = json.optString("customGoalsJson", fallback.customGoalsJson),
+                customLumpSumsJson = json.optString("customLumpSumsJson", fallback.customLumpSumsJson),
                 deletedCategoriesJson = json.optString("deletedCategoriesJson", fallback.deletedCategoriesJson),
 
                 childExpensesEnabled = json.optBoolean("childExpensesEnabled", fallback.childExpensesEnabled),

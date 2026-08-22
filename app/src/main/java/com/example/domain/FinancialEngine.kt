@@ -142,6 +142,65 @@ fun serializeCustomLifeGoals(items: List<CustomLifeGoalItem>): String {
     return array.toString()
 }
 
+data class CustomLumpSumItem(
+    val id: String,
+    val name: String,
+    val year: Int,
+    val amount: Double,
+    val enabled: Boolean = true
+)
+
+fun parseCustomLumpSums(jsonStr: String): List<CustomLumpSumItem> {
+    if (jsonStr.isBlank() || jsonStr == "[]") return emptyList()
+    return try {
+        val array = org.json.JSONArray(jsonStr)
+        val list = mutableListOf<CustomLumpSumItem>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            list.add(
+                CustomLumpSumItem(
+                    id = obj.optString("id", i.toString()),
+                    name = obj.optString("name", "Lump Sum"),
+                    year = obj.optInt("year", 2030),
+                    amount = obj.optDouble("amount", 0.0),
+                    enabled = obj.optBoolean("enabled", true)
+                )
+            )
+        }
+        list
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun serializeCustomLumpSums(items: List<CustomLumpSumItem>): String {
+    val array = org.json.JSONArray()
+    items.forEach { item ->
+        val obj = org.json.JSONObject()
+        obj.put("id", item.id)
+        obj.put("name", item.name)
+        obj.put("year", item.year)
+        obj.put("amount", item.amount)
+        obj.put("enabled", item.enabled)
+        array.put(obj)
+    }
+    return array.toString()
+}
+
+fun lumpSumForYear(year: Int, settings: SettingsEntity): Double {
+    var total = 0.0
+    if (settings.lumpSumInclude && year == settings.lumpSumYear) {
+        total += settings.lumpSumAmount
+    }
+    val additional = parseCustomLumpSums(settings.customLumpSumsJson)
+    for (item in additional) {
+        if (item.enabled && item.year == year) {
+            total += item.amount
+        }
+    }
+    return total
+}
+
 data class PortfolioYearPoint(
     val year: Int,
     val age: Int,
@@ -316,13 +375,9 @@ object FinancialEngine {
 
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         val sy = settings.baseYear
-        val nb = settings.vSalary
-        val r = settings.vRaiseAnnual
-        val bonusMonthly = settings.vBonusAnnual / 12.0
-
         if (year < sy) return 0.0
-        val base = nb + (year - sy) * r
-        return base + bonusMonthly
+        val bonusMonthly = settings.vBonusAnnual / 12.0
+        return settings.vSalary + bonusMonthly + settings.vOtherInflowsMonthly
     }
 
     fun eleonoraSalaryMonthly(year: Int, settings: SettingsEntity): Double {
@@ -348,7 +403,8 @@ object FinancialEngine {
         val e = eleonoraSalaryMonthly(year, settings)
         val b = eleonoraBenefitMonthly(year, settings)
         val lec = if (!settings.isSingleHousehold) settings.eLecturingMonthly else 0.0
-        val total = v + e + b + lec + settings.familyGiftMonthly + settings.vMealVouchersMonthly
+        val gift = settings.familyGiftMonthly + (settings.annualOtherGifts / 12.0)
+        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly
 
         return YearlyIncome(
             year = year,
@@ -357,7 +413,7 @@ object FinancialEngine {
             benefit = b,
             lecturing = lec,
             vouchers = settings.vMealVouchersMonthly,
-            gift = settings.familyGiftMonthly,
+            gift = gift,
             totalMonthly = total
         )
     }
@@ -473,7 +529,7 @@ object FinancialEngine {
             val reinvestAnnual = if (dualIncome && !settings.isSingleHousehold && year >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(year, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
-            val lump = if (settings.lumpSumInclude && year == settings.lumpSumYear) settings.lumpSumAmount else 0.0
+            val lump = lumpSumForYear(year, settings)
 
             bal = (bal + baseAnnual + reinvestAnnual + lump) * (1.0 + ret)
             val t = fireTargetYear(year + 1, settings, age)
@@ -664,7 +720,7 @@ object FinancialEngine {
             val eleonoraSal = if (!settings.isSingleHousehold && sy >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
-            val lump = if (settings.lumpSumInclude && sy == settings.lumpSumYear) settings.lumpSumAmount else 0.0
+            val lump = lumpSumForYear(sy, settings)
             val target = fireTargetYear(sy + 1, settings, baseAge + y + 1)
             Triple(baseDca + eleonoraSal + lump, target, baseAge + y + 1)
         }
@@ -837,7 +893,7 @@ object FinancialEngine {
             val reinvestAnnual = if (year >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(year, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
-            val lump = if (settings.lumpSumInclude && year == settings.lumpSumYear) settings.lumpSumAmount else 0.0
+            val lump = lumpSumForYear(year, settings)
 
             bal = (bal + baseAnnual + reinvestAnnual + lump) * (1.0 + ret)
             val t = fireTargetYear(year + 1, settings, age)
