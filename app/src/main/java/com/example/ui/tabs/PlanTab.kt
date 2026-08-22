@@ -213,7 +213,7 @@ private fun RoadmapAndGoalsSubTab(
                                 fontSize = 12.5.sp
                             ),
                             maxLines = 1,
-                            softWrap = false
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -546,7 +546,7 @@ private fun RoadmapTimelineCard(
                 isLast = false,
                 keyPoints = listOf(
                     "Pass 3-year Czech ETF capital gains tax exemption",
-                    "Unlock Age 36 penalty-free 1/3 DPS withdrawal (${fmtCompact(state.dps.earlyWithdrawalLimitAt36)})",
+                    "Unlock Age 36 penalty-free 30% DPS withdrawal (${fmtCompact(state.dps.earlyWithdrawalLimitAt36)})",
                     "Reach intermediate Lean FIRE independence barrier"
                 )
             )
@@ -1482,7 +1482,7 @@ private fun FireMilestonesComparisonCard(
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
                             maxLines = 1,
-                            softWrap = false
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1599,7 +1599,7 @@ private fun FireMilestonesComparisonCard(
                                         color = if (isSelected) config.accentColor else MaterialTheme.colorScheme.onSurface
                                     ),
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = m.badgeLabel,
@@ -1608,7 +1608,7 @@ private fun FireMilestonesComparisonCard(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     maxLines = 1,
-                                    softWrap = false
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -1623,7 +1623,7 @@ private fun FireMilestonesComparisonCard(
                                 fontSize = 11.5.sp
                             ),
                             maxLines = 1,
-                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1.15f)
                         )
 
@@ -1638,7 +1638,7 @@ private fun FireMilestonesComparisonCard(
                                 color = config.accentColor
                             ),
                             maxLines = 1,
-                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1.1f)
                         )
 
@@ -1774,7 +1774,8 @@ private fun FireMilestonesComparisonCard(
                                     fontSize = 12.5.sp
                                 ),
                                 maxLines = 1,
-                                softWrap = false
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {

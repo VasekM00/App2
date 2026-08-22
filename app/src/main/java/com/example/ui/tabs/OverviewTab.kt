@@ -403,14 +403,14 @@ fun OverviewTab(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SummaryRow(
-                    label = "Emergency coverage",
-                    value = "${String.format("%.1f", state.emergencyCoverageMonths)} months",
+                    label = "Monthly savings rate",
+                    value = String.format("%.1f%%", state.savingsRatePct),
                     info = MetricInfo(
-                        title = "Emergency Coverage Ratio",
-                        category = "Risk Management",
-                        formulaOrRule = "Liquid Cash / Essential Monthly Budget",
-                        explanation = "Indicates resilience against unexpected cash shocks, medical costs, or job loss without having to liquidate long-term investments at market troughs.",
-                        practicalImplication = "Maintains psychological calm and prevents sequence-of-returns destruction.",
+                        title = "Monthly Savings Rate",
+                        category = "Wealth Accumulation Velocity",
+                        formulaOrRule = "Savings Rate = Net Monthly Surplus / Total Net Inflows",
+                        explanation = "Indicates the proportion of total monthly cash inflows preserved and deployed toward building financial independence capital.",
+                        practicalImplication = "Elevating savings rate reduces working years exponentially due to the dual effect of higher investment deposits and lower required baseline lifestyle expenses.",
                         accentColor = BrandTeal
                     ),
                     onShowInfo = { infoState.show(it) }

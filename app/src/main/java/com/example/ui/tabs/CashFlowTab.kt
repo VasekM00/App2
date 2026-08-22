@@ -1015,7 +1015,7 @@ private fun BudgetAndIncomesSubTab(
                                 fontSize = 13.sp
                             ),
                             maxLines = 1,
-                            softWrap = false
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
