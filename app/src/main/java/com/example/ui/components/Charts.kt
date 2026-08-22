@@ -461,6 +461,8 @@ fun MonteCarloFanChart(
     val cGreen = GoodGreen
     val cRed = BadRed
 
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -516,6 +518,15 @@ fun MonteCarloFanChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
+                        .pointerInput(points) {
+                            detectTapGestures { offset ->
+                                val plotW = size.width - paddingLeft - paddingRight
+                                val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
+                                val relativeX = offset.x - paddingLeft
+                                val clickedIdx = if (points.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, points.size - 1) else 0
+                                selectedIndex = clickedIdx
+                            }
+                        }
                 ) {
                     val w = size.width
                     val h = size.height
@@ -594,8 +605,8 @@ fun MonteCarloFanChart(
                     val p95Path = Path()
                     points.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val y = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
-                        if (i == 0) p95Path.moveTo(x, y) else p95Path.lineTo(x, y)
+                        val yP95 = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
+                        if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
                     }
                     drawPath(p95Path, cGreen, style = Stroke(width = 3f))
 
@@ -603,8 +614,8 @@ fun MonteCarloFanChart(
                     val p5Path = Path()
                     points.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val y = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
-                        if (i == 0) p5Path.moveTo(x, y) else p5Path.lineTo(x, y)
+                        val yP5 = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
+                        if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
                     }
                     drawPath(p5Path, cRed, style = Stroke(width = 3f))
 
@@ -612,12 +623,83 @@ fun MonteCarloFanChart(
                     val p50Path = Path()
                     points.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val y = plotH - (plotH * (pt.p50 / maxVal)).toFloat()
-                        if (i == 0) p50Path.moveTo(x, y) else p50Path.lineTo(x, y)
+                        val yP50 = plotH - (plotH * (pt.p50 / maxVal)).toFloat()
+                        if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
                     }
                     drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
 
+                    // Highlight selected point marker
+                    selectedIndex?.let { idx ->
+                        val sx = paddingLeft + (idx * stepX)
+                        val sy = plotH - (plotH * (points[idx].p50 / maxVal)).toFloat()
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.5f),
+                            start = Offset(sx, 0f),
+                            end = Offset(sx, plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                        )
+                        drawCircle(color = cTeal, radius = 12f, center = Offset(sx, sy))
+                    }
+
                     drawContext.canvas.restore()
+                }
+            }
+
+            // Interactive Detail Tooltip Box
+            val activePoint = selectedIndex?.let { points.getOrNull(it) } ?: points.lastOrNull()
+            activePoint?.let { pt ->
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth().testTag("monte_carlo_tooltip_box")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Year ${pt.year} (Age ${pt.age}) Monte Carlo Range:",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "P50: ${fmtCompact(pt.p50)}",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandTeal
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = BadRed,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Text(
+                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = GoodGreen,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }

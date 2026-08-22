@@ -44,6 +44,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -821,12 +822,27 @@ private fun AddLedgerEntryDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = ym,
-                    onValueChange = { ym = it },
-                    label = { Text("Year-Month (YYYY-MM)") },
-                    modifier = Modifier.fillMaxWidth().testTag("ledger_input_ym")
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = ym,
+                        onValueChange = { ym = it },
+                        label = { Text("Year-Month (YYYY-MM)") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("ledger_input_ym")
+                    )
+                    OutlinedButton(
+                        onClick = { ym = nextYearMonth(ym) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.padding(top = 6.dp)
+                    ) {
+                        Text("+1 Mo", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
                 OutlinedTextField(
                     value = incV,
                     onValueChange = { incV = it },

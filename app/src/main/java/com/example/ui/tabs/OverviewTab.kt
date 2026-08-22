@@ -88,7 +88,7 @@ fun OverviewTab(
     val infoState = rememberMetricInfoState()
 
     val incomeInfo = MetricInfo(
-        title = if (state.settings.isSingleHousehold) "Monthly Net Inflows" else "Household Net Inflows",
+        title = "Household Net Inflows",
         category = "Cash Flow & Inflows",
         formulaOrRule = "Net Take-Home Pay + Meal Vouchers + Employer Pension Matching",
         explanation = "Measures true monthly cash generation after all personal Czech taxes (15%/23%), social security (7.1%), and health insurance (4.5%). Employer contributions to DIP and DPS enter directly into tax-sheltered investment accounts without personal tax drag.",
@@ -107,7 +107,7 @@ fun OverviewTab(
         accentColor = BrandGold
     )
 
-    val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
+    val firePoint = state.fireDualPoint
     val fireAgeInfo = MetricInfo(
         title = "Projected FIRE Horizon",
         category = "Trajectory Milestone",
@@ -133,20 +133,17 @@ fun OverviewTab(
             .padding(16.dp)
             .testTag("overview_tab")
     ) {
-        // 4 Interactive KPI Cards (Tap / Hold for deep insight)
-        FlowRow(
+        // 4 Interactive KPI Cards (Symmetric 2x2 Grid, Tap / Hold for deep insight)
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            val itemWidth = Modifier.fillMaxWidth(0.48f)
-
             KpiCard(
-                title = if (state.settings.isSingleHousehold) "Monthly net income" else "Household net / mo",
+                title = "Household net / mo",
                 value = fmtCZK(state.currentIncome.totalMonthly),
-                hint = if (state.settings.isSingleHousehold) "Take-home + inflows" else "Combined family income",
+                hint = "Combined family income",
                 accentColor = BrandTeal,
-                modifier = itemWidth,
+                modifier = Modifier.weight(1f),
                 testTagStr = "kpi_family_net",
                 info = incomeInfo,
                 onShowInfo = { infoState.show(it) },
@@ -158,19 +155,26 @@ fun OverviewTab(
                 value = fmtCompact(state.fireBaseTargetToday),
                 hint = "Today's purchasing power",
                 accentColor = BrandGold,
-                modifier = itemWidth,
+                modifier = Modifier.weight(1f),
                 testTagStr = "kpi_fire_target",
                 info = fireTargetInfo,
                 onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToProjections
             )
+        }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             KpiCard(
-                title = if (state.settings.isSingleHousehold) "FIRE age" else "FIRE age (dual)",
+                title = "Projected FIRE age",
                 value = firePoint?.let { "Age ${it.age}" } ?: ">60",
                 hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
-                modifier = itemWidth,
+                modifier = Modifier.weight(1f),
                 testTagStr = "kpi_fire_age",
                 info = fireAgeInfo,
                 onShowInfo = { infoState.show(it) },
@@ -182,7 +186,7 @@ fun OverviewTab(
                 value = fmtCompact(state.netWorthTotal),
                 hint = "Liquid + reserve + pension",
                 accentColor = GoodGreen,
-                modifier = itemWidth,
+                modifier = Modifier.weight(1f),
                 testTagStr = "kpi_net_worth",
                 info = netWorthInfo,
                 onShowInfo = { infoState.show(it) },
