@@ -759,11 +759,7 @@ object FinancialEngine {
                 "inflation_shock" -> 6.0
                 else -> settings.cpiInflationPct
             }
-            val rentGrowth = when (id) {
-                "stagflation" -> 6.0
-                "inflation_shock" -> 7.0
-                else -> settings.rentGrowthPct
-            }
+            val rentGrowth = cpiPct
             val swr = when (id) {
                 "stagflation", "crash" -> 3.5
                 else -> settings.safeWithdrawalRatePct

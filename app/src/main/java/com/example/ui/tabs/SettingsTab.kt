@@ -305,7 +305,14 @@ fun SettingsTab(
                         ) {
                             if (!deletedSet.contains("rent")) {
                                 NumberSettingField(label = "Rent / Housing", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("rent", s.copy(rentMonthly = 0.0))) })
-                                NumberSettingField(label = "Rent Annual Inflation Growth (%)", value = s.rentGrowthPct, onValueChange = { onUpdateSettings(s.copy(rentGrowthPct = it)) })
+                                Text(
+                                    text = "Indexed annually each July to ČSÚ CPI inflation (${s.cpiInflationPct}%)",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.5.sp
+                                    ),
+                                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                                )
                             }
                             if (!deletedSet.contains("groceries")) {
                                 NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("groceries", s.copy(groceriesMonthly = 0.0))) })
