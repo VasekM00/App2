@@ -263,13 +263,13 @@ private fun IncomeSubTab(state: FullCalculationState) {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                IncomeRow(label = "${state.settings.primaryName} Net Salary", value = fmtCZK(inc.vaclavNet))
-                if (!state.settings.isSingleHousehold) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora (Wife) Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
-                }
+                IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Lecturing & Meal Vouchers", value = fmtCZK(inc.lecturing + inc.vouchers))
+                IncomeRow(label = "Eleonora (Wife) Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
 
@@ -846,19 +846,17 @@ private fun AddLedgerEntryDialog(
                 OutlinedTextField(
                     value = incV,
                     onValueChange = { incV = it },
-                    label = { Text("${state.settings.primaryName} Net Income") },
+                    label = { Text("Václav Net Income") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_v")
                 )
-                if (!state.settings.isSingleHousehold) {
-                    OutlinedTextField(
-                        value = incE,
-                        onValueChange = { incE = it },
-                        label = { Text("Eleonora (Wife) Net Income") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
-                    )
-                }
+                OutlinedTextField(
+                    value = incE,
+                    onValueChange = { incE = it },
+                    label = { Text("Eleonora (Wife) Net Income") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth().testTag("ledger_input_inc_e")
+                )
                 OutlinedTextField(
                     value = incU,
                     onValueChange = { incU = it },
@@ -1255,22 +1253,20 @@ private fun SummarySubTab(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 if (entry != null) {
-                    IncomeRow(label = "${state.settings.primaryName} Net Income", value = fmtCZK(entry.incVaclav))
-                    if (!state.settings.isSingleHousehold) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        IncomeRow(label = "Eleonora (Wife) Net Income", value = fmtCZK(entry.incEleonora))
-                    }
+                    IncomeRow(label = "Václav Net Income", value = fmtCZK(entry.incVaclav))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Other Income", value = fmtCZK(entry.incUnforeseen))
+                    IncomeRow(label = "Eleonora (Wife) Net Income", value = fmtCZK(entry.incEleonora))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Other / Unforeseen Income", value = fmtCZK(entry.incUnforeseen))
                 } else {
                     val inc = state.currentIncome
-                    IncomeRow(label = "${state.settings.primaryName} Net Salary", value = fmtCZK(inc.vaclavNet))
-                    if (!state.settings.isSingleHousehold) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        IncomeRow(label = "Eleonora (Wife) Salary / Allowance", value = fmtCZK(inc.eleonoraSalary.takeIf { it > 0 } ?: inc.benefit))
-                    }
+                    IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Lecturing & Vouchers", value = fmtCZK(inc.lecturing + inc.vouchers))
+                    IncomeRow(label = "Eleonora (Wife) Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
                 }

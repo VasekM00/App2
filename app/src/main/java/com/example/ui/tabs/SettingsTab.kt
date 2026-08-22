@@ -587,8 +587,18 @@ fun SettingsTab(
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
                             TaxSummaryRow(
-                                label = "Child Tax Bonus",
-                                status = "+${fmtCZK(state.taxReturnHelper.childBonus)}",
+                                label = "Child 1 Tax Bonus (2024)",
+                                status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                isGood = s.child1Enabled
+                            )
+                            TaxSummaryRow(
+                                label = "Child 2 Tax Bonus (Jan 2027)",
+                                status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                isGood = s.child2Enabled
+                            )
+                            TaxSummaryRow(
+                                label = "Total Child Tax Bonus (§ 35c)",
+                                status = "+${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
                                 isGood = true
                             )
                             TaxSummaryRow(

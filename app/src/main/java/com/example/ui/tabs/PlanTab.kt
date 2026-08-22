@@ -685,6 +685,8 @@ private fun ActionChecklistCard(
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    var filterMode by rememberSaveable { mutableStateOf("ALL") } // "ALL", "PENDING", "COMPLETED"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -752,89 +754,153 @@ private fun ActionChecklistCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            ActionMeta.items.forEachIndexed { index, meta ->
-                val key = "${currentYear}_${meta.id}"
-                val isDone = actionStates[key] == true
-                val impact = state.actionsImpacts[meta.id] ?: 0.0
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
-                    border = BorderStroke(
-                        0.5.dp,
-                        if (isDone) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleAction(currentYear, meta.id, isDone)
-                        }
-                        .testTag("action_card_${meta.id}")
-                ) {
-                    Row(
+            // 1-Tap Filter Bar (All / Pending / Done)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val pendingCount = ActionMeta.items.size - completedCount
+                listOf(
+                    "ALL" to "All (${ActionMeta.items.size})",
+                    "PENDING" to "Pending ($pendingCount)",
+                    "COMPLETED" to "Done ($completedCount)"
+                ).forEach { (mode, label) ->
+                    val isSelected = filterMode == mode
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { filterMode = mode }
                     ) {
-                        Checkbox(
-                            checked = isDone,
-                            onCheckedChange = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onToggleAction(currentYear, meta.id, isDone)
-                            },
-                            colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
-                            modifier = Modifier
-                                .size(24.dp)
-                                .testTag("action_cb_${meta.id}")
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = meta.title,
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
-                                    color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 13.sp
-                                )
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = meta.description,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp
-                                )
-                            )
-                        }
-
-                        if (impact > 0.0) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = GoodGreen.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "+${fmtCompact(impact)}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = GoodGreen,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
                         }
                     }
                 }
+            }
 
-                if (index < ActionMeta.items.size - 1) {
-                    Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val filteredItems = ActionMeta.items.filter { meta ->
+                val isDone = actionStates["${currentYear}_${meta.id}"] == true
+                when (filterMode) {
+                    "PENDING" -> !isDone
+                    "COMPLETED" -> isDone
+                    else -> true
+                }
+            }
+
+            if (filteredItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (filterMode == "PENDING") "All actions completed for Year $currentYear!" else "No completed actions yet.",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+            } else {
+                filteredItems.forEachIndexed { index, meta ->
+                    val key = "${currentYear}_${meta.id}"
+                    val isDone = actionStates[key] == true
+                    val impact = state.actionsImpacts[meta.id] ?: 0.0
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isDone) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                        border = BorderStroke(
+                            0.5.dp,
+                            if (isDone) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleAction(currentYear, meta.id, isDone)
+                            }
+                            .testTag("action_card_${meta.id}")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isDone,
+                                onCheckedChange = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onToggleAction(currentYear, meta.id, isDone)
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .testTag("action_cb_${meta.id}")
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = meta.title,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                        color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                                Text(
+                                    text = meta.description,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+
+                            if (impact > 0.0) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = GoodGreen.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "+${fmtCompact(impact)}",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = GoodGreen,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (index < filteredItems.size - 1) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                 }
             }
         }
