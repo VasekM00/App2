@@ -86,10 +86,12 @@ fun EmergencyReserveWidget(
     val cAmber = WarnAmber
     val cRed = BadRed
 
+    val pctCovered = ((currentLiquidCash / targetAmount.coerceAtLeast(1.0)) * 100).toInt()
+
     val (statusText, statusColor, statusIcon) = when {
-        currentLiquidCash >= targetAmount -> Triple("Fully Funded", cGreen, Icons.Default.CheckCircle)
-        currentLiquidCash >= (targetAmount * 0.5) -> Triple("Building Reserve", cAmber, Icons.Default.Info)
-        else -> Triple("Low Reserve", cRed, Icons.Default.Warning)
+        currentLiquidCash >= targetAmount -> Triple("Fully Funded ($pctCovered%)", cGreen, Icons.Default.CheckCircle)
+        currentLiquidCash >= (targetAmount * 0.5) -> Triple("Building ($pctCovered%)", cAmber, Icons.Default.Info)
+        else -> Triple("Low Reserve ($pctCovered%)", cRed, Icons.Default.Warning)
     }
 
     val reserveInfo = MetricInfo(
