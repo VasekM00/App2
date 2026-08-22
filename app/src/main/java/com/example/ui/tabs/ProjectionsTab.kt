@@ -268,7 +268,7 @@ private fun TrajectorySubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = "State Pension Amount / mo",
+                    label = "Monthly State Pension Amount",
                     value = fmtCZK(state.settings.statePensionMonthly),
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
@@ -415,17 +415,17 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow("Monthly Brokerage / ETF DCA", "${fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly)} / mo")
+                ProjectionMetricRow("Brokerage / ETF DCA", fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DIP Monthly Contribution", "${fmtCZK(s.dipContributionMonthly + s.eDipContributionMonthly)} / mo")
+                ProjectionMetricRow("DIP Contribution", fmtCZK(s.dipContributionMonthly + s.eDipContributionMonthly))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DPS Monthly Own Contribution", "${fmtCZK(s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly)} / mo")
+                ProjectionMetricRow("DPS Own Contribution", fmtCZK(s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 if (empMonthly > 0) {
-                    ProjectionMetricRow("Employer Benefit (Monthly Equiv.)", "${fmtCZK(empMonthly)} / mo")
+                    ProjectionMetricRow("Employer Benefit (Equiv.)", fmtCZK(empMonthly))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
-                ProjectionMetricRow("Total Combined Monthly Investment", "${fmtCZK(state.investMonthlyTotal)} / mo", isBold = true, highlightColor = BrandTeal)
+                ProjectionMetricRow("Total Combined Investment", fmtCZK(state.investMonthlyTotal), isBold = true, highlightColor = BrandTeal)
             }
         }
 
@@ -472,10 +472,10 @@ private fun PortfolioAccountsView(
 
                     ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    AccountBreakdownItem(label = "Brokerage ETF", value = "${fmtCZK(s.portuDcaMonthly)}/mo")
-                    AccountBreakdownItem(label = "DIP DCA", value = "${fmtCZK(s.dipContributionMonthly)}/mo")
-                    AccountBreakdownItem(label = "DPS DCA", value = "${fmtCZK(s.dpsOwnContributionMonthly)}/mo")
-                    AccountBreakdownItem(label = "Total DCA", value = "${fmtCZK(vaclavTotalDca)}/mo", isBold = true, color = GoodGreen)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.portuDcaMonthly))
+                    AccountBreakdownItem(label = "DIP DCA", value = fmtCZK(s.dipContributionMonthly))
+                    AccountBreakdownItem(label = "DPS DCA", value = fmtCZK(s.dpsOwnContributionMonthly))
+                    AccountBreakdownItem(label = "Total DCA", value = fmtCZK(vaclavTotalDca), isBold = true, color = GoodGreen)
                 }
             }
 
@@ -517,10 +517,10 @@ private fun PortfolioAccountsView(
 
                     ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    AccountBreakdownItem(label = "Brokerage ETF", value = "${fmtCZK(s.ePortuDcaMonthly)}/mo")
-                    AccountBreakdownItem(label = "DIP DCA", value = "${fmtCZK(s.eDipContributionMonthly)}/mo")
-                    AccountBreakdownItem(label = "DPS DCA", value = "${fmtCZK(s.eDpsOwnContributionMonthly)}/mo")
-                    AccountBreakdownItem(label = "Total DCA", value = "${fmtCZK(eTotalDca)}/mo", isBold = true, color = GoodGreen)
+                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.ePortuDcaMonthly))
+                    AccountBreakdownItem(label = "DIP DCA", value = fmtCZK(s.eDipContributionMonthly))
+                    AccountBreakdownItem(label = "DPS DCA", value = fmtCZK(s.eDpsOwnContributionMonthly))
+                    AccountBreakdownItem(label = "Total DCA", value = fmtCZK(eTotalDca), isBold = true, color = GoodGreen)
                 }
             }
         }
