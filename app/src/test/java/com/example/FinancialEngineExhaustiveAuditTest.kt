@@ -53,8 +53,7 @@ class FinancialEngineExhaustiveAuditTest {
             eBonusAnnual = 24000.0, // 2000/mo
             eSalaryGrowthPct = 5.0,
             eParentalAllowanceMonthly = 15000.0,
-            eLecturingMonthly = 10000.0,
-            eIncludeLecturing = false
+            eLecturingMonthly = 0.0
         )
 
         // Year 2026 (before Eleonora returns, with no lecturing)
@@ -220,7 +219,7 @@ class FinancialEngineExhaustiveAuditTest {
 
         // Eligible Spouse: When spouse income <= 68k and has child under 3
         val eligibleSpouseSettings = defaultSettings.copy(
-            eIncludeLecturing = false,
+            eLecturingMonthly = 0.0,
             hasChildUnder3 = true,
             includeSpouseCredit = true
         )

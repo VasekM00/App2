@@ -156,7 +156,7 @@ fun MainScreen(
             SearchIndexEntry("Salary, Raise & Bonus Parameters", "Settings > Cashflow & Family", 4, 0, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings")),
             SearchIndexEntry("Expense Categories & Custom Budgets", "Settings > Cashflow & Family", 4, 0, listOf("expense settings", "custom category", "delete category", "add category", "rent setting", "groceries setting")),
             SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "Settings > FIRE & Investments", 4, 1, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings", "swr", "balances")),
-            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > FIRE & Investments", 4, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "spouse tax relief", "child tax credit", "czech tax")),
+            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > FIRE & Investments", 4, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "wife tax relief", "child tax credit", "czech tax")),
             SearchIndexEntry("Preset Profiles, CSV Export & Data Management", "Settings > Data & System", 4, 2, listOf("presets", "backup", "restore", "reset", "clear data", "export csv", "import csv", "data"))
         )
     }

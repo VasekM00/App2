@@ -91,10 +91,10 @@ class FullSettingsReactivityAuditTest {
         val parentalState = FinancialEngine.calculate(base.copy(eParentalAllowanceMonthly = 20000.0))
         assertEquals(20000.0, parentalState.currentIncome.benefit, 0.001)
 
-        // eLecturingMonthly & eIncludeLecturing
-        val withLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 12000.0, eIncludeLecturing = true))
+        // eLecturingMonthly
+        val withLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 12000.0))
         assertEquals(12000.0, withLecturing.currentIncome.lecturing, 0.001)
-        val withoutLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 12000.0, eIncludeLecturing = false))
+        val withoutLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 0.0))
         assertEquals(0.0, withoutLecturing.currentIncome.lecturing, 0.001)
 
         // familyGiftMonthly
@@ -240,7 +240,7 @@ class FullSettingsReactivityAuditTest {
 
         // spouseTaxCreditAnnual, spouseIncomeLimitAnnual, includeSpouseCredit, hasChildUnder3
         val eligibleSettings = base.copy(
-            eIncludeLecturing = false,
+            eLecturingMonthly = 0.0,
             hasChildUnder3 = true,
             includeSpouseCredit = true,
             spouseTaxCreditAnnual = 30000.0

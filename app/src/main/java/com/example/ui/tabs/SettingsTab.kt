@@ -179,37 +179,38 @@ fun SettingsTab(
                         SettingsGroupCard(
                             title = "Profile & Household Structure",
                             initiallyExpanded = false,
-                            badgeText = "PROFILE",
+                            badgeText = "VÁCLAV & ELEONORA",
                             badgeColor = BrandGold
                         ) {
-                            OutlinedTextField(
-                                value = s.primaryName,
-                                onValueChange = { onUpdateSettings(s.copy(primaryName = it)) },
-                                label = { Text("Primary Earner Name") },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .testTag("settings_input_primary_name")
-                            )
-
-                            BooleanSettingField(
-                                label = "Single Earner Household Mode",
-                                checked = s.isSingleHousehold,
-                                onCheckedChange = { onUpdateSettings(s.copy(isSingleHousehold = it)) }
-                            )
-
-                            if (!s.isSingleHousehold) {
-                                OutlinedTextField(
-                                    value = s.spouseName,
-                                    onValueChange = { onUpdateSettings(s.copy(spouseName = it)) },
-                                    label = { Text("Partner / Spouse Name") },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .testTag("settings_input_spouse_name")
-                                )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Václav & Eleonora",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                                        )
+                                        Text(
+                                            text = "Married Household · Primary & Wife",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        )
+                                    }
+                                    ColorPill(
+                                        text = "MARRIED",
+                                        color = BrandTeal,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        horizontalPadding = 8.dp,
+                                        verticalPadding = 4.dp
+                                    )
+                                }
                             }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -245,7 +246,7 @@ fun SettingsTab(
                             badgeColor = GoodGreen
                         ) {
                             Text(
-                                text = "${s.primaryName}'s Incomes",
+                                text = "Václav's Incomes",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
                             NumberSettingField(label = "Gross Salary (CZK)", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
@@ -253,27 +254,24 @@ fun SettingsTab(
                             NumberSettingField(label = "Annual Bonus (CZK)", value = s.vBonusAnnual, onValueChange = { onUpdateSettings(s.copy(vBonusAnnual = it)) })
                             NumberSettingField(label = "Meal Vouchers Monthly (CZK)", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
 
-                            if (!s.isSingleHousehold) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
-                                Text(
-                                    text = "${s.spouseName}'s Active Incomes",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
-                                )
-                                NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
-                                NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
-                                BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { onUpdateSettings(s.copy(eIncludeLecturing = it)) })
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+                            Text(
+                                text = "Eleonora's Incomes (Wife)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                            )
+                            NumberSettingField(label = "Parental Allowance Monthly (CZK)", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
+                            NumberSettingField(label = "Lecturing Monthly (CZK)", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
 
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                Text(
-                                    text = "${s.spouseName}'s Future Return to Work (${s.eReturnYear}+)",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                                NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
-                                NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
-                                NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
-                                NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
-                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(
+                                text = "Eleonora's Future Return to Work (${s.eReturnYear}+)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
+                            NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
+                            NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
+                            NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
+                            NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
@@ -425,7 +423,7 @@ fun SettingsTab(
                             badgeText = fmtCZK(state.netWorthTotal),
                             badgeColor = BrandTeal
                         ) {
-                            Text(text = "${s.primaryName}'s Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
+                            Text(text = "Václav's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
                                 label = "Liquid Brokerage / ETF Portfolio (CZK)",
                                 value = s.liquidPortfolioCurrent,
@@ -443,25 +441,23 @@ fun SettingsTab(
                                 onValueChange = { onUpdateSettings(s.copy(dpsBalanceCurrent = it)) }
                             )
 
-                            if (!s.isSingleHousehold) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                Text(text = "${s.spouseName}'s Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s Liquid Brokerage / ETF (CZK)",
-                                    value = s.eLiquidPortfolioCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s DIP Balance (CZK)",
-                                    value = s.eDipBalanceCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s DPS Pension Balance (CZK)",
-                                    value = s.eDpsBalanceCurrent,
-                                    onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
-                                )
-                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(text = "Eleonora's Balances (Wife)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                            NumberSettingField(
+                                label = "Liquid Brokerage / ETF (CZK)",
+                                value = s.eLiquidPortfolioCurrent,
+                                onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
+                            )
+                            NumberSettingField(
+                                label = "DIP Balance (CZK)",
+                                value = s.eDipBalanceCurrent,
+                                onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
+                            )
+                            NumberSettingField(
+                                label = "DPS Pension Balance (CZK)",
+                                value = s.eDpsBalanceCurrent,
+                                onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
+                            )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             Text(text = "Cash & Emergency Reserve", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
@@ -486,7 +482,7 @@ fun SettingsTab(
                             badgeText = fmtCZK(state.investMonthlyTotal) + "/mo",
                             badgeColor = GoodGreen
                         ) {
-                            Text(text = "${s.primaryName}'s DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
+                            Text(text = "Václav's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
                                 label = "Monthly Brokerage / ETF (CZK)",
                                 value = s.portuDcaMonthly,
@@ -508,30 +504,28 @@ fun SettingsTab(
                                 onValueChange = { onUpdateSettings(s.copy(employerRetirementAnnual = it)) }
                             )
 
-                            if (!s.isSingleHousehold) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                Text(text = "${s.spouseName}'s DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s Brokerage / ETF (CZK)",
-                                    value = s.ePortuDcaMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s DIP Contribution (CZK)",
-                                    value = s.eDipContributionMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s DPS Contribution (CZK)",
-                                    value = s.eDpsOwnContributionMonthly,
-                                    onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
-                                )
-                                NumberSettingField(
-                                    label = "${s.spouseName}'s Employer Benefit (CZK)",
-                                    value = s.eEmployerRetirementAnnual,
-                                    onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
-                                )
-                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Text(text = "Eleonora's DCA (Wife)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                            NumberSettingField(
+                                label = "Brokerage / ETF (CZK)",
+                                value = s.ePortuDcaMonthly,
+                                onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
+                            )
+                            NumberSettingField(
+                                label = "DIP Contribution (CZK)",
+                                value = s.eDipContributionMonthly,
+                                onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
+                            )
+                            NumberSettingField(
+                                label = "DPS Contribution (CZK)",
+                                value = s.eDpsOwnContributionMonthly,
+                                onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
+                            )
+                            NumberSettingField(
+                                label = "Employer Benefit (CZK)",
+                                value = s.eEmployerRetirementAnnual,
+                                onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementAnnual = it)) }
+                            )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             NumberSettingField(
@@ -576,12 +570,12 @@ fun SettingsTab(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             TaxSummaryRow(
-                                label = "Spouse Income",
+                                label = "Wife Income (Eleonora)",
                                 status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
                                 isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                             )
                             TaxSummaryRow(
-                                label = "Spouse Tax Credit Eligible",
+                                label = "Wife Tax Credit Eligible (§ 35ba)",
                                 status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
@@ -603,9 +597,9 @@ fun SettingsTab(
                             NumberSettingField(label = "Higher Bracket Threshold Annual (CZK)", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
                             NumberSettingField(label = "Basic Taxpayer Credit Annual (CZK)", value = s.taxpayerCreditAnnual, onValueChange = { onUpdateSettings(s.copy(taxpayerCreditAnnual = it)) })
                             NumberSettingField(label = "Retirement Tax Deduction Ceiling Annual (CZK)", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
-                            NumberSettingField(label = "Spouse Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
-                            NumberSettingField(label = "Spouse Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
-                            BooleanSettingField(label = "Include Spouse Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
+                            NumberSettingField(label = "Wife Tax Credit Annual (CZK)", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
+                            NumberSettingField(label = "Wife Income Limit Annual (CZK)", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
+                            BooleanSettingField(label = "Include Wife Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
                             BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { onUpdateSettings(s.copy(hasChildUnder3 = it)) })
                             NumberSettingField(label = "Min Wage Monthly (CZK)", value = s.minWageMonthly, onValueChange = { onUpdateSettings(s.copy(minWageMonthly = it)) })
 

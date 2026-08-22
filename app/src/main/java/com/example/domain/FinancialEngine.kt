@@ -339,7 +339,7 @@ object FinancialEngine {
     fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold) return 0.0
         val sal = eleonoraSalaryMonthly(year, settings)
-        val lec = if (settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
+        val lec = settings.eLecturingMonthly
         return (sal + lec) * 12.0
     }
 
@@ -347,7 +347,7 @@ object FinancialEngine {
         val v = vaclavSalaryMonthly(year, settings)
         val e = eleonoraSalaryMonthly(year, settings)
         val b = eleonoraBenefitMonthly(year, settings)
-        val lec = if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
+        val lec = if (!settings.isSingleHousehold) settings.eLecturingMonthly else 0.0
         val total = v + e + b + lec + settings.familyGiftMonthly + settings.vMealVouchersMonthly
 
         return YearlyIncome(
@@ -933,7 +933,7 @@ object FinancialEngine {
                 settings.dipBalanceCurrent + eDip
 
         val actionsImpacts = mapOf(
-            "ac1" to (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly * 12.0 else 0.0),
+            "ac1" to (if (!settings.isSingleHousehold) settings.eLecturingMonthly * 12.0 else 0.0),
             "ac2" to taxHelper.totalIncrementalValue,
             "ac3" to ((settings.liquidPortfolioCurrent + eLiquid) * 0.01),
             "ac4" to (settings.emergencyReserveCurrent * 0.04),

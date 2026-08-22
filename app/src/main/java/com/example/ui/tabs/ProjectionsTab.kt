@@ -205,7 +205,7 @@ private fun TrajectorySubTab(
                     info = MetricInfo(
                         title = "Dual-Income FIRE Date",
                         category = "Household Horizon",
-                        explanation = "Models both partners contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
+                        explanation = "Models both Václav and Eleonora contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
                         accentColor = BrandTeal
                     ),
                     onShowInfo = onShowInfo
@@ -474,12 +474,12 @@ private fun PortfolioAccountsView(
                 }
             }
         } else {
-            // Side-by-Side Account Breakdown (Primary vs. Spouse)
+            // Side-by-Side Account Breakdown (Václav & Eleonora)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Primary Earner Card
+                // Primary Earner Card (Václav)
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp),
@@ -524,7 +524,7 @@ private fun PortfolioAccountsView(
                     }
                 }
 
-                // Spouse Card
+                // Wife Card (Eleonora)
                 Card(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp),
@@ -538,7 +538,7 @@ private fun PortfolioAccountsView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = s.spouseName,
+                                text = "Eleonora (Wife)",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                             )
                             ColorPill(
