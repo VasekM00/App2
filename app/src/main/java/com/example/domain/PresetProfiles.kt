@@ -32,6 +32,7 @@ object PresetProfiles {
         badge = "AGGRESSIVE",
         iconEmoji = "",
         settings = SettingsEntity(
+            isSingleHousehold = true,
             vSalary = 65000.0,
             vBonusAnnual = 30000.0,
             vMealVouchersMonthly = 2200.0,

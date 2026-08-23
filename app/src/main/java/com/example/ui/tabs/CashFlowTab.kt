@@ -518,18 +518,6 @@ private fun LedgerSubTab(
                 }
             }
         }
-
-        FloatingActionButton(
-            onClick = onAddClick,
-            containerColor = BrandTeal,
-            contentColor = androidx.compose.ui.graphics.Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-                .testTag("add_ledger_fab")
-        ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = "Add Entry")
-        }
     }
 }
 
@@ -926,7 +914,7 @@ fun LedgerChart(entries: List<LedgerEntryEntity>, modifier: Modifier = Modifier)
     val maxVal = sorted.maxOf { maxOf(it.incVaclav + it.incEleonora + it.incUnforeseen, it.expRent + it.expGroceries + it.expOther) }.coerceAtLeast(100.0)
 
     val incColor = BrandTeal
-    val expColor = androidx.compose.ui.graphics.Color(0xFFE57373)
+    val expColor = BadRed
 
     Card(
         modifier = modifier.fillMaxWidth().height(195.dp),

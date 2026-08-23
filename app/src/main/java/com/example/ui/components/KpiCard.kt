@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BrandTeal
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun KpiCard(
     title: String,
@@ -43,7 +46,20 @@ fun KpiCard(
 ) {
     val haptic = LocalHapticFeedback.current
 
-    val clickModifier = if (onClick != null) {
+    val clickModifier = if (onClick != null && info != null && onShowInfo != null) {
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onShowInfo(info)
+                }
+            )
+    } else if (onClick != null) {
         Modifier
             .clip(RoundedCornerShape(16.dp))
             .clickable {

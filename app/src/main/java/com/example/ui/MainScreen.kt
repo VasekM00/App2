@@ -111,7 +111,6 @@ fun MainScreen(
     var targetProjectionsSubTab by rememberSaveable { mutableIntStateOf(0) }
     var targetPlanSubTab by rememberSaveable { mutableIntStateOf(0) }
     var targetSettingsSubTab by rememberSaveable { mutableIntStateOf(0) }
-    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showExportReportDialog by rememberSaveable { mutableStateOf(false) }
@@ -379,65 +378,6 @@ fun MainScreen(
                                 isSyncing = isSyncing,
                                 onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
                                 initialSubTab = targetSettingsSubTab
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Settings Modal Dialog / Fullsheet
-            if (showSettingsDialog) {
-                androidx.compose.ui.window.Dialog(
-                    onDismissRequest = { showSettingsDialog = false },
-                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .statusBarsPadding()
-                            .navigationBarsPadding(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Settings & Parameters",
-                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
-                                androidx.compose.material3.TextButton(
-                                    onClick = { showSettingsDialog = false },
-                                    modifier = Modifier.testTag("close_settings_button")
-                                ) {
-                                    Text("Done", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            HorizontalDivider()
-
-                            SettingsTab(
-                                state = state,
-                                onUpdateSettings = { viewModel.updateSettings(it) },
-                                onResetDefaults = { viewModel.resetSettingsToDefault() },
-                                onClearAllData = { viewModel.clearAllUserData() },
-                                liveRegulatoryData = liveRegulatoryData,
-                                isSyncing = isSyncing,
-                                onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
-                                initialSubTab = targetSettingsSubTab,
-                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

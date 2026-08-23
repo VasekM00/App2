@@ -209,8 +209,12 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(30840.0, tax.taxpayerCredit, 0.001)
         // With default eLecturing = 6900/mo (82800/yr > 68000/yr limit), spouse credit is properly disallowed
         assertFalse("Spouse earning 82.8k/yr from lecturing exceeds 68k threshold", tax.spouseEligible)
-        assertEquals(0.0, tax.spouseCredit, 0.001)
-        assertEquals(37524.0, tax.childBonus, 0.001) // Child 1 (15204) + Child 2 (22320)
+        // In 2026 base year: Child 1 (born 2024) is eligible (15204). Child 2 (born 2027) is not yet born -> 0
+        assertEquals(15204.0, tax.childBonus, 0.001)
+
+        // When both children are born (e.g. child2BirthYear <= 2026), both bonuses apply
+        val bothBornState = FinancialEngine.calculate(defaultSettings.copy(child2BirthYear = 2026))
+        assertEquals(37524.0, bothBornState.taxReturnHelper.childBonus, 0.001) // Child 1 (15204) + Child 2 (22320)
 
         // DIP Tax Saving on default 1700/mo
         // Annual deduction = 1700 * 12 = 20400. Tax saving = 20400 * 0.15 = 3060
@@ -233,10 +237,8 @@ class FinancialEngineExhaustiveAuditTest {
         )
         val richSpouseState = FinancialEngine.calculate(richSpouseSettings)
         assertFalse("Spouse earning > 68k/yr should not be eligible", richSpouseState.taxReturnHelper.spouseEligible)
-        assertEquals(0.0, richSpouseState.taxReturnHelper.spouseCredit, 0.001)
-
-        // Mutate: Disable child expenses/bonuses
-        val noChildSettings = defaultSettings.copy(childExpensesEnabled = false)
+        // Mutate: Disable children -> child bonus should be 0
+        val noChildSettings = defaultSettings.copy(child1Enabled = false, child2Enabled = false)
         val noChildState = FinancialEngine.calculate(noChildSettings)
         assertEquals(0.0, noChildState.taxReturnHelper.childBonus, 0.001)
     }

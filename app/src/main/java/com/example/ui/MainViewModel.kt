@@ -194,8 +194,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 if (entriesToInsert.isNotEmpty()) {
-                    repository.addLedgerEntries(entriesToInsert)
-                    _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${entriesToInsert.size} entries!"))
+                    val distinctNewEntries = entriesToInsert.distinctBy { it.yearMonth }
+                    val existingYearMonths = ledgerEntries.value.map { it.yearMonth }.toSet()
+                    val toInsert = distinctNewEntries.filter { !existingYearMonths.contains(it.yearMonth) }
+
+                    if (toInsert.isNotEmpty()) {
+                        repository.addLedgerEntries(toInsert)
+                        _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${toInsert.size} new entries!"))
+                    } else {
+                        _uiEvent.emit(UiMessage.ShowSnackbar("All ${distinctNewEntries.size} entries already exist in ledger."))
+                    }
                 } else {
                     _uiEvent.emit(UiMessage.ShowSnackbar("No valid entries found in CSV"))
                 }

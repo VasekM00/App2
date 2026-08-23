@@ -87,8 +87,8 @@ fun ExportReportDialog(
         appendLine("MONTE CARLO STRESS TEST")
         appendLine("• FIRE Success Probability: ${String.format("%.1f%%", state.monteCarlo.successRatePct)}")
         appendLine("• Median FIRE Age: ${state.monteCarlo.medianFireAge?.let { "Age $it" } ?: "N/A"}")
-        appendLine("• Best-Case (95th): ${state.monteCarlo.bestCaseAge?.let { "Age $it" } ?: "N/A"}")
-        appendLine("• Conservative (5th): ${state.monteCarlo.worstCaseAge?.let { "Age $it" } ?: "N/A"}")
+        appendLine("• Fastest / Best-Case (5th percentile age): ${state.monteCarlo.bestCaseAge?.let { "Age $it" } ?: "N/A"}")
+        appendLine("• Conservative / Late (95th percentile age): ${state.monteCarlo.worstCaseAge?.let { "Age $it" } ?: "N/A"}")
         appendLine("==============================================")
     }
 

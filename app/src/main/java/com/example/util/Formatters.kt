@@ -8,9 +8,13 @@ import kotlin.math.roundToInt
 object Formatters {
     private val czkLocale = Locale.forLanguageTag("cs-CZ")
 
-    private val czkFormat = NumberFormat.getNumberInstance(czkLocale).apply {
-        maximumFractionDigits = 0
+    private val czkFormatThreadLocal = ThreadLocal.withInitial {
+        NumberFormat.getNumberInstance(czkLocale).apply {
+            maximumFractionDigits = 0
+        }
     }
+
+    private fun getCzkFormat(): NumberFormat = czkFormatThreadLocal.get() ?: NumberFormat.getNumberInstance(czkLocale).apply { maximumFractionDigits = 0 }
 
     fun roundToDisplay(value: Double): Double {
         if (value.isNaN() || value.isInfinite()) return 0.0
@@ -35,13 +39,13 @@ object Formatters {
     fun fmtNum(value: Double): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        return czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
+        return getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
     }
 
     fun fmtCZK(value: Double, symbol: String = "Kč"): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        val formatted = czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
+        val formatted = getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
         return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
     }
 
@@ -59,15 +63,11 @@ object Formatters {
             }
             absVal >= 100_000 -> {
                 val k = value / 1_000.0
-                if (abs(k - k.roundToInt()) < 0.05) {
-                    String.format(czkLocale, "%.0fk", k)
-                } else {
-                    String.format(czkLocale, "%.0fk", k)
-                }
+                String.format(czkLocale, "%.0fk", k)
             }
             else -> {
                 val displayVal = roundToDisplay(value)
-                czkFormat.format(displayVal.roundToInt()).replace(' ', '\u00A0')
+                getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
             }
         }
         return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"

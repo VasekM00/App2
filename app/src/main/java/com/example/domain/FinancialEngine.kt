@@ -503,7 +503,8 @@ object FinancialEngine {
         val sy = settings.baseYear
         val age0 = settings.primaryAge
         val ret = settings.portfolioNominalReturnPct / 100.0
-        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val includeSpouse = dualIncome && !settings.isSingleHousehold
+        val eLiquid = if (includeSpouse) settings.eLiquidPortfolioCurrent else 0.0
         var bal = settings.liquidPortfolioCurrent + eLiquid
         val initialTarget = fireTargetYear(sy, settings, age0)
 
@@ -522,10 +523,10 @@ object FinancialEngine {
 
         for (year in sy until (sy + 35)) {
             val age = age0 + (year - sy) + 1
-            val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
+            val ePortu = if (includeSpouse) settings.ePortuDcaMonthly else 0.0
             val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(year - sy) else 1.0
             val baseAnnual = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
-            val reinvestAnnual = if (dualIncome && !settings.isSingleHousehold && year >= settings.eReturnYear) {
+            val reinvestAnnual = if (includeSpouse && year >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(year, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
             val lump = lumpSumForYear(year, settings)
@@ -628,10 +629,15 @@ object FinancialEngine {
         val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
         val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
         val totalMonthlyDip = settings.dipContributionMonthly + eDipMonthly
+        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+        val baseDeductionWithoutDip = min(vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
+
         val levels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
         val scenarios = levels.map { monthly: Double ->
-            val mock = settings.copy(dipContributionMonthly = monthly)
-            val asave = dipTaxSavingYear(mock)
+            val dipAnnual = monthly * 12.0
+            val totalVDeduction = min(dipAnnual + vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
+            val incrementalDipDeduction = totalVDeduction - baseDeductionWithoutDip
+            val asave = incrementalDipDeduction * (settings.taxRatePct / 100.0)
             val risk = when {
                 monthly >= 4000.0 -> "High lock-up"
                 monthly >= 2300.0 -> "Medium"
@@ -642,7 +648,7 @@ object FinancialEngine {
                 annual = monthly * 12.0,
                 annualTaxSaved = asave,
                 netCostMonthly = monthly - asave / 12.0,
-                headroom = max(0.0, (settings.taxDeductionCeilingAnnual * 2) - annualRetirementDeduction(mock)),
+                headroom = max(0.0, settings.taxDeductionCeilingAnnual - (dipAnnual + vDpsAboveThreshold)),
                 riskLevel = risk
             )
         }
@@ -684,7 +690,8 @@ object FinancialEngine {
 
     private data class MonteCarloKey(
         val settings: SettingsEntity,
-        val horizonYears: Int
+        val horizonYears: Int,
+        val initialCrashPct: Double = 0.0
     )
 
     @Volatile
@@ -692,10 +699,11 @@ object FinancialEngine {
     @Volatile
     private var cachedMcResult: MonteCarloResult? = null
 
-    fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35): MonteCarloResult {
+    fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35, initialCrashPct: Double = 0.0): MonteCarloResult {
         val currentKey = MonteCarloKey(
             settings = settings,
-            horizonYears = horizonYears
+            horizonYears = horizonYears,
+            initialCrashPct = initialCrashPct
         )
 
         cachedMcResult?.let { result ->
@@ -732,7 +740,7 @@ object FinancialEngine {
 
         for (i in 0 until sims) {
             val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
-            var bal = settings.liquidPortfolioCurrent + eLiquid
+            var bal = (settings.liquidPortfolioCurrent + eLiquid) * (1.0 - initialCrashPct)
             yearlyBalances[0][i] = bal
             var hitAge: Int? = null
 
@@ -838,7 +846,9 @@ object FinancialEngine {
             }
 
             val firePoint = trajectory.firstOrNull { it.portfolio >= it.target }
-            val successRate = if (runMonteCarlo) runMonteCarlo(mockSettings).successRatePct else 0.0
+            val successRate = if (runMonteCarlo) {
+                runMonteCarlo(mockSettings, initialCrashPct = if (id == "crash") 0.25 else 0.0).successRatePct
+            } else 0.0
 
             val effectiveLivingCost = if (cpiPct > settings.cpiInflationPct) {
                 baseLivingCost * (1.0 + (cpiPct - settings.cpiInflationPct) / 100.0)
@@ -950,9 +960,10 @@ object FinancialEngine {
         val dip = buildDipProjection(settings)
 
         val spouseInc = spouseOwnIncomeAnnual(settings.baseYear, settings)
-        // B7: Validate child under 3 dynamically while respecting user toggle
+        // Child under 3 check: child must be born and under 3 years old
         val child1AgeAtBase = settings.baseYear - settings.child1BirthYear
-        val childAgeValid = if (settings.childExpensesEnabled && settings.child1Enabled) child1AgeAtBase < 3 else true
+        val child2AgeAtBase = settings.baseYear - settings.child2BirthYear
+        val childAgeValid = (settings.child1Enabled && child1AgeAtBase in 0..2) || (settings.child2Enabled && child2AgeAtBase in 0..2)
         val hasChildUnder3 = settings.hasChildUnder3 && childAgeValid
 
         val spouseEligible = settings.includeSpouseCredit &&
@@ -964,10 +975,10 @@ object FinancialEngine {
                 (settings.minWageMonthly * RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER)
 
         val spouseCreditVal = if (spouseEligible) settings.spouseTaxCreditAnnual else 0.0
-        val childBonusVal = if (childBonusOk && settings.childExpensesEnabled) {
+        val childBonusVal = if (childBonusOk) {
             var bonus = 0.0
-            if (settings.child1Enabled) bonus += settings.child1TaxBonusAnnual
-            if (settings.child2Enabled) bonus += settings.child2TaxBonusAnnual
+            if (settings.child1Enabled && child1AgeAtBase in 0..26) bonus += settings.child1TaxBonusAnnual
+            if (settings.child2Enabled && child2AgeAtBase in 0..26) bonus += settings.child2TaxBonusAnnual
             bonus
         } else 0.0
         val incrementalValue = spouseCreditVal + childBonusVal + dip.taxSavedYear
@@ -1028,7 +1039,11 @@ object FinancialEngine {
         val coastTarget = kotlin.math.round(coastRawTarget / 10_000.0) * 10_000.0
         val coastProgress = if (coastTarget > 0) ((investableNetWorth / coastTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val coastAchieved = investableNetWorth >= coastTarget
-        val coastPoint = if (coastAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= coastTarget }
+        val coastPoint = if (coastAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
+            val yDiff = point.year - settings.baseYear
+            val futureTarget = coastTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            point.portfolio >= futureTarget
+        }
         val coastMilestone = FireMilestone(
             id = "coast",
             name = "Coast FIRE",
@@ -1047,7 +1062,11 @@ object FinancialEngine {
         val leanTarget = kotlin.math.round(leanRawTarget / 10_000.0) * 10_000.0
         val leanProgress = if (leanTarget > 0) ((investableNetWorth / leanTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val leanAchieved = investableNetWorth >= leanTarget
-        val leanPoint = if (leanAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= leanTarget }
+        val leanPoint = if (leanAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
+            val yDiff = point.year - settings.baseYear
+            val futureTarget = leanTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            point.portfolio >= futureTarget
+        }
         val leanMilestone = FireMilestone(
             id = "lean",
             name = "Lean FIRE",
@@ -1085,7 +1104,11 @@ object FinancialEngine {
         val fatTarget = kotlin.math.round(fatRawTarget / 10_000.0) * 10_000.0
         val fatProgress = if (fatTarget > 0) ((investableNetWorth / fatTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val fatAchieved = investableNetWorth >= fatTarget
-        val fatPoint = if (fatAchieved) dual.firstOrNull() else dual.firstOrNull { it.portfolio >= fatTarget }
+        val fatPoint = if (fatAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
+            val yDiff = point.year - settings.baseYear
+            val futureTarget = fatTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            point.portfolio >= futureTarget
+        }
         val fatMilestone = FireMilestone(
             id = "fat",
             name = "Fat FIRE",

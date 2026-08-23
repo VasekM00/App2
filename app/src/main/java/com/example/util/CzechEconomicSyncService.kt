@@ -48,8 +48,10 @@ object CzechEconomicSyncService {
             val remoteJson = fetchUrlContent(STATUTORY_MANIFEST_URL, timeoutMs = 2500)
             if (!remoteJson.isNullOrBlank()) {
                 val json = JSONObject(remoteJson)
-                cpiInflation = json.optDouble("csuCpiInflationPct", cpiInflation)
-                avgWage = json.optDouble("csuNationalAverageWageMonthly", avgWage)
+                val parsedCpi = json.optDouble("csuCpiInflationPct", cpiInflation)
+                val parsedWage = json.optDouble("csuNationalAverageWageMonthly", avgWage)
+                if (parsedCpi in -10.0..50.0) cpiInflation = parsedCpi
+                if (parsedWage in 20_000.0..200_000.0) avgWage = parsedWage
                 sourceDescription = "Live ČSÚ, ČNB & Statutory Registry"
             }
         } catch (e: Exception) {
