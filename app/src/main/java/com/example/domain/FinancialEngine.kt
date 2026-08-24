@@ -396,7 +396,7 @@ object FinancialEngine {
         // Each child has their own statutory pot; subtract what was drawn before baseYear.
         var remaining = 0.0
         for ((birthYear, pot) in children) {
-            if (birthYear <= settings.baseYear) {
+            if (birthYear < settings.baseYear) {
                 remaining += max(0.0, pot - rate * 12.0 * (settings.baseYear - birthYear))
             }
         }
