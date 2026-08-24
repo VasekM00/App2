@@ -334,7 +334,7 @@ private fun PortfolioAccountsView(
     val earlyWithdrawalInfo = MetricInfo(
         title = "10-Year Partial Pension Liquidity Rule",
         category = "Pension Flexibility",
-        formulaOrRule = "Up to 33.3% of own contributions after 120 deposit months",
+        formulaOrRule = "Up to 1/3 of own deposits plus their appreciation, before age 36, after 120 months of saving",
         explanation = "Savers who open a DPS contract young can withdraw up to one-third of their accumulated personal contributions after 10 years without canceling the contract, incurring tax penalties, or forfeiting state subsidies on the remaining balance.",
         statutoryReference = "§ 22 Act No. 427/1994 / 427/2011 Coll.",
         practicalImplication = "Allows leveraging DPS as a flexible mid-career bridge liquidity reservoir (e.g. real estate down payment or emergency bridge buffer).",
@@ -545,7 +545,7 @@ private fun PortfolioAccountsView(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow(
-                    label = "30% Early Withdrawal at Age 36",
+                    label = "1/3 Early Withdrawal at Age 36",
                     value = fmtCZK(state.dps.earlyWithdrawalLimitAt36),
                     info = earlyWithdrawalInfo,
                     onShowInfo = onShowInfo

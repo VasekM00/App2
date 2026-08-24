@@ -546,7 +546,7 @@ private fun RoadmapTimelineCard(
                 isLast = false,
                 keyPoints = listOf(
                     "Pass 3-year Czech ETF capital gains tax exemption",
-                    "Unlock Age 36 penalty-free 30% DPS withdrawal (${fmtCompact(state.dps.earlyWithdrawalLimitAt36)})",
+                    "Unlock Age 36 penalty-free one-third DPS withdrawal (${fmtCompact(state.dps.earlyWithdrawalLimitAt36)})",
                     "Reach intermediate Lean FIRE independence barrier"
                 )
             )

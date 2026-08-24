@@ -601,7 +601,7 @@ object FinancialEngine {
         return list
     }
 
-    // Lepší penzijko Reform Projection: Capped 0.5% TER & 30% Partial Withdrawal at Age 36
+    // Lepší penzijko Reform Projection: Capped 0.5% TER & One-Third Partial Withdrawal at Age 36
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
         val fee = min(settings.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT) // Statutory 0.5% cap
@@ -643,22 +643,23 @@ object FinancialEngine {
         // B4 fix: balAt36 respects isSingleHousehold for Eleonora's balance
         val monthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - settings.primaryAge) * 12)
         var balAt36 = settings.dpsBalanceCurrent + eDpsBal  // eDpsBal already 0.0 in single mode
-        var ownContributionsTo36 = 0.0
+        var ownValueTo36 = 0.0
         if (monthsTo36 in 1..totalMonths) {
             for (m in 0 until monthsTo36) {
                 val currentAge = settings.primaryAge + (m / 12)
                 val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
                 val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
-                ownContributionsTo36 += own
+                ownValueTo36 = (ownValueTo36 + own) * (1.0 + monthlyRateDPS)
                 balAt36 = (balAt36 + own + subV + subE + emp) * (1.0 + monthlyRateDPS)
             }
         }
 
-        // Statutory 30% withdrawal applies to OWN contributions only (not subsidies/employer/gains),
+        // Statutory one-third withdrawal basis: OWN deposits AND their appreciation only
+        // (state subsidies and employer contributions are excluded from the basis),
         // and requires at least 10 years of saving by age 36 (i.e. started at age 26 or younger).
         val tenYearRuleMet = settings.primaryAge <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10
         val earlyWithdrawalLimitAt36 = if (tenYearRuleMet) {
-            ownContributionsTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0)
+            ownValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0)
         } else 0.0
 
         return DpsProjection(

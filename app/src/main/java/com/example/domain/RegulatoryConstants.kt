@@ -5,7 +5,7 @@ package com.example.domain
  * 
  * Sources:
  * - Zákon č. 586/1992 Sb., o daních z příjmů (ZDP) v platném znění pro rok 2026
- * - Vládní návrh reformy DPS "Lepší penzijko" (MPSV / MF ČR, předloženo červen 2026 s účinností 2026/2027)
+ * - Vládou schválená novela zákona o doplňkovém penzijním spoření "Lepší penzijko" (srpen 2026)
  * - Zákon č. 155/1995 Sb., o důchodovém pojištění
  * - Nařízení vlády o minimální mzdě pro rok 2026
  */
@@ -46,11 +46,12 @@ object RegulatoryConstants {
     const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026 = 1582812.0
     const val STATUTORY_INCOME_TAX_LAW_REF = "ZDP § 16 (15 % základní pásmo, 23 % nad 36× průměrné mzdy)"
 
-    // --- REFORMA DPS "LEPŠÍ PENZIJKO" (Návrh MF ČR / MPSV, 2026) ---
-    // 1. Státní příspěvek pro mladé (< 30 let): 40 % z vkladu, max 680 Kč/měsíc při úložce 1 700 Kč/měsíc
+    // --- REFORMA DPS "LEPŠÍ PENZIJKO" (novela zákona o doplňkovém penzijním spoření, schváleno vládou 8/2026) ---
+    // 1. Státní příspěvek pro mladé (do 30. narozenin): 40 % z vkladu, max 680 Kč/měsíc při úložce 1 700 Kč/měsíc
     // 2. Standardní státní příspěvek (≥ 30 let): 20 % z vkladu, max 340 Kč/měsíc při úložce 1 700 Kč/měsíc (min vklad 500 Kč/měsíc)
-    // 3. Zákonný poplatkový strop pro dynamické účastnické fondy: 0.5 % p.a.
-    // 4. Možnost částečného výběru až 30 % vlastních vkladů v 36 letech (po 10 letech spoření bez sankce na státní podporu)
+    // 3. Zákonný poplatkový strop pro správu fondů: 0.5 % p.a. (ruší se výkonnostní poplatek)
+    // 4. Možnost jednorázového výběru až jedné TŘETINY vlastních vkladů včetně jejich zhodnocení
+    //    do 36. narozenin (po minimálně 10 letech spoření, bez sankce; výběr není vázán na účel)
     const val LEPSI_PENZIJKO_MIN_DEPOSIT_MONTHLY = 500.0
     const val LEPSI_PENZIJKO_STANDARD_SUBSIDY_RATE_PCT = 20.0
     const val LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY = 340.0
@@ -59,8 +60,8 @@ object RegulatoryConstants {
     const val LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY = 680.0
     const val LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT = 0.5
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE = 36
-    const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT = 30.0
-    const val LEPSI_PENZIJKO_LAW_REF = "Vládní návrh zákona o penzijním spoření (Lepší penzijko 2026/2027)"
+    const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT = 100.0 / 3.0
+    const val LEPSI_PENZIJKO_LAW_REF = "Novela zákona o doplňkovém penzijním spoření (Lepší penzijko, schváleno vládou 8/2026)"
 
     // --- Minimální mzda v ČR ---
     const val STATUTORY_MIN_WAGE_MONTHLY_2026 = 22400.0
