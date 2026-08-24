@@ -476,21 +476,36 @@ object FinancialEngine {
     }
 
     fun dipTaxSavingYear(settings: SettingsEntity): Double {
-        val vDipDeduction = min(settings.dipContributionMonthly * 12.0, settings.taxDeductionCeilingAnnual)
-        val eDipDeduction = if (!settings.isSingleHousehold) {
-            min(settings.eDipContributionMonthly * 12.0, settings.taxDeductionCeilingAnnual)
-        } else 0.0
-        val deduction = vDipDeduction + eDipDeduction
-
-        val taxableBase = vaclavSalaryMonthly(settings.baseYear, settings) * 12.0
         val threshold = settings.taxSecondBracketThresholdAnnual
         val baseRate = settings.taxRatePct / 100.0
         val highRate = settings.taxRateSecondPct / 100.0
 
-        val baseBracketIncome = min(taxableBase, threshold)
-        val baseSaving = min(deduction, baseBracketIncome) * baseRate
-        val highSaving = max(0.0, deduction - baseBracketIncome) * highRate
-        return baseSaving + highSaving
+        // Václav saving (DIP + DPS combined)
+        val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+        val vDip = settings.dipContributionMonthly * 12.0
+        val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
+        // Approximate gross from net for deduction bracket check
+        val vTaxableBase = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
+        
+        val vHighIncome = max(0.0, vTaxableBase - threshold)
+        val vSavingHigh = min(vDeduction, vHighIncome) * highRate
+        val vSavingBase = max(0.0, vDeduction - vSavingHigh / highRate) * baseRate
+        val vSaving = vSavingHigh + vSavingBase
+
+        // Eleonora saving
+        val eSaving = if (!settings.isSingleHousehold) {
+            val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+            val eDip = settings.eDipContributionMonthly * 12.0
+            val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
+            val eTaxableBase = (eleonoraSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
+            
+            val eHighIncome = max(0.0, eTaxableBase - threshold)
+            val eSavingHigh = min(eDeduction, eHighIncome) * highRate
+            val eSavingBase = max(0.0, eDeduction - eSavingHigh / highRate) * baseRate
+            eSavingHigh + eSavingBase
+        } else 0.0
+
+        return vSaving + eSaving
     }
 
     fun childMonthlyExpense(birthYear: Int, currentYear: Int, settings: SettingsEntity): Double {
@@ -678,7 +693,8 @@ object FinancialEngine {
 
     fun buildDipProjection(settings: SettingsEntity): DipProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val tsYear = dipTaxSavingYear(settings)
+        val baseTaxSaved = dipTaxSavingYear(settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0))
+        val tsYear = dipTaxSavingYear(settings) - baseTaxSaved
         val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
         val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
         val totalMonthlyDip = settings.dipContributionMonthly + eDipMonthly
@@ -687,10 +703,10 @@ object FinancialEngine {
 
         val levels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
         val scenarios = levels.map { monthly: Double ->
+            val scenarioSettings = settings.copy(dipContributionMonthly = monthly, eDipContributionMonthly = 0.0)
+            val asave = dipTaxSavingYear(scenarioSettings) - baseTaxSaved
             val dipAnnual = monthly * 12.0
-            val totalVDeduction = min(dipAnnual + vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
-            val incrementalDipDeduction = totalVDeduction - baseDeductionWithoutDip
-            val asave = incrementalDipDeduction * (settings.taxRatePct / 100.0)
+            
             val risk = when {
                 monthly >= 4000.0 -> "High lock-up"
                 monthly >= 2300.0 -> "Medium"
