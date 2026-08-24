@@ -67,7 +67,7 @@ fun ScenarioSimulatorChips(
         FireScenarioPreset(
             id = "base_plan",
             title = "Base Plan (2 Children)",
-            description = "Child 1 (2024) & Child 2 (Jan 2027) · Eleonora 2030 (25k) · +37.5k/yr tax credit · 7% return",
+            description = "Child 1 (2024) & Child 2 (Jan 2027) · Eleonora 2029 (22k) · +15.2k in 2026 / +37.5k from 2027 · 7% return",
             applyPreset = { s ->
                 s.copy(
                     childExpensesEnabled = true,
@@ -75,22 +75,22 @@ fun ScenarioSimulatorChips(
                     child1BirthYear = 2024,
                     child2Enabled = true,
                     child2BirthYear = 2027,
-                    eReturnYear = 2030,
-                    eStartingSalary = 25000.0,
+                    eReturnYear = 2029,
+                    eStartingSalary = 22000.0,
                     eReinvestedPct = 75.0,
                     portfolioNominalReturnPct = 7.0,
-                    cpiInflationPct = 3.0,
+                    cpiInflationPct = 2.8,
                     safeWithdrawalRatePct = 4.0,
-                    portuDcaMonthly = 14000.0,
-                    rentGrowthPct = 3.0,
+                    portuDcaMonthly = 11000.0,
+                    rentGrowthPct = 2.8,
                     monteCarloVolatilityPct = 15.0
                 )
             }
         ),
         FireScenarioPreset(
             id = "career_boost",
-            title = "Career Acceleration (2030)",
-            description = "Eleonora returns 2030 with 38k net · 85% Eleonora reinvestment · 18k ETF DCA",
+            title = "Career Acceleration (2029)",
+            description = "Eleonora returns 2029 with 32k net · 85% Eleonora reinvestment · 15k ETF DCA",
             applyPreset = { s ->
                 s.copy(
                     childExpensesEnabled = true,
@@ -98,10 +98,10 @@ fun ScenarioSimulatorChips(
                     child1BirthYear = 2024,
                     child2Enabled = true,
                     child2BirthYear = 2027,
-                    eReturnYear = 2030,
-                    eStartingSalary = 38000.0,
+                    eReturnYear = 2029,
+                    eStartingSalary = 32000.0,
                     eReinvestedPct = 85.0,
-                    portuDcaMonthly = 18000.0,
+                    portuDcaMonthly = 15000.0,
                     portfolioNominalReturnPct = 7.5
                 )
             }
@@ -117,8 +117,8 @@ fun ScenarioSimulatorChips(
                     child1BirthYear = 2024,
                     child2Enabled = true,
                     child2BirthYear = 2027,
-                    eReturnYear = 2030,
-                    eStartingSalary = 25000.0,
+                    eReturnYear = 2029,
+                    eStartingSalary = 22000.0,
                     cpiInflationPct = 5.0,
                     rentGrowthPct = 5.0,
                     portfolioNominalReturnPct = 5.5,
@@ -137,12 +137,12 @@ fun ScenarioSimulatorChips(
                     child1BirthYear = 2024,
                     child2Enabled = true,
                     child2BirthYear = 2027,
-                    eReturnYear = 2030,
-                    eStartingSalary = 25000.0,
+                    eReturnYear = 2029,
+                    eStartingSalary = 22000.0,
                     portuDcaMonthly = 0.0,
                     dipContributionMonthly = 0.0,
                     dpsOwnContributionMonthly = 0.0,
-                    lifestyleCostAtFireMonthly = 35000.0,
+                    lifestyleCostAtFireMonthly = 33000.0,
                     safeWithdrawalRatePct = 3.5,
                     portfolioNominalReturnPct = 6.5
                 )

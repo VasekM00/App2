@@ -67,7 +67,7 @@ import kotlin.math.pow
 @Composable
 fun NetWorthChart(
     data: List<PortfolioYearPoint>,
-    cpiInflationPct: Double = 3.0,
+    cpiInflationPct: Double = 2.8,
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
