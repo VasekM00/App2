@@ -518,7 +518,7 @@ private fun RoadmapTimelineCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             val youthYearsLeft = maxOf(0, state.settings.dpsYouthAgeLimit - state.settings.primaryAge)
-            val p1EndYear = currentYear + youthYearsLeft
+            val p1EndYear = if (youthYearsLeft > 0) currentYear + youthYearsLeft else currentYear + 3
             val p2EndYear = maxOf(p1EndYear + 1, currentYear + maxOf(1, 36 - state.settings.primaryAge))
             val p3StartYear = maxOf(p2EndYear + 1, fireYear)
 
@@ -526,7 +526,7 @@ private fun RoadmapTimelineCard(
             TimelineStepItem(
                 phaseNum = "1",
                 title = "Capital Accumulation & Tax Shield",
-                timeframe = if (youthYearsLeft > 0) "$currentYear – $p1EndYear" else "$currentYear – ${currentYear + 3}",
+                timeframe = "$currentYear – $p1EndYear",
                 badgeColor = BrandTeal,
                 isCurrent = true,
                 isLast = false,
@@ -540,7 +540,7 @@ private fun RoadmapTimelineCard(
             TimelineStepItem(
                 phaseNum = "2",
                 title = "Portfolio Scaling & Time-Test",
-                timeframe = if (youthYearsLeft > 0) "${p1EndYear + 1} – $p2EndYear" else "${currentYear + 4} – ${currentYear + 10}",
+                timeframe = "${p1EndYear + 1} – $p2EndYear",
                 badgeColor = BrandGold,
                 isCurrent = false,
                 isLast = false,
@@ -936,7 +936,11 @@ private fun LifeGoalsSimulatorSubTab(
     val totalFireDelayYears = if (monthlyInvest > 0) totalRemainingCapitalNeeded / (monthlyInvest * 12.0) else 0.0
 
     val surplusAfterGoals = monthlyNetSurplus - totalRequiredMonthlyGoals
-    val capacityRatio = if (monthlyNetSurplus > 0) (totalRequiredMonthlyGoals / monthlyNetSurplus).coerceIn(0.0, 2.0) else 1.0
+    val capacityRatio = when {
+        monthlyNetSurplus > 0 -> (totalRequiredMonthlyGoals / monthlyNetSurplus).coerceIn(0.0, 2.0)
+        totalRequiredMonthlyGoals > 0 -> 2.0
+        else -> 0.0
+    }
     val isOverBudget = surplusAfterGoals < 0
 
     Column(
@@ -1060,7 +1064,11 @@ private fun LifeGoalsSimulatorSubTab(
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         Text(
-                            text = "Combined Goals Impact: Delays primary FIRE target by ~${String.format("%.1f", totalFireDelayYears)} years.",
+                            text = if (monthlyInvest > 0) {
+                                "Combined Goals Impact: Delays primary FIRE target by ~${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} years."
+                            } else {
+                                "Combined Goals Impact: No DCA flow — delay cannot be estimated."
+                            },
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -1179,7 +1187,7 @@ private fun LifeGoalsSimulatorSubTab(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     ColorPill(
-                        text = "+${String.format("%.1f", goalFireDelay)} yrs to FIRE",
+                        text = if (monthlyInvest > 0) "+${String.format(java.util.Locale.ROOT, "%.1f", goalFireDelay)} yrs to FIRE" else "No DCA flow",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -1195,7 +1203,7 @@ private fun LifeGoalsSimulatorSubTab(
 
     if (showAddGoalDialog) {
         var goalName by remember { mutableStateOf("") }
-        var targetYearStr by remember { mutableStateOf("2029") }
+        var targetYearStr by remember { mutableStateOf((state.settings.baseYear + 5).toString()) }
         var targetAmountStr by remember { mutableStateOf("500000") }
         var currentSavedStr by remember { mutableStateOf("50000") }
 
@@ -1237,7 +1245,7 @@ private fun LifeGoalsSimulatorSubTab(
                 Button(
                     onClick = {
                         val name = goalName.ifBlank { "Custom Life Goal" }
-                        val yr = targetYearStr.toIntOrNull() ?: 2030
+                        val yr = targetYearStr.toIntOrNull() ?: (state.settings.baseYear + 5)
                         val targetAmt = targetAmountStr.toDoubleOrNull() ?: 500000.0
                         val savedAmt = currentSavedStr.toDoubleOrNull() ?: 0.0
 
@@ -1660,7 +1668,7 @@ private fun FireMilestonesComparisonCard(
                                 )
                             } else {
                                 ColorPill(
-                                    text = m.estimatedAge?.let { "Age $it" } ?: "2050+",
+                                    text = m.estimatedAge?.let { "Age $it" } ?: "Age ${state.settings.primaryAge + 35}+",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,

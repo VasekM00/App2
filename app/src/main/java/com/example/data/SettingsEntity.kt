@@ -2,6 +2,9 @@ package com.example.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.domain.DEFAULT_CUSTOM_LIFE_GOALS
+import com.example.domain.serializeCustomLifeGoals
+import java.util.Calendar
 
 @Entity(tableName = "app_settings")
 data class SettingsEntity(
@@ -106,4 +109,11 @@ data class SettingsEntity(
     val customGoalsJson: String = "[]",
     val customLumpSumsJson: String = "[]",
     val deletedCategoriesJson: String = "[]"
-)
+) {
+    companion object {
+        fun freshDefaults(): SettingsEntity = SettingsEntity(
+            baseYear = Calendar.getInstance().get(Calendar.YEAR),
+            customGoalsJson = serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
+        )
+    }
+}

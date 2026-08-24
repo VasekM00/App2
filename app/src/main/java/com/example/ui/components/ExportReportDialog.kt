@@ -52,9 +52,7 @@ fun ExportReportDialog(
 ) {
     val context = LocalContext.current
 
-    val fiProgress = if (state.fireBaseTargetToday > 0) {
-        (state.netWorthTotal / state.fireBaseTargetToday * 100.0).coerceAtMost(100.0)
-    } else 0.0
+    val fiProgress = state.fireMilestones.standardFire.progressPct
 
     val reportText = buildString {
         appendLine("==============================================")
@@ -66,9 +64,9 @@ fun ExportReportDialog(
         appendLine("EXECUTIVE SUMMARY")
         appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal)}")
         appendLine("• Monthly Living Expenses: ${fmtCZK(state.totalLivingCostMonthly)}")
-        appendLine("• Emergency Reserve: ${fmtCZK(state.settings.emergencyReserveCurrent)} (${String.format("%.1f", state.emergencyCoverageMonths)} months)")
+        appendLine("• Emergency Reserve: ${fmtCZK(state.settings.emergencyReserveCurrent)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
         appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
-        appendLine("• FIRE Progress: ${String.format("%.1f%%", fiProgress)}")
+        appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
         appendLine("• Projected FIRE Year (Dual): ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
         appendLine("• Projected FIRE Year (Single): ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
         appendLine()
@@ -85,7 +83,7 @@ fun ExportReportDialog(
         appendLine("• DPS Statutory Fee Cap: 0.5% p.a.")
         appendLine()
         appendLine("MONTE CARLO STRESS TEST")
-        appendLine("• FIRE Success Probability: ${String.format("%.1f%%", state.monteCarlo.successRatePct)}")
+        appendLine("• FIRE Success Probability: ${String.format(java.util.Locale.ROOT, "%.1f%%", state.monteCarlo.successRatePct)}")
         appendLine("• Median FIRE Age: ${state.monteCarlo.medianFireAge?.let { "Age $it" } ?: "N/A"}")
         appendLine("• Fastest / Best-Case (5th percentile age): ${state.monteCarlo.bestCaseAge?.let { "Age $it" } ?: "N/A"}")
         appendLine("• Conservative / Late (95th percentile age): ${state.monteCarlo.worstCaseAge?.let { "Age $it" } ?: "N/A"}")
@@ -186,6 +184,9 @@ fun ExportReportDialog(
                         if (exportFormat == "Summary") "Personal Finance Report" else "FIRE Projections CSV",
                         activeText
                     )
+                    clip.description.extras = android.os.PersistableBundle().apply {
+                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    }
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "${if (exportFormat == "Summary") "Report" else "CSV"} copied to clipboard!", Toast.LENGTH_SHORT).show()
                     onDismiss()

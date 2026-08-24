@@ -35,11 +35,11 @@ class FinancialEngineExhaustiveAuditTest {
         val income2026 = FinancialEngine.householdIncome(2026, defaultSettings)
         assertEquals(33500.0, income2026.vaclavNet, 0.001)
         assertEquals(0.0, income2026.eleonoraSalary, 0.001)
-        assertEquals(13000.0, income2026.benefit, 0.001)
+        assertEquals(3166.6667, income2026.benefit, 0.001) // Child 1 pot: 350k - 24 months drawn at 13k = 38k left in 2026
         assertEquals(6900.0, income2026.lecturing, 0.001)
         assertEquals(2090.0, income2026.vouchers, 0.001)
         assertEquals(16000.0, income2026.gift, 0.001)
-        assertEquals(71490.0, income2026.totalMonthly, 0.001)
+        assertEquals(61656.6667, income2026.totalMonthly, 0.001)
 
         // Mutate Vaclav salary, other inflows, and bonus
         val modifiedSettings = defaultSettings.copy(
@@ -59,11 +59,11 @@ class FinancialEngineExhaustiveAuditTest {
         val inc2026Mod = FinancialEngine.householdIncome(2026, modifiedSettings)
         assertEquals(50000.0, inc2026Mod.vaclavNet, 0.001) // 45000 + 5000 bonus
         assertEquals(0.0, inc2026Mod.eleonoraSalary, 0.001)
-        assertEquals(15000.0, inc2026Mod.benefit, 0.001)
+        assertEquals(0.0, inc2026Mod.benefit, 0.001) // Child 1 pot already exhausted before baseYear at 15k/mo
         assertEquals(0.0, inc2026Mod.lecturing, 0.001)
         assertEquals(3000.0, inc2026Mod.vouchers, 0.001)
         assertEquals(20000.0, inc2026Mod.gift, 0.001)
-        assertEquals(88000.0, inc2026Mod.totalMonthly, 0.001)
+        assertEquals(73000.0, inc2026Mod.totalMonthly, 0.001)
 
         // Year 2028 (Eleonora returns)
         val inc2028Mod = FinancialEngine.householdIncome(2028, modifiedSettings)
@@ -209,12 +209,8 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(30840.0, tax.taxpayerCredit, 0.001)
         // With default eLecturing = 6900/mo (82800/yr > 68000/yr limit), spouse credit is properly disallowed
         assertFalse("Spouse earning 82.8k/yr from lecturing exceeds 68k threshold", tax.spouseEligible)
-        // In 2026 base year: Child 1 (born 2024) is eligible (15204). Child 2 (born 2027) is not yet born -> 0
-        assertEquals(15204.0, tax.childBonus, 0.001)
-
-        // When both children are born (e.g. child2BirthYear <= 2026), both bonuses apply
-        val bothBornState = FinancialEngine.calculate(defaultSettings.copy(child2BirthYear = 2026))
-        assertEquals(37524.0, bothBornState.taxReturnHelper.childBonus, 0.001) // Child 1 (15204) + Child 2 (22320)
+        assertEquals(0.0, tax.spouseCredit, 0.001)
+        assertEquals(15204.0, tax.childBonus, 0.001) // Child 1 only: Child 2 (born 2027) is not yet born in baseYear
 
         // DIP Tax Saving on default 1700/mo
         // Annual deduction = 1700 * 12 = 20400. Tax saving = 20400 * 0.15 = 3060
@@ -237,7 +233,9 @@ class FinancialEngineExhaustiveAuditTest {
         )
         val richSpouseState = FinancialEngine.calculate(richSpouseSettings)
         assertFalse("Spouse earning > 68k/yr should not be eligible", richSpouseState.taxReturnHelper.spouseEligible)
-        // Mutate: Disable children -> child bonus should be 0
+        assertEquals(0.0, richSpouseState.taxReturnHelper.spouseCredit, 0.001)
+
+        // Mutate: Disable all children -> no child bonus (expense toggle alone no longer gates § 35c bonus)
         val noChildSettings = defaultSettings.copy(child1Enabled = false, child2Enabled = false)
         val noChildState = FinancialEngine.calculate(noChildSettings)
         assertEquals(0.0, noChildState.taxReturnHelper.childBonus, 0.001)

@@ -92,33 +92,40 @@ class SecurityAuditTest {
     }
 
     /**
-     * 4.3: allowBackup
-     * Checks AndroidManifest.xml for allowBackup="true" and issues a WARNING.
+     * 4.3: backup rules
+     * Asserts backup_rules.xml excludes the Room database from cloud backups.
      */
     @Test
-    fun test4_3_allowBackupWarning() {
-        val manifestFile = File(getAppSrcMain(), "AndroidManifest.xml")
-        assertTrue("AndroidManifest.xml must exist", manifestFile.exists())
-        val content = manifestFile.readText()
-        if (content.contains("android:allowBackup=\"true\"")) {
-            println("WARNING: AndroidManifest.xml contains android:allowBackup=\"true\". Ensure sensitive storage is protected.")
-        }
-        assertTrue("allowBackup check completed", true)
+    fun test4_3_backupRulesExcludeDatabase() {
+        val rulesFile = File(getAppSrcMain(), "res/xml/backup_rules.xml")
+        assertTrue("backup_rules.xml must exist at ${rulesFile.absolutePath}", rulesFile.exists())
+        val content = rulesFile.readText()
+        assertTrue(
+            "backup_rules.xml must exclude the Room database from cloud backups",
+            content.contains("<exclude") && content.contains("martinu_financials_db")
+        )
     }
 
     /**
      * 4.4: data_extraction_rules.xml
-     * Reads data_extraction_rules.xml and warns if it contains template TODO markers.
+     * Asserts data_extraction_rules.xml excludes the Room database from cloud backup
+     * and contains no template TODOs. (Device transfer intentionally includes the DB
+     * so users keep their data when migrating to a new phone.)
      */
     @Test
     fun test4_4_dataExtractionRules() {
         val rulesFile = File(getAppSrcMain(), "res/xml/data_extraction_rules.xml")
         assertTrue("data_extraction_rules.xml must exist at ${rulesFile.absolutePath}", rulesFile.exists())
         val content = rulesFile.readText()
-        if (content.contains("TODO")) {
-            println("WARNING: data_extraction_rules.xml contains template 'TODO' comments. Custom backup inclusion/exclusion rules recommended.")
-        }
-        assertTrue("data_extraction_rules.xml check completed", true)
+        assertTrue(
+            "data_extraction_rules.xml must not contain template 'TODO' comments",
+            !content.contains("TODO")
+        )
+        assertTrue(
+            "data_extraction_rules.xml must exclude the Room database from cloud backup",
+            content.contains("<cloud-backup>") && content.contains("<exclude") &&
+                    content.contains("martinu_financials_db")
+        )
     }
 
     /**
@@ -261,7 +268,8 @@ class SecurityAuditTest {
 
     /**
      * 4.10: Room exportSchema
-     * Scans all .kt files for @Database annotations and ensures exportSchema = false is set.
+     * Scans all .kt files for @Database annotations and ensures exportSchema = true is set
+     * (schema JSON export is required to validate migrations).
      */
     @Test
     fun test4_10_roomDatabaseExportSchema() {
@@ -278,8 +286,8 @@ class SecurityAuditTest {
                 databaseAnnotationFound = true
                 val args = match.groupValues[1]
                 assertTrue(
-                    "Database annotation in ${file.name} must specify 'exportSchema = false'",
-                    args.contains("exportSchema = false") || args.contains("exportSchema=false")
+                    "Database annotation in ${file.name} must specify 'exportSchema = true'",
+                    args.contains("exportSchema = true") || args.contains("exportSchema=true")
                 )
             }
         }

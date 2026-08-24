@@ -4,6 +4,7 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 object Formatters {
     private val czkLocale = Locale.forLanguageTag("cs-CZ")
@@ -39,13 +40,13 @@ object Formatters {
     fun fmtNum(value: Double): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        return getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
+        return getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
     }
 
     fun fmtCZK(value: Double, symbol: String = "Kč"): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        val formatted = getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
+        val formatted = getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
         return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
     }
 
@@ -63,11 +64,15 @@ object Formatters {
             }
             absVal >= 100_000 -> {
                 val k = value / 1_000.0
-                String.format(czkLocale, "%.0fk", k)
+                if (abs(k - k.roundToInt()) < 0.05) {
+                    String.format(czkLocale, "%.0fk", k)
+                } else {
+                    String.format(czkLocale, "%.1fk", k)
+                }
             }
             else -> {
                 val displayVal = roundToDisplay(value)
-                getCzkFormat().format(displayVal.roundToInt()).replace(' ', '\u00A0')
+                getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
             }
         }
         return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
@@ -76,7 +81,7 @@ object Formatters {
     fun fmtPct(value: Double, digits: Int? = null): String {
         if (value.isNaN() || value.isInfinite()) return "--%"
         val formatted = if (digits != null) {
-            String.format(czkLocale, "%.${digits}f%%", value)
+            String.format(czkLocale, "%.${digits.coerceAtLeast(0)}f%%", value)
         } else {
             val isWhole = (value % 1.0) == 0.0
             if (isWhole) {

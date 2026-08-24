@@ -128,7 +128,7 @@ object BackupManager {
     fun deserializeSettingsFromJson(jsonStr: String, fallback: SettingsEntity): SettingsEntity? {
         return try {
             val json = JSONObject(jsonStr.trim())
-            fallback.copy(
+            val restored = fallback.copy(
                 baseYear = json.optInt("baseYear", fallback.baseYear),
                 primaryAge = json.optInt("primaryAge", fallback.primaryAge),
                 primaryName = json.optString("primaryName", fallback.primaryName),
@@ -238,8 +238,98 @@ object BackupManager {
                 monteCarloVolatilityPct = json.optDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
                 monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed)
             )
+            sanitizeRestored(restored, fallback)
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun sanitizeRestored(s: SettingsEntity, f: SettingsEntity): SettingsEntity {
+        fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
+        fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
+        fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
+        return s.copy(
+            baseYear = year(s.baseYear, f.baseYear),
+            primaryAge = if (s.primaryAge in 15..90) s.primaryAge else f.primaryAge,
+            eReturnYear = year(s.eReturnYear, f.eReturnYear),
+            lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
+            statePensionAge = if (s.statePensionAge in 55..75) s.statePensionAge else f.statePensionAge,
+            child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
+            child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
+            dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
+            monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
+            vSalary = money(s.vSalary, f.vSalary),
+            vBonusAnnual = money(s.vBonusAnnual, f.vBonusAnnual),
+            vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
+            vOtherInflowsMonthly = money(s.vOtherInflowsMonthly, f.vOtherInflowsMonthly),
+            eStartingSalary = money(s.eStartingSalary, f.eStartingSalary),
+            eBonusAnnual = money(s.eBonusAnnual, f.eBonusAnnual),
+            eSalaryGrowthPct = pct(s.eSalaryGrowthPct, f.eSalaryGrowthPct),
+            eReinvestedPct = pct(s.eReinvestedPct, f.eReinvestedPct),
+            eParentalAllowanceMonthly = money(s.eParentalAllowanceMonthly, f.eParentalAllowanceMonthly),
+            eLecturingMonthly = money(s.eLecturingMonthly, f.eLecturingMonthly),
+            familyGiftMonthly = money(s.familyGiftMonthly, f.familyGiftMonthly),
+            annualOtherGifts = money(s.annualOtherGifts, f.annualOtherGifts),
+            lumpSumAmount = money(s.lumpSumAmount, f.lumpSumAmount),
+            liquidPortfolioCurrent = money(s.liquidPortfolioCurrent, f.liquidPortfolioCurrent),
+            dpsBalanceCurrent = money(s.dpsBalanceCurrent, f.dpsBalanceCurrent),
+            dipBalanceCurrent = money(s.dipBalanceCurrent, f.dipBalanceCurrent),
+            eLiquidPortfolioCurrent = money(s.eLiquidPortfolioCurrent, f.eLiquidPortfolioCurrent),
+            eDpsBalanceCurrent = money(s.eDpsBalanceCurrent, f.eDpsBalanceCurrent),
+            eDipBalanceCurrent = money(s.eDipBalanceCurrent, f.eDipBalanceCurrent),
+            emergencyReserveCurrent = money(s.emergencyReserveCurrent, f.emergencyReserveCurrent),
+            emergencyReserveTarget = money(s.emergencyReserveTarget, f.emergencyReserveTarget),
+            portuDcaMonthly = money(s.portuDcaMonthly, f.portuDcaMonthly),
+            dpsOwnContributionMonthly = money(s.dpsOwnContributionMonthly, f.dpsOwnContributionMonthly),
+            dipContributionMonthly = money(s.dipContributionMonthly, f.dipContributionMonthly),
+            employerRetirementAnnual = money(s.employerRetirementAnnual, f.employerRetirementAnnual),
+            ePortuDcaMonthly = money(s.ePortuDcaMonthly, f.ePortuDcaMonthly),
+            eDpsOwnContributionMonthly = money(s.eDpsOwnContributionMonthly, f.eDpsOwnContributionMonthly),
+            eDipContributionMonthly = money(s.eDipContributionMonthly, f.eDipContributionMonthly),
+            eEmployerRetirementAnnual = money(s.eEmployerRetirementAnnual, f.eEmployerRetirementAnnual),
+            portfolioNominalReturnPct = pct(s.portfolioNominalReturnPct, f.portfolioNominalReturnPct),
+            dpsGrossReturnPct = pct(s.dpsGrossReturnPct, f.dpsGrossReturnPct),
+            dpsAnnualFeePct = pct(s.dpsAnnualFeePct, f.dpsAnnualFeePct),
+            cpiInflationPct = pct(s.cpiInflationPct, f.cpiInflationPct),
+            safeWithdrawalRatePct = pct(s.safeWithdrawalRatePct, f.safeWithdrawalRatePct),
+            safetyBufferPct = pct(s.safetyBufferPct, f.safetyBufferPct),
+            rentGrowthPct = pct(s.rentGrowthPct, f.rentGrowthPct),
+            dcaAnnualGrowthPct = pct(s.dcaAnnualGrowthPct, f.dcaAnnualGrowthPct),
+            statePensionMonthly = money(s.statePensionMonthly, f.statePensionMonthly),
+            lifestyleCostAtFireMonthly = money(s.lifestyleCostAtFireMonthly, f.lifestyleCostAtFireMonthly),
+            fireTargetOverride = money(s.fireTargetOverride, f.fireTargetOverride),
+            rentMonthly = money(s.rentMonthly, f.rentMonthly),
+            groceriesMonthly = money(s.groceriesMonthly, f.groceriesMonthly),
+            cafesMonthly = money(s.cafesMonthly, f.cafesMonthly),
+            therapyMonthly = money(s.therapyMonthly, f.therapyMonthly),
+            charityMonthly = money(s.charityMonthly, f.charityMonthly),
+            entertainmentMonthly = money(s.entertainmentMonthly, f.entertainmentMonthly),
+            transportMonthly = money(s.transportMonthly, f.transportMonthly),
+            subscriptionsMonthly = money(s.subscriptionsMonthly, f.subscriptionsMonthly),
+            otherDiscretionaryMonthly = money(s.otherDiscretionaryMonthly, f.otherDiscretionaryMonthly),
+            taxRatePct = pct(s.taxRatePct, f.taxRatePct),
+            taxRateSecondPct = pct(s.taxRateSecondPct, f.taxRateSecondPct),
+            taxSecondBracketThresholdAnnual = money(s.taxSecondBracketThresholdAnnual, f.taxSecondBracketThresholdAnnual),
+            taxpayerCreditAnnual = money(s.taxpayerCreditAnnual, f.taxpayerCreditAnnual),
+            taxDeductionCeilingAnnual = money(s.taxDeductionCeilingAnnual, f.taxDeductionCeilingAnnual),
+            spouseTaxCreditAnnual = money(s.spouseTaxCreditAnnual, f.spouseTaxCreditAnnual),
+            spouseIncomeLimitAnnual = money(s.spouseIncomeLimitAnnual, f.spouseIncomeLimitAnnual),
+            minWageMonthly = money(s.minWageMonthly, f.minWageMonthly),
+            dpsDeductionThresholdMonthly = money(s.dpsDeductionThresholdMonthly, f.dpsDeductionThresholdMonthly),
+            dpsStandardSubsidyMaxMonthly = money(s.dpsStandardSubsidyMaxMonthly, f.dpsStandardSubsidyMaxMonthly),
+            dpsYouthSubsidyMaxMonthly = money(s.dpsYouthSubsidyMaxMonthly, f.dpsYouthSubsidyMaxMonthly),
+            dpsMinDepositForSubsidy = money(s.dpsMinDepositForSubsidy, f.dpsMinDepositForSubsidy),
+            dpsSubsidyRateStandardPct = pct(s.dpsSubsidyRateStandardPct, f.dpsSubsidyRateStandardPct),
+            dpsSubsidyRateYouthPct = pct(s.dpsSubsidyRateYouthPct, f.dpsSubsidyRateYouthPct),
+            child1TaxBonusAnnual = money(s.child1TaxBonusAnnual, f.child1TaxBonusAnnual),
+            child2TaxBonusAnnual = money(s.child2TaxBonusAnnual, f.child2TaxBonusAnnual),
+            child3PlusTaxBonusAnnual = money(s.child3PlusTaxBonusAnnual, f.child3PlusTaxBonusAnnual),
+            childToddlerMonthly = money(s.childToddlerMonthly, f.childToddlerMonthly),
+            childPreschoolMonthly = money(s.childPreschoolMonthly, f.childPreschoolMonthly),
+            childSchoolMonthly = money(s.childSchoolMonthly, f.childSchoolMonthly),
+            childTeenMonthly = money(s.childTeenMonthly, f.childTeenMonthly),
+            childUniMonthly = money(s.childUniMonthly, f.childUniMonthly),
+            monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct)
+        )
     }
 }

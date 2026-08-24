@@ -22,21 +22,21 @@ object CzechEconomicSyncService {
 
     /**
      * Fetches live Czech macroeconomic, ČNB FX rates, and statutory tax/pension parameters.
-     * Guaranteed to return a valid CzechRegulatoryData object (uses local statutory defaults if offline).
+     * Guaranteed to return a valid CzechRegulatoryData object (uses local statutory defaults if offline
+     * or if the remote manifest contains out-of-range values).
      */
     suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
         var eurRate = 25.15
         var usdRate = 23.25
         var rateDate = ""
-        var cpiInflation = 2.8
-        var avgWage = 43967.0
         var sourceDescription = "Local Verified Statutory Registry"
+        var parsed = localDefaults()
 
         // 1. Fetch live ČNB exchange rates
         try {
             val fxRates = fetchCnbRates()
-            if (fxRates.first > 0) eurRate = fxRates.first
-            if (fxRates.second > 0) usdRate = fxRates.second
+            if (fxRates.first in 5.0..200.0) eurRate = fxRates.first
+            if (fxRates.second in 5.0..200.0) usdRate = fxRates.second
             if (fxRates.third.isNotBlank()) rateDate = fxRates.third
             sourceDescription = "ČNB Daily API & Statutory Registry"
         } catch (e: Exception) {
@@ -48,46 +48,60 @@ object CzechEconomicSyncService {
             val remoteJson = fetchUrlContent(STATUTORY_MANIFEST_URL, timeoutMs = 2500)
             if (!remoteJson.isNullOrBlank()) {
                 val json = JSONObject(remoteJson)
-                val parsedCpi = json.optDouble("csuCpiInflationPct", cpiInflation)
-                val parsedWage = json.optDouble("csuNationalAverageWageMonthly", avgWage)
-                if (parsedCpi in -10.0..50.0) cpiInflation = parsedCpi
-                if (parsedWage in 20_000.0..200_000.0) avgWage = parsedWage
+                parsed = parseManifestSanitized(json, parsed)
                 sourceDescription = "Live ČSÚ, ČNB & Statutory Registry"
             }
         } catch (e: Exception) {
             // Offline or repo manifest unreachable, use built-in statutory data
         }
 
-        CzechRegulatoryData(
+        parsed.copy(
             timestamp = System.currentTimeMillis(),
             sourceName = sourceDescription,
-            effectiveYear = 2026,
-            csuCpiInflationPct = cpiInflation,
-            csuAnnualAverageCpiPct = 2.5,
-            csuNationalAverageWageMonthly = avgWage,
             eurCzkRate = eurRate,
             usdCzkRate = usdRate,
-            rateDate = rateDate,
-            msciWorld10yCagrPct = 8.9,
-            sp50010yCagrPct = 12.1,
-            baseTaxRatePct = 15.0,
-            progressiveTaxRatePct = 23.0,
-            progressive23ThresholdAnnual = 1582812.0,
-            taxpayerCreditAnnual = 30840.0,
-            spouseTaxCreditAnnual = 24840.0,
-            spouseIncomeLimitAnnual = 68000.0,
-            minWageMonthly = 22400.0,
-            child1TaxBonusAnnual = 15204.0,
-            child2TaxBonusAnnual = 22320.0,
-            child3PlusTaxBonusAnnual = 27840.0,
-            dipDpsCombinedCeilingAnnual = 48000.0,
-            employerRetirementExemptionAnnual = 50000.0,
-            dpsMinDepositForSubsidy = 500.0,
-            dpsDeductionThresholdMonthly = 1700.0,
-            dpsStandardSubsidyMaxMonthly = 340.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
-            dpsYouthAgeLimit = 30,
-            dpsStatutoryFeeCapPct = 0.5
+            rateDate = rateDate
+        )
+    }
+
+    private fun localDefaults() = CzechRegulatoryData()
+
+    /**
+     * Parses the remote manifest but keeps the local default for any field that is
+     * missing, non-finite, or outside a sane statutory range, so a rogue or corrupted
+     * manifest can never corrupt user settings.
+     */
+    private fun parseManifestSanitized(json: JSONObject, fallback: CzechRegulatoryData): CzechRegulatoryData {
+        fun d(key: String, fallbackVal: Double, min: Double, max: Double): Double {
+            val v = json.optDouble(key, fallbackVal)
+            return if (v.isFinite() && v in min..max) v else fallbackVal
+        }
+        fun i(key: String, fallbackVal: Int, min: Int, max: Int): Int {
+            val v = json.optInt(key, fallbackVal)
+            return if (v in min..max) v else fallbackVal
+        }
+        return fallback.copy(
+            effectiveYear = i("effectiveYear", fallback.effectiveYear, 2020, 2100),
+            csuCpiInflationPct = d("csuCpiInflationPct", fallback.csuCpiInflationPct, -10.0, 50.0),
+            csuNationalAverageWageMonthly = d("csuNationalAverageWageMonthly", fallback.csuNationalAverageWageMonthly, 20000.0, 200000.0),
+            baseTaxRatePct = d("baseTaxRatePct", fallback.baseTaxRatePct, 0.0, 50.0),
+            progressiveTaxRatePct = d("progressiveTaxRatePct", fallback.progressiveTaxRatePct, 0.0, 60.0),
+            progressive23ThresholdAnnual = d("progressive23ThresholdAnnual", fallback.progressive23ThresholdAnnual, 500000.0, 10000000.0),
+            taxpayerCreditAnnual = d("taxpayerCreditAnnual", fallback.taxpayerCreditAnnual, 0.0, 200000.0),
+            spouseTaxCreditAnnual = d("spouseTaxCreditAnnual", fallback.spouseTaxCreditAnnual, 0.0, 200000.0),
+            spouseIncomeLimitAnnual = d("spouseIncomeLimitAnnual", fallback.spouseIncomeLimitAnnual, 0.0, 500000.0),
+            minWageMonthly = d("minWageMonthly", fallback.minWageMonthly, 5000.0, 100000.0),
+            child1TaxBonusAnnual = d("child1TaxBonusAnnual", fallback.child1TaxBonusAnnual, 0.0, 200000.0),
+            child2TaxBonusAnnual = d("child2TaxBonusAnnual", fallback.child2TaxBonusAnnual, 0.0, 200000.0),
+            child3PlusTaxBonusAnnual = d("child3PlusTaxBonusAnnual", fallback.child3PlusTaxBonusAnnual, 0.0, 200000.0),
+            dipDpsCombinedCeilingAnnual = d("dipDpsCombinedCeilingAnnual", fallback.dipDpsCombinedCeilingAnnual, 0.0, 500000.0),
+            employerRetirementExemptionAnnual = d("employerRetirementExemptionAnnual", fallback.employerRetirementExemptionAnnual, 0.0, 500000.0),
+            dpsMinDepositForSubsidy = d("dpsMinDepositForSubsidy", fallback.dpsMinDepositForSubsidy, 0.0, 10000.0),
+            dpsDeductionThresholdMonthly = d("dpsDeductionThresholdMonthly", fallback.dpsDeductionThresholdMonthly, 0.0, 20000.0),
+            dpsStandardSubsidyMaxMonthly = d("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly, 0.0, 20000.0),
+            dpsYouthSubsidyMaxMonthly = d("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly, 0.0, 20000.0),
+            dpsYouthAgeLimit = i("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit, 18, 40),
+            dpsStatutoryFeeCapPct = d("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct, 0.0, 10.0)
         )
     }
 
@@ -283,12 +297,23 @@ object CzechEconomicSyncService {
             connection.requestMethod = "GET"
             connection.connectTimeout = timeoutMs
             connection.readTimeout = timeoutMs
-            connection.setRequestProperty("User-Agent", "MartinufinancialsFIRE/2.0")
+            connection.setRequestProperty("User-Agent", "MartinufinancialsFIRE/6.0")
             connection.setRequestProperty("Accept", "*/*")
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val limit = 1_000_000
                 BufferedReader(InputStreamReader(connection.inputStream, Charsets.UTF_8)).use { reader ->
-                    reader.readText()
+                    val sb = StringBuilder()
+                    val buf = CharArray(8192)
+                    var total = 0
+                    while (true) {
+                        val n = reader.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > limit) return null
+                        sb.append(buf, 0, n)
+                    }
+                    sb.toString()
                 }
             } else {
                 null

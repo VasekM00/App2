@@ -59,8 +59,7 @@ class UIAccessibilityStressTest {
                 )
                 OverviewTab(state = defaultCalcState)
                 ProjectionsTab(
-                    state = defaultCalcState,
-                    onSensitivityChange = { _, _, _ -> }
+                    state = defaultCalcState
                 )
                 SettingsTab(
                     state = defaultCalcState,
@@ -81,7 +80,12 @@ class UIAccessibilityStressTest {
                 )
             }
         }
-        assertTrue(true)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
+        composeTestRule.onNodeWithTag("settings_tab").assertExists()
+        composeTestRule.onNodeWithTag("cashflow_tab").assertExists()
     }
 
     @Test
@@ -96,8 +100,7 @@ class UIAccessibilityStressTest {
                 )
                 OverviewTab(state = zeroCalcState)
                 ProjectionsTab(
-                    state = zeroCalcState,
-                    onSensitivityChange = { _, _, _ -> }
+                    state = zeroCalcState
                 )
                 SettingsTab(
                     state = zeroCalcState,
@@ -118,7 +121,12 @@ class UIAccessibilityStressTest {
                 )
             }
         }
-        assertTrue(true)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
+        composeTestRule.onNodeWithTag("settings_tab").assertExists()
+        composeTestRule.onNodeWithTag("cashflow_tab").assertExists()
     }
 
     @Test
@@ -133,8 +141,7 @@ class UIAccessibilityStressTest {
                 )
                 OverviewTab(state = maxCalcState)
                 ProjectionsTab(
-                    state = maxCalcState,
-                    onSensitivityChange = { _, _, _ -> }
+                    state = maxCalcState
                 )
                 SettingsTab(
                     state = maxCalcState,
@@ -155,7 +162,12 @@ class UIAccessibilityStressTest {
                 )
             }
         }
-        assertTrue(true)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
+        composeTestRule.onNodeWithTag("settings_tab").assertExists()
+        composeTestRule.onNodeWithTag("cashflow_tab").assertExists()
     }
 
     @Test
@@ -183,22 +195,18 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
-        assertTrue(true)
     }
 
     @Test
     fun test6_6_projectionsTabSettingsChange() {
-        var sensitivityChanged = false
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 ProjectionsTab(
-                    state = defaultCalcState,
-                    onSensitivityChange = { _, _, _ -> sensitivityChanged = true }
+                    state = defaultCalcState
                 )
             }
         }
         composeTestRule.onNodeWithTag("projections_tab").assertExists()
-        assertTrue(true)
     }
 
     @Test
@@ -217,7 +225,6 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.onNodeWithTag("settings_tab").assertExists()
-        assertTrue(true)
     }
 
     @Test

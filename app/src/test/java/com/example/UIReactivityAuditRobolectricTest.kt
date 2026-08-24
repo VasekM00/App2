@@ -1,7 +1,11 @@
 package com.example
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.ui.tabs.OverviewTab
@@ -9,6 +13,7 @@ import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
 import com.example.ui.theme.MartinuFinancialsTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -89,8 +94,7 @@ class UIReactivityAuditRobolectricTest {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 ProjectionsTab(
-                    state = state,
-                    onSensitivityChange = { _, _, _ -> }
+                    state = state
                 )
             }
         }
@@ -103,26 +107,25 @@ class UIReactivityAuditRobolectricTest {
     fun `test ProjectionsTab What-If sandbox subtab rendering`() {
         val settings = SettingsEntity()
         val state = FinancialEngine.calculate(settings)
-        val currentSubTab = mutableStateOf(0)
 
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 ProjectionsTab(
-                    state = state,
-                    initialSubTab = currentSubTab.value,
-                    onSensitivityChange = { _, _, _ -> }
+                    state = state
                 )
             }
         }
         composeTestRule.waitForIdle()
 
-        // Switch to Subtab 1: What-If Sandbox
-        currentSubTab.value = 1
+        // Switch to Subtab 1: What-If Sandbox via a real UI interaction
+        composeTestRule.onNodeWithTag("projections_subtab_1").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onNode(hasTestTag("projections_subtab_1") and isSelected()).assertExists()
 
         // Switch to Subtab 2: Monte Carlo & Stress
-        currentSubTab.value = 2
+        composeTestRule.onNodeWithTag("projections_subtab_2").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onNode(hasTestTag("projections_subtab_2") and isSelected()).assertExists()
     }
 
     @Test
@@ -145,6 +148,6 @@ class UIReactivityAuditRobolectricTest {
         }
 
         composeTestRule.waitForIdle()
-        assertTrue(calculationState.value.settings.baseYear == 2026)
+        assertEquals(SettingsEntity().baseYear, calculationState.value.settings.baseYear)
     }
 }

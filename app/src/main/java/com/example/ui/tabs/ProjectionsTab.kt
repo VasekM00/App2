@@ -28,8 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -78,7 +76,6 @@ import com.example.util.Formatters.fmtPct
 @Composable
 fun ProjectionsTab(
     state: FullCalculationState,
-    onSensitivityChange: (returnPct: Double?, cpiPct: Double?, swrPct: Double?) -> Unit,
     onApplySettings: (SettingsEntity) -> Unit = {},
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
@@ -116,8 +113,8 @@ fun ProjectionsTab(
 
         when (selectedSubTab) {
             0 -> TrajectorySubTab(state = state, onShowInfo = { infoState.show(it) })
-            1 -> WhatIfSandboxSubTab(state = state, onApplySettings = onApplySettings, onSensitivityChange = onSensitivityChange, onShowInfo = { infoState.show(it) })
-            2 -> MonteCarloAndStressSubTab(state = state, onSensitivityChange = onSensitivityChange, onShowInfo = { infoState.show(it) })
+            1 -> WhatIfSandboxSubTab(state = state, onApplySettings = onApplySettings, onShowInfo = { infoState.show(it) })
+            2 -> MonteCarloAndStressSubTab(state = state, onShowInfo = { infoState.show(it) })
         }
     }
 
@@ -287,7 +284,6 @@ private fun TrajectorySubTab(
 private fun WhatIfSandboxSubTab(
     state: FullCalculationState,
     onApplySettings: (SettingsEntity) -> Unit,
-    onSensitivityChange: (Double?, Double?, Double?) -> Unit,
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -590,7 +586,6 @@ private fun PortfolioAccountsView(
 @Composable
 private fun MonteCarloAndStressSubTab(
     state: FullCalculationState,
-    onSensitivityChange: (Double?, Double?, Double?) -> Unit,
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()

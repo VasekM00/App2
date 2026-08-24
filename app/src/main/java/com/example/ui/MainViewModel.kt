@@ -158,14 +158,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiEvent.emit(UiMessage.ShowSnackbar("Error: Unable to open CSV file"))
                     return@launch
                 }
+                val existingYearMonths = repository.existingYearMonths()
                 val entriesToInsert = mutableListOf<LedgerEntryEntity>()
+                var skippedDuplicates = 0
                 inputStream.use { stream ->
                     java.io.BufferedReader(java.io.InputStreamReader(stream)).use { reader ->
                         var line: String? = reader.readLine() // Skip header
                         while (run { line = reader.readLine(); line } != null) {
                             val rawLine = line!!.trim()
                             if (rawLine.isBlank()) continue
-                            val tokens = rawLine.split(",")
+                            val tokens = parseCsvLine(rawLine)
                             if (tokens.size >= 6) {
                                 val ym = tokens[0].trim()
                                 val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
@@ -175,35 +177,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
                                 val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
                                 val notes = tokens.last().trim()
-                                if (ym.isNotEmpty()) {
-                                    entriesToInsert.add(
-                                        LedgerEntryEntity(
-                                            yearMonth = ym,
-                                            incVaclav = incV,
-                                            incEleonora = incE,
-                                            incUnforeseen = incExtra,
-                                            expRent = expR,
-                                            expGroceries = expG + expO,
-                                            expOther = 0.0,
-                                            notes = notes
+                                if (ym.isNotEmpty() && ym.matches(Regex("""\d{4}-\d{2}"""))) {
+                                    if (ym in existingYearMonths) {
+                                        skippedDuplicates++
+                                    } else {
+                                        entriesToInsert.add(
+                                            LedgerEntryEntity(
+                                                yearMonth = ym,
+                                                incVaclav = incV,
+                                                incEleonora = incE,
+                                                incUnforeseen = incExtra,
+                                                expRent = expR,
+                                                expGroceries = expG + expO,
+                                                expOther = 0.0,
+                                                notes = notes
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                         }
                     }
                 }
                 if (entriesToInsert.isNotEmpty()) {
-                    val distinctNewEntries = entriesToInsert.distinctBy { it.yearMonth }
-                    val existingYearMonths = ledgerEntries.value.map { it.yearMonth }.toSet()
-                    val toInsert = distinctNewEntries.filter { !existingYearMonths.contains(it.yearMonth) }
-
-                    if (toInsert.isNotEmpty()) {
-                        repository.addLedgerEntries(toInsert)
-                        _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${toInsert.size} new entries!"))
-                    } else {
-                        _uiEvent.emit(UiMessage.ShowSnackbar("All ${distinctNewEntries.size} entries already exist in ledger."))
-                    }
+                    repository.addLedgerEntries(entriesToInsert)
+                    val dupNote = if (skippedDuplicates > 0) " ($skippedDuplicates duplicate months skipped)" else ""
+                    _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${entriesToInsert.size} entries!$dupNote"))
+                } else if (skippedDuplicates > 0) {
+                    _uiEvent.emit(UiMessage.ShowSnackbar("All $skippedDuplicates entries already exist - nothing imported"))
                 } else {
                     _uiEvent.emit(UiMessage.ShowSnackbar("No valid entries found in CSV"))
                 }
@@ -214,9 +215,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun parseCsvLine(line: String): List<String> {
+        val fields = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                c == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
+                    sb.append('"')
+                    i++
+                }
+                c == '"' -> inQuotes = !inQuotes
+                c == ',' && !inQuotes -> {
+                    fields.add(sb.toString())
+                    sb.setLength(0)
+                }
+                else -> sb.append(c)
+            }
+            i++
+        }
+        fields.add(sb.toString())
+        return fields
+    }
+
     fun toggleAction(year: Int, actionId: String, currentIsDone: Boolean) {
         viewModelScope.launch {
-            repository.setActionState(year, actionId, !currentIsDone)
+            repository.toggleActionState(year, actionId)
         }
     }
 
@@ -228,7 +254,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetSettingsToDefault() {
         viewModelScope.launch {
-            repository.saveSettings(SettingsEntity())
+            repository.saveSettings(SettingsEntity.freshDefaults())
             setSensitivityOverrides(null, null, null)
             _uiEvent.emit(UiMessage.ShowSnackbar("Reset all settings to default"))
         }
@@ -237,7 +263,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearAllUserData() {
         viewModelScope.launch {
             repository.clearAllData()
-            repository.saveSettings(SettingsEntity())
+            repository.saveSettings(SettingsEntity.freshDefaults())
             setSensitivityOverrides(null, null, null)
             _uiEvent.emit(UiMessage.ShowSnackbar("All user data cleared"))
         }

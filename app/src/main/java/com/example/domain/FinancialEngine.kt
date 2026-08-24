@@ -101,9 +101,8 @@ val DEFAULT_CUSTOM_LIFE_GOALS = listOf(
 )
 
 fun parseCustomLifeGoals(jsonStr: String): List<CustomLifeGoalItem> {
-    if (jsonStr.isBlank() || jsonStr.trim() == "[]") {
-        return DEFAULT_CUSTOM_LIFE_GOALS
-    }
+    if (jsonStr.isBlank()) return DEFAULT_CUSTOM_LIFE_GOALS
+    if (jsonStr.trim() == "[]") return emptyList()
     return try {
         val array = org.json.JSONArray(jsonStr)
         val list = mutableListOf<CustomLifeGoalItem>()
@@ -386,8 +385,39 @@ object FinancialEngine {
     }
 
     fun eleonoraBenefitMonthly(year: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold) return 0.0
-        return if (year < settings.eReturnYear) settings.eParentalAllowanceMonthly else 0.0
+        if (settings.isSingleHousehold || year < settings.baseYear || year >= settings.eReturnYear) return 0.0
+        val rate = settings.eParentalAllowanceMonthly
+        if (rate <= 0.0) return 0.0
+
+        val children = mutableListOf<Pair<Int, Double>>()
+        if (settings.child1Enabled) children.add(settings.child1BirthYear to parentalAllowancePot(settings.child1BirthYear))
+        if (settings.child2Enabled) children.add(settings.child2BirthYear to parentalAllowancePot(settings.child2BirthYear))
+
+        // Each child has their own statutory pot; subtract what was drawn before baseYear.
+        var remaining = 0.0
+        for ((birthYear, pot) in children) {
+            if (birthYear <= settings.baseYear) {
+                remaining += max(0.0, pot - rate * 12.0 * (settings.baseYear - birthYear))
+            }
+        }
+        var paidInYear = 0.0
+        for (y in settings.baseYear..year) {
+            for ((birthYear, pot) in children) {
+                if (birthYear == y) remaining += pot
+            }
+            val pay = min(rate * 12.0, remaining)
+            remaining -= pay
+            paidInYear = pay
+        }
+        return paidInYear / 12.0
+    }
+
+    private fun parentalAllowancePot(birthYear: Int): Double {
+        return if (birthYear >= RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR) {
+            RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF
+        } else {
+            RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF
+        }
     }
 
     fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
@@ -446,7 +476,21 @@ object FinancialEngine {
     }
 
     fun dipTaxSavingYear(settings: SettingsEntity): Double {
-        return annualRetirementDeduction(settings) * (settings.taxRatePct / 100.0)
+        val vDipDeduction = min(settings.dipContributionMonthly * 12.0, settings.taxDeductionCeilingAnnual)
+        val eDipDeduction = if (!settings.isSingleHousehold) {
+            min(settings.eDipContributionMonthly * 12.0, settings.taxDeductionCeilingAnnual)
+        } else 0.0
+        val deduction = vDipDeduction + eDipDeduction
+
+        val taxableBase = vaclavSalaryMonthly(settings.baseYear, settings) * 12.0
+        val threshold = settings.taxSecondBracketThresholdAnnual
+        val baseRate = settings.taxRatePct / 100.0
+        val highRate = settings.taxRateSecondPct / 100.0
+
+        val baseBracketIncome = min(taxableBase, threshold)
+        val baseSaving = min(deduction, baseBracketIncome) * baseRate
+        val highSaving = max(0.0, deduction - baseBracketIncome) * highRate
+        return baseSaving + highSaving
     }
 
     fun childMonthlyExpense(birthYear: Int, currentYear: Int, settings: SettingsEntity): Double {
@@ -490,10 +534,10 @@ object FinancialEngine {
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
         val vaclavInvest = settings.portuDcaMonthly + settings.dpsOwnContributionMonthly +
-                settings.dipContributionMonthly + (min(settings.employerRetirementAnnual, 50000.0) / 12.0)
+                settings.dipContributionMonthly + (min(settings.employerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0)
         val eleonoraInvest = if (!settings.isSingleHousehold) {
             settings.ePortuDcaMonthly + settings.eDpsOwnContributionMonthly +
-                    settings.eDipContributionMonthly + (min(settings.eEmployerRetirementAnnual, 50000.0) / 12.0)
+                    settings.eDipContributionMonthly + (min(settings.eEmployerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0)
         } else 0.0
         return vaclavInvest + eleonoraInvest
     }
@@ -599,14 +643,23 @@ object FinancialEngine {
         // B4 fix: balAt36 respects isSingleHousehold for Eleonora's balance
         val monthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - settings.primaryAge) * 12)
         var balAt36 = settings.dpsBalanceCurrent + eDpsBal  // eDpsBal already 0.0 in single mode
+        var ownContributionsTo36 = 0.0
         if (monthsTo36 in 1..totalMonths) {
             for (m in 0 until monthsTo36) {
                 val currentAge = settings.primaryAge + (m / 12)
                 val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
                 val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
+                ownContributionsTo36 += own
                 balAt36 = (balAt36 + own + subV + subE + emp) * (1.0 + monthlyRateDPS)
             }
         }
+
+        // Statutory 30% withdrawal applies to OWN contributions only (not subsidies/employer/gains),
+        // and requires at least 10 years of saving by age 36 (i.e. started at age 26 or younger).
+        val tenYearRuleMet = settings.primaryAge <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10
+        val earlyWithdrawalLimitAt36 = if (tenYearRuleMet) {
+            ownContributionsTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0)
+        } else 0.0
 
         return DpsProjection(
             yearsTo60 = years,
@@ -617,8 +670,7 @@ object FinancialEngine {
             etfBalance = etfBal,
             margin = dpsBal - etfBal,
             balanceAt36 = balAt36,
-            // B5 fix: statutory 30% withdrawal limit (not 1/3 = 33.3%)
-            earlyWithdrawalLimitAt36 = balAt36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0),
+            earlyWithdrawalLimitAt36 = earlyWithdrawalLimitAt36,
             youthSubsidyActive = settings.primaryAge < settings.dpsYouthAgeLimit
         )
     }
@@ -825,7 +877,11 @@ object FinancialEngine {
                 "inflation_shock" -> 6.0
                 else -> settings.cpiInflationPct
             }
-            val rentGrowth = cpiPct
+            val rentGrowth = when (id) {
+                "stagflation" -> 6.0
+                "inflation_shock" -> 7.0
+                else -> cpiPct
+            }
             val swr = when (id) {
                 "stagflation", "crash" -> 3.5
                 else -> settings.safeWithdrawalRatePct
@@ -1031,7 +1087,10 @@ object FinancialEngine {
                 settings.dipBalanceCurrent + eDip
 
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.01)
-        val realReturnRate = ((settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0).coerceAtLeast(0.001)
+        val nominalFactor = 1.0 + settings.portfolioNominalReturnPct / 100.0
+        val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.01)
+        val realReturnFactor = nominalFactor / inflationFactor
+        val realReturnRate = (realReturnFactor - 1.0).coerceAtLeast(0.001)
         val yearsToRetire = max(1, settings.statePensionAge - settings.primaryAge)
 
         // 1. Coast FIRE
@@ -1139,7 +1198,7 @@ object FinancialEngine {
             currentIncome = currentIncome,
             investMonthlyTotal = investMonthly,
             emergencyCoverageMonths = emergencyMonths,
-            realReturnPct = settings.portfolioNominalReturnPct - settings.cpiInflationPct,
+            realReturnPct = (realReturnFactor - 1.0) * 100.0,
             dps = dps,
             dip = dip,
             taxReturnHelper = taxHelper,

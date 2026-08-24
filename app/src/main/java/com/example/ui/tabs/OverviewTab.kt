@@ -55,12 +55,14 @@ import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.components.KpiCard
 import com.example.ui.components.NetWorthChart
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtPct
 
 import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.MetricInfo
@@ -171,7 +173,7 @@ fun OverviewTab(
         ) {
             KpiCard(
                 title = "Projected FIRE Age",
-                value = firePoint?.let { "Age ${it.age}" } ?: "Age >60",
+                value = firePoint?.let { "Age ${it.age}" } ?: "Age ${state.settings.primaryAge + 35}+",
                 hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f),
@@ -273,7 +275,7 @@ fun OverviewTab(
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
                             onClick = { isActionBannerExpanded = !isActionBannerExpanded },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = if (isActionBannerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -398,13 +400,14 @@ fun OverviewTab(
                 SummaryRow(
                     label = "Monthly surplus",
                     value = fmtCZK(surplusVal),
+                    valueColor = if (surplusVal < 0) BadRed else GoodGreen,
                     info = surplusInfo,
                     onShowInfo = { infoState.show(it) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SummaryRow(
                     label = "Monthly savings rate",
-                    value = String.format("%.1f%%", state.savingsRatePct),
+                    value = fmtPct(state.savingsRatePct, 1),
                     info = MetricInfo(
                         title = "Monthly Savings Rate",
                         category = "Wealth Accumulation Velocity",
@@ -440,7 +443,8 @@ private fun SummaryRow(
     label: String,
     value: String,
     info: MetricInfo? = null,
-    onShowInfo: ((MetricInfo) -> Unit)? = null
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
+    valueColor: androidx.compose.ui.graphics.Color = BrandTeal
 ) {
     val clickModifier = if (info != null && onShowInfo != null) {
         Modifier
@@ -477,7 +481,7 @@ private fun SummaryRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            color = BrandTeal,
+            color = valueColor,
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
             modifier = Modifier.weight(1f)
         )

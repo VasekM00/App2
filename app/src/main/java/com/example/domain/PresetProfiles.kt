@@ -36,7 +36,7 @@ object PresetProfiles {
             vSalary = 65000.0,
             vBonusAnnual = 30000.0,
             vMealVouchersMonthly = 2200.0,
-            eReturnYear = 2099, // Inactive
+            eReturnYear = 2029,
             eStartingSalary = 0.0,
             eBonusAnnual = 0.0,
             eSalaryGrowthPct = 0.0,
@@ -78,11 +78,12 @@ object PresetProfiles {
         badge = "REFORM FOCUS",
         iconEmoji = "",
         settings = SettingsEntity(
+            isSingleHousehold = true,
             primaryAge = 24,
             vSalary = 38000.0,
             vBonusAnnual = 15000.0,
             vMealVouchersMonthly = 1800.0,
-            eReturnYear = 2099,
+            eReturnYear = 2029,
             eIncludeLecturing = false,
             familyGiftMonthly = 0.0,
             lumpSumInclude = false,

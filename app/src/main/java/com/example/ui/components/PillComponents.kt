@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -98,98 +97,6 @@ fun ColorPill(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-    }
-}
-
-/**
- * Full modern section header featuring a colored category pill tag,
- * crisp title, optional icon, optional subtitle, and optional trailing content.
- */
-@Composable
-fun SectionHeaderPill(
-    title: String,
-    modifier: Modifier = Modifier,
-    categoryPill: String? = null,
-    subtitle: String? = null,
-    icon: ImageVector? = null,
-    iconEmoji: String? = null,
-    accentColor: Color = BrandTeal,
-    trailingContent: @Composable (() -> Unit)? = null
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        if (categoryPill != null) {
-            ColorPill(
-                text = categoryPill.uppercase(),
-                color = accentColor,
-                icon = icon,
-                iconEmoji = iconEmoji,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                horizontalPadding = 7.dp,
-                verticalPadding = 2.5.dp,
-                cornerRadius = 6.dp
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f, fill = false)
-            ) {
-                if (categoryPill == null && (icon != null || iconEmoji != null)) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (iconEmoji != null) {
-                            Text(text = iconEmoji, fontSize = 14.sp)
-                        } else if (icon != null) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = accentColor,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    )
-                    if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.5.sp
-                            )
-                        )
-                    }
-                }
-            }
-
-            if (trailingContent != null) {
-                Spacer(modifier = Modifier.width(8.dp))
-                trailingContent()
-            }
         }
     }
 }

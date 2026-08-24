@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -53,7 +53,7 @@ class RuntimePermissionInstrumentedTest {
      *  - Inaccessible/invalid Uri is handled gracefully without crashing, emitting an error notification.
      */
     @Test
-    fun testCsvImportPermissionHandlingAndUriReading() = runTest {
+    fun testCsvImportPermissionHandlingAndUriReading() = runBlocking {
         // 1. Prepare a valid CSV file in the app's cache directory
         tempCsvFile = File(application.cacheDir, "test_ledger_import_${System.currentTimeMillis()}.csv").apply {
             writeText(
@@ -91,9 +91,10 @@ class RuntimePermissionInstrumentedTest {
         assertTrue("Expected successful CSV import message to be emitted", successMessageEmitted)
 
         // Verify entries were saved in the database
-        val entries = viewModel.ledgerEntries.first { it.isNotEmpty() }
-        assertTrue("Expected imported entries in ledger", entries.any { it.yearMonth == "2026-04" })
-        assertTrue("Expected imported entries in ledger", entries.any { it.yearMonth == "2026-05" })
+        val entries = withTimeoutOrNull(5000) { viewModel.ledgerEntries.first { it.isNotEmpty() } }
+        assertNotNull("Expected imported entries in ledger", entries)
+        assertTrue("Expected imported entries in ledger", entries?.any { it.yearMonth == "2026-04" } == true)
+        assertTrue("Expected imported entries in ledger", entries?.any { it.yearMonth == "2026-05" } == true)
 
         // 2. Test reading an invalid / inaccessible Uri without crash
         emittedMessages.clear()
@@ -118,7 +119,7 @@ class RuntimePermissionInstrumentedTest {
      * Validates that UI event streams correctly emit expected snackbar messages for all core user actions.
      */
     @Test
-    fun testNotificationAndSnackbarFlowValidation() = runTest {
+    fun testNotificationAndSnackbarFlowValidation() = runBlocking {
         val emittedMessages = mutableListOf<String>()
         val collectJob = launch(Dispatchers.IO) {
             viewModel.uiEvent.collect { event ->

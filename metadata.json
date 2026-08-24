@@ -2,5 +2,5 @@
   "name": "Personal Finance Tracker",
   "description": "Personal Finance Tracker & FIRE planning app in the Czech Republic, featuring Czech tax optimization, Lepší penzijko reform calculations, cash-flow tracking, and Monte Carlo projections.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

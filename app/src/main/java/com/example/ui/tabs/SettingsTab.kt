@@ -228,9 +228,12 @@ fun SettingsTab(
                             NumberSettingField(
                                 label = "Base Planning Year",
                                 value = s.baseYear.toDouble(),
+                                minValue = 2000.0,
+                                maxValue = 2200.0,
                                 onValueChange = { yr ->
                                     val y = yr.toInt()
-                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = y - birthYear))
+                                    val newAge = (y - birthYear).coerceIn(15, 80)
+                                    onUpdateSettings(s.copy(baseYear = birthYear + newAge, primaryAge = newAge))
                                 }
                             )
                             NumberSettingField(
@@ -242,6 +245,8 @@ fun SettingsTab(
                             NumberSettingField(
                                 label = "Expected CPI Inflation (%)",
                                 value = s.cpiInflationPct,
+                                minValue = 0.0,
+                                maxValue = 20.0,
                                 onValueChange = { onUpdateSettings(s.copy(cpiInflationPct = it)) }
                             )
                         }
@@ -278,7 +283,7 @@ fun SettingsTab(
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                             )
                             NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                            NumberSettingField(label = "Future Starting Salary (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
+                            NumberSettingField(label = "Future Starting Salary Net (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
                             NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
                             NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
                             NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
@@ -348,7 +353,7 @@ fun SettingsTab(
                                                             val updated = customLumpSums.filter { it.id != item.id }
                                                             onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
                                                         },
-                                                        modifier = Modifier.size(32.dp)
+                                                        modifier = Modifier.size(48.dp)
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
@@ -645,15 +650,15 @@ fun SettingsTab(
                             badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
                             badgeColor = BrandTeal
                         ) {
-                            NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
+                            NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.0, maxValue = 10.0, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
                             NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                             NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
                             NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) })
-                            NumberSettingField(label = "DPS Annual Management Fee (%, cap 0.5%)", value = s.dpsAnnualFeePct, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
+                            NumberSettingField(label = "DPS Annual Management Fee (%, cap 0.5%)", value = s.dpsAnnualFeePct, minValue = 0.0, maxValue = 5.0, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
                             NumberSettingField(label = "Manual FIRE Target Override (CZK, 0 = auto)", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
                             NumberSettingField(label = "Lifestyle Cost at FIRE (CZK/mo)", value = s.lifestyleCostAtFireMonthly, onValueChange = { onUpdateSettings(s.copy(lifestyleCostAtFireMonthly = it)) })
                             NumberSettingField(label = "State Pension Monthly (CZK)", value = s.statePensionMonthly, onValueChange = { onUpdateSettings(s.copy(statePensionMonthly = it)) })
-                            NumberSettingField(label = "State Pension Age", value = s.statePensionAge.toDouble(), onValueChange = { onUpdateSettings(s.copy(statePensionAge = it.toInt())) })
+                            NumberSettingField(label = "State Pension Age", value = s.statePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(statePensionAge = it.toInt())) })
                         }
                     }
 
@@ -728,7 +733,7 @@ fun SettingsTab(
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(text = "Monte Carlo Stochastic Risk Engine", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                             NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
-                            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
+                            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 100.0, maxValue = 400.0, onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
                         }
                     }
                 }
@@ -807,6 +812,9 @@ fun SettingsTab(
                                         val json = BackupManager.serializeSettingsToJson(s)
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         val clip = ClipData.newPlainText("FIRE Settings JSON", json)
+                                        clip.description.extras = android.os.PersistableBundle().apply {
+                                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                        }
                                         clipboard.setPrimaryClip(clip)
                                         Toast.makeText(context, "Settings JSON copied to clipboard", Toast.LENGTH_SHORT).show()
                                     },
@@ -845,10 +853,13 @@ fun SettingsTab(
                                         appendLine("• Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
                                         appendLine("• FIRE Target: ${fmtCZK(state.fireBaseTargetToday)} (${fmtPct(s.safeWithdrawalRatePct)} SWR)")
                                         appendLine("• Dual FIRE ETA: ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
-                                        appendLine("• Emergency Reserve: ${fmtCZK(s.emergencyReserveCurrent)} (${String.format("%.1f", state.emergencyCoverageMonths)} months)")
+                                        appendLine("• Emergency Reserve: ${fmtCZK(s.emergencyReserveCurrent)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
                                     }
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     val clip = ClipData.newPlainText("Financial Summary", summary)
+                                    clip.description.extras = android.os.PersistableBundle().apply {
+                                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                    }
                                     clipboard.setPrimaryClip(clip)
                                     Toast.makeText(context, "Summary copied to clipboard", Toast.LENGTH_SHORT).show()
                                 },
@@ -1238,7 +1249,9 @@ private fun NumberSettingField(
     onValueChange: (Double) -> Unit,
     testTagStr: String = "",
     onDelete: (() -> Unit)? = null,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    minValue: Double = 0.0,
+    maxValue: Double? = null
 ) {
     fun formatVal(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
@@ -1250,8 +1263,11 @@ private fun NumberSettingField(
         if (readOnly) return
         val sanitized = textValue.replace(',', '.').trim()
         val parsed = if (sanitized.isEmpty()) 0.0 else sanitized.toDoubleOrNull()
-        if (parsed != null && parsed != value) {
-            onValueChange(parsed)
+        if (parsed != null) {
+            val clamped = parsed.coerceIn(minValue, maxValue ?: parsed)
+            if (clamped != value) {
+                onValueChange(clamped)
+            }
         }
     }
 

@@ -79,4 +79,12 @@ object RegulatoryConstants {
     // --- ČSÚ Live CPI Benchmark (default for fresh installs; overwritten by Live Sync) ---
     // Meziroční inflace dle ČSÚ pro rok 2025/2026 (aktualizováno při Live Sync)
     const val DEFAULT_CPI_BENCHMARK_PCT = 2.8
+
+    // --- Rodičovský příspěvek (zákon č. 117/1995 Sb., o státní sociální podpoře) ---
+    // Celková částka je určena na každé narozené dítě podle data narození:
+    // - narozené před 1. 1. 2027: 350 000 Kč
+    // - narozené od 1. 1. 2027: 400 000 Kč
+    const val PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF = 350000.0
+    const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 400000.0
+    const val PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR = 2027
 }

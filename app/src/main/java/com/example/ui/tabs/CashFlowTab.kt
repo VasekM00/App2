@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -82,6 +83,7 @@ import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import java.util.Locale
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.ui.components.CashFlowProjectionChart
 import kotlin.math.abs
@@ -89,15 +91,23 @@ import kotlin.math.abs
 fun nextYearMonth(ym: String): String {
     val parts = ym.split("-")
     if (parts.size == 2) {
-        val y = parts[0].toIntOrNull() ?: 2026
-        val m = parts[1].toIntOrNull() ?: 8
-        return if (m >= 12) {
-            "${y + 1}-01"
-        } else {
-            String.format("%04d-%02d", y, m + 1)
+        val y = parts[0].toIntOrNull()
+        val m = parts[1].toIntOrNull()
+        if (y != null && m != null && m in 1..12) {
+            return if (m >= 12) {
+                String.format(Locale.ROOT, "%04d-%02d", y + 1, 1)
+            } else {
+                String.format(Locale.ROOT, "%04d-%02d", y, m + 1)
+            }
         }
     }
-    return "2026-09"
+    val now = java.util.Calendar.getInstance()
+    return String.format(
+        Locale.ROOT,
+        "%04d-%02d",
+        now.get(java.util.Calendar.YEAR),
+        now.get(java.util.Calendar.MONTH) + 1
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -605,27 +615,27 @@ private fun LedgerCard(
                     IconButton(
                         onClick = onDuplicate,
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(48.dp)
                             .testTag("duplicate_ledger_entry_${entry.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Duplicate This Month",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(
                         onClick = { showDeleteDialog = true },
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(48.dp)
                             .testTag("delete_ledger_entry_${entry.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Ledger Entry",
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -666,7 +676,11 @@ private fun LedgerCard(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Icon(
-                            imageVector = if (expDiff > 50) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                            imageVector = when {
+                                expDiff > 50 -> Icons.AutoMirrored.Filled.TrendingUp
+                                expDiff < -50 -> Icons.AutoMirrored.Filled.TrendingDown
+                                else -> Icons.Filled.Check
+                            },
                             contentDescription = null,
                             tint = expBadgeColor,
                             modifier = Modifier.size(12.dp)
@@ -736,7 +750,7 @@ private fun AddLedgerEntryDialog(
         initialEntry.yearMonth
     } else {
         val latest = entries.maxByOrNull { it.yearMonth }
-        if (latest != null) nextYearMonth(latest.yearMonth) else "${state.settings.baseYear}-08"
+        if (latest != null) nextYearMonth(latest.yearMonth) else nextYearMonth("")
     }
 
     var ym by remember { mutableStateOf(defaultYm) }
@@ -1360,10 +1374,10 @@ private fun SummarySubTab(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 val s = state.settings
-                IncomeRow(label = "Portu / Stock ETFs (${s.primaryName})", value = fmtCZK(s.portuDcaMonthly))
+                IncomeRow(label = "Brokerage / ETF (${s.primaryName})", value = fmtCZK(s.portuDcaMonthly))
                 if (!s.isSingleHousehold && s.ePortuDcaMonthly > 0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Portu / Stock ETFs (Eleonora)", value = fmtCZK(s.ePortuDcaMonthly))
+                    IncomeRow(label = "Brokerage / ETF (${s.spouseName})", value = fmtCZK(s.ePortuDcaMonthly))
                 }
                 if (s.dpsOwnContributionMonthly > 0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

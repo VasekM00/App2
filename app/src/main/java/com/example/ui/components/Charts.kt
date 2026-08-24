@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,7 +102,11 @@ fun NetWorthChart(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("net_worth_chart_card"),
+            .testTag("net_worth_chart_card")
+            .semantics {
+                contentDescription =
+                    "Net worth trajectory chart showing projected portfolio growth and FIRE target over ${data.size} years."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -466,7 +472,11 @@ fun MonteCarloFanChart(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("monte_carlo_chart_card"),
+            .testTag("monte_carlo_chart_card")
+            .semantics {
+                contentDescription =
+                    "Monte Carlo simulation fan chart showing the 5th, 50th and 95th percentile portfolio outcomes and the FIRE target over ${points.size} years."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -723,7 +733,10 @@ fun CashFlowProjectionChart(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("cashflow_chart_card"),
+            .testTag("cashflow_chart_card")
+            .semantics {
+                contentDescription = "Cash flow projection chart comparing monthly income and expenses over the planning horizon."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -971,7 +984,10 @@ fun StressComparisonChart(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("stress_comparison_chart_card"),
+            .testTag("stress_comparison_chart_card")
+            .semantics {
+                contentDescription = "Stress scenario comparison chart showing portfolio trajectories under baseline, bull, stagflation, crash and high inflation regimes."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

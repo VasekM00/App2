@@ -1,11 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Financial data is user-sensitive: the Room database is excluded from cloud backup.
+   Device transfer intentionally includes the database so users keep their data
+   when migrating to a new phone.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
+        <include domain="database" path="."/>
         <exclude domain="database" path="martinu_financials_db"/>
         <exclude domain="database" path="martinu_financials_db-wal"/>
         <exclude domain="database" path="martinu_financials_db-shm"/>

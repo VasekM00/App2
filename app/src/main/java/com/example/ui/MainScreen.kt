@@ -146,7 +146,7 @@ fun MainScreen(
             SearchIndexEntry("Vaclav & Eleonora Salaries, Raises & Bonuses", "Cash Flow > Budget & Incomes", 1, 0, listOf("income", "salary", "bonus", "raise", "vaclav", "eleonora", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
             SearchIndexEntry("Living Expenses, Rent & Groceries", "Cash Flow > Budget & Incomes", 1, 0, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
             SearchIndexEntry("Historical Ledger Records & CSV Import", "Cash Flow > Monthly Records & Ledger", 1, 1, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
-            SearchIndexEntry("FIRE Target, SWR & 35-Year Trajectory", "Projections > 35y Trajectory", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory")),
+            SearchIndexEntry("FIRE Target, SWR & 35-Year Trajectory", "Projections > Trajectory", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory")),
             SearchIndexEntry("What-If Live Sandbox & Investment Balances", "Projections > What-If Sandbox", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders")),
             SearchIndexEntry("Monte Carlo Multi-Run Simulation & Macro Stress Scenarios", "Projections > Monte Carlo & Stress", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
             SearchIndexEntry("Czech Tax & Pension Regulations, DPS & DIP Tax Shield", "Strategy > Czech Tax & Pension", 3, 0, listOf("pension", "dps", "dip", "tax", "statutory", "youth", "40%", "tax shield", "deduction", "employer match", "early withdrawal")),
@@ -154,8 +154,8 @@ fun MainScreen(
             SearchIndexEntry("Base Year, Inflation & Household Settings", "Settings > Cashflow & Family", 4, 0, listOf("base year", "cpi", "inflation", "birth year", "settings", "general", "macro", "profile")),
             SearchIndexEntry("Salary, Raise & Bonus Parameters", "Settings > Cashflow & Family", 4, 0, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings")),
             SearchIndexEntry("Expense Categories & Custom Budgets", "Settings > Cashflow & Family", 4, 0, listOf("expense settings", "custom category", "delete category", "add category", "rent setting", "groceries setting")),
-            SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "Settings > FIRE & Investments", 4, 1, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings", "swr", "balances")),
-            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > FIRE & Investments", 4, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "eleonora tax relief", "child tax credit", "czech tax")),
+            SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "Settings > FIRE & Assets", 4, 1, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings", "swr", "balances")),
+            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > FIRE & Assets", 4, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "eleonora tax relief", "child tax credit", "czech tax")),
             SearchIndexEntry("Preset Profiles, CSV Export & Data Management", "Settings > Data & System", 4, 2, listOf("presets", "backup", "restore", "reset", "clear data", "export csv", "import csv", "data"))
         )
     }
@@ -356,7 +356,6 @@ fun MainScreen(
                             )
                             2 -> ProjectionsTab(
                                 state = state,
-                                onSensitivityChange = { r, c, s -> viewModel.setSensitivityOverrides(r, c, s) },
                                 onApplySettings = { viewModel.updateSettings(it) },
                                 initialSubTab = targetProjectionsSubTab
                             )

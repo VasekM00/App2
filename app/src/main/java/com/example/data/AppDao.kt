@@ -24,6 +24,9 @@ interface LedgerDao {
     @Query("SELECT * FROM ledger_entries ORDER BY yearMonth DESC")
     fun getAllEntries(): Flow<List<LedgerEntryEntity>>
 
+    @Query("SELECT yearMonth FROM ledger_entries")
+    suspend fun getAllYearMonths(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEntry(entry: LedgerEntryEntity)
 
@@ -47,6 +50,9 @@ interface ActionStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveActionState(state: ActionStateEntity)
+
+    @Query("UPDATE action_states SET isDone = NOT isDone WHERE actionKey = :key")
+    suspend fun toggleActionState(key: String)
 
     @Query("DELETE FROM action_states")
     suspend fun deleteAllActionStates()

@@ -11,7 +11,7 @@ class FinancialRepository(
     private val actionStateDao: ActionStateDao
 ) {
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
-        .map { it ?: SettingsEntity() }
+        .map { it ?: SettingsEntity.freshDefaults() }
 
     val ledgerFlow: Flow<List<LedgerEntryEntity>> = ledgerDao.getAllEntries()
 
@@ -34,6 +34,10 @@ class FinancialRepository(
         ledgerDao.insertEntries(entries)
     }
 
+    suspend fun existingYearMonths(): Set<String> = withContext(Dispatchers.IO) {
+        ledgerDao.getAllYearMonths().toSet()
+    }
+
     suspend fun deleteLedgerEntry(id: Long) = withContext(Dispatchers.IO) {
         ledgerDao.deleteEntry(id)
     }
@@ -41,6 +45,10 @@ class FinancialRepository(
     suspend fun setActionState(year: Int, actionId: String, isDone: Boolean) = withContext(Dispatchers.IO) {
         val key = "${year}_$actionId"
         actionStateDao.saveActionState(ActionStateEntity(key, year, actionId, isDone))
+    }
+
+    suspend fun toggleActionState(year: Int, actionId: String) = withContext(Dispatchers.IO) {
+        actionStateDao.toggleActionState("${year}_$actionId")
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {

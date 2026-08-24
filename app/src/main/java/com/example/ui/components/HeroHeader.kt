@@ -74,19 +74,11 @@ fun HeroHeader(
                 .fillMaxWidth()
                 .background(
                     brush = Brush.linearGradient(
-                        colors = if (isDarkTheme) {
-                            listOf(
-                                Color(0xFF0F172A),
-                                Color(0xFF1E293B),
-                                Color(0xFF0F172A)
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF090D16),
-                                Color(0xFF1E293B),
-                                Color(0xFF0F172A)
-                            )
-                        }
+                        colors = listOf(
+                            Color(0xFF0F172A),
+                            Color(0xFF1E293B),
+                            Color(0xFF0F172A)
+                        )
                     )
                 )
         ) {

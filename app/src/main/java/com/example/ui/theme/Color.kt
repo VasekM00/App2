@@ -6,7 +6,10 @@ import androidx.compose.ui.graphics.Color
 
 // Clean Premium Minimalist Theme Palette (Adaptive)
 val BrandTeal: Color
-    @Composable get() = MaterialTheme.colorScheme.primary
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BrandTealDark else BrandTealLight
+
+val BrandTealLight = Color(0xFF0F766E) // Teal 700 (high contrast on light surface)
+val BrandTealDark = Color(0xFF2DD4BF) // Teal 400 (bright accent on dark surface)
 
 val BrandGoldLight = Color(0xFFD97706) // Rich Warm Amber (high contrast on white light mode)
 val BrandGoldDarkTheme = Color(0xFFFBBF24) // Radiant Warm Gold (high contrast on dark mode)

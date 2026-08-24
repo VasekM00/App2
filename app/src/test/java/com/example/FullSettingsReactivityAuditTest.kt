@@ -86,7 +86,7 @@ class FullSettingsReactivityAuditTest {
     @Test
     fun `assert reactivity of Secondary Income Streams - Parental Allowance, Lecturing, Family Gift, Lump Sum`() {
         // eParentalAllowanceMonthly
-        val parentalState = FinancialEngine.calculate(base.copy(eParentalAllowanceMonthly = 20000.0))
+        val parentalState = FinancialEngine.calculate(base.copy(eParentalAllowanceMonthly = 20000.0, child1BirthYear = base.baseYear))
         assertEquals(20000.0, parentalState.currentIncome.benefit, 0.001)
 
         // eLecturingMonthly
@@ -275,8 +275,8 @@ class FullSettingsReactivityAuditTest {
         val withoutChildExpenses = FinancialEngine.totalLivingCostMonthly(base.copy(childExpensesEnabled = false), 2026)
         assertEquals(withChildExpenses - base.childToddlerMonthly, withoutChildExpenses, 0.001)
 
-        // child1Enabled & child2Enabled toggles (both born at base year)
-        val stateBothChildren = FinancialEngine.calculate(base.copy(child1Enabled = true, child2Enabled = true, child2BirthYear = 2025))
+        // child1Enabled & child2Enabled toggles
+        val stateBothChildren = FinancialEngine.calculate(base.copy(child1Enabled = true, child2Enabled = true, child2BirthYear = base.baseYear))
         val stateOneChild = FinancialEngine.calculate(base.copy(child1Enabled = true, child2Enabled = false))
         val stateNoChildren = FinancialEngine.calculate(base.copy(child1Enabled = false, child2Enabled = false))
         assertEquals(base.child1TaxBonusAnnual + base.child2TaxBonusAnnual, stateBothChildren.taxReturnHelper.childBonus, 0.001)
@@ -304,11 +304,11 @@ class FullSettingsReactivityAuditTest {
         assertEquals(16000.0, FinancialEngine.childMonthlyExpense(2024, 2040, customChildSettings), 0.001) // Teen
         assertEquals(14000.0, FinancialEngine.childMonthlyExpense(2024, 2045, customChildSettings), 0.001) // Uni
 
-        // Custom Tax Bonuses (both born)
+        // Custom Tax Bonuses
         val customBonusSettings = base.copy(
             child1TaxBonusAnnual = 18000.0,
             child2TaxBonusAnnual = 26000.0,
-            child2BirthYear = 2025
+            child2BirthYear = base.baseYear
         )
         val customBonusState = FinancialEngine.calculate(customBonusSettings)
         assertEquals(18000.0 + 26000.0, customBonusState.taxReturnHelper.childBonus, 0.001)
