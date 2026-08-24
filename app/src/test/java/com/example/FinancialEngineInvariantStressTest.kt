@@ -179,17 +179,13 @@ class FinancialEngineInvariantStressTest {
     }
 
     @Test
-    fun test1_16_FIREMilestoneOrdering() {
-        val settings = SettingsEntity()
-        val result = FinancialEngine.calculate(settings, runMonteCarlo = false)
-        val coast = result.fireMilestones.coastFire.targetAmountToday
-        val lean = result.fireMilestones.leanFire.targetAmountToday
-        val standard = result.fireMilestones.standardFire.targetAmountToday
-        val fat = result.fireMilestones.fatFire.targetAmountToday
-        
-        assertTrue("coast <= lean", coast <= lean)
-        assertTrue("lean <= standard", lean <= standard)
-        assertTrue("standard <= fat", standard <= fat)
+    fun test1_16_MilestoneOrdering() {
+        val s = SettingsEntity()
+        val result = FinancialEngine.calculate(s, runMonteCarlo = false)
+        val ms = result.fireMilestones
+        assertTrue(ms.coastFire.targetAmountToday <= ms.leanFire.targetAmountToday)
+        assertTrue(ms.leanFire.targetAmountToday <= ms.standardFire.targetAmountToday)
+        assertTrue(ms.standardFire.targetAmountToday <= ms.fatFire.targetAmountToday)
     }
 
     @Test
