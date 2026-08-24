@@ -103,7 +103,7 @@ fun OverviewTab(
         title = "Base FIRE Target Capital",
         category = "Retirement Actuarial Target",
         formulaOrRule = "Target = (Annual Living Burn - State Pension) / SWR + Bridge Deficit",
-        explanation = "Calculated in today's constant purchasing power (real CZK). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at age 65.",
+        explanation = "Calculated in today's constant purchasing power (real CZK). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at age ${state.settings.statePensionAge}.",
         statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act)",
         practicalImplication = "Every 1,000 CZK/month reduction in permanent baseline living expenses reduces required FIRE capital by ~342,000 CZK at a 3.5% SWR.",
         accentColor = BrandGold
