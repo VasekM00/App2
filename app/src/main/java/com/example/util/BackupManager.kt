@@ -16,13 +16,11 @@ object BackupManager {
         
         // Income & Work
         json.put("vSalary", s.vSalary)
-        json.put("vBonusAnnual", s.vBonusAnnual)
         json.put("vMealVouchersMonthly", s.vMealVouchersMonthly)
         json.put("vOtherInflowsMonthly", s.vOtherInflowsMonthly)
         json.put("eReturnYear", s.eReturnYear)
         json.put("eReturnMonth", s.eReturnMonth)
         json.put("eStartingSalary", s.eStartingSalary)
-        json.put("eBonusAnnual", s.eBonusAnnual)
         json.put("eSalaryGrowthPct", s.eSalaryGrowthPct)
         json.put("eReinvestedPct", s.eReinvestedPct)
         json.put("eParentalAllowanceMonthly", s.eParentalAllowanceMonthly)
@@ -30,7 +28,6 @@ object BackupManager {
         json.put("eIncludeLecturing", s.eIncludeLecturing)
         json.put("eOtherInflowsMonthly", s.eOtherInflowsMonthly)
         json.put("familyGiftMonthly", s.familyGiftMonthly)
-        json.put("annualOtherGifts", s.annualOtherGifts)
         json.put("lumpSumYear", s.lumpSumYear)
         json.put("lumpSumAmount", s.lumpSumAmount)
         json.put("lumpSumInclude", s.lumpSumInclude)
@@ -49,11 +46,11 @@ object BackupManager {
         json.put("portuDcaMonthly", s.portuDcaMonthly)
         json.put("dpsOwnContributionMonthly", s.dpsOwnContributionMonthly)
         json.put("dipContributionMonthly", s.dipContributionMonthly)
-        json.put("employerRetirementAnnual", s.employerRetirementAnnual)
+        json.put("employerRetirementMonthly", s.employerRetirementMonthly)
         json.put("ePortuDcaMonthly", s.ePortuDcaMonthly)
         json.put("eDpsOwnContributionMonthly", s.eDpsOwnContributionMonthly)
         json.put("eDipContributionMonthly", s.eDipContributionMonthly)
-        json.put("eEmployerRetirementAnnual", s.eEmployerRetirementAnnual)
+        json.put("eEmployerRetirementMonthly", s.eEmployerRetirementMonthly)
 
         // Core Assumptions & FIRE Targets
         json.put("portfolioNominalReturnPct", s.portfolioNominalReturnPct)
@@ -62,7 +59,8 @@ object BackupManager {
         json.put("safetyBufferPct", s.safetyBufferPct)
         json.put("fireTargetOverride", s.fireTargetOverride)
         json.put("statePensionAge", s.statePensionAge)
-        json.put("statePensionMonthly", s.statePensionMonthly)
+        json.put("vStatePensionMonthly", s.vStatePensionMonthly)
+        json.put("eStatePensionMonthly", s.eStatePensionMonthly)
         json.put("lifestyleCostAtFireMonthly", s.lifestyleCostAtFireMonthly)
 
         // Living Expenses
@@ -139,13 +137,11 @@ object BackupManager {
                 dcaAnnualGrowthPct = json.optDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
                 vSalary = json.optDouble("vSalary", fallback.vSalary),
-                vBonusAnnual = json.optDouble("vBonusAnnual", fallback.vBonusAnnual),
                 vMealVouchersMonthly = json.optDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
                 vOtherInflowsMonthly = json.optDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),
                 eReturnYear = json.optInt("eReturnYear", fallback.eReturnYear),
                 eReturnMonth = json.optInt("eReturnMonth", fallback.eReturnMonth),
                 eStartingSalary = json.optDouble("eStartingSalary", fallback.eStartingSalary),
-                eBonusAnnual = json.optDouble("eBonusAnnual", fallback.eBonusAnnual),
                 eSalaryGrowthPct = json.optDouble("eSalaryGrowthPct", fallback.eSalaryGrowthPct),
                 eReinvestedPct = json.optDouble("eReinvestedPct", fallback.eReinvestedPct),
                 eParentalAllowanceMonthly = json.optDouble("eParentalAllowanceMonthly", fallback.eParentalAllowanceMonthly),
@@ -153,7 +149,6 @@ object BackupManager {
                 eIncludeLecturing = json.optBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
                 eOtherInflowsMonthly = json.optDouble("eOtherInflowsMonthly", fallback.eOtherInflowsMonthly),
                 familyGiftMonthly = json.optDouble("familyGiftMonthly", fallback.familyGiftMonthly),
-                annualOtherGifts = json.optDouble("annualOtherGifts", fallback.annualOtherGifts),
                 lumpSumYear = json.optInt("lumpSumYear", fallback.lumpSumYear),
                 lumpSumAmount = json.optDouble("lumpSumAmount", fallback.lumpSumAmount),
                 lumpSumInclude = json.optBoolean("lumpSumInclude", fallback.lumpSumInclude),
@@ -170,11 +165,11 @@ object BackupManager {
                 portuDcaMonthly = json.optDouble("portuDcaMonthly", fallback.portuDcaMonthly),
                 dpsOwnContributionMonthly = json.optDouble("dpsOwnContributionMonthly", fallback.dpsOwnContributionMonthly),
                 dipContributionMonthly = json.optDouble("dipContributionMonthly", fallback.dipContributionMonthly),
-                employerRetirementAnnual = json.optDouble("employerRetirementAnnual", fallback.employerRetirementAnnual),
+                employerRetirementMonthly = json.optDouble("employerRetirementMonthly", fallback.employerRetirementMonthly),
                 ePortuDcaMonthly = json.optDouble("ePortuDcaMonthly", fallback.ePortuDcaMonthly),
                 eDpsOwnContributionMonthly = json.optDouble("eDpsOwnContributionMonthly", fallback.eDpsOwnContributionMonthly),
                 eDipContributionMonthly = json.optDouble("eDipContributionMonthly", fallback.eDipContributionMonthly),
-                eEmployerRetirementAnnual = json.optDouble("eEmployerRetirementAnnual", fallback.eEmployerRetirementAnnual),
+                eEmployerRetirementMonthly = json.optDouble("eEmployerRetirementMonthly", fallback.eEmployerRetirementMonthly),
 
                 portfolioNominalReturnPct = json.optDouble("portfolioNominalReturnPct", fallback.portfolioNominalReturnPct),
                 cpiInflationPct = json.optDouble("cpiInflationPct", fallback.cpiInflationPct),
@@ -182,7 +177,8 @@ object BackupManager {
                 safetyBufferPct = json.optDouble("safetyBufferPct", fallback.safetyBufferPct),
                 fireTargetOverride = json.optDouble("fireTargetOverride", fallback.fireTargetOverride),
                 statePensionAge = json.optInt("statePensionAge", fallback.statePensionAge),
-                statePensionMonthly = json.optDouble("statePensionMonthly", fallback.statePensionMonthly),
+                vStatePensionMonthly = json.optDouble("vStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly)),
+                eStatePensionMonthly = json.optDouble("eStatePensionMonthly", fallback.eStatePensionMonthly),
                 lifestyleCostAtFireMonthly = json.optDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
 
                 rentMonthly = json.optDouble("rentMonthly", fallback.rentMonthly),
@@ -253,8 +249,8 @@ object BackupManager {
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
         return s.copy(
+            primaryAge = if (s.primaryAge in 15..80) s.primaryAge else f.primaryAge,
             baseYear = year(s.baseYear, f.baseYear),
-            primaryAge = if (s.primaryAge in 15..90) s.primaryAge else f.primaryAge,
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
             eReturnMonth = if (s.eReturnMonth in 1..12) s.eReturnMonth else f.eReturnMonth,
             lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
@@ -264,18 +260,15 @@ object BackupManager {
             dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
             monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
             vSalary = money(s.vSalary, f.vSalary),
-            vBonusAnnual = money(s.vBonusAnnual, f.vBonusAnnual),
             vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
             vOtherInflowsMonthly = money(s.vOtherInflowsMonthly, f.vOtherInflowsMonthly),
             eStartingSalary = money(s.eStartingSalary, f.eStartingSalary),
-            eBonusAnnual = money(s.eBonusAnnual, f.eBonusAnnual),
             eSalaryGrowthPct = pct(s.eSalaryGrowthPct, f.eSalaryGrowthPct),
             eReinvestedPct = pct(s.eReinvestedPct, f.eReinvestedPct),
             eParentalAllowanceMonthly = money(s.eParentalAllowanceMonthly, f.eParentalAllowanceMonthly),
             eLecturingMonthly = money(s.eLecturingMonthly, f.eLecturingMonthly),
             eOtherInflowsMonthly = money(s.eOtherInflowsMonthly, f.eOtherInflowsMonthly),
             familyGiftMonthly = money(s.familyGiftMonthly, f.familyGiftMonthly),
-            annualOtherGifts = money(s.annualOtherGifts, f.annualOtherGifts),
             lumpSumAmount = money(s.lumpSumAmount, f.lumpSumAmount),
             liquidPortfolioCurrent = money(s.liquidPortfolioCurrent, f.liquidPortfolioCurrent),
             dpsBalanceCurrent = money(s.dpsBalanceCurrent, f.dpsBalanceCurrent),
@@ -288,11 +281,11 @@ object BackupManager {
             portuDcaMonthly = money(s.portuDcaMonthly, f.portuDcaMonthly),
             dpsOwnContributionMonthly = money(s.dpsOwnContributionMonthly, f.dpsOwnContributionMonthly),
             dipContributionMonthly = money(s.dipContributionMonthly, f.dipContributionMonthly),
-            employerRetirementAnnual = money(s.employerRetirementAnnual, f.employerRetirementAnnual),
+            employerRetirementMonthly = money(s.employerRetirementMonthly, f.employerRetirementMonthly),
             ePortuDcaMonthly = money(s.ePortuDcaMonthly, f.ePortuDcaMonthly),
             eDpsOwnContributionMonthly = money(s.eDpsOwnContributionMonthly, f.eDpsOwnContributionMonthly),
             eDipContributionMonthly = money(s.eDipContributionMonthly, f.eDipContributionMonthly),
-            eEmployerRetirementAnnual = money(s.eEmployerRetirementAnnual, f.eEmployerRetirementAnnual),
+            eEmployerRetirementMonthly = money(s.eEmployerRetirementMonthly, f.eEmployerRetirementMonthly),
             portfolioNominalReturnPct = pct(s.portfolioNominalReturnPct, f.portfolioNominalReturnPct),
             dpsGrossReturnPct = pct(s.dpsGrossReturnPct, f.dpsGrossReturnPct),
             dpsAnnualFeePct = pct(s.dpsAnnualFeePct, f.dpsAnnualFeePct),
@@ -301,7 +294,8 @@ object BackupManager {
             safetyBufferPct = pct(s.safetyBufferPct, f.safetyBufferPct),
             rentGrowthPct = pct(s.rentGrowthPct, f.rentGrowthPct),
             dcaAnnualGrowthPct = pct(s.dcaAnnualGrowthPct, f.dcaAnnualGrowthPct),
-            statePensionMonthly = money(s.statePensionMonthly, f.statePensionMonthly),
+            vStatePensionMonthly = money(s.vStatePensionMonthly, f.vStatePensionMonthly),
+            eStatePensionMonthly = money(s.eStatePensionMonthly, f.eStatePensionMonthly),
             lifestyleCostAtFireMonthly = money(s.lifestyleCostAtFireMonthly, f.lifestyleCostAtFireMonthly),
             fireTargetOverride = money(s.fireTargetOverride, f.fireTargetOverride),
             rentMonthly = money(s.rentMonthly, f.rentMonthly),

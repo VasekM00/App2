@@ -154,11 +154,12 @@ private fun TrajectorySubTab(
         accentColor = BrandGold
     )
 
+    val combinedPension = state.settings.vStatePensionMonthly + if (!state.settings.isSingleHousehold) state.settings.eStatePensionMonthly else 0.0
     val pensionBridgeInfo = MetricInfo(
         title = "State Pension Bridge Years",
         category = "Actuarial Horizon",
         formulaOrRule = "Bridge Horizon = State Pension Age (${state.settings.statePensionAge}) - Target FIRE Age",
-        explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(state.settings.statePensionMonthly)}/mo), the required portfolio draw drops dramatically.",
+        explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(combinedPension)}/mo), the required portfolio draw drops dramatically.",
         statutoryReference = "§ 32 Act No. 155/1995 Coll.",
         practicalImplication = "Dynamic bridge modeling avoids over-saving millions of CZK by accounting for future guaranteed state annuity cash flows.",
         accentColor = BrandTeal
@@ -264,9 +265,10 @@ private fun TrajectorySubTab(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                val totalStatePension = state.settings.vStatePensionMonthly + if (!state.settings.isSingleHousehold) state.settings.eStatePensionMonthly else 0.0
                 ProjectionMetricRow(
-                    label = "Monthly State Pension Amount",
-                    value = fmtCZK(state.settings.statePensionMonthly),
+                    label = if (state.settings.isSingleHousehold) "Monthly State Pension" else "Combined State Pension",
+                    value = fmtCZK(totalStatePension) + "/mo",
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )
@@ -319,7 +321,7 @@ private fun PortfolioAccountsView(
     val vaclavTotalDca by remember(s) { derivedStateOf { s.portuDcaMonthly + s.dipContributionMonthly + s.dpsOwnContributionMonthly } }
     val eTotalBal by remember(s) { derivedStateOf { s.eLiquidPortfolioCurrent + s.eDipBalanceCurrent + s.eDpsBalanceCurrent } }
     val eTotalDca by remember(s) { derivedStateOf { s.ePortuDcaMonthly + s.eDipContributionMonthly + s.eDpsOwnContributionMonthly } }
-    val empMonthly by remember(s) { derivedStateOf { (s.employerRetirementAnnual + s.eEmployerRetirementAnnual) / 12.0 } }
+    val empMonthly by remember(s) { derivedStateOf { s.employerRetirementMonthly + if (!s.isSingleHousehold) s.eEmployerRetirementMonthly else 0.0 } }
 
     val feeCapInfo = MetricInfo(
         title = "Statutory DPS Fee Cap (0.50% TER)",

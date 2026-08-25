@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -326,6 +326,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE app_settings ADD COLUMN employerRetirementMonthly REAL NOT NULL DEFAULT 2800.0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE app_settings ADD COLUMN eEmployerRetirementMonthly REAL NOT NULL DEFAULT 0.0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE app_settings ADD COLUMN vStatePensionMonthly REAL NOT NULL DEFAULT 12000.0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE app_settings ADD COLUMN eStatePensionMonthly REAL NOT NULL DEFAULT 12000.0")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -333,7 +350,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "martinu_financials_db"
                 )
-                    .addMigrations(MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                    .addMigrations(MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                     .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance

@@ -69,13 +69,11 @@ class AbsoluteStressFuzzingTest {
                 isSingleHousehold = isSingle,
                 statePensionAge = statePensionAge,
                 vSalary = vSalary,
-                vBonusAnnual = vBonus,
                 vMealVouchersMonthly = vMeal,
                 vOtherInflowsMonthly = vOther,
                 eReturnYear = eReturnYear,
                 eReturnMonth = eReturnMonth,
                 eStartingSalary = eSalary,
-                eBonusAnnual = eBonus,
                 eSalaryGrowthPct = eGrowth,
                 eReinvestedPct = eReinvest,
                 eParentalAllowanceMonthly = eParental,
@@ -137,16 +135,13 @@ class AbsoluteStressFuzzingTest {
     fun test2_theZeroEconomy_allZeroSettings() {
         val zero = SettingsEntity(
             vSalary = 0.0,
-            vBonusAnnual = 0.0,
             vMealVouchersMonthly = 0.0,
             vOtherInflowsMonthly = 0.0,
             eStartingSalary = 0.0,
-            eBonusAnnual = 0.0,
             eParentalAllowanceMonthly = 0.0,
             eLecturingMonthly = 0.0,
             eOtherInflowsMonthly = 0.0,
             familyGiftMonthly = 0.0,
-            annualOtherGifts = 0.0,
             lumpSumAmount = 0.0,
             liquidPortfolioCurrent = 0.0,
             eLiquidPortfolioCurrent = 0.0,
@@ -243,7 +238,8 @@ class AbsoluteStressFuzzingTest {
             primaryAge = 18,
             statePensionAge = 65,
             lifestyleCostAtFireMonthly = 40_000.0,
-            statePensionMonthly = 20_000.0
+            vStatePensionMonthly = 10_000.0,
+            eStatePensionMonthly = 10_000.0
         )
 
         val state = FinancialEngine.calculate(young, runMonteCarlo = false)
@@ -257,7 +253,8 @@ class AbsoluteStressFuzzingTest {
             primaryAge = 75,
             statePensionAge = 65,
             lifestyleCostAtFireMonthly = 20_000.0,
-            statePensionMonthly = 25_000.0 // pension exceeds lifestyle cost
+            vStatePensionMonthly = 15_000.0,
+            eStatePensionMonthly = 10_000.0 // combined 25k pension exceeds lifestyle cost
         )
 
         val state = FinancialEngine.calculate(senior, runMonteCarlo = false)
@@ -273,7 +270,6 @@ class AbsoluteStressFuzzingTest {
                 eReturnYear = 2029,
                 eReturnMonth = month,
                 eStartingSalary = 24_000.0,
-                eBonusAnnual = 0.0,
                 eParentalAllowanceMonthly = 12_000.0,
                 eLecturingMonthly = 6_000.0
             )

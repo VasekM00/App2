@@ -37,7 +37,7 @@ class FullSettingsReactivityAuditTest {
     }
 
     @Test
-    fun `assert reactivity of Primary Earner Incomes - vSalary, vOtherInflowsMonthly, vBonusAnnual, vMealVouchersMonthly`() {
+    fun `assert reactivity of Primary Earner Incomes - vSalary, vOtherInflowsMonthly, vMealVouchersMonthly`() {
         // vSalary
         val baseState = FinancialEngine.calculate(base)
         val higherSalaryState = FinancialEngine.calculate(base.copy(vSalary = 60000.0))
@@ -48,10 +48,6 @@ class FullSettingsReactivityAuditTest {
         val otherInflowState = FinancialEngine.calculate(base.copy(vOtherInflowsMonthly = 8000.0))
         assertEquals(base.vSalary + 8000.0, otherInflowState.currentIncome.vaclavNet, 0.001)
 
-        // vBonusAnnual
-        val bonusState = FinancialEngine.calculate(base.copy(vBonusAnnual = 120000.0)) // 10k/mo
-        assertEquals(base.vSalary + 10000.0, bonusState.currentIncome.vaclavNet, 0.001)
-
         // vMealVouchersMonthly
         val voucherState = FinancialEngine.calculate(base.copy(vMealVouchersMonthly = 4500.0))
         assertEquals(4500.0, voucherState.currentIncome.vouchers, 0.001)
@@ -59,7 +55,7 @@ class FullSettingsReactivityAuditTest {
     }
 
     @Test
-    fun `assert reactivity of Spouse Career Incomes - eReturnYear, eStartingSalary, eBonusAnnual, eSalaryGrowthPct, eReinvestedPct`() {
+    fun `assert reactivity of Spouse Career Incomes - eReturnYear, eStartingSalary, eSalaryGrowthPct, eReinvestedPct`() {
         // eReturnYear
         val inc2028BeforeReturn = FinancialEngine.householdIncome(2028, base.copy(eReturnYear = 2029))
         val inc2028AfterReturn = FinancialEngine.householdIncome(2028, base.copy(eReturnYear = 2028))
@@ -67,7 +63,7 @@ class FullSettingsReactivityAuditTest {
         assertTrue(inc2028AfterReturn.eleonoraSalary > 0)
 
         // eReturnMonth (e.g. July return -> 6 months work, 6 months leave)
-        val julyReturn = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 7, eStartingSalary = 40000.0, eBonusAnnual = 0.0, eParentalAllowanceMonthly = 14000.0, eLecturingMonthly = 8000.0))
+        val julyReturn = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 7, eStartingSalary = 40000.0, eParentalAllowanceMonthly = 14000.0, eLecturingMonthly = 8000.0))
         assertEquals(20000.0, julyReturn.eleonoraSalary, 0.001) // 40000 * 6/12 = 20000
         assertEquals(7000.0, julyReturn.benefit, 0.001) // 14000 * 6/12 = 7000
         assertEquals(4000.0, julyReturn.lecturing, 0.001) // 8000 * 6/12 = 4000
@@ -77,9 +73,10 @@ class FullSettingsReactivityAuditTest {
         val incWithoutOther = FinancialEngine.householdIncome(2026, base.copy(eOtherInflowsMonthly = 0.0))
         assertEquals(5500.0, incWithOther.totalMonthly - incWithoutOther.totalMonthly, 0.001)
 
-        // eStartingSalary & eBonusAnnual
-        val customSpouseSalary = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 40000.0, eBonusAnnual = 60000.0))
-        assertEquals(40000.0 + 5000.0, customSpouseSalary.eleonoraSalary, 0.001)
+        // eStartingSalary & eOtherInflowsMonthly
+        val customSpouseSalary = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 40000.0, eOtherInflowsMonthly = 5000.0))
+        assertEquals(40000.0, customSpouseSalary.eleonoraSalary, 0.001)
+        assertEquals(0.0, customSpouseSalary.lecturing, 0.001)
 
         // eSalaryGrowthPct
         val slowGrowth = FinancialEngine.householdIncome(2031, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 30000.0, eSalaryGrowthPct = 2.0))
@@ -106,9 +103,9 @@ class FullSettingsReactivityAuditTest {
         val withoutLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 0.0))
         assertEquals(0.0, withoutLecturing.currentIncome.lecturing, 0.001)
 
-        // familyGiftMonthly & annualOtherGifts
-        val giftState = FinancialEngine.calculate(base.copy(familyGiftMonthly = 30000.0, annualOtherGifts = 60000.0))
-        assertEquals(35000.0, giftState.currentIncome.gift, 0.001) // 30k + 60k/12 = 35k
+        // familyGiftMonthly
+        val giftState = FinancialEngine.calculate(base.copy(familyGiftMonthly = 35000.0))
+        assertEquals(35000.0, giftState.currentIncome.gift, 0.001)
 
         // lumpSumYear, lumpSumAmount, lumpSumInclude, and customLumpSumsJson
         val stateWithoutLump = FinancialEngine.calculate(base.copy(lumpSumInclude = false, customLumpSumsJson = "[]"))
@@ -151,8 +148,8 @@ class FullSettingsReactivityAuditTest {
         assertEquals(390000.0, totalNW, 0.001)
 
         // Employer Retirement Contributions
-        val empBase = FinancialEngine.calculate(base.copy(employerRetirementAnnual = 0.0, eEmployerRetirementAnnual = 0.0))
-        val empBoosted = FinancialEngine.calculate(base.copy(employerRetirementAnnual = 20000.0, eEmployerRetirementAnnual = 15000.0))
+        val empBase = FinancialEngine.calculate(base.copy(employerRetirementMonthly = 0.0, eEmployerRetirementMonthly = 0.0))
+        val empBoosted = FinancialEngine.calculate(base.copy(employerRetirementMonthly = 2000.0, eEmployerRetirementMonthly = 1500.0))
         assertTrue(empBoosted.dps.employerTotal > empBase.dps.employerTotal)
     }
 
@@ -201,9 +198,9 @@ class FullSettingsReactivityAuditTest {
         val highInflationTarget = FinancialEngine.fireTargetYear(futureYear, base.copy(cpiInflationPct = 6.0))
         assertTrue(highInflationTarget > lowInflationTarget)
 
-        // statePensionMonthly & statePensionAge
-        val statePensionZero = FinancialEngine.calculate(base.copy(statePensionMonthly = 0.0))
-        val statePensionGenerous = FinancialEngine.calculate(base.copy(statePensionMonthly = 30000.0))
+        // vStatePensionMonthly & statePensionAge
+        val statePensionZero = FinancialEngine.calculate(base.copy(vStatePensionMonthly = 0.0, eStatePensionMonthly = 0.0))
+        val statePensionGenerous = FinancialEngine.calculate(base.copy(vStatePensionMonthly = 20000.0, eStatePensionMonthly = 15000.0))
         assertTrue(statePensionZero.fireBaseTargetToday > statePensionGenerous.fireBaseTargetToday)
 
         val earlyPension = FinancialEngine.calculate(base.copy(statePensionAge = 62))

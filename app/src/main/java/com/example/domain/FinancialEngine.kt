@@ -355,8 +355,10 @@ object FinancialEngine {
         if (settings.fireTargetOverride > 0) return settings.fireTargetOverride
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
 
-        val annualLifestyle = max(0.0, settings.lifestyleCostAtFireMonthly * 12.0)
-        val annualStatePension = max(0.0, settings.statePensionMonthly * 12.0)
+        val lifestyleMonthly = if (settings.lifestyleCostAtFireMonthly > 0.0) settings.lifestyleCostAtFireMonthly else totalLivingCostMonthly(settings, settings.baseYear)
+        val annualLifestyle = max(0.0, lifestyleMonthly * 12.0)
+        val totalStatePensionMonthly = settings.vStatePensionMonthly + (if (!settings.isSingleHousehold) settings.eStatePensionMonthly else 0.0)
+        val annualStatePension = max(0.0, totalStatePensionMonthly * 12.0)
         val bridgeYears = statePensionBridgeYears(age, settings)
 
         val bridgeCost = annualLifestyle * annuityFactor(swr, bridgeYears)
@@ -384,18 +386,17 @@ object FinancialEngine {
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         val sy = settings.baseYear
         if (year < sy) return 0.0
-        val bonusMonthly = settings.vBonusAnnual / 12.0
-        return settings.vSalary + bonusMonthly + settings.vOtherInflowsMonthly
+        return settings.vSalary + settings.vOtherInflowsMonthly
     }
 
     fun eleonoraSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold || year < settings.eReturnYear) return 0.0
         val month = settings.eReturnMonth.coerceIn(1, 12)
         val fullSalary = if (year == settings.eReturnYear) {
-            settings.eStartingSalary + (settings.eBonusAnnual / 12.0)
+            settings.eStartingSalary
         } else {
             val yearsActive = year - settings.eReturnYear
-            settings.eStartingSalary * (1.0 + settings.eSalaryGrowthPct / 100.0).pow(yearsActive) + (settings.eBonusAnnual / 12.0)
+            settings.eStartingSalary * (1.0 + settings.eSalaryGrowthPct / 100.0).pow(yearsActive)
         }
         return if (year == settings.eReturnYear) {
             val workFraction = (13 - month) / 12.0
@@ -452,10 +453,9 @@ object FinancialEngine {
         val e = eleonoraSalaryMonthly(year, settings)
         val b = eleonoraBenefitMonthly(year, settings)
         val lec = eleonoraLecturingMonthly(year, settings)
-        val gift = settings.familyGiftMonthly + (settings.annualOtherGifts / 12.0)
-        val vOther = settings.vOtherInflowsMonthly
+        val gift = settings.familyGiftMonthly
         val eOther = if (!settings.isSingleHousehold) settings.eOtherInflowsMonthly else 0.0
-        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly + vOther + eOther
+        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly + eOther
 
         return YearlyIncome(
             year = year,
@@ -571,10 +571,10 @@ object FinancialEngine {
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
         val vaclavInvest = settings.portuDcaMonthly + settings.dpsOwnContributionMonthly +
-                settings.dipContributionMonthly + (min(settings.employerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0)
+                settings.dipContributionMonthly + min(settings.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
         val eleonoraInvest = if (!settings.isSingleHousehold) {
             settings.ePortuDcaMonthly + settings.eDpsOwnContributionMonthly +
-                    settings.eDipContributionMonthly + (min(settings.eEmployerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0)
+                    settings.eDipContributionMonthly + min(settings.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
         } else 0.0
         return vaclavInvest + eleonoraInvest
     }
@@ -650,11 +650,11 @@ object FinancialEngine {
 
         val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
         val eDpsBal = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
-        val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementAnnual else 0.0
+        val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
 
         val own = settings.dpsOwnContributionMonthly + eDpsOwn
-        val emp = (min(settings.employerRetirementAnnual, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) +
-                min(eEmp, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL)) / 12.0
+        val emp = min(settings.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) +
+                min(eEmp, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
 
         var dpsBal = settings.dpsBalanceCurrent + eDpsBal
         var etfBal = settings.dpsBalanceCurrent + eDpsBal

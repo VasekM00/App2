@@ -91,7 +91,21 @@ class FinancialEngineInvariantStressTest {
 
     @Test
     fun test1_8_ZeroLivingExpenses() {
-        val settingsZero = SettingsEntity(lifestyleCostAtFireMonthly = 0.0)
+        val settingsZero = SettingsEntity(
+            lifestyleCostAtFireMonthly = 0.0,
+            rentMonthly = 0.0,
+            groceriesMonthly = 0.0,
+            cafesMonthly = 0.0,
+            therapyMonthly = 0.0,
+            charityMonthly = 0.0,
+            entertainmentMonthly = 0.0,
+            transportMonthly = 0.0,
+            subscriptionsMonthly = 0.0,
+            otherDiscretionaryMonthly = 0.0,
+            childExpensesEnabled = false,
+            vStatePensionMonthly = 0.0,
+            eStatePensionMonthly = 0.0
+        )
         val result = FinancialEngine.calculate(settingsZero, runMonteCarlo = false)
         assertEquals(0.0, result.fireMilestones.standardFire.targetAmountToday, 1e-9)
         val target = FinancialEngine.fireTargetBase(settingsZero)
@@ -106,10 +120,10 @@ class FinancialEngineInvariantStressTest {
             lumpSumInclude = false, eReinvestedPct = 0.0,
             dpsBalanceCurrent = 0.0, dipBalanceCurrent = 0.0,
             dpsOwnContributionMonthly = 0.0, dipContributionMonthly = 0.0,
-            employerRetirementAnnual = 0.0,
+            employerRetirementMonthly = 0.0,
             eDpsBalanceCurrent = 0.0, eDipBalanceCurrent = 0.0,
             eDpsOwnContributionMonthly = 0.0, eDipContributionMonthly = 0.0,
-            eEmployerRetirementAnnual = 0.0
+            eEmployerRetirementMonthly = 0.0
         )
         val trajectory = FinancialEngine.buildLiquidPortfolio(settings, dualIncome = true)
         for (point in trajectory) {
