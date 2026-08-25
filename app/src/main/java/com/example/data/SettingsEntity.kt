@@ -6,11 +6,14 @@ import com.example.domain.DEFAULT_CUSTOM_LIFE_GOALS
 import com.example.domain.serializeCustomLifeGoals
 import java.util.Calendar
 
+const val VACLAV_BIRTH_YEAR: Int = 2000
+const val ELEONORA_BIRTH_YEAR: Int = 2000
+
 @Entity(tableName = "app_settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
     val baseYear: Int = 2026,
-    val primaryAge: Int = 26,
+    val primaryAge: Int = 2026 - VACLAV_BIRTH_YEAR,
     val primaryName: String = "Václav",
     val spouseName: String = "Eleonora",
     val isSingleHousehold: Boolean = false,
@@ -112,9 +115,13 @@ data class SettingsEntity(
     val deletedCategoriesJson: String = "[]"
 ) {
     companion object {
-        fun freshDefaults(): SettingsEntity = SettingsEntity(
-            baseYear = Calendar.getInstance().get(Calendar.YEAR),
-            customGoalsJson = serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
-        )
+        fun freshDefaults(): SettingsEntity {
+            val yr = Calendar.getInstance().get(Calendar.YEAR)
+            return SettingsEntity(
+                baseYear = yr,
+                primaryAge = yr - VACLAV_BIRTH_YEAR,
+                customGoalsJson = serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
+            )
+        }
     }
 }

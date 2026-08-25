@@ -10,8 +10,8 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-// Birth years are derived dynamically from settings.baseYear - settings.primaryAge
-// No hardcoded constants — keeps projections accurate if age or base year changes
+// Václav and Eleonora birth years are fixed to 2000 (com.example.data.VACLAV_BIRTH_YEAR / ELEONORA_BIRTH_YEAR)
+// Primary age is computed directly as baseYear - 2000.
 
 // --- Data Classes for Calculations & Output UI ---
 

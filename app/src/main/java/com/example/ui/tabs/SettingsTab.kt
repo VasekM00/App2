@@ -302,7 +302,6 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                            val birthYear = s.baseYear - s.primaryAge
                             NumberSettingField(
                                 label = "Base Planning Year",
                                 value = s.baseYear.toDouble(),
@@ -310,15 +309,9 @@ fun SettingsTab(
                                 maxValue = 2200.0,
                                 onValueChange = { yr ->
                                     val y = yr.toInt()
-                                    val newAge = (y - birthYear).coerceIn(15, 80)
-                                    onUpdateSettings(s.copy(baseYear = birthYear + newAge, primaryAge = newAge))
+                                    val newAge = (y - com.example.data.VACLAV_BIRTH_YEAR).coerceIn(15, 80)
+                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = newAge))
                                 }
-                            )
-                            NumberSettingField(
-                                label = "Birth Year ($birthYear)",
-                                value = birthYear.toDouble(),
-                                onValueChange = { },
-                                readOnly = true
                             )
                             NumberSettingField(
                                 label = "Expected CPI Inflation (%)",
