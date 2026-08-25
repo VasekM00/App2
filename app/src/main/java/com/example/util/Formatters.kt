@@ -54,6 +54,14 @@ object Formatters {
         if (value.isNaN() || value.isInfinite()) return "--"
         val absVal = abs(value)
         val numStr = when {
+            absVal >= 1_000_000_000 -> {
+                val b = value / 1_000_000_000.0
+                if (abs(b - b.roundToInt()) < 0.05) {
+                    String.format(czkLocale, "%.0fB", b)
+                } else {
+                    String.format(czkLocale, "%.1fB", b)
+                }
+            }
             absVal >= 1_000_000 -> {
                 val mil = value / 1_000_000.0
                 if (abs(mil - mil.roundToInt()) < 0.05) {

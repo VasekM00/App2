@@ -341,7 +341,10 @@ object FinancialEngine {
     fun annuityFactor(rate: Double, years: Int): Double {
         if (years <= 0) return 0.0
         if (abs(rate) < 1e-9) return years.toDouble()
-        return (1.0 - (1.0 + rate).pow(-years)) / rate
+        if (rate <= -1.0) return 0.0
+        val term = (1.0 + rate).pow(-years)
+        if (term.isNaN() || term.isInfinite()) return years.toDouble()
+        return (1.0 - term) / rate
     }
 
     fun statePensionBridgeYears(age: Int, settings: SettingsEntity): Int {
@@ -352,23 +355,30 @@ object FinancialEngine {
         if (settings.fireTargetOverride > 0) return settings.fireTargetOverride
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
 
-        val annualLifestyle = settings.lifestyleCostAtFireMonthly * 12.0
-        val annualStatePension = settings.statePensionMonthly * 12.0
+        val annualLifestyle = max(0.0, settings.lifestyleCostAtFireMonthly * 12.0)
+        val annualStatePension = max(0.0, settings.statePensionMonthly * 12.0)
         val bridgeYears = statePensionBridgeYears(age, settings)
 
         val bridgeCost = annualLifestyle * annuityFactor(swr, bridgeYears)
         val postPensionShortfall = max(0.0, annualLifestyle - annualStatePension)
         val targetCapitalPostPension = if (postPensionShortfall > 0) {
-            (postPensionShortfall / swr) / (1.0 + swr).pow(bridgeYears)
+            val factor = (1.0 + swr).pow(bridgeYears)
+            if (factor > 0.0 && !factor.isNaN() && !factor.isInfinite()) {
+                (postPensionShortfall / swr) / factor
+            } else 0.0
         } else 0.0
 
-        return (bridgeCost + targetCapitalPostPension) * (1.0 + settings.safetyBufferPct / 100.0)
+        val safetyBuffer = (1.0 + settings.safetyBufferPct / 100.0).coerceAtLeast(0.0)
+        val total = (bridgeCost + targetCapitalPostPension) * safetyBuffer
+        return if (total.isNaN() || total.isInfinite()) 0.0 else max(0.0, total)
     }
 
     fun fireTargetYear(year: Int, settings: SettingsEntity, age: Int = settings.primaryAge + (year - settings.baseYear)): Double {
         val baseTarget = fireTargetBase(settings, age)
-        val yearsElapsed = year - settings.baseYear
-        return baseTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yearsElapsed)
+        val yearsElapsed = max(0, year - settings.baseYear)
+        val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.0)
+        val result = baseTarget * inflationFactor.pow(yearsElapsed)
+        return if (result.isNaN() || result.isInfinite()) baseTarget else max(0.0, result)
     }
 
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
@@ -602,7 +612,7 @@ object FinancialEngine {
             } else 0.0
             val lump = lumpSumForYear(year, settings)
 
-            bal = (bal + baseAnnual + reinvestAnnual + lump) * (1.0 + ret)
+            bal = max(0.0, (bal + baseAnnual + reinvestAnnual + lump) * max(0.0, 1.0 + ret))
             val t = fireTargetYear(year + 1, settings, age)
             val gap = t - bal
 
@@ -663,8 +673,8 @@ object FinancialEngine {
             totalOwn += own
             totalEmp += emp
 
-            dpsBal = (dpsBal + own + sub + emp) * (1.0 + monthlyRateDPS)
-            etfBal = (etfBal + own + emp) * (1.0 + monthlyRateETF)
+            dpsBal = max(0.0, (dpsBal + own + sub + emp) * max(0.0, 1.0 + monthlyRateDPS))
+            etfBal = max(0.0, (etfBal + own + emp) * max(0.0, 1.0 + monthlyRateETF))
         }
 
         // B4 fix: balAt36 respects isSingleHousehold for Eleonora's balance
@@ -676,8 +686,8 @@ object FinancialEngine {
                 val currentAge = settings.primaryAge + (m / 12)
                 val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
                 val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
-                ownValueTo36 = (ownValueTo36 + own) * (1.0 + monthlyRateDPS)
-                balAt36 = (balAt36 + own + subV + subE + emp) * (1.0 + monthlyRateDPS)
+                ownValueTo36 = max(0.0, (ownValueTo36 + own) * max(0.0, 1.0 + monthlyRateDPS))
+                balAt36 = max(0.0, (balAt36 + own + subV + subE + emp) * max(0.0, 1.0 + monthlyRateDPS))
             }
         }
 
@@ -739,7 +749,7 @@ object FinancialEngine {
         var dipBal = settings.dipBalanceCurrent + eDipBal
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
-            dipBal = (dipBal + totalMonthlyDip) * (1.0 + monthlyRate)
+            dipBal = max(0.0, (dipBal + totalMonthlyDip) * max(0.0, 1.0 + monthlyRate))
         }
 
         return DipProjection(
@@ -821,14 +831,14 @@ object FinancialEngine {
 
         for (i in 0 until sims) {
             val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
-            var bal = (settings.liquidPortfolioCurrent + eLiquid) * (1.0 - initialCrashPct)
+            var bal = max(0.0, (settings.liquidPortfolioCurrent + eLiquid) * max(0.0, 1.0 - initialCrashPct))
             yearlyBalances[0][i] = bal
             var hitAge: Int? = null
 
             for (y in 0 until horizonYears) {
                 val (add, target, age) = additions[y]
-                val ret = max(-0.60, meanReturn + nextGaussian(random) * sigma)
-                bal = (bal + add) * (1.0 + ret)
+                val ret = max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                bal = max(0.0, (bal + add) * max(0.0, 1.0 + ret))
                 yearlyBalances[y + 1][i] = bal
 
                 if (hitAge == null && bal >= target) {
@@ -998,7 +1008,7 @@ object FinancialEngine {
             } else 0.0
             val lump = lumpSumForYear(year, settings)
 
-            bal = (bal + baseAnnual + reinvestAnnual + lump) * (1.0 + ret)
+            bal = max(0.0, (bal + baseAnnual + reinvestAnnual + lump) * max(0.0, 1.0 + ret))
             val t = fireTargetYear(year + 1, settings, age)
             val gap = t - bal
 
@@ -1121,6 +1131,7 @@ object FinancialEngine {
         val realReturnFactor = nominalFactor / inflationFactor
         val realReturnRate = (realReturnFactor - 1.0).coerceAtLeast(0.001)
         val yearsToRetire = max(1, settings.statePensionAge - settings.primaryAge)
+        val cpiCompounding = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.0)
 
         // 1. Coast FIRE
         val coastRawTarget = fireBase / (1.0 + realReturnRate).pow(yearsToRetire)
@@ -1129,7 +1140,7 @@ object FinancialEngine {
         val coastAchieved = investableNetWorth >= coastTarget
         val coastPoint = if (coastAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
-            val futureTarget = coastTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            val futureTarget = coastTarget * cpiCompounding.pow(yDiff)
             point.portfolio >= futureTarget
         }
         val coastMilestone = FireMilestone(
@@ -1152,7 +1163,7 @@ object FinancialEngine {
         val leanAchieved = investableNetWorth >= leanTarget
         val leanPoint = if (leanAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
-            val futureTarget = leanTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            val futureTarget = leanTarget * cpiCompounding.pow(yDiff)
             point.portfolio >= futureTarget
         }
         val leanMilestone = FireMilestone(
@@ -1194,7 +1205,7 @@ object FinancialEngine {
         val fatAchieved = investableNetWorth >= fatTarget
         val fatPoint = if (fatAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
-            val futureTarget = fatTarget * (1.0 + settings.cpiInflationPct / 100.0).pow(yDiff)
+            val futureTarget = fatTarget * cpiCompounding.pow(yDiff)
             point.portfolio >= futureTarget
         }
         val fatMilestone = FireMilestone(
