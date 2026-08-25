@@ -280,20 +280,25 @@ private fun IncomeSubTab(state: FullCalculationState) {
                 if (inc.eleonoraSalary > 0.0) {
                     IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                } else {
+                }
+                if (inc.benefit > 0.0) {
                     IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    if (inc.lecturing > 0.0) {
-                        IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
+                }
+                if (inc.lecturing > 0.0) {
+                    IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
                 IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
                 if (state.settings.vOtherInflowsMonthly > 0.0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Other Monthly Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                    IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                }
+                if (!state.settings.isSingleHousehold && state.settings.eOtherInflowsMonthly > 0.0) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(state.settings.eOtherInflowsMonthly))
                 }
 
                 HorizontalDivider(
@@ -1280,20 +1285,25 @@ private fun SummarySubTab(
                     if (inc.eleonoraSalary > 0.0) {
                         IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    } else {
+                    }
+                    if (inc.benefit > 0.0) {
                         IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        if (inc.lecturing > 0.0) {
-                            IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        }
+                    }
+                    if (inc.lecturing > 0.0) {
+                        IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     }
                     IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
                     if (state.settings.vOtherInflowsMonthly > 0.0) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        IncomeRow(label = "Other Monthly Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                        IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                    }
+                    if (!state.settings.isSingleHousehold && state.settings.eOtherInflowsMonthly > 0.0) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(state.settings.eOtherInflowsMonthly))
                     }
                 }
 

@@ -66,18 +66,29 @@ class FullSettingsReactivityAuditTest {
         assertEquals(0.0, inc2028BeforeReturn.eleonoraSalary, 0.001)
         assertTrue(inc2028AfterReturn.eleonoraSalary > 0)
 
+        // eReturnMonth (e.g. July return -> 6 months work, 6 months leave)
+        val julyReturn = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 7, eStartingSalary = 40000.0, eBonusAnnual = 0.0, eParentalAllowanceMonthly = 14000.0, eLecturingMonthly = 8000.0))
+        assertEquals(20000.0, julyReturn.eleonoraSalary, 0.001) // 40000 * 6/12 = 20000
+        assertEquals(7000.0, julyReturn.benefit, 0.001) // 14000 * 6/12 = 7000
+        assertEquals(4000.0, julyReturn.lecturing, 0.001) // 8000 * 6/12 = 4000
+
+        // eOtherInflowsMonthly
+        val incWithOther = FinancialEngine.householdIncome(2026, base.copy(eOtherInflowsMonthly = 5500.0))
+        val incWithoutOther = FinancialEngine.householdIncome(2026, base.copy(eOtherInflowsMonthly = 0.0))
+        assertEquals(5500.0, incWithOther.totalMonthly - incWithoutOther.totalMonthly, 0.001)
+
         // eStartingSalary & eBonusAnnual
-        val customSpouseSalary = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eStartingSalary = 40000.0, eBonusAnnual = 60000.0))
+        val customSpouseSalary = FinancialEngine.householdIncome(2029, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 40000.0, eBonusAnnual = 60000.0))
         assertEquals(40000.0 + 5000.0, customSpouseSalary.eleonoraSalary, 0.001)
 
         // eSalaryGrowthPct
-        val slowGrowth = FinancialEngine.householdIncome(2031, base.copy(eReturnYear = 2029, eStartingSalary = 30000.0, eSalaryGrowthPct = 2.0))
-        val fastGrowth = FinancialEngine.householdIncome(2031, base.copy(eReturnYear = 2029, eStartingSalary = 30000.0, eSalaryGrowthPct = 10.0))
+        val slowGrowth = FinancialEngine.householdIncome(2031, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 30000.0, eSalaryGrowthPct = 2.0))
+        val fastGrowth = FinancialEngine.householdIncome(2031, base.copy(eReturnYear = 2029, eReturnMonth = 1, eStartingSalary = 30000.0, eSalaryGrowthPct = 10.0))
         assertTrue(fastGrowth.eleonoraSalary > slowGrowth.eleonoraSalary)
 
         // eReinvestedPct
-        val lowReinvest = FinancialEngine.buildLiquidPortfolio(base.copy(eReturnYear = 2029, eReinvestedPct = 25.0), dualIncome = true)
-        val highReinvest = FinancialEngine.buildLiquidPortfolio(base.copy(eReturnYear = 2029, eReinvestedPct = 90.0), dualIncome = true)
+        val lowReinvest = FinancialEngine.buildLiquidPortfolio(base.copy(eReturnYear = 2029, eReturnMonth = 1, eReinvestedPct = 25.0), dualIncome = true)
+        val highReinvest = FinancialEngine.buildLiquidPortfolio(base.copy(eReturnYear = 2029, eReturnMonth = 1, eReinvestedPct = 90.0), dualIncome = true)
         val ptLow = lowReinvest.first { it.year == 2030 }
         val ptHigh = highReinvest.first { it.year == 2030 }
         assertTrue(ptHigh.reinvestAnnual > ptLow.reinvestAnnual)

@@ -380,15 +380,33 @@ object FinancialEngine {
 
     fun eleonoraSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold || year < settings.eReturnYear) return 0.0
-        val yearsActive = year - settings.eReturnYear
-        return settings.eStartingSalary * (1.0 + settings.eSalaryGrowthPct / 100.0).pow(yearsActive) + (settings.eBonusAnnual / 12.0)
+        val month = settings.eReturnMonth.coerceIn(1, 12)
+        val fullSalary = if (year == settings.eReturnYear) {
+            settings.eStartingSalary + (settings.eBonusAnnual / 12.0)
+        } else {
+            val yearsActive = year - settings.eReturnYear
+            settings.eStartingSalary * (1.0 + settings.eSalaryGrowthPct / 100.0).pow(yearsActive) + (settings.eBonusAnnual / 12.0)
+        }
+        return if (year == settings.eReturnYear) {
+            val workFraction = (13 - month) / 12.0
+            fullSalary * workFraction
+        } else {
+            fullSalary
+        }
     }
 
     fun eleonoraBenefitMonthly(year: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold || year < settings.baseYear || year >= settings.eReturnYear) return 0.0
+        if (settings.isSingleHousehold || year < settings.baseYear || year > settings.eReturnYear) return 0.0
         val hasChildren = settings.child1Enabled || settings.child2Enabled
         if (!hasChildren) return 0.0
-        return max(0.0, settings.eParentalAllowanceMonthly)
+        val baseBenefit = max(0.0, settings.eParentalAllowanceMonthly)
+        return if (year == settings.eReturnYear) {
+            val month = settings.eReturnMonth.coerceIn(1, 12)
+            val leaveFraction = (month - 1) / 12.0
+            baseBenefit * leaveFraction
+        } else {
+            baseBenefit
+        }
     }
 
     private fun parentalAllowancePot(birthYear: Int): Double {
@@ -400,15 +418,23 @@ object FinancialEngine {
     }
 
     fun eleonoraLecturingMonthly(year: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold || !settings.eIncludeLecturing || year >= settings.eReturnYear) return 0.0
-        return settings.eLecturingMonthly
+        if (settings.isSingleHousehold || !settings.eIncludeLecturing || year > settings.eReturnYear) return 0.0
+        val baseLecturing = settings.eLecturingMonthly
+        return if (year == settings.eReturnYear) {
+            val month = settings.eReturnMonth.coerceIn(1, 12)
+            val leaveFraction = (month - 1) / 12.0
+            baseLecturing * leaveFraction
+        } else {
+            baseLecturing
+        }
     }
 
     fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold) return 0.0
         val sal = eleonoraSalaryMonthly(year, settings)
         val lec = eleonoraLecturingMonthly(year, settings)
-        return (sal + lec) * 12.0
+        val oth = settings.eOtherInflowsMonthly
+        return (sal + lec + oth) * 12.0
     }
 
     fun householdIncome(year: Int, settings: SettingsEntity): YearlyIncome {
@@ -417,7 +443,9 @@ object FinancialEngine {
         val b = eleonoraBenefitMonthly(year, settings)
         val lec = eleonoraLecturingMonthly(year, settings)
         val gift = settings.familyGiftMonthly + (settings.annualOtherGifts / 12.0)
-        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly
+        val vOther = settings.vOtherInflowsMonthly
+        val eOther = if (!settings.isSingleHousehold) settings.eOtherInflowsMonthly else 0.0
+        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly + vOther + eOther
 
         return YearlyIncome(
             year = year,
