@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
@@ -289,12 +290,12 @@ fun SettingsTab(
                                 NumberSettingField(label = "Reinvested Share of Salary (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
 
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                Text(
-                                    text = "Return to Work Date ($returnMonthLabel)",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                YearMonthSettingField(
+                                    label = "Planned Return",
+                                    yearValue = s.eReturnYear,
+                                    monthValue = s.eReturnMonth,
+                                    onValueChange = { yr, mo -> onUpdateSettings(s.copy(eReturnYear = yr, eReturnMonth = mo)) }
                                 )
-                                NumberSettingField(label = "Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                                NumberSettingField(label = "Return Month (1-12, e.g. 7 for July)", value = s.eReturnMonth.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnMonth = it.toInt().coerceIn(1, 12))) })
                             } else {
                                 Text(
                                     text = "Eleonora's Incomes (Parental Leave until $returnMonthLabel)",
@@ -309,8 +310,12 @@ fun SettingsTab(
                                     text = "Eleonora's Future Return to Work ($returnMonthLabel+)",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                                 )
-                                NumberSettingField(label = "Planned Return Year", value = s.eReturnYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnYear = it.toInt())) })
-                                NumberSettingField(label = "Planned Return Month (1-12, e.g. 7 for July)", value = s.eReturnMonth.toDouble(), onValueChange = { onUpdateSettings(s.copy(eReturnMonth = it.toInt().coerceIn(1, 12))) })
+                                YearMonthSettingField(
+                                    label = "Planned Return",
+                                    yearValue = s.eReturnYear,
+                                    monthValue = s.eReturnMonth,
+                                    onValueChange = { yr, mo -> onUpdateSettings(s.copy(eReturnYear = yr, eReturnMonth = mo)) }
+                                )
                                 NumberSettingField(label = "Future Starting Salary Net (CZK)", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
                                 NumberSettingField(label = "Future Annual Bonus (CZK)", value = s.eBonusAnnual, onValueChange = { onUpdateSettings(s.copy(eBonusAnnual = it)) })
                                 NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
@@ -1402,6 +1407,105 @@ private fun NumberSettingField(
                 }
                 .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
         )
+    }
+}
+
+@Composable
+private fun YearMonthSettingField(
+    label: String,
+    yearValue: Int,
+    monthValue: Int,
+    onValueChange: (year: Int, month: Int) -> Unit
+) {
+    var yearText by remember { mutableStateOf(yearValue.toString()) }
+    var monthText by remember { mutableStateOf(monthValue.toString()) }
+    var isYearFocused by remember { mutableStateOf(false) }
+    var isMonthFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(yearValue) {
+        if (!isYearFocused) {
+            yearText = yearValue.toString()
+        }
+    }
+    LaunchedEffect(monthValue) {
+        if (!isMonthFocused) {
+            monthText = monthValue.toString()
+        }
+    }
+
+    fun commit() {
+        val y = yearText.trim().toIntOrNull() ?: yearValue
+        val m = (monthText.trim().toIntOrNull() ?: monthValue).coerceIn(1, 12)
+        onValueChange(y, m)
+    }
+
+    LaunchedEffect(yearText, monthText) {
+        if (isYearFocused || isMonthFocused) {
+            delay(400)
+            commit()
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            OutlinedTextField(
+                value = monthText,
+                onValueChange = { input ->
+                    val filtered = input.filter { it.isDigit() }.take(2)
+                    monthText = filtered
+                },
+                placeholder = { Text("M", fontSize = 11.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { commit() }),
+                singleLine = true,
+                modifier = Modifier
+                    .width(56.dp)
+                    .onFocusChanged {
+                        if (isMonthFocused && !it.isFocused) commit()
+                        isMonthFocused = it.isFocused
+                    },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center)
+            )
+            Text(
+                text = "/",
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            )
+            OutlinedTextField(
+                value = yearText,
+                onValueChange = { input ->
+                    val filtered = input.filter { it.isDigit() }.take(4)
+                    yearText = filtered
+                },
+                placeholder = { Text("YYYY", fontSize = 11.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { commit() }),
+                singleLine = true,
+                modifier = Modifier
+                    .width(78.dp)
+                    .onFocusChanged {
+                        if (isYearFocused && !it.isFocused) commit()
+                        isYearFocused = it.isFocused
+                    },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center)
+            )
+        }
     }
 }
 
