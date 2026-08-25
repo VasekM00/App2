@@ -348,7 +348,9 @@ object FinancialEngine {
     }
 
     fun statePensionBridgeYears(age: Int, settings: SettingsEntity): Int {
-        return max(0, settings.statePensionAge - age)
+        val vBridge = max(0, settings.vStatePensionAge - age)
+        val eBridge = if (!settings.isSingleHousehold) max(0, settings.eStatePensionAge - age) else vBridge
+        return max(vBridge, eBridge)
     }
 
     fun fireTargetBase(settings: SettingsEntity, age: Int = settings.primaryAge): Double {
@@ -357,21 +359,43 @@ object FinancialEngine {
 
         val lifestyleMonthly = if (settings.lifestyleCostAtFireMonthly > 0.0) settings.lifestyleCostAtFireMonthly else totalLivingCostMonthly(settings, settings.baseYear)
         val annualLifestyle = max(0.0, lifestyleMonthly * 12.0)
-        val totalStatePensionMonthly = settings.vStatePensionMonthly + (if (!settings.isSingleHousehold) settings.eStatePensionMonthly else 0.0)
-        val annualStatePension = max(0.0, totalStatePensionMonthly * 12.0)
-        val bridgeYears = statePensionBridgeYears(age, settings)
+        
+        val vAnnualPension = max(0.0, settings.vStatePensionMonthly * 12.0)
+        val eAnnualPension = if (!settings.isSingleHousehold) max(0.0, settings.eStatePensionMonthly * 12.0) else 0.0
 
-        val bridgeCost = annualLifestyle * annuityFactor(swr, bridgeYears)
-        val postPensionShortfall = max(0.0, annualLifestyle - annualStatePension)
-        val targetCapitalPostPension = if (postPensionShortfall > 0) {
-            val factor = (1.0 + swr).pow(bridgeYears)
-            if (factor > 0.0 && !factor.isNaN() && !factor.isInfinite()) {
-                (postPensionShortfall / swr) / factor
+        val vBridgeYears = max(0, settings.vStatePensionAge - age)
+        val eBridgeYears = if (!settings.isSingleHousehold) max(0, settings.eStatePensionAge - age) else vBridgeYears
+
+        val (b1, b2, p1Active) = if (vBridgeYears <= eBridgeYears) {
+            Triple(vBridgeYears, eBridgeYears, vAnnualPension)
+        } else {
+            Triple(eBridgeYears, vBridgeYears, eAnnualPension)
+        }
+
+        // Phase 1: From age until first pension starts (b1 years)
+        val costPhase1 = annualLifestyle * annuityFactor(swr, b1)
+
+        // Phase 2: From b1 until second pension starts (b2 years)
+        val shortfallPhase2 = max(0.0, annualLifestyle - p1Active)
+        val costPhase2 = if (b2 > b1 && shortfallPhase2 > 0) {
+            val annuity2 = shortfallPhase2 * annuityFactor(swr, b2 - b1)
+            val discountFactor1 = (1.0 + swr).pow(b1)
+            if (discountFactor1 > 0.0 && !discountFactor1.isNaN() && !discountFactor1.isInfinite()) {
+                annuity2 / discountFactor1
+            } else 0.0
+        } else 0.0
+
+        // Phase 3: Perpetuity after second pension starts (b2 years)
+        val postAllPensionsShortfall = max(0.0, annualLifestyle - vAnnualPension - eAnnualPension)
+        val targetCapitalPhase3 = if (postAllPensionsShortfall > 0) {
+            val discountFactor2 = (1.0 + swr).pow(b2)
+            if (discountFactor2 > 0.0 && !discountFactor2.isNaN() && !discountFactor2.isInfinite()) {
+                (postAllPensionsShortfall / swr) / discountFactor2
             } else 0.0
         } else 0.0
 
         val safetyBuffer = (1.0 + settings.safetyBufferPct / 100.0).coerceAtLeast(0.0)
-        val total = (bridgeCost + targetCapitalPostPension) * safetyBuffer
+        val total = (costPhase1 + costPhase2 + targetCapitalPhase3) * safetyBuffer
         return if (total.isNaN() || total.isInfinite()) 0.0 else max(0.0, total)
     }
 
@@ -1130,7 +1154,7 @@ object FinancialEngine {
         val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.01)
         val realReturnFactor = nominalFactor / inflationFactor
         val realReturnRate = (realReturnFactor - 1.0).coerceAtLeast(0.001)
-        val yearsToRetire = max(1, settings.statePensionAge - settings.primaryAge)
+        val yearsToRetire = max(1, settings.vStatePensionAge - settings.primaryAge)
         val cpiCompounding = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.0)
 
         // 1. Coast FIRE
@@ -1147,7 +1171,7 @@ object FinancialEngine {
             id = "coast",
             name = "Coast FIRE",
             badgeLabel = "Compound Only",
-            description = "Existing investments grow to full FIRE target by age ${settings.statePensionAge} with 0 additional contributions.",
+            description = "Existing investments grow to full FIRE target by age ${settings.vStatePensionAge} with 0 additional contributions.",
             targetAmountToday = coastTarget,
             monthlyPassiveIncome = kotlin.math.round(((fireBase * swr) / 12.0) / 1_000.0) * 1_000.0,
             progressPct = coastProgress,

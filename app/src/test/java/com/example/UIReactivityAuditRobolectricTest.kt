@@ -30,7 +30,7 @@ class UIReactivityAuditRobolectricTest {
 
     @Test
     fun `test UI reactivity in PlanTab milestone hierarchy on settings change`() {
-        val settingsState = mutableStateOf(SettingsEntity(statePensionAge = 67))
+        val settingsState = mutableStateOf(SettingsEntity(vStatePensionAge = 67))
         val calculationState = mutableStateOf(FinancialEngine.calculate(settingsState.value))
 
         composeTestRule.setContent {
@@ -50,7 +50,7 @@ class UIReactivityAuditRobolectricTest {
 
         // Update settings: retirement age 65 and new lifestyle cost
         settingsState.value = settingsState.value.copy(
-            statePensionAge = 65,
+            vStatePensionAge = 65,
             lifestyleCostAtFireMonthly = 55000.0
         )
         calculationState.value = FinancialEngine.calculate(settingsState.value)

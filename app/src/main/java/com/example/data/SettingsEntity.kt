@@ -54,7 +54,8 @@ data class SettingsEntity(
     val lifestyleCostAtFireMonthly: Double = 0.0, // 0.0 = Auto-sync with current living expenses
     val vStatePensionMonthly: Double = 12000.0,
     val eStatePensionMonthly: Double = 12000.0,
-    val statePensionAge: Int = 67,
+    val vStatePensionAge: Int = 65,
+    val eStatePensionAge: Int = 65,
     val safeWithdrawalRatePct: Double = 4.0,
     val safetyBufferPct: Double = 10.0,
     val cpiInflationPct: Double = 2.8, // Default matches ČSÚ live benchmark; updated by Live Sync

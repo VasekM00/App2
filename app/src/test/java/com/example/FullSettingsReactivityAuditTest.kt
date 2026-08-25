@@ -203,8 +203,8 @@ class FullSettingsReactivityAuditTest {
         val statePensionGenerous = FinancialEngine.calculate(base.copy(vStatePensionMonthly = 20000.0, eStatePensionMonthly = 15000.0))
         assertTrue(statePensionZero.fireBaseTargetToday > statePensionGenerous.fireBaseTargetToday)
 
-        val earlyPension = FinancialEngine.calculate(base.copy(statePensionAge = 62))
-        val latePension = FinancialEngine.calculate(base.copy(statePensionAge = 70))
+        val earlyPension = FinancialEngine.calculate(base.copy(vStatePensionAge = 62, eStatePensionAge = 62))
+        val latePension = FinancialEngine.calculate(base.copy(vStatePensionAge = 70, eStatePensionAge = 70))
         assertTrue(latePension.fireBaseTargetToday > earlyPension.fireBaseTargetToday)
 
         // fireTargetOverride

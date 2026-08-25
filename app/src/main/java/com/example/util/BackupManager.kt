@@ -58,7 +58,8 @@ object BackupManager {
         json.put("safeWithdrawalRatePct", s.safeWithdrawalRatePct)
         json.put("safetyBufferPct", s.safetyBufferPct)
         json.put("fireTargetOverride", s.fireTargetOverride)
-        json.put("statePensionAge", s.statePensionAge)
+        json.put("vStatePensionAge", s.vStatePensionAge)
+        json.put("eStatePensionAge", s.eStatePensionAge)
         json.put("vStatePensionMonthly", s.vStatePensionMonthly)
         json.put("eStatePensionMonthly", s.eStatePensionMonthly)
         json.put("lifestyleCostAtFireMonthly", s.lifestyleCostAtFireMonthly)
@@ -176,7 +177,8 @@ object BackupManager {
                 safeWithdrawalRatePct = json.optDouble("safeWithdrawalRatePct", fallback.safeWithdrawalRatePct),
                 safetyBufferPct = json.optDouble("safetyBufferPct", fallback.safetyBufferPct),
                 fireTargetOverride = json.optDouble("fireTargetOverride", fallback.fireTargetOverride),
-                statePensionAge = json.optInt("statePensionAge", fallback.statePensionAge),
+                vStatePensionAge = json.optInt("vStatePensionAge", json.optInt("statePensionAge", fallback.vStatePensionAge)),
+                eStatePensionAge = json.optInt("eStatePensionAge", json.optInt("statePensionAge", fallback.eStatePensionAge)),
                 vStatePensionMonthly = json.optDouble("vStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly)),
                 eStatePensionMonthly = json.optDouble("eStatePensionMonthly", fallback.eStatePensionMonthly),
                 lifestyleCostAtFireMonthly = json.optDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
@@ -254,7 +256,8 @@ object BackupManager {
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
             eReturnMonth = if (s.eReturnMonth in 1..12) s.eReturnMonth else f.eReturnMonth,
             lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
-            statePensionAge = if (s.statePensionAge in 55..75) s.statePensionAge else f.statePensionAge,
+            vStatePensionAge = if (s.vStatePensionAge in 55..75) s.vStatePensionAge else f.vStatePensionAge,
+            eStatePensionAge = if (s.eStatePensionAge in 55..75) s.eStatePensionAge else f.eStatePensionAge,
             child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
             dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,

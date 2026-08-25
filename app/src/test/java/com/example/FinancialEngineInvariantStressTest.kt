@@ -141,7 +141,7 @@ class FinancialEngineInvariantStressTest {
 
     @Test
     fun test1_11_ZeroHorizon() {
-        val settings = SettingsEntity(primaryAge = 67, statePensionAge = 67)
+        val settings = SettingsEntity(primaryAge = 67, vStatePensionAge = 67, eStatePensionAge = 67)
         val bridgeYears = FinancialEngine.statePensionBridgeYears(settings.primaryAge, settings)
         assertEquals(0, bridgeYears)
     }

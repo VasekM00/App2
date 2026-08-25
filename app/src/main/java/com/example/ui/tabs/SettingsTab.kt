@@ -698,10 +698,11 @@ fun SettingsTab(
                                 )
                             }
                             NumberSettingField(label = "Václav's State Pension Monthly", value = s.vStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(vStatePensionMonthly = it)) })
+                            NumberSettingField(label = "Václav's State Pension Age", value = s.vStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(vStatePensionAge = it.toInt())) })
                             if (!s.isSingleHousehold) {
                                 NumberSettingField(label = "Eleonora's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(eStatePensionMonthly = it)) })
+                                NumberSettingField(label = "Eleonora's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(eStatePensionAge = it.toInt())) })
                             }
-                            NumberSettingField(label = "State Pension Age", value = s.statePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(statePensionAge = it.toInt())) })
                         }
                     }
 

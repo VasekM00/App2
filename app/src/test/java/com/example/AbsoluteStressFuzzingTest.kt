@@ -35,7 +35,8 @@ class AbsoluteStressFuzzingTest {
             val baseYear = rng.nextInt(1990, 2150)
             val primaryAge = rng.nextInt(15, 85)
             val isSingle = rng.nextBoolean()
-            val statePensionAge = rng.nextInt(55, 75)
+            val vStatePensionAge = rng.nextInt(55, 75)
+            val eStatePensionAge = rng.nextInt(55, 75)
 
             val vSalary = rng.nextDouble(0.0, 500_000.0)
             val vBonus = rng.nextDouble(0.0, 1_000_000.0)
@@ -67,7 +68,8 @@ class AbsoluteStressFuzzingTest {
                 baseYear = baseYear,
                 primaryAge = primaryAge,
                 isSingleHousehold = isSingle,
-                statePensionAge = statePensionAge,
+                vStatePensionAge = vStatePensionAge,
+                eStatePensionAge = eStatePensionAge,
                 vSalary = vSalary,
                 vMealVouchersMonthly = vMeal,
                 vOtherInflowsMonthly = vOther,
@@ -236,7 +238,8 @@ class AbsoluteStressFuzzingTest {
     fun test6_instantRetirementAtAge18() {
         val young = SettingsEntity(
             primaryAge = 18,
-            statePensionAge = 65,
+            vStatePensionAge = 65,
+            eStatePensionAge = 65,
             lifestyleCostAtFireMonthly = 40_000.0,
             vStatePensionMonthly = 10_000.0,
             eStatePensionMonthly = 10_000.0
@@ -251,7 +254,8 @@ class AbsoluteStressFuzzingTest {
     fun test7_postPensionRetirementAtAge75() {
         val senior = SettingsEntity(
             primaryAge = 75,
-            statePensionAge = 65,
+            vStatePensionAge = 65,
+            eStatePensionAge = 65,
             lifestyleCostAtFireMonthly = 20_000.0,
             vStatePensionMonthly = 15_000.0,
             eStatePensionMonthly = 10_000.0 // combined 25k pension exceeds lifestyle cost

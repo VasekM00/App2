@@ -169,10 +169,10 @@ class FinancialEngineExhaustiveAuditTest {
 
         // Test state pension bridge years
         val bridgeYearsAt26 = FinancialEngine.statePensionBridgeYears(26, defaultSettings)
-        assertEquals(41, bridgeYearsAt26) // 67 - 26
+        assertEquals(39, bridgeYearsAt26) // 65 - 26
 
         val bridgeYearsAt70 = FinancialEngine.statePensionBridgeYears(70, defaultSettings)
-        assertEquals(0, bridgeYearsAt70) // max(0, 67 - 70)
+        assertEquals(0, bridgeYearsAt70) // max(0, 65 - 70)
     }
 
     @Test
@@ -271,10 +271,10 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(fatExpected, ms.fatFire.targetAmountToday, 0.001)
 
         // Check Coast description contains dynamic retirement age
-        assertTrue(ms.coastFire.description.contains("age ${defaultSettings.statePensionAge}"))
+        assertTrue(ms.coastFire.description.contains("age ${defaultSettings.vStatePensionAge}"))
 
-        // Check if mutating statePensionAge changes Coast description
-        val laterRetirementSettings = defaultSettings.copy(statePensionAge = 70)
+        // Check if mutating vStatePensionAge changes Coast description
+        val laterRetirementSettings = defaultSettings.copy(vStatePensionAge = 70)
         val laterState = FinancialEngine.calculate(laterRetirementSettings)
         assertTrue(laterState.fireMilestones.coastFire.description.contains("age 70"))
 

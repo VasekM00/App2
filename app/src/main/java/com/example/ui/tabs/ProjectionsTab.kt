@@ -155,10 +155,15 @@ private fun TrajectorySubTab(
     )
 
     val combinedPension = state.settings.vStatePensionMonthly + if (!state.settings.isSingleHousehold) state.settings.eStatePensionMonthly else 0.0
+    val pensionAgeDisplay = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
+        "${state.settings.vStatePensionAge}"
+    } else {
+        "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge}"
+    }
     val pensionBridgeInfo = MetricInfo(
         title = "State Pension Bridge Years",
         category = "Actuarial Horizon",
-        formulaOrRule = "Bridge Horizon = State Pension Age (${state.settings.statePensionAge}) - Target FIRE Age",
+        formulaOrRule = "Bridge Horizon = State Pension Age ($pensionAgeDisplay) - Target FIRE Age",
         explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(combinedPension)}/mo), the required portfolio draw drops dramatically.",
         statutoryReference = "§ 32 Act No. 155/1995 Coll.",
         practicalImplication = "Dynamic bridge modeling avoids over-saving millions of CZK by accounting for future guaranteed state annuity cash flows.",
@@ -258,8 +263,8 @@ private fun TrajectorySubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = "State Pension Age",
-                    value = "${state.settings.statePensionAge} yrs",
+                    label = if (state.settings.isSingleHousehold) "State Pension Age" else "State Pension Ages",
+                    value = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} yrs" else "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge} yrs",
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )
