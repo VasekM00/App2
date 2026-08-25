@@ -531,7 +531,7 @@ private fun RoadmapTimelineCard(
                 isCurrent = true,
                 isLast = false,
                 keyPoints = listOf(
-                    "Maximize DIP contributions (CZK 48k/yr tax deduction)",
+                    "Maximize DIP contributions (48k Kč/yr tax deduction)",
                     if (state.dps.youthSubsidyActive) "Secure 40% youth DPS state match" else "Secure DPS state match & employer match",
                     "Maintain 6-month liquid cash reserve"
                 )
@@ -1228,14 +1228,14 @@ private fun LifeGoalsSimulatorSubTab(
                     OutlinedTextField(
                         value = targetAmountStr,
                         onValueChange = { targetAmountStr = it },
-                        label = { Text("Target Capital (CZK)") },
+                        label = { Text("Target Capital") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = currentSavedStr,
                         onValueChange = { currentSavedStr = it },
-                        label = { Text("Current Savings (CZK)") },
+                        label = { Text("Current Savings") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
