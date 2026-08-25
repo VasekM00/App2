@@ -317,12 +317,12 @@ fun NetWorthChart(
                         if (x in paddingLeft..(w - paddingRight + 10f)) {
                             // Tick mark
                             drawLine(
-                                color = gridColor,
+                                color = if (i == 0) cTeal else gridColor,
                                 start = Offset(x, plotH),
                                 end = Offset(x, plotH + 8f),
-                                strokeWidth = 2f
+                                strokeWidth = if (i == 0) 3f else 2f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
@@ -369,6 +369,22 @@ fun NetWorthChart(
                         color = cTeal,
                         style = Stroke(width = 6f, cap = StrokeCap.Round)
                     )
+
+                    // Draw Current Position (Now / Start Year) Indicator Dot
+                    if (displayData.isNotEmpty()) {
+                        val curX = paddingLeft + panOffsetX + (0 * stepX)
+                        val curY = plotH - (plotH * (displayData[0].portfolio / maxVal)).toFloat()
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.35f),
+                            start = Offset(curX, curY),
+                            end = Offset(curX, plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                        )
+                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
+                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
+                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
+                    }
 
                     // Draw FIRE Milestone marker dot
                     if (fireReachedIndex >= 0) {
@@ -466,6 +482,7 @@ fun MonteCarloFanChart(
     val cTeal = BrandTeal
     val cGreen = GoodGreen
     val cRed = BadRed
+    val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -572,12 +589,12 @@ fun MonteCarloFanChart(
                         val pt = points[i]
                         val x = paddingLeft + (i * stepX)
                         drawLine(
-                            color = gridColor,
+                            color = if (i == 0) cTeal else gridColor,
                             start = Offset(x, plotH),
                             end = Offset(x, plotH + 8f),
-                            strokeWidth = 2f
+                            strokeWidth = if (i == 0) 3f else 2f
                         )
-                        val labelText = "${pt.year}"
+                        val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
                         val textWidth = textPaint.measureText(labelText)
                         drawContext.canvas.nativeCanvas.drawText(
                             labelText,
@@ -637,6 +654,22 @@ fun MonteCarloFanChart(
                         if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
                     }
                     drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+
+                    // Draw Current Position (Now / Start Year) Indicator Dot
+                    if (points.isNotEmpty()) {
+                        val curX = paddingLeft + (0 * stepX)
+                        val curY = plotH - (plotH * (points[0].p50 / maxVal)).toFloat()
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.35f),
+                            start = Offset(curX, curY),
+                            end = Offset(curX, plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                        )
+                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
+                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
+                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
+                    }
 
                     // Highlight selected point marker
                     selectedIndex?.let { idx ->
@@ -725,6 +758,7 @@ fun CashFlowProjectionChart(
 
     val cTeal = BrandTeal
     val cGold = BrandGold
+    val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -876,12 +910,12 @@ fun CashFlowProjectionChart(
                         val x = paddingLeft + panOffsetX + (i * stepX)
                         if (x in paddingLeft..(w - paddingRight + 10f)) {
                             drawLine(
-                                color = gridColor,
+                                color = if (i == 0) cTeal else gridColor,
                                 start = Offset(x, plotH),
                                 end = Offset(x, plotH + 8f),
-                                strokeWidth = 2f
+                                strokeWidth = if (i == 0) 3f else 2f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
@@ -912,6 +946,22 @@ fun CashFlowProjectionChart(
                         if (i == 0) reinvestedPath.moveTo(x, y) else reinvestedPath.lineTo(x, y)
                     }
                     drawPath(reinvestedPath, cGold, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f))))
+
+                    // Draw Current Position (Now / Start Year) Indicator Dot
+                    if (data.isNotEmpty()) {
+                        val curX = paddingLeft + panOffsetX + (0 * stepX)
+                        val curY = plotH - (plotH * (data[0].investedAnnual / maxVal)).toFloat()
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.35f),
+                            start = Offset(curX, curY),
+                            end = Offset(curX, plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                        )
+                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
+                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
+                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
+                    }
 
                     // Highlight line
                     selectedIndex?.let { idx ->
@@ -972,6 +1022,7 @@ fun StressComparisonChart(
     val cGreen = GoodGreen
     val cRed = BadRed
     val cGold = BrandGold
+    val cCardSurface = MaterialTheme.colorScheme.surface
 
     val scenarioColors = listOf(
         cTeal,                         // Baseline
@@ -1101,12 +1152,12 @@ fun StressComparisonChart(
                         val x = paddingLeft + (i * stepX)
                         if (x in paddingLeft..(w - paddingRight + 10f)) {
                             drawLine(
-                                color = gridColor,
+                                color = if (i == 0) cTeal else gridColor,
                                 start = Offset(x, plotH),
                                 end = Offset(x, plotH + 8f),
-                                strokeWidth = 2f
+                                strokeWidth = if (i == 0) 3f else 2f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
@@ -1137,6 +1188,22 @@ fun StressComparisonChart(
                                 pathEffect = if (scenario.id == "crash") PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) else null
                             )
                         )
+                    }
+
+                    // Draw Current Position (Now / Start Year) Indicator Dot
+                    if (firstTraj.isNotEmpty()) {
+                        val curX = paddingLeft + (0 * stepX)
+                        val curY = plotH - (plotH * (firstTraj[0].portfolio / maxVal)).toFloat()
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.35f),
+                            start = Offset(curX, curY),
+                            end = Offset(curX, plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                        )
+                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
+                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
+                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
                     }
 
                     drawContext.canvas.restore()
