@@ -261,69 +261,7 @@ fun SettingsTab(
                     // TAB 0: CASHFLOW & FAMILY
                     // ==========================================
 
-                    // 1. Profile & Household Structure
-                    item {
-                        SettingsGroupCard(
-                            title = "Profile & Household Structure",
-                            initiallyExpanded = false,
-                            badgeText = "VÁCLAV & ELEONORA",
-                            badgeColor = BrandGold
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = "Václav & Eleonora",
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
-                                        )
-                                        Text(
-                                            text = "Married Household · Two Earners",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        )
-                                    }
-                                    ColorPill(
-                                        text = "MARRIED",
-                                        color = BrandTeal,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        horizontalPadding = 8.dp,
-                                        verticalPadding = 4.dp
-                                    )
-                                }
-                            }
-
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                            NumberSettingField(
-                                label = "Base Planning Year",
-                                value = s.baseYear.toDouble(),
-                                minValue = 2000.0,
-                                maxValue = 2200.0,
-                                onValueChange = { yr ->
-                                    val y = yr.toInt()
-                                    val newAge = (y - com.example.data.VACLAV_BIRTH_YEAR).coerceIn(15, 80)
-                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = newAge))
-                                }
-                            )
-                            NumberSettingField(
-                                label = "Expected CPI Inflation (%)",
-                                value = s.cpiInflationPct,
-                                minValue = 0.0,
-                                maxValue = 20.0,
-                                onValueChange = { onUpdateSettings(s.copy(cpiInflationPct = it)) }
-                            )
-                        }
-                    }
-
-                    // 2. Earned & Side Incomes
+                    // 1. Earned & Side Incomes
                     item {
                         SettingsGroupCard(
                             title = "Earned & Side Incomes",
@@ -754,6 +692,25 @@ fun SettingsTab(
                             info = SettingsMetricInfos.swr,
                             onShowInfo = { infoState.show(it) }
                         ) {
+                            NumberSettingField(
+                                label = "Base Planning Year",
+                                value = s.baseYear.toDouble(),
+                                minValue = 2000.0,
+                                maxValue = 2200.0,
+                                onValueChange = { yr ->
+                                    val y = yr.toInt()
+                                    val newAge = (y - com.example.data.VACLAV_BIRTH_YEAR).coerceIn(15, 80)
+                                    onUpdateSettings(s.copy(baseYear = y, primaryAge = newAge))
+                                }
+                            )
+                            NumberSettingField(
+                                label = "Expected CPI Inflation (%)",
+                                value = s.cpiInflationPct,
+                                minValue = 0.0,
+                                maxValue = 20.0,
+                                onValueChange = { onUpdateSettings(s.copy(cpiInflationPct = it)) }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.0, maxValue = 10.0, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
                             NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                             NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
@@ -1393,7 +1350,19 @@ private fun NumberSettingField(
     minValue: Double = 0.0,
     maxValue: Double? = null
 ) {
-    fun formatVal(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+    fun formatVal(v: Double): String {
+        if (v.isNaN() || v.isInfinite()) return "0"
+        return if (v % 1.0 == 0.0) {
+            v.toLong().toString()
+        } else {
+            val rounded = kotlin.math.round(v * 100.0) / 100.0
+            if (rounded % 1.0 == 0.0) {
+                rounded.toLong().toString()
+            } else {
+                String.format(java.util.Locale.US, "%.2f", rounded).trimEnd('0').trimEnd('.')
+            }
+        }
+    }
 
     var textValue by remember { mutableStateOf(formatVal(value)) }
     var isFocused by remember { mutableStateOf(false) }

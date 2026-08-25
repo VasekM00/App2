@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -170,8 +170,8 @@ abstract class AppDatabase : RoomDatabase() {
                 }
 
                 val employerRetirementMonthlyCol = when {
-                    columns.contains("employerRetirementMonthly") -> "employerRetirementMonthly"
-                    columns.contains("employerRetirementAnnual") -> "(employerRetirementAnnual / 12.0)"
+                    columns.contains("employerRetirementMonthly") -> "CASE WHEN employerRetirementMonthly > 230.0 AND employerRetirementMonthly < 235.0 THEN 2800.0 ELSE employerRetirementMonthly END"
+                    columns.contains("employerRetirementAnnual") -> "CASE WHEN employerRetirementAnnual <= 5000.0 THEN employerRetirementAnnual ELSE (employerRetirementAnnual / 12.0) END"
                     else -> "2800.0"
                 }
 
@@ -363,19 +363,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_18_20 = object : Migration(18, 20) {
+        val MIGRATION_20_21 = object : Migration(20, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 recreateAppSettingsTable(db)
             }
         }
 
-        val MIGRATION_17_20 = object : Migration(17, 20) {
+        val MIGRATION_19_21 = object : Migration(19, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 recreateAppSettingsTable(db)
             }
         }
 
-        val MIGRATION_16_20 = object : Migration(16, 20) {
+        val MIGRATION_18_21 = object : Migration(18, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recreateAppSettingsTable(db)
+            }
+        }
+
+        val MIGRATION_17_21 = object : Migration(17, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                recreateAppSettingsTable(db)
+            }
+        }
+
+        val MIGRATION_16_21 = object : Migration(16, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 recreateAppSettingsTable(db)
             }
@@ -390,8 +402,8 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_18_20,
-                        MIGRATION_17_20, MIGRATION_16_20
+                        MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
+                        MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21
                     )
                     .fallbackToDestructiveMigration(true)
                     .build()

@@ -11,7 +11,14 @@ class FinancialRepository(
     private val actionStateDao: ActionStateDao
 ) {
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
-        .map { it ?: SettingsEntity.freshDefaults() }
+        .map { entity ->
+            val s = entity ?: SettingsEntity.freshDefaults()
+            if (s.employerRetirementMonthly in 230.0..235.0) {
+                s.copy(employerRetirementMonthly = 2800.0)
+            } else {
+                s
+            }
+        }
 
     val ledgerFlow: Flow<List<LedgerEntryEntity>> = ledgerDao.getAllEntries()
 
