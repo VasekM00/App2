@@ -63,12 +63,8 @@ object Formatters {
                 }
             }
             absVal >= 100_000 -> {
-                val k = value / 1_000.0
-                if (abs(k - k.roundToInt()) < 0.05) {
-                    String.format(czkLocale, "%.0fk", k)
-                } else {
-                    String.format(czkLocale, "%.1fk", k)
-                }
+                val k = kotlin.math.round(value / 1_000.0).roundToLong()
+                "${k}k"
             }
             else -> {
                 val displayVal = roundToDisplay(value)

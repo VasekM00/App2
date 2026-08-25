@@ -69,7 +69,7 @@ fun EmergencyReserveWidget(
     val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
     val currentLiquidCash = state.settings.emergencyReserveCurrent
 
-    val targetAmount = when (selectedTargetMode) {
+    val rawTargetAmount = when (selectedTargetMode) {
         "3M" -> monthlyExpense * 3
         "6M" -> monthlyExpense * 6
         "9M" -> monthlyExpense * 9
@@ -77,6 +77,7 @@ fun EmergencyReserveWidget(
         "Target" -> if (state.settings.emergencyReserveTarget > 0.0) state.settings.emergencyReserveTarget else monthlyExpense * 6
         else -> monthlyExpense * 6
     }
+    val targetAmount = com.example.util.Formatters.roundTo1k(rawTargetAmount)
 
     val progress = (currentLiquidCash / targetAmount.coerceAtLeast(1.0)).coerceIn(0.0, 1.0).toFloat()
     val monthsCovered = currentLiquidCash / monthlyExpense
@@ -160,7 +161,7 @@ fun EmergencyReserveWidget(
                             softWrap = true
                         )
                         Text(
-                            text = "${String.format("%.1f", monthsCovered)} Mo. Expenses Covered",
+                            text = "${String.format(java.util.Locale.forLanguageTag("cs-CZ"), "%.1f", monthsCovered)} Mo. Expenses Covered",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
