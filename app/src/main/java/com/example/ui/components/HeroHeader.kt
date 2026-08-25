@@ -170,7 +170,7 @@ fun HeroHeader(
                     )
                     MiniStatChip(
                         label = "Savings Rate",
-                        value = String.format("%.1f%%", state.savingsRatePct),
+                        value = if (state.savingsRatePct.isFinite()) String.format(java.util.Locale.US, "%.1f%%", state.savingsRatePct) else "0.0%",
                         onClick = onNavigateToSavingsRate,
                         modifier = Modifier.weight(1f).testTag("hero_stat_savings_rate")
                     )

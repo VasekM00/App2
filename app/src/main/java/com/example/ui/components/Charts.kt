@@ -798,7 +798,7 @@ fun CashFlowProjectionChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val maxVal = (data.maxOf { maxOf(it.reinvestAnnual, it.investedAnnual) } * 1.25).coerceAtLeast(100000.0)
+            val maxVal = ((data.maxOfOrNull { maxOf(it.reinvestAnnual, it.investedAnnual) } ?: 100000.0) * 1.25).coerceAtLeast(100000.0)
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
@@ -1040,7 +1040,7 @@ fun StressComparisonChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val firstTraj = scenarios.first().trajectory
+            val firstTraj = scenarios.firstOrNull()?.trajectory ?: emptyList()
             val maxVal = (scenarios.flatMap { it.trajectory }.maxOfOrNull { it.portfolio } ?: 1000000.0).coerceAtLeast(100.0) * 1.1
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()

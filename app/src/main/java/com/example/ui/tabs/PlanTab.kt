@@ -1433,9 +1433,9 @@ private fun FireMilestonesComparisonCard(
         else -> "Level 0: Accumulation"
     }
 
-    val defaultTargetId = items.firstOrNull { !it.milestone.isAchieved }?.milestone?.id ?: items.last().milestone.id
+    val defaultTargetId = items.firstOrNull { !it.milestone.isAchieved }?.milestone?.id ?: items.lastOrNull()?.milestone?.id ?: "standard"
     var selectedMilestoneId by remember { mutableStateOf(defaultTargetId) }
-    val activeConfig = items.find { it.milestone.id == selectedMilestoneId } ?: items.first()
+    val activeConfig = items.find { it.milestone.id == selectedMilestoneId } ?: items.firstOrNull() ?: items[0]
 
     Card(
         modifier = Modifier
