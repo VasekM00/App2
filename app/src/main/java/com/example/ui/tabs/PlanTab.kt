@@ -96,6 +96,11 @@ import com.example.domain.serializeCustomLifeGoals
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.components.KpiCard
+import com.example.ui.components.MetricInfo
+import com.example.ui.components.MetricInfoDialog
+import com.example.ui.components.rememberMetricInfoState
+import com.example.ui.components.infoTapHold
+import androidx.compose.material.icons.filled.Info
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
@@ -116,6 +121,84 @@ data class LifeGoalItem(
     val currentSavedCzk: Double
 )
 
+private object PlanMetricInfos {
+    val coastFire = MetricInfo(
+        title = "Coast FIRE Milestone",
+        category = "Organic Compounding",
+        formulaOrRule = "Target / (1 + Real CAGR)^Years_to_Pension",
+        explanation = "The amount of invested capital needed today such that, with zero additional contributions, it will compound into your full retirement nest egg by statutory state pension age.",
+        practicalImplication = "Reaching Coast FIRE eliminates survival employment pressure; you only need to earn enough to cover current living burn.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val leanFire = MetricInfo(
+        title = "Lean FIRE Milestone",
+        category = "Essential Independence",
+        formulaOrRule = "(75% Baseline Living Costs) / SWR",
+        explanation = "Financial independence covering 100% of essential non-negotiable living expenses (housing, utilities, groceries, healthcare) without discretionary lifestyle costs.",
+        practicalImplication = "Guarantees absolute basic survival security even in catastrophic economic scenarios.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val standardFire = MetricInfo(
+        title = "Standard FIRE Target",
+        category = "Full Independence",
+        formulaOrRule = "(100% Living Burn - State Pension) / SWR + Bridge Deficit",
+        explanation = "Full financial independence sustaining 100% of your current household lifestyle, including discretionary spending, vacations, and child expenses perpetually.",
+        practicalImplication = "Private investment portfolio supports 100% of living burn during early retirement and bridges until statutory pensions arrive.",
+        accentColor = Color(0xFFD97706)
+    )
+
+    val fatFire = MetricInfo(
+        title = "Fat FIRE Milestone",
+        category = "Abundance & Legacy",
+        formulaOrRule = "(130% Enhanced Living Burn) / SWR",
+        explanation = "Financial abundance providing an extra 30% spending buffer for frequent travel, luxury, major family support, and generational wealth preservation.",
+        practicalImplication = "Offers maximum safety margin against prolonged stagflation or bear markets.",
+        accentColor = Color(0xFFD97706)
+    )
+
+    val dipDeduction = MetricInfo(
+        title = "DIP (Dlouhodobý investiční produkt)",
+        category = "Retirement Tax Shield",
+        formulaOrRule = "§ 15a ZDP · Up to 48,000 CZK/yr personal tax deduction",
+        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48k CZK combined with DPS saves 7,200 CZK (15% bracket) or 11,040 CZK (23% bracket) per person each year.",
+        statutoryReference = "§ 15a Act No. 586/1992 Coll.",
+        practicalImplication = "Requires maintaining contract for 120 months and withdrawal after age 60 for 0% tax liquidation.",
+        accentColor = Color(0xFF16A34A)
+    )
+
+    val dpsLepsiPenzijko = MetricInfo(
+        title = "DPS 'Lepší Penzijko' Reform",
+        category = "State Subsidy & Pension",
+        formulaOrRule = "20% standard match · 40% youth match (<30 yrs) up to 680 CZK/mo",
+        explanation = "State supplementary pension savings. Contributions between 500 CZK and 1,700 CZK receive direct monthly state cash subsidies. Contributions above 1,700 CZK qualify for the personal income tax deduction.",
+        statutoryReference = "Act No. 427/2011 Coll. & 2024 Amendments",
+        practicalImplication = "Youth under 30 get an immediate 40% guaranteed match on deposits up to 1,700 CZK/mo.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val dpsAge36 = MetricInfo(
+        title = "Age 36 One-Third DPS Withdrawal",
+        category = "Statutory Liquidity Option",
+        formulaOrRule = "§ 12 Act No. 427/2011 Coll. · 1/3 penalty-free withdrawal",
+        explanation = "Participants in DPS participation funds who reach age 36 with at least 120 months (10 years) of contributions can withdraw up to one-third of their own accumulated balances without terminating the contract or losing future entitlement.",
+        statutoryReference = "§ 12 odst. 2 Act No. 427/2011 Coll.",
+        practicalImplication = "Provides intermediate liquidity for home down payment or major life milestone without forfeiting the pension plan.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val etfTimeTest = MetricInfo(
+        title = "3-Year ETF Time Test Exemption",
+        category = "Czech Capital Gains Tax",
+        formulaOrRule = "§ 4 odst. 1 písm. w) ZDP · 3-year holding test",
+        explanation = "Capital gains from selling securities (stocks, ETFs like VWCE/SPPW) held by a natural person for more than 3 years are 100% exempt from Czech personal income tax, health insurance, and social security.",
+        statutoryReference = "§ 4 odst. 1 písm. w) Act No. 586/1992 Coll.",
+        practicalImplication = "Allows broad liquid ETF portfolios to compound and be liquidated during FIRE with completely tax-free cash returns.",
+        accentColor = Color(0xFF16A34A)
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanTab(
@@ -128,6 +211,7 @@ fun PlanTab(
 ) {
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
     val subTabs = listOf("Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
+    val infoState = rememberMetricInfoState()
 
     val haptic = LocalHapticFeedback.current
 
@@ -162,10 +246,15 @@ fun PlanTab(
         }
 
         when (selectedSubTab) {
-            0 -> PensionSubTab(state)
-            1 -> RoadmapAndGoalsSubTab(state, actionStates, onToggleAction, onUpdateSettings)
+            0 -> PensionSubTab(state, onShowInfo = { infoState.show(it) })
+            1 -> RoadmapAndGoalsSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = { infoState.show(it) })
         }
     }
+
+    MetricInfoDialog(
+        info = infoState.currentInfo,
+        onDismiss = { infoState.dismiss() }
+    )
 }
 
 @Composable
@@ -173,7 +262,8 @@ private fun RoadmapAndGoalsSubTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean>,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
-    onUpdateSettings: ((SettingsEntity) -> Unit)?
+    onUpdateSettings: ((SettingsEntity) -> Unit)?,
+    onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Life Goals Simulator
     val views = listOf("Action Checklist & Tasks", "Life Goals Simulator")
@@ -221,7 +311,7 @@ private fun RoadmapAndGoalsSubTab(
         }
 
         when (selectedView) {
-            0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings)
+            0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = onShowInfo)
             1 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
         }
     }
@@ -232,7 +322,8 @@ private fun FireRoadmapSubTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean>,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val currentYear = state.settings.baseYear
@@ -443,7 +534,7 @@ private fun FireRoadmapSubTab(
 
         // 2. Section 1: FIRE Milestones Hierarchy & Roadmap Timeline
         if (selectedSection == 0) {
-            FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings)
+            FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
             RoadmapTimelineCard(state = state, fireYear = fireYear, targetWorth = targetWorth, monthlyPassiveIncome = monthlyPassiveIncome)
         }
 
@@ -1277,7 +1368,10 @@ private fun LifeGoalsSimulatorSubTab(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PensionSubTab(state: FullCalculationState) {
+private fun PensionSubTab(
+    state: FullCalculationState,
+    onShowInfo: (MetricInfo) -> Unit = {}
+) {
     val scrollState = rememberScrollState()
     val dps = state.dps
     val currentSubsidy = FinancialEngine.dpsSubsidy(state.settings.dpsOwnContributionMonthly, state.settings.primaryAge, state.settings)
@@ -1301,7 +1395,9 @@ private fun PensionSubTab(state: FullCalculationState) {
                 value = if (dps.youthSubsidyActive) "40% (Youth)" else "20%",
                 hint = if (dps.youthSubsidyActive) "Youth match active" else "Standard rate active",
                 accentColor = BrandTeal,
-                modifier = itemWidth
+                modifier = itemWidth,
+                info = PlanMetricInfos.dpsLepsiPenzijko,
+                onShowInfo = onShowInfo
             )
 
             KpiCard(
@@ -1309,7 +1405,9 @@ private fun PensionSubTab(state: FullCalculationState) {
                 value = fmtCZK(currentSubsidy),
                 hint = "On ${fmtCZK(state.settings.dpsOwnContributionMonthly)} deposit",
                 accentColor = BrandGold,
-                modifier = itemWidth
+                modifier = itemWidth,
+                info = PlanMetricInfos.dpsLepsiPenzijko,
+                onShowInfo = onShowInfo
             )
 
             KpiCard(
@@ -1317,7 +1415,9 @@ private fun PensionSubTab(state: FullCalculationState) {
                 value = fmtCZK(state.taxReturnHelper.dipSaving),
                 hint = "Direct tax saving / yr",
                 accentColor = GoodGreen,
-                modifier = itemWidth
+                modifier = itemWidth,
+                info = PlanMetricInfos.dipDeduction,
+                onShowInfo = onShowInfo
             )
 
             KpiCard(
@@ -1325,7 +1425,9 @@ private fun PensionSubTab(state: FullCalculationState) {
                 value = fmtCompact(dps.dpsBalance),
                 hint = "Projected pension wealth",
                 accentColor = BrandTeal,
-                modifier = itemWidth
+                modifier = itemWidth,
+                info = PlanMetricInfos.dpsAge36,
+                onShowInfo = onShowInfo
             )
         }
 
@@ -1386,7 +1488,8 @@ private fun PensionSubTab(state: FullCalculationState) {
 @Composable
 private fun FireMilestonesComparisonCard(
     state: FullCalculationState,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
     val investableNetWorth = state.settings.liquidPortfolioCurrent + state.settings.eLiquidPortfolioCurrent +
@@ -1399,28 +1502,32 @@ private fun FireMilestonesComparisonCard(
             accentColor = BrandTeal,
             icon = Icons.Default.Spa,
             shortLabel = "Coast",
-            levelIndex = 1
+            levelIndex = 1,
+            metricInfo = PlanMetricInfos.coastFire
         ),
         MilestoneConfig(
             milestone = milestones.leanFire,
             accentColor = BrandBlue,
             icon = Icons.Default.Home,
             shortLabel = "Lean",
-            levelIndex = 2
+            levelIndex = 2,
+            metricInfo = PlanMetricInfos.leanFire
         ),
         MilestoneConfig(
             milestone = milestones.standardFire,
             accentColor = GoodGreen,
             icon = Icons.Default.Shield,
             shortLabel = "Standard",
-            levelIndex = 3
+            levelIndex = 3,
+            metricInfo = PlanMetricInfos.standardFire
         ),
         MilestoneConfig(
             milestone = milestones.fatFire,
             accentColor = BrandGold,
             icon = Icons.Default.Diamond,
             shortLabel = "Fat",
-            levelIndex = 4
+            levelIndex = 4,
+            metricInfo = PlanMetricInfos.fatFire
         )
     )
 
@@ -1707,6 +1814,17 @@ private fun FireMilestonesComparisonCard(
                                 text = "Active Target: ${activeM.name}",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
+                            if (onShowInfo != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Info on ${activeM.name}",
+                                    tint = activeConfig.accentColor.copy(alpha = 0.8f),
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .clickable { onShowInfo(activeConfig.metricInfo) }
+                                )
+                            }
                             Spacer(modifier = Modifier.width(6.dp))
                             ColorPill(
                                 text = "${activeM.progressPct.toInt()}%",
@@ -1928,7 +2046,8 @@ private data class MilestoneConfig(
     val accentColor: Color,
     val icon: ImageVector,
     val shortLabel: String,
-    val levelIndex: Int
+    val levelIndex: Int,
+    val metricInfo: MetricInfo
 )
 
 

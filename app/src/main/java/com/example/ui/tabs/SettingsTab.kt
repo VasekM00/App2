@@ -90,6 +90,12 @@ import com.example.domain.serializeCustomLumpSums
 import com.example.domain.serializeDeletedCategories
 import com.example.ui.components.ColorPill
 import com.example.ui.components.LiveSyncDialog
+import com.example.ui.components.MetricInfo
+import com.example.ui.components.MetricInfoDialog
+import com.example.ui.components.rememberMetricInfoState
+import com.example.ui.components.infoTapHold
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.graphics.Color
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -99,6 +105,76 @@ import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import kotlinx.coroutines.delay
 import java.util.UUID
+
+private object SettingsMetricInfos {
+    val swr = MetricInfo(
+        title = "Safe Withdrawal Rate (SWR)",
+        category = "Actuarial Science",
+        formulaOrRule = "Initial Annual Spend / Starting Portfolio Size",
+        explanation = "The percentage of your investment portfolio withdrawn in year 1 of retirement, subsequently adjusted annually for CPI inflation. Based on the Trinity Study (Bengen, 1994). A 3.5% SWR historically provides a 99%+ 40-year portfolio survival rate.",
+        statutoryReference = "Trinity Study & Modern Portfolio Theory",
+        practicalImplication = "Dropping SWR from 4.0% to 3.5% provides extra safety margin against sequence-of-returns risk.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val safetyBuffer = MetricInfo(
+        title = "FIRE Safety Capital Buffer",
+        category = "Risk Management",
+        formulaOrRule = "Target Base Portfolio * (1 + Safety Buffer %)",
+        explanation = "An additional discretionary capital cushion added on top of your baseline FIRE nest egg. Shields against healthcare shocks, extended deep recessions, or unforeseen property maintenance.",
+        practicalImplication = "A 10% buffer on a 10M CZK target adds 1,000,000 CZK in extra margin of safety.",
+        accentColor = Color(0xFFD97706)
+    )
+
+    val spouseCredit = MetricInfo(
+        title = "Spouse Tax Credit (§ 35ba)",
+        category = "Czech Tax Code",
+        formulaOrRule = "24,840 CZK/yr deduction if spouse's own income < 68,000 CZK",
+        explanation = "Annual tax credit claimed by one spouse when the other has own annual gross income not exceeding 68,000 CZK and takes care of a child under 3 years old. Crucially, state parental allowance (rodičovský příspěvek) is legally excluded from this income ceiling.",
+        statutoryReference = "§ 35ba odst. 1 písm. b) Act No. 586/1992 Coll.",
+        practicalImplication = "Directly reduces personal income tax liability by up to 24,840 CZK per year (2,070 CZK/month).",
+        accentColor = Color(0xFF16A34A)
+    )
+
+    val childBonus = MetricInfo(
+        title = "Child Tax Credit & Bonus (§ 35c)",
+        category = "Czech Tax Code",
+        formulaOrRule = "1st child: 15,204 CZK/yr · 2nd child: 22,320 CZK/yr · 3rd+: 27,840 CZK/yr",
+        explanation = "Progressive tax allowance per dependent child. If your tax liability reaches zero, the unused portion is paid out by the state directly to you as a cash tax bonus (daňový bonus).",
+        statutoryReference = "§ 35c Act No. 586/1992 Coll.",
+        practicalImplication = "Provides direct cash rebates when tax liability is low.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val monteCarlo = MetricInfo(
+        title = "Monte Carlo Volatility Modeling",
+        category = "Statistical Simulation",
+        formulaOrRule = "Geometric Brownian Motion · 1,000 Iterations",
+        explanation = "Simulates 1,000 randomized market return paths using historical asset volatility (16% std dev) and expected inflation. Renders 5th percentile (bear worst case), 50th percentile (median), and 95th percentile (bull optimal) wealth trajectories.",
+        practicalImplication = "Ensures financial planning accounts for unpredictable market sequences rather than unrealistic linear returns.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val cpiInflation = MetricInfo(
+        title = "CPI Inflation Compounding",
+        category = "Macroeconomic Model",
+        formulaOrRule = "Future Cost = Present Cost * (1 + CPI)^Years",
+        explanation = "Annual consumer price inflation rate used to compound future living expenses, child costs, and lifestyle goals.",
+        statutoryReference = "Czech Statistical Office (ČSÚ)",
+        practicalImplication = "At 2.5% inflation, living costs double approximately every 28 years.",
+        accentColor = Color(0xFFDC2626)
+    )
+
+    val statePensionAge = MetricInfo(
+        title = "Statutory State Pension Age",
+        category = "Czech Pension System",
+        formulaOrRule = "Act No. 155/1995 Coll. · Statutory retirement age",
+        explanation = "The legal retirement age when state pillar 1 pension benefits begin. In the FIRE model, your private investment portfolio bridges living expenses from early retirement until this age.",
+        statutoryReference = "Act No. 155/1995 Coll. on Pension Insurance",
+        practicalImplication = "Earlier personal retirement requires a larger private bridge fund to cover living costs before state pensions kick in.",
+        accentColor = Color(0xFF0F766E)
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,6 +207,7 @@ fun SettingsTab(
     var newLumpSumName by remember { mutableStateOf("") }
     var newLumpSumYear by remember { mutableStateOf("") }
     var newLumpSumAmount by remember { mutableStateOf("") }
+    val infoState = rememberMetricInfoState()
 
     // Consolidated into 3 high-level cohesive hubs
     val clampedInitialTab = initialSubTab.coerceIn(0, 2)
@@ -516,7 +593,9 @@ fun SettingsTab(
                             title = "Family & Children",
                             initiallyExpanded = false,
                             badgeText = if (s.childExpensesEnabled) "ACTIVE" else "OFF",
-                            badgeColor = BrandTeal
+                            badgeColor = BrandTeal,
+                            info = SettingsMetricInfos.childBonus,
+                            onShowInfo = { infoState.show(it) }
                         ) {
                             BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
 
@@ -678,7 +757,9 @@ fun SettingsTab(
                             title = "FIRE Targets & Market Assumptions",
                             initiallyExpanded = false,
                             badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
-                            badgeColor = BrandTeal
+                            badgeColor = BrandTeal,
+                            info = SettingsMetricInfos.swr,
+                            onShowInfo = { infoState.show(it) }
                         ) {
                             NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.0, maxValue = 10.0, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
                             NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
@@ -712,7 +793,9 @@ fun SettingsTab(
                             title = "Czech Tax Shield & Statutory Engine",
                             initiallyExpanded = false,
                             badgeText = "ADVANCED",
-                            badgeColor = BrandGold
+                            badgeColor = BrandGold,
+                            info = SettingsMetricInfos.spouseCredit,
+                            onShowInfo = { infoState.show(it) }
                         ) {
                             Text(
                                 text = "Live Tax Shield Summary",
@@ -1191,6 +1274,11 @@ fun SettingsTab(
             }
         )
     }
+
+    MetricInfoDialog(
+        info = infoState.currentInfo,
+        onDismiss = { infoState.dismiss() }
+    )
 }
 
 @Composable
@@ -1224,6 +1312,8 @@ private fun SettingsGroupCard(
     collapsible: Boolean = true,
     badgeText: String? = null,
     badgeColor: androidx.compose.ui.graphics.Color = BrandTeal,
+    info: MetricInfo? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
@@ -1255,6 +1345,19 @@ private fun SettingsGroupCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    if (info != null && onShowInfo != null) {
+                        IconButton(
+                            onClick = { onShowInfo(info) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Info on $title",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                     if (badgeText != null) {
                         ColorPill(
                             text = badgeText,
