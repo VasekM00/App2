@@ -35,11 +35,11 @@ class FinancialEngineExhaustiveAuditTest {
         val income2026 = FinancialEngine.householdIncome(2026, defaultSettings)
         assertEquals(33500.0, income2026.vaclavNet, 0.001)
         assertEquals(0.0, income2026.eleonoraSalary, 0.001)
-        assertEquals(3166.6667, income2026.benefit, 0.001) // Child 1 pot: 350k - 24 months drawn at 13k = 38k left in 2026
+        assertEquals(13000.0, income2026.benefit, 0.001) // Direct monthly parental allowance
         assertEquals(6900.0, income2026.lecturing, 0.001)
         assertEquals(2090.0, income2026.vouchers, 0.001)
         assertEquals(16000.0, income2026.gift, 0.001)
-        assertEquals(61656.6667, income2026.totalMonthly, 0.001)
+        assertEquals(71490.0, income2026.totalMonthly, 0.001)
 
         // Mutate Vaclav salary, other inflows, and bonus
         val modifiedSettings = defaultSettings.copy(
@@ -59,11 +59,11 @@ class FinancialEngineExhaustiveAuditTest {
         val inc2026Mod = FinancialEngine.householdIncome(2026, modifiedSettings)
         assertEquals(50000.0, inc2026Mod.vaclavNet, 0.001) // 45000 + 5000 bonus
         assertEquals(0.0, inc2026Mod.eleonoraSalary, 0.001)
-        assertEquals(0.0, inc2026Mod.benefit, 0.001) // Child 1 pot already exhausted before baseYear at 15k/mo
+        assertEquals(15000.0, inc2026Mod.benefit, 0.001) // Direct monthly parental allowance at 15k
         assertEquals(0.0, inc2026Mod.lecturing, 0.001)
         assertEquals(3000.0, inc2026Mod.vouchers, 0.001)
         assertEquals(20000.0, inc2026Mod.gift, 0.001)
-        assertEquals(73000.0, inc2026Mod.totalMonthly, 0.001)
+        assertEquals(88000.0, inc2026Mod.totalMonthly, 0.001)
 
         // Year 2028 (Eleonora returns)
         val inc2028Mod = FinancialEngine.householdIncome(2028, modifiedSettings)

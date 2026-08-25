@@ -386,30 +386,9 @@ object FinancialEngine {
 
     fun eleonoraBenefitMonthly(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold || year < settings.baseYear || year >= settings.eReturnYear) return 0.0
-        val rate = settings.eParentalAllowanceMonthly
-        if (rate <= 0.0) return 0.0
-
-        val children = mutableListOf<Pair<Int, Double>>()
-        if (settings.child1Enabled) children.add(settings.child1BirthYear to parentalAllowancePot(settings.child1BirthYear))
-        if (settings.child2Enabled) children.add(settings.child2BirthYear to parentalAllowancePot(settings.child2BirthYear))
-
-        // Each child has their own statutory pot; subtract what was drawn before baseYear.
-        var remaining = 0.0
-        for ((birthYear, pot) in children) {
-            if (birthYear < settings.baseYear) {
-                remaining += max(0.0, pot - rate * 12.0 * (settings.baseYear - birthYear))
-            }
-        }
-        var paidInYear = 0.0
-        for (y in settings.baseYear..year) {
-            for ((birthYear, pot) in children) {
-                if (birthYear == y) remaining += pot
-            }
-            val pay = min(rate * 12.0, remaining)
-            remaining -= pay
-            paidInYear = pay
-        }
-        return paidInYear / 12.0
+        val hasChildren = settings.child1Enabled || settings.child2Enabled
+        if (!hasChildren) return 0.0
+        return max(0.0, settings.eParentalAllowanceMonthly)
     }
 
     private fun parentalAllowancePot(birthYear: Int): Double {
