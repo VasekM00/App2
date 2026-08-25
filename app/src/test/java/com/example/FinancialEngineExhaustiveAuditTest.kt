@@ -31,7 +31,7 @@ class FinancialEngineExhaustiveAuditTest {
 
     @Test
     fun `test 1 - income calculations with variable modifications`() {
-        // Base case
+        // Base case (2026: Parental leave + lecturing)
         val income2026 = FinancialEngine.householdIncome(2026, defaultSettings)
         assertEquals(33500.0, income2026.vaclavNet, 0.001)
         assertEquals(0.0, income2026.eleonoraSalary, 0.001)
@@ -40,6 +40,16 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(2090.0, income2026.vouchers, 0.001)
         assertEquals(16000.0, income2026.gift, 0.001)
         assertEquals(71490.0, income2026.totalMonthly, 0.001)
+
+        // Base case (2029: Eleonora returns to work -> Allowance & Lecturing vanish, replaced by Salary)
+        val income2029 = FinancialEngine.householdIncome(2029, defaultSettings)
+        assertEquals(33500.0, income2029.vaclavNet, 0.001)
+        assertEquals(22000.0, income2029.eleonoraSalary, 0.001) // 22k starting salary
+        assertEquals(0.0, income2029.benefit, 0.001) // Vanished
+        assertEquals(0.0, income2029.lecturing, 0.001) // Vanished
+        assertEquals(2090.0, income2029.vouchers, 0.001)
+        assertEquals(16000.0, income2029.gift, 0.001)
+        assertEquals(73590.0, income2029.totalMonthly, 0.001)
 
         // Mutate Vaclav salary, other inflows, and bonus
         val modifiedSettings = defaultSettings.copy(

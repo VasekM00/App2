@@ -399,10 +399,15 @@ object FinancialEngine {
         }
     }
 
+    fun eleonoraLecturingMonthly(year: Int, settings: SettingsEntity): Double {
+        if (settings.isSingleHousehold || !settings.eIncludeLecturing || year >= settings.eReturnYear) return 0.0
+        return settings.eLecturingMonthly
+    }
+
     fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
         if (settings.isSingleHousehold) return 0.0
         val sal = eleonoraSalaryMonthly(year, settings)
-        val lec = if (settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
+        val lec = eleonoraLecturingMonthly(year, settings)
         return (sal + lec) * 12.0
     }
 
@@ -410,7 +415,7 @@ object FinancialEngine {
         val v = vaclavSalaryMonthly(year, settings)
         val e = eleonoraSalaryMonthly(year, settings)
         val b = eleonoraBenefitMonthly(year, settings)
-        val lec = if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0
+        val lec = eleonoraLecturingMonthly(year, settings)
         val gift = settings.familyGiftMonthly + (settings.annualOtherGifts / 12.0)
         val total = v + e + b + lec + gift + settings.vMealVouchersMonthly
 

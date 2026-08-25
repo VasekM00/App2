@@ -277,10 +277,17 @@ private fun IncomeSubTab(state: FullCalculationState) {
 
                 IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Eleonora's Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                if (inc.eleonoraSalary > 0.0) {
+                    IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                } else {
+                    IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    if (inc.lecturing > 0.0) {
+                        IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
+                }
                 IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
@@ -1270,10 +1277,17 @@ private fun SummarySubTab(
                     val inc = state.currentIncome
                     IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora's Allowance / Salary", value = fmtCZK(if (inc.eleonoraSalary > 0) inc.eleonoraSalary else inc.benefit))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    if (inc.eleonoraSalary > 0.0) {
+                        IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    } else {
+                        IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        if (inc.lecturing > 0.0) {
+                            IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                    }
                     IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
