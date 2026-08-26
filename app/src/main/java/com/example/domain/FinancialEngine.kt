@@ -512,44 +512,58 @@ object FinancialEngine {
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDeduction = min(vDipAnnual + vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
-        val eDeduction = if (!settings.isSingleHousehold) {
-            val eDipAnnual = settings.eDipContributionMonthly * 12.0
-            val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-            min(eDipAnnual + eDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
-        } else 0.0
+        val eDipAnnual = settings.eDipContributionMonthly * 12.0
+        val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+        val eDeduction = min(eDipAnnual + eDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
         return vDeduction + eDeduction
+    }
+
+    private fun singleEarnerRetirementTaxSaved(
+        taxableGrossAnnual: Double,
+        deductionAnnual: Double,
+        thresholdHighBracket: Double,
+        baseRate: Double,
+        highRate: Double,
+        basicTaxpayerCredit: Double
+    ): Double {
+        if (taxableGrossAnnual <= 0.0 || deductionAnnual <= 0.0) return 0.0
+
+        val highIncomeBefore = max(0.0, taxableGrossAnnual - thresholdHighBracket)
+        val baseIncomeBefore = taxableGrossAnnual - highIncomeBefore
+        val grossTaxBefore = highIncomeBefore * highRate + baseIncomeBefore * baseRate
+        val netTaxBefore = max(0.0, grossTaxBefore - basicTaxpayerCredit)
+
+        val effectiveDeduction = min(deductionAnnual, taxableGrossAnnual)
+        val taxableGrossAfter = taxableGrossAnnual - effectiveDeduction
+        val highIncomeAfter = max(0.0, taxableGrossAfter - thresholdHighBracket)
+        val baseIncomeAfter = taxableGrossAfter - highIncomeAfter
+        val grossTaxAfter = highIncomeAfter * highRate + baseIncomeAfter * baseRate
+        val netTaxAfter = max(0.0, grossTaxAfter - basicTaxpayerCredit)
+
+        return max(0.0, netTaxBefore - netTaxAfter)
     }
 
     fun dipTaxSavingYear(settings: SettingsEntity): Double {
         val threshold = settings.taxSecondBracketThresholdAnnual
         val baseRate = settings.taxRatePct / 100.0
         val highRate = settings.taxRateSecondPct / 100.0
+        val credit = settings.taxpayerCreditAnnual
 
-        // Václav saving (DIP + DPS combined)
+        // Václav saving (DIP + DPS qualifying combined)
         val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDip = settings.dipContributionMonthly * 12.0
         val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
-        // Approximate gross from net: net ≈ gross × 0.85 (employee social 7.1% + health 4.5% + avg tax wedge ~7.4%)
+        // Approximate gross from net: net ≈ gross × 0.85 (employee social 7.1% + health 4.5% + effective tax wedge)
         val vTaxableBase = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
-        
-        val vHighIncome = max(0.0, vTaxableBase - threshold)
-        val vSavingHigh = min(vDeduction, vHighIncome) * highRate
-        val vSavingBase = max(0.0, vDeduction - vSavingHigh / highRate) * baseRate
-        val vSaving = vSavingHigh + vSavingBase
+        val vSaving = singleEarnerRetirementTaxSaved(vTaxableBase, vDeduction, threshold, baseRate, highRate, credit)
 
         // Eleonora saving
-        val eSaving = if (!settings.isSingleHousehold) {
-            val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-            val eDip = settings.eDipContributionMonthly * 12.0
-            val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
-            val eTaxableBase = (eleonoraSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
-            
-            val eHighIncome = max(0.0, eTaxableBase - threshold)
-            val eSavingHigh = min(eDeduction, eHighIncome) * highRate
-            val eSavingBase = max(0.0, eDeduction - eSavingHigh / highRate) * baseRate
-            eSavingHigh + eSavingBase
-        } else 0.0
+        val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+        val eDip = settings.eDipContributionMonthly * 12.0
+        val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
+        val eTaxableBase = (eleonoraSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
+        val eSaving = singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
 
         return vSaving + eSaving
     }
@@ -739,24 +753,23 @@ object FinancialEngine {
 
     fun buildDipProjection(settings: SettingsEntity): DipProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val baseTaxSaved = dipTaxSavingYear(settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0))
-        val tsYear = dipTaxSavingYear(settings) - baseTaxSaved
-        val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
-        val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
-        val totalMonthlyDip = settings.dipContributionMonthly + eDipMonthly
+        val tsYear = dipTaxSavingYear(settings)
+        val vDipMonthly = settings.dipContributionMonthly
+        val eDipMonthly = settings.eDipContributionMonthly
+        val totalMonthlyDip = vDipMonthly + eDipMonthly
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val baseDeductionWithoutDip = min(vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
         val levels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
         val scenarios = levels.map { monthly: Double ->
             val scenarioSettings = settings.copy(dipContributionMonthly = monthly, eDipContributionMonthly = 0.0)
-            val asave = dipTaxSavingYear(scenarioSettings) - baseTaxSaved
+            val asave = dipTaxSavingYear(scenarioSettings)
             val dipAnnual = monthly * 12.0
             
             val risk = when {
-                monthly >= 4000.0 -> "High lock-up"
-                monthly >= 2300.0 -> "Medium"
-                else -> "Lower"
+                monthly >= 4000.0 -> "Optimal Max"
+                monthly >= 2500.0 -> "Balanced"
+                monthly > 0.0 -> "Light"
+                else -> "None"
             }
             DipScenario(
                 monthly = monthly,
@@ -770,17 +783,20 @@ object FinancialEngine {
 
         val annualRateDIP = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
         val monthlyRate = (1.0 + annualRateDIP).pow(1.0 / 12.0) - 1.0
-        var dipBal = settings.dipBalanceCurrent + eDipBal
+        var dipBal = settings.dipBalanceCurrent + settings.eDipBalanceCurrent
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
             dipBal = max(0.0, (dipBal + totalMonthlyDip) * max(0.0, 1.0 + monthlyRate))
         }
 
+        val totalCeiling = settings.taxDeductionCeilingAnnual * 2.0
+        val totalUtilized = annualRetirementDeduction(settings)
+
         return DipProjection(
             taxSavedYear = tsYear,
             netCostMonthly = totalMonthlyDip - tsYear / 12.0,
             scenarios = scenarios,
-            headroom = max(0.0, (settings.taxDeductionCeilingAnnual * 2) - annualRetirementDeduction(settings)),
+            headroom = max(0.0, totalCeiling - totalUtilized),
             dipBalanceAt60 = dipBal
         )
     }
