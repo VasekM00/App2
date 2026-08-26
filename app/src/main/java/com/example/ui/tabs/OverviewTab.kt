@@ -269,7 +269,7 @@ fun OverviewTab(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ColorPill(
-                            text = "${((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}% DONE",
+                            text = "${if (ActionMeta.items.isEmpty()) 0 else ((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}% DONE",
                             color = GoodGreen,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,

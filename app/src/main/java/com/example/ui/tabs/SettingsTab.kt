@@ -425,7 +425,7 @@ fun SettingsTab(
                         }
                     }
 
-                    // 3. Monthly Living Expenses
+                    // 2. Monthly Living Expenses
                     item {
                         val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
                         val deletedSet = remember(s.deletedCategoriesJson) { parseDeletedCategories(s.deletedCategoriesJson) }
@@ -518,7 +518,7 @@ fun SettingsTab(
                         }
                     }
 
-                    // 4. Family & Children
+                    // 3. Family & Children
                     item {
                         SettingsGroupCard(
                             title = "Family & Children",
@@ -645,7 +645,7 @@ fun SettingsTab(
                                 onValueChange = { onUpdateSettings(s.copy(dpsOwnContributionMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "Employer Pension Match Monthly",
+                                label = "Employer Pension Match (CZK/mo)",
                                 value = s.employerRetirementMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(employerRetirementMonthly = it)) }
                             )
@@ -668,7 +668,7 @@ fun SettingsTab(
                                 onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
                             )
                             NumberSettingField(
-                                label = "Employer Pension Match Monthly",
+                                label = "Employer Pension Match (CZK/mo)",
                                 value = s.eEmployerRetirementMonthly,
                                 onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementMonthly = it)) }
                             )
@@ -685,7 +685,7 @@ fun SettingsTab(
                     // 3. FIRE Targets & Market Assumptions
                     item {
                         SettingsGroupCard(
-                            title = "FIRE Targets & Market Assumptions",
+                            title = "Planning Assumptions & FIRE Targets",
                             initiallyExpanded = false,
                             badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
                             badgeColor = BrandTeal,
@@ -730,10 +730,8 @@ fun SettingsTab(
                             }
                             NumberSettingField(label = "Václav's State Pension Monthly", value = s.vStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(vStatePensionMonthly = it)) })
                             NumberSettingField(label = "Václav's State Pension Age", value = s.vStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(vStatePensionAge = it.toInt())) })
-                            if (!s.isSingleHousehold) {
-                                NumberSettingField(label = "Eleonora's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(eStatePensionMonthly = it)) })
-                                NumberSettingField(label = "Eleonora's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(eStatePensionAge = it.toInt())) })
-                            }
+                            NumberSettingField(label = "Eleonora's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(eStatePensionMonthly = it)) })
+                            NumberSettingField(label = "Eleonora's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(eStatePensionAge = it.toInt())) })
                         }
                     }
 

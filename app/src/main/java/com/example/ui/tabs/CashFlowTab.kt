@@ -471,7 +471,7 @@ private fun IncomeSubTab(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
                 }
-                if (!state.settings.isSingleHousehold && state.settings.eOtherInflowsMonthly > 0.0) {
+                if (state.settings.eOtherInflowsMonthly > 0.0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(state.settings.eOtherInflowsMonthly))
                 }

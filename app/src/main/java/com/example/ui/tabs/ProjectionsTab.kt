@@ -154,8 +154,8 @@ private fun TrajectorySubTab(
         accentColor = BrandGold
     )
 
-    val combinedPension = state.settings.vStatePensionMonthly + if (!state.settings.isSingleHousehold) state.settings.eStatePensionMonthly else 0.0
-    val pensionAgeDisplay = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
+    val combinedPension = state.settings.vStatePensionMonthly + state.settings.eStatePensionMonthly
+    val pensionAgeDisplay = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
         "${state.settings.vStatePensionAge}"
     } else {
         "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge}"
@@ -300,16 +300,16 @@ private fun TrajectorySubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = if (state.settings.isSingleHousehold) "State Pension Age" else "State Pension Ages",
-                    value = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} yrs" else "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge} yrs",
+                    label = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) "State Pension Age" else "State Pension Ages",
+                    value = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} yrs" else "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge} yrs",
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                val totalStatePension = state.settings.vStatePensionMonthly + if (!state.settings.isSingleHousehold) state.settings.eStatePensionMonthly else 0.0
+                val totalStatePension = state.settings.vStatePensionMonthly + state.settings.eStatePensionMonthly
                 ProjectionMetricRow(
-                    label = if (state.settings.isSingleHousehold) "Monthly State Pension" else "Combined State Pension",
+                    label = "Combined State Pension",
                     value = fmtCZK(totalStatePension) + "/mo",
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
@@ -363,7 +363,7 @@ private fun PortfolioAccountsView(
     val vaclavTotalDca by remember(s) { derivedStateOf { s.portuDcaMonthly + s.dipContributionMonthly + s.dpsOwnContributionMonthly } }
     val eTotalBal by remember(s) { derivedStateOf { s.eLiquidPortfolioCurrent + s.eDipBalanceCurrent + s.eDpsBalanceCurrent } }
     val eTotalDca by remember(s) { derivedStateOf { s.ePortuDcaMonthly + s.eDipContributionMonthly + s.eDpsOwnContributionMonthly } }
-    val empMonthly by remember(s) { derivedStateOf { s.employerRetirementMonthly + if (!s.isSingleHousehold) s.eEmployerRetirementMonthly else 0.0 } }
+    val empMonthly by remember(s) { derivedStateOf { s.employerRetirementMonthly + s.eEmployerRetirementMonthly } }
 
     val feeCapInfo = MetricInfo(
         title = "Statutory DPS Fee Cap (0.50% TER)",

@@ -530,7 +530,7 @@ object FinancialEngine {
         val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDip = settings.dipContributionMonthly * 12.0
         val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
-        // Approximate gross from net for deduction bracket check
+        // Approximate gross from net: net ≈ gross × 0.85 (employee social 7.1% + health 4.5% + avg tax wedge ~7.4%)
         val vTaxableBase = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) / 0.85
         
         val vHighIncome = max(0.0, vTaxableBase - threshold)
