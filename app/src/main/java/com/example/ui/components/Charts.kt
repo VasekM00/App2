@@ -72,7 +72,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.text.style.TextOverflow
 import kotlin.math.max
 
 import kotlin.math.pow
@@ -1224,6 +1223,12 @@ fun StressComparisonChart(
     }
 }
 
+private data class DcaStreamItem(
+    val label: String,
+    val amount: Double,
+    val color: Color
+)
+
 @Composable
 fun DcaAllocationBreakdownBar(
     settings: SettingsEntity,
@@ -1237,19 +1242,38 @@ fun DcaAllocationBreakdownBar(
     val dpsV = settings.dpsOwnContributionMonthly
     val dpsE = if (!isSingle) settings.eDpsOwnContributionMonthly else 0.0
 
-    val totalDca = portuV + portuE + dipV + dipE + dpsV + dpsE
-    if (totalDca <= 0.0) return
-
-    val normalizer = totalDca
-    val rPortuV = (portuV / normalizer).toFloat()
-    val rPortuE = (portuE / normalizer).toFloat()
-    val rDip = ((dipV + dipE) / normalizer).toFloat()
-    val rDps = ((dpsV + dpsE) / normalizer).toFloat()
-
     val cPortuV = BrandTeal
     val cPortuE = BrandGold
-    val cDip = GoodGreen
-    val cDps = BrandBlue
+    val cDipV = GoodGreen
+    val cDipE = Color(0xFF059669)
+    val cDpsV = BrandBlue
+    val cDpsE = Color(0xFF38BDF8)
+
+    val streams = remember(settings, isSingle, portuV, portuE, dipV, dipE, dpsV, dpsE, cPortuV, cPortuE, cDipV, cDipE, cDpsV, cDpsE) {
+        buildList {
+            if (portuV > 0.0) {
+                add(DcaStreamItem(label = "Brokerage · ${settings.primaryName}", amount = portuV, color = cPortuV))
+            }
+            if (portuE > 0.0) {
+                add(DcaStreamItem(label = "Brokerage · ${settings.spouseName}", amount = portuE, color = cPortuE))
+            }
+            if (dipV > 0.0) {
+                add(DcaStreamItem(label = "DIP · ${settings.primaryName}", amount = dipV, color = cDipV))
+            }
+            if (dipE > 0.0) {
+                add(DcaStreamItem(label = "DIP · ${settings.spouseName}", amount = dipE, color = cDipE))
+            }
+            if (dpsV > 0.0) {
+                add(DcaStreamItem(label = "DPS · ${settings.primaryName}", amount = dpsV, color = cDpsV))
+            }
+            if (dpsE > 0.0) {
+                add(DcaStreamItem(label = "DPS · ${settings.spouseName}", amount = dpsE, color = cDpsE))
+            }
+        }
+    }
+
+    val totalDca = streams.sumOf { it.amount }
+    if (totalDca <= 0.0 || streams.isEmpty()) return
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -1293,97 +1317,44 @@ fun DcaAllocationBreakdownBar(
                 .padding(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (rPortuV > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(rPortuV)
-                        .fillMaxHeight()
-                        .background(cPortuV, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
-                )
-            }
-            if (rPortuE > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(rPortuE)
-                        .fillMaxHeight()
-                        .background(cPortuE)
-                )
-            }
-            if (rDip > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(rDip)
-                        .fillMaxHeight()
-                        .background(cDip)
-                )
-            }
-            if (rDps > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(rDps)
-                        .fillMaxHeight()
-                        .background(cDps, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
-                )
+            streams.forEachIndexed { index, stream ->
+                val ratio = (stream.amount / totalDca).toFloat()
+                if (ratio > 0f) {
+                    val startRadius = if (index == 0) 6.dp else 0.dp
+                    val endRadius = if (index == streams.size - 1) 6.dp else 0.dp
+                    Box(
+                        modifier = Modifier
+                            .weight(ratio)
+                            .fillMaxHeight()
+                            .background(
+                                stream.color,
+                                RoundedCornerShape(
+                                    topStart = startRadius,
+                                    bottomStart = startRadius,
+                                    topEnd = endRadius,
+                                    bottomEnd = endRadius
+                                )
+                            )
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Pillboxes Grid for Streams
+        // Single-line Pillbox Stream Rows
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (portuV > 0) {
-                    DcaPillBox(
-                        label = "Brokerage · ${settings.primaryName}",
-                        amount = portuV,
-                        pct = (rPortuV * 100).toInt(),
-                        color = cPortuV,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (portuE > 0) {
-                    DcaPillBox(
-                        label = "Brokerage · ${settings.spouseName}",
-                        amount = portuE,
-                        pct = (rPortuE * 100).toInt(),
-                        color = cPortuE,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            if ((dipV + dipE) > 0 || (dpsV + dpsE) > 0) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if ((dipV + dipE) > 0) {
-                        val dipLabel = if (!isSingle && dipE > 0) "DIP · Both" else "DIP Retirement"
-                        DcaPillBox(
-                            label = dipLabel,
-                            amount = dipV + dipE,
-                            pct = (rDip * 100).toInt(),
-                            color = cDip,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if ((dpsV + dpsE) > 0) {
-                        val dpsLabel = if (!isSingle && dpsE > 0) "DPS · Both" else "DPS Pension"
-                        DcaPillBox(
-                            label = dpsLabel,
-                            amount = dpsV + dpsE,
-                            pct = (rDps * 100).toInt(),
-                            color = cDps,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+            streams.forEach { stream ->
+                val pct = ((stream.amount / totalDca) * 100).toInt()
+                DcaPillBox(
+                    label = stream.label,
+                    amount = stream.amount,
+                    pct = pct,
+                    color = stream.color
+                )
             }
         }
     }
@@ -1398,7 +1369,7 @@ private fun DcaPillBox(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
         color = color.copy(alpha = 0.08f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.22f))
@@ -1406,40 +1377,40 @@ private fun DcaPillBox(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier.weight(1f).padding(end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(8.dp)
                         .background(color, CircleShape)
                 )
-                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 11.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false
                 )
             }
             Text(
-                text = "${fmtCompact(amount)} ($pct%)",
+                text = "${fmtCZK(amount)} · $pct%",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
+                    fontSize = 11.5.sp,
                     color = color
                 ),
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -1473,8 +1444,8 @@ fun ChartMetricPill(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(end = 4.dp)
+                softWrap = false,
+                modifier = Modifier.padding(end = 4.dp)
             )
             Text(
                 text = value,
@@ -1484,7 +1455,8 @@ fun ChartMetricPill(
                     fontFamily = FontFamily.Monospace,
                     color = color
                 ),
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -1552,8 +1524,7 @@ fun DcaTrajectoryBarChart(
                     Text(
                         text = "DCA & Compounding Breakdown",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true
                     )
                     Text(
                         text = if (viewMode == 0) "Annual savings inflows & reinvestment" else "Invested capital vs compound gains",
@@ -1561,8 +1532,7 @@ fun DcaTrajectoryBarChart(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
                         ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true
                     )
                 }
 

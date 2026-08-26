@@ -84,7 +84,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
@@ -162,9 +161,15 @@ private object PlanMetricInfos {
         title = "DIP (Dlouhodobý investiční produkt)",
         category = "Retirement Tax Shield",
         formulaOrRule = "§ 15a ZDP · Up to 48,000 CZK/yr personal tax deduction",
-        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48k CZK combined with DPS saves 7,200 CZK (15% bracket) or 11,040 CZK (23% bracket) per person each year.",
-        statutoryReference = "§ 15a Act No. 586/1992 Coll.",
-        practicalImplication = "Requires maintaining contract for 120 months and withdrawal after age 60 for 0% tax liquidation.",
+        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48,000 CZK combined with DPS saves 7,200 CZK (15% bracket) or 11,040 CZK (23% bracket) per person annually.\n\n" +
+                "📊 Statutory Deduction Matrix:\n" +
+                "• 1,000 CZK/mo (12k/yr) → Saves 1,800 CZK/yr (15%)\n" +
+                "• 2,000 CZK/mo (24k/yr) → Saves 3,600 CZK/yr (15%)\n" +
+                "• 3,000 CZK/mo (36k/yr) → Saves 5,400 CZK/yr (15%)\n" +
+                "• 4,000 CZK/mo (48k/yr) → Max 7,200 CZK/yr (15%) / 11,040 CZK/yr (23%)\n\n" +
+                "In two-income households, both partners can independently claim up to 48k CZK each (saving up to 14,400 CZK/yr combined).",
+        statutoryReference = "§ 15a Act No. 586/1992 Coll. (Income Tax Act)",
+        practicalImplication = "Requires maintaining the contract for at least 120 months (10 years) and withdrawing only after age 60 for tax-free maturity without clawbacks.",
         accentColor = Color(0xFF16A34A)
     )
 
@@ -236,8 +241,8 @@ fun PlanTab(
                             text = title,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 2,
+                            softWrap = true
                         )
                     },
                     modifier = Modifier.testTag("plan_subtab_$index")
@@ -302,8 +307,7 @@ private fun RoadmapAndGoalsSubTab(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 fontSize = 12.5.sp
                             ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
                 }
@@ -446,9 +450,9 @@ private fun FireRoadmapSubTab(
                     Column(modifier = Modifier.weight(1.05f)) {
                         Text(
                             text = "Investable Capital",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 2,
-                            softWrap = true
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(investableNetWorth),
@@ -463,10 +467,10 @@ private fun FireRoadmapSubTab(
                     }
                     Column(modifier = Modifier.weight(1.05f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Target Capital (Today)",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 2,
-                            softWrap = true
+                            text = "Target Capital",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(targetWorth),
@@ -482,10 +486,10 @@ private fun FireRoadmapSubTab(
                     }
                     Column(modifier = Modifier.weight(0.9f), horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "Monthly SWR Flow",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp),
-                            maxLines = 2,
-                            softWrap = true
+                            text = "Monthly SWR",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = fmtCZK(monthlyPassiveIncome),
@@ -1433,44 +1437,88 @@ private fun PensionSubTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // DIP Scenarios Card
+        // DIP Tax Shield Summary Card (Clean & Compact with Tap/Hold for deep matrix)
+        val vDipMonthly = state.settings.dipContributionMonthly
+        val eDipMonthly = if (!state.settings.isSingleHousehold) state.settings.eDipContributionMonthly else 0.0
+        val totalMonthlyDip = vDipMonthly + eDipMonthly
+        val totalAnnualDip = totalMonthlyDip * 12.0
+        val yearlyTaxSaved = state.taxReturnHelper.dipSaving
+
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .infoTapHold(PlanMetricInfos.dipDeduction, onShowInfo)
+                .testTag("dip_summary_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = "DIP Tax Deduction Matrix",
-                    subtitle = "Tax deductions under the 48,000 CZK combined annual ceiling",
-                    badgeText = "DIP SHIELD",
-                    accentColor = GoodGreen
+                    title = "DIP Tax Shield",
+                    subtitle = "Annual personal tax deduction (§ 15a ZDP)",
+                    badgeText = "§ 15a ZDP",
+                    accentColor = GoodGreen,
+                    trailingContent = {
+                        IconButton(
+                            onClick = { onShowInfo(PlanMetricInfos.dipDeduction) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "DIP Matrix Details",
+                                tint = GoodGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                state.dip.scenarios.forEach { scenario ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Monthly Deposit",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        )
+                        Text(
+                            text = fmtCZK(totalMonthlyDip) + " / mo",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        if (!state.settings.isSingleHousehold && (vDipMonthly > 0 || eDipMonthly > 0)) {
                             Text(
-                                text = "${fmtCZK(scenario.monthly)} / month",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = "Annual deposit: ${fmtCZK(scenario.annual)}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                text = "V: ${fmtCompact(vDipMonthly)} · E: ${fmtCompact(eDipMonthly)}",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                             )
                         }
+                    }
 
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Annual Deposit",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        )
+                        Text(
+                            text = fmtCZK(totalAnnualDip) + " / yr",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Yearly Tax Saved",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
                         ColorPill(
-                            text = "Saves ${fmtCZK(scenario.annualTaxSaved)}/yr",
-                            color = BrandTeal,
+                            text = "Saves ${fmtCZK(yearlyTaxSaved)}/yr",
+                            color = GoodGreen,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -1478,7 +1526,28 @@ private fun PensionSubTab(
                             verticalPadding = 4.dp
                         )
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = "Tap & hold to view full statutory matrix & bracket rules",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            fontSize = 10.5.sp
+                        )
+                    )
                 }
             }
         }
@@ -1596,8 +1665,7 @@ private fun FireMilestonesComparisonCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
 
@@ -1713,8 +1781,7 @@ private fun FireMilestonesComparisonCard(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                                         color = if (isSelected) config.accentColor else MaterialTheme.colorScheme.onSurface
                                     ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 1
                                 )
                                 Text(
                                     text = m.badgeLabel,
@@ -1722,8 +1789,7 @@ private fun FireMilestonesComparisonCard(
                                         fontSize = 8.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 1
                                 )
                             }
                         }
@@ -1738,7 +1804,6 @@ private fun FireMilestonesComparisonCard(
                                 fontSize = 11.5.sp
                             ),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1.15f)
                         )
 
@@ -1753,7 +1818,6 @@ private fun FireMilestonesComparisonCard(
                                 color = config.accentColor
                             ),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1.1f)
                         )
 
@@ -1887,10 +1951,10 @@ private fun FireMilestonesComparisonCard(
                                 text = "Target Capital",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = 10.5.sp
                                 ),
-                                maxLines = 2,
-                                softWrap = true
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = fmtCZK(activeTarget),
@@ -1900,19 +1964,18 @@ private fun FireMilestonesComparisonCard(
                                     fontSize = 12.5.sp
                                 ),
                                 maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = false
                             )
                         }
                         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Monthly SWR Flow",
+                                text = "Monthly SWR",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = 10.5.sp
                                 ),
-                                maxLines = 2,
-                                softWrap = true
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
@@ -1928,13 +1991,13 @@ private fun FireMilestonesComparisonCard(
                         }
                         Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                             Text(
-                                text = if (activeM.isAchieved) "Portfolio Surplus" else "Remaining Gap",
+                                text = if (activeM.isAchieved) "Surplus" else "Remaining Gap",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp
+                                    fontSize = 10.5.sp
                                 ),
-                                maxLines = 2,
-                                softWrap = true
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Text(
                                 text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),

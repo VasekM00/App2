@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -94,8 +93,7 @@ fun ColorPill(
                     letterSpacing = 0.3.sp
                 ),
                 maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false
             )
         }
     }

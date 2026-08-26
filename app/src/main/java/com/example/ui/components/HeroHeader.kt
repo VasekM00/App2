@@ -39,7 +39,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
@@ -226,12 +225,11 @@ fun MiniStatChip(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     color = accentColor,
-                    fontSize = 12.5.sp,
+                    fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 ),
                 maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
+                softWrap = false
             )
         }
     }

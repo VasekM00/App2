@@ -239,8 +239,8 @@ fun SettingsTab(
                             text = title,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            maxLines = 2,
+                            softWrap = true
                         )
                     },
                     modifier = Modifier.testTag("settings_subtab_$index")
