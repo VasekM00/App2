@@ -57,11 +57,22 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.MonteCarloPoint
 import com.example.domain.PortfolioYearPoint
 import com.example.domain.StressScenarioResult
+import com.example.data.SettingsEntity
 import com.example.ui.theme.BadRed
+import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.WarnAmber
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtPct
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextOverflow
 import kotlin.math.max
 
 import kotlin.math.pow
@@ -1212,6 +1223,794 @@ fun StressComparisonChart(
         }
     }
 }
+
+@Composable
+fun DcaAllocationBreakdownBar(
+    settings: SettingsEntity,
+    modifier: Modifier = Modifier
+) {
+    val isSingle = settings.isSingleHousehold
+    val portuV = settings.portuDcaMonthly
+    val portuE = if (!isSingle) settings.ePortuDcaMonthly else 0.0
+    val dipV = settings.dipContributionMonthly
+    val dipE = if (!isSingle) settings.eDipContributionMonthly else 0.0
+    val dpsV = settings.dpsOwnContributionMonthly
+    val dpsE = if (!isSingle) settings.eDpsOwnContributionMonthly else 0.0
+
+    val totalDca = portuV + portuE + dipV + dipE + dpsV + dpsE
+    if (totalDca <= 0.0) return
+
+    val normalizer = totalDca
+    val rPortuV = (portuV / normalizer).toFloat()
+    val rPortuE = (portuE / normalizer).toFloat()
+    val rDip = ((dipV + dipE) / normalizer).toFloat()
+    val rDps = ((dpsV + dpsE) / normalizer).toFloat()
+
+    val cPortuV = BrandTeal
+    val cPortuE = BrandGold
+    val cDip = GoodGreen
+    val cDps = BrandBlue
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ColorPill(
+                    text = "DCA ALLOCATIONS",
+                    color = BrandTeal,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    horizontalPadding = 6.dp,
+                    verticalPadding = 2.dp,
+                    cornerRadius = 6.dp
+                )
+            }
+            ColorPill(
+                text = "${fmtCompact(totalDca)} / mo",
+                color = BrandTeal,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                horizontalPadding = 8.dp,
+                verticalPadding = 2.5.dp,
+                cornerRadius = 8.dp
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Segmented Progress Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(7.dp)
+                )
+                .padding(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (rPortuV > 0f) {
+                Box(
+                    modifier = Modifier
+                        .weight(rPortuV)
+                        .fillMaxHeight()
+                        .background(cPortuV, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
+                )
+            }
+            if (rPortuE > 0f) {
+                Box(
+                    modifier = Modifier
+                        .weight(rPortuE)
+                        .fillMaxHeight()
+                        .background(cPortuE)
+                )
+            }
+            if (rDip > 0f) {
+                Box(
+                    modifier = Modifier
+                        .weight(rDip)
+                        .fillMaxHeight()
+                        .background(cDip)
+                )
+            }
+            if (rDps > 0f) {
+                Box(
+                    modifier = Modifier
+                        .weight(rDps)
+                        .fillMaxHeight()
+                        .background(cDps, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Pillboxes Grid for Streams
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (portuV > 0) {
+                    DcaPillBox(
+                        label = "Brokerage · ${settings.primaryName}",
+                        amount = portuV,
+                        pct = (rPortuV * 100).toInt(),
+                        color = cPortuV,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (portuE > 0) {
+                    DcaPillBox(
+                        label = "Brokerage · ${settings.spouseName}",
+                        amount = portuE,
+                        pct = (rPortuE * 100).toInt(),
+                        color = cPortuE,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if ((dipV + dipE) > 0 || (dpsV + dpsE) > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if ((dipV + dipE) > 0) {
+                        val dipLabel = if (!isSingle && dipE > 0) "DIP · Both" else "DIP Retirement"
+                        DcaPillBox(
+                            label = dipLabel,
+                            amount = dipV + dipE,
+                            pct = (rDip * 100).toInt(),
+                            color = cDip,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if ((dpsV + dpsE) > 0) {
+                        val dpsLabel = if (!isSingle && dpsE > 0) "DPS · Both" else "DPS Pension"
+                        DcaPillBox(
+                            label = dpsLabel,
+                            amount = dpsV + dpsE,
+                            pct = (rDps * 100).toInt(),
+                            color = cDps,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DcaPillBox(
+    label: String,
+    amount: Double,
+    pct: Int,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = color.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.22f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f).padding(end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(color, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = "${fmtCompact(amount)} ($pct%)",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = color
+                ),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun ChartMetricPill(
+    label: String,
+    value: String,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    isBold: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 7.dp, vertical = 4.5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(end = 4.dp)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.5.sp,
+                    fontWeight = if (isBold) FontWeight.Bold else FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace,
+                    color = color
+                ),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun DcaTrajectoryBarChart(
+    data: List<PortfolioYearPoint>,
+    settings: SettingsEntity? = null,
+    modifier: Modifier = Modifier
+) {
+    if (data.isEmpty()) return
+
+    val cTeal = BrandTeal
+    val cGold = BrandGold
+    val cGreen = GoodGreen
+
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    var zoomScale by remember { mutableFloatStateOf(1.0f) }
+    var panOffsetX by remember { mutableFloatStateOf(0.0f) }
+    var viewMode by remember { mutableIntStateOf(0) } // 0 = Annual Inflow Streams, 1 = Principal vs Compound Gains
+
+    val initialBal = remember(data) { data.firstOrNull()?.portfolio ?: 0.0 }
+
+    // Precalculate cumulative invested principal and cumulative compound gains
+    val cumulativeData = remember(data, initialBal) {
+        var runningPrincipal = initialBal
+        data.mapIndexed { idx, pt ->
+            if (idx > 0) {
+                runningPrincipal += pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
+            }
+            val gains = (pt.portfolio - runningPrincipal).coerceAtLeast(0.0)
+            Triple(pt, runningPrincipal, gains)
+        }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("dca_trajectory_bar_chart_card")
+            .semantics {
+                contentDescription = "DCA trajectory bar chart visualizing annual contribution streams, growth rates, and compound market gains."
+            },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    ColorPill(
+                        text = "DCA & WEALTH ENGINE",
+                        color = BrandTeal,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 5.dp,
+                        verticalPadding = 2.dp,
+                        cornerRadius = 5.dp
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "DCA & Compounding Breakdown",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (viewMode == 0) "Annual savings inflows & reinvestment" else "Invested capital vs compound gains",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { zoomScale = (zoomScale * 1.25f).coerceAtMost(4.0f) },
+                        modifier = Modifier.size(40.dp).testTag("dca_bar_zoom_in")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Zoom In", modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            zoomScale = (zoomScale / 1.25f).coerceAtLeast(1.0f)
+                            if (zoomScale == 1.0f) panOffsetX = 0.0f
+                        },
+                        modifier = Modifier.size(40.dp).testTag("dca_bar_zoom_out")
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Zoom Out", modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            zoomScale = 1.0f
+                            panOffsetX = 0.0f
+                            selectedIndex = null
+                        },
+                        modifier = Modifier.size(40.dp).testTag("dca_bar_zoom_reset")
+                    ) {
+                        Icon(Icons.Default.RestartAlt, contentDescription = "Reset Zoom", modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mode Selector Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AssistChip(
+                    onClick = { viewMode = 0 },
+                    label = {
+                        Text(
+                            "Inflow Streams",
+                            fontSize = 11.sp,
+                            fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (viewMode == 0) BrandTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        labelColor = if (viewMode == 0) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1f).testTag("dca_chip_annual_inflows")
+                )
+                AssistChip(
+                    onClick = { viewMode = 1 },
+                    label = {
+                        Text(
+                            "Principal vs Gains",
+                            fontSize = 11.sp,
+                            fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (viewMode == 1) GoodGreen.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        labelColor = if (viewMode == 1) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1f).testTag("dca_chip_principal_gains")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Legend Pillboxes
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (viewMode == 0) {
+                    ColorPill(
+                        text = "Base DCA",
+                        color = cTeal,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 3.dp,
+                        cornerRadius = 6.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ColorPill(
+                        text = "Reinvestment",
+                        color = cGold,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 3.dp,
+                        cornerRadius = 6.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ColorPill(
+                        text = "Lump Sum",
+                        color = cGreen,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 3.dp,
+                        cornerRadius = 6.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    ColorPill(
+                        text = "Invested Principal",
+                        color = cTeal,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp,
+                        cornerRadius = 6.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ColorPill(
+                        text = "Compound Profit",
+                        color = cGreen,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp,
+                        cornerRadius = 6.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val maxVal = remember(data, viewMode, cumulativeData) {
+                if (viewMode == 0) {
+                    ((data.maxOfOrNull { it.investedAnnual + it.reinvestAnnual + it.lumpSum } ?: 100000.0) * 1.25).coerceAtLeast(100000.0)
+                } else {
+                    ((data.maxOfOrNull { it.portfolio } ?: 1000000.0) * 1.15).coerceAtLeast(100000.0)
+                }
+            }
+
+            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
+
+            val paddingLeft = 75f
+            val paddingRight = 24f
+            val paddingBottom = 45f
+
+            val textPaint = remember(textColor) {
+                android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 20f
+                    isAntiAlias = true
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .pointerInput(data, zoomScale) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
+                                val maxPan = (size.width * (zoomScale - 1f))
+                                panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
+                            }
+                        }
+                        .pointerInput(data, zoomScale, panOffsetX) {
+                            detectTapGestures { offset ->
+                                val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
+                                val relativeX = offset.x - paddingLeft - panOffsetX
+                                val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
+                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
+                                selectedIndex = clickedIdx
+                            }
+                        }
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val plotW = w - paddingLeft - paddingRight
+                    val plotH = h - paddingBottom
+
+                    // Y-Axis
+                    val ySteps = 4
+                    for (i in 0..ySteps) {
+                        val valAtStep = maxVal * i / ySteps
+                        val y = plotH - (plotH * i / ySteps)
+
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(paddingLeft, y),
+                            end = Offset(w - paddingRight, y),
+                            strokeWidth = 1.5f
+                        )
+
+                        drawContext.canvas.nativeCanvas.drawText(
+                            fmtCompact(valAtStep),
+                            8f,
+                            y + 7f,
+                            textPaint
+                        )
+                    }
+
+                    // X-Axis
+                    val chartWidth = plotW * zoomScale
+                    val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
+                    val barWidth = (stepX * 0.55f).coerceIn(5f, 28f)
+
+                    val xStepCount = 5
+                    for (i in 0 until data.size step max(1, data.size / xStepCount)) {
+                        val pt = data[i]
+                        val x = paddingLeft + panOffsetX + (i * stepX)
+                        if (x in paddingLeft..(w - paddingRight + 10f)) {
+                            drawLine(
+                                color = if (i == 0) cTeal else gridColor,
+                                start = Offset(x, plotH),
+                                end = Offset(x, plotH + 6f),
+                                strokeWidth = if (i == 0) 2.5f else 1.5f
+                            )
+                            val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
+                            val textWidth = textPaint.measureText(labelText)
+                            drawContext.canvas.nativeCanvas.drawText(
+                                labelText,
+                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                plotH + 30f,
+                                textPaint
+                            )
+                        }
+                    }
+
+                    drawContext.canvas.save()
+                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+
+                    // Draw Bars
+                    data.forEachIndexed { i, pt ->
+                        val x = paddingLeft + panOffsetX + (i * stepX)
+                        val left = x - barWidth / 2f
+                        val right = x + barWidth / 2f
+
+                        if (right >= paddingLeft && left <= (w - paddingRight)) {
+                            if (viewMode == 0) {
+                                // Annual Streams
+                                val hBase = (pt.investedAnnual / maxVal).toFloat() * plotH
+                                val hReinvest = (pt.reinvestAnnual / maxVal).toFloat() * plotH
+                                val hLump = (pt.lumpSum / maxVal).toFloat() * plotH
+
+                                var currentY = plotH
+
+                                if (hBase > 0) {
+                                    drawRect(
+                                        color = cTeal,
+                                        topLeft = Offset(left, currentY - hBase),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, hBase)
+                                    )
+                                    currentY -= hBase
+                                }
+                                if (hReinvest > 0) {
+                                    drawRect(
+                                        color = cGold,
+                                        topLeft = Offset(left, currentY - hReinvest),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, hReinvest)
+                                    )
+                                    currentY -= hReinvest
+                                }
+                                if (hLump > 0) {
+                                    drawRect(
+                                        color = cGreen,
+                                        topLeft = Offset(left, currentY - hLump),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, hLump)
+                                    )
+                                }
+                            } else {
+                                // Principal vs Gains
+                                val (_, principal, gains) = cumulativeData[i]
+                                val hPrincipal = ((principal / maxVal).toFloat() * plotH).coerceAtLeast(0f)
+                                val hGains = ((gains / maxVal).toFloat() * plotH).coerceAtLeast(0f)
+
+                                var currentY = plotH
+                                if (hPrincipal > 0) {
+                                    drawRect(
+                                        color = cTeal,
+                                        topLeft = Offset(left, currentY - hPrincipal),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, hPrincipal)
+                                    )
+                                    currentY -= hPrincipal
+                                }
+                                if (hGains > 0) {
+                                    drawRect(
+                                        color = cGreen,
+                                        topLeft = Offset(left, currentY - hGains),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, hGains)
+                                    )
+                                }
+                            }
+
+                            // Selection highlight indicator
+                            if (selectedIndex == i) {
+                                drawLine(
+                                    color = cTeal.copy(alpha = 0.6f),
+                                    start = Offset(x, 0f),
+                                    end = Offset(x, plotH),
+                                    strokeWidth = 2f,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                                )
+                                drawCircle(color = cTeal, radius = 6f, center = Offset(x, 14f))
+                            }
+                        }
+                    }
+
+                    drawContext.canvas.restore()
+                }
+            }
+
+                // Interactive Tooltip Box
+                val activeIdx = selectedIndex ?: (if (data.isNotEmpty()) data.size - 1 else 0)
+                val activeTriple = cumulativeData.getOrNull(activeIdx)
+                if (activeTriple != null) {
+                    val (pt, principal, gains) = activeTriple
+                    val totalInflow = pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
+                    val gainsPct = if (pt.portfolio > 0) (gains / pt.portfolio * 100.0) else 0.0
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth().testTag("dca_tooltip_box")
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Year ${pt.year}",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    ColorPill(
+                                        text = "Age ${pt.age}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        horizontalPadding = 5.dp,
+                                        verticalPadding = 1.5.dp,
+                                        cornerRadius = 4.dp
+                                    )
+                                }
+                                ColorPill(
+                                    text = pt.status,
+                                    color = if (pt.status == "FIRE OK") GoodGreen else BrandTeal,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.5.dp,
+                                    cornerRadius = 6.dp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Grid of Pillboxes
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ChartMetricPill(
+                                    label = "Monthly DCA",
+                                    value = "${fmtCompact(pt.investedAnnual / 12.0)}/mo",
+                                    color = BrandTeal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ChartMetricPill(
+                                    label = "Annual Inflow",
+                                    value = fmtCompact(totalInflow),
+                                    color = BrandGold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ChartMetricPill(
+                                    label = "Principal",
+                                    value = fmtCompact(principal),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ChartMetricPill(
+                                    label = "Profit (${gainsPct.toInt()}%)",
+                                    value = "+${fmtCompact(gains)}",
+                                    color = GoodGreen,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ChartMetricPill(
+                                    label = "Portfolio Balance",
+                                    value = fmtCompact(pt.portfolio),
+                                    color = BrandTeal,
+                                    isBold = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ChartMetricPill(
+                                    label = "FIRE Target",
+                                    value = fmtCompact(pt.target),
+                                    color = BrandGold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+            // Embedded Monthly Allocation Bar
+            if (settings != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(10.dp))
+                DcaAllocationBreakdownBar(settings = settings)
+            }
+        }
+    }
+}
+
 
 
 

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -94,6 +95,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import java.util.Locale
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.ui.components.CashFlowProjectionChart
+import com.example.ui.components.DcaTrajectoryBarChart
+import com.example.ui.components.DcaAllocationBreakdownBar
 import kotlin.math.abs
 
 fun nextYearMonth(ym: String): String {
@@ -464,8 +467,42 @@ private fun IncomeSubTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Visual Cash Flow Projection Chart
-        CashFlowProjectionChart(data = state.dualTrajectory)
+        // Visual DCA Trajectory Bar Chart & Cash Flow Projections
+        var chartViewIndex by remember { mutableIntStateOf(0) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AssistChip(
+                onClick = { chartViewIndex = 0 },
+                label = { Text("DCA Bar Chart", fontSize = 12.sp, fontWeight = if (chartViewIndex == 0) FontWeight.Bold else FontWeight.Normal) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (chartViewIndex == 0) BrandTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    labelColor = if (chartViewIndex == 0) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.weight(1f).testTag("chip_dca_bar_chart")
+            )
+            AssistChip(
+                onClick = { chartViewIndex = 1 },
+                label = { Text("Line Trajectory", fontSize = 12.sp, fontWeight = if (chartViewIndex == 1) FontWeight.Bold else FontWeight.Normal) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (chartViewIndex == 1) BrandGold.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    labelColor = if (chartViewIndex == 1) BrandGold else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.weight(1f).testTag("chip_line_trajectory")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (chartViewIndex == 0) {
+            DcaTrajectoryBarChart(
+                data = state.dualTrajectory,
+                settings = state.settings
+            )
+        } else {
+            CashFlowProjectionChart(data = state.dualTrajectory)
+        }
 
         Spacer(modifier = Modifier.height(96.dp))
     }
@@ -1638,6 +1675,10 @@ private fun SummarySubTab(
                     value = fmtCZK(investmentsMonthly),
                     isBold = true
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
+                DcaAllocationBreakdownBar(settings = state.settings)
             }
         }
 
@@ -1715,33 +1756,51 @@ private fun CashAllocationBar(
     investments: Double,
     unallocated: Double
 ) {
-    // B6 fix: normalize against maxOf(totalIncome, expenses+investments) so bar always sums to 100%
-    // even in deficit months where DCA + expenses exceed take-home income.
     val totalSpend = expenses + investments
     val normalizer = if (totalIncome > 0) maxOf(totalIncome, totalSpend) else 1.0
     val expRatio = (expenses / normalizer).coerceIn(0.0, 1.0).toFloat()
     val invRatio = (investments / normalizer).coerceIn(0.0, 1.0).toFloat()
     val unallocRatio = (unallocated.coerceAtLeast(0.0) / normalizer).coerceIn(0.0, 1.0).toFloat()
 
-    // P6 fix: use theme tokens instead of hardcoded hex colors
     val expColor = BadRed
     val invColor = BrandTeal
     val unallocColor = WarnAmber
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Monthly Income Allocation",
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ColorPill(
+                text = "INCOME ALLOCATION",
+                color = BrandTeal,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                horizontalPadding = 6.dp,
+                verticalPadding = 2.dp,
+                cornerRadius = 6.dp
+            )
+            ColorPill(
+                text = "${fmtCompact(totalIncome)} Total",
+                color = BrandTeal,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                horizontalPadding = 8.dp,
+                verticalPadding = 2.5.dp,
+                cornerRadius = 8.dp
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(20.dp)
+                .height(16.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(10.dp)
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
                 )
                 .padding(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1751,7 +1810,7 @@ private fun CashAllocationBar(
                     modifier = Modifier
                         .weight(expRatio)
                         .fillMaxHeight()
-                        .background(expColor, RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp))
+                        .background(expColor, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
                 )
             }
             if (invRatio > 0f) {
@@ -1767,50 +1826,101 @@ private fun CashAllocationBar(
                     modifier = Modifier
                         .weight(unallocRatio)
                         .fillMaxHeight()
-                        .background(unallocColor, RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
+                        .background(unallocColor, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            AllocationLegendItem("Living Expenses", expenses, expRatio, expColor)
-            AllocationLegendItem("Investments (ETFs/DPS/DIP)", investments, invRatio, invColor)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AllocationPillBox(
+                    label = "Living Costs",
+                    amount = expenses,
+                    ratio = expRatio,
+                    color = expColor,
+                    modifier = Modifier.weight(1f)
+                )
+                AllocationPillBox(
+                    label = "DCA & Investing",
+                    amount = investments,
+                    ratio = invRatio,
+                    color = invColor,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             if (unallocated > 0) {
-                AllocationLegendItem("Surplus Buffer", unallocated, unallocRatio, unallocColor)
+                AllocationPillBox(
+                    label = "Surplus Buffer",
+                    amount = unallocated,
+                    ratio = unallocRatio,
+                    color = unallocColor,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AllocationLegendItem(
+private fun AllocationPillBox(
     label: String,
     amount: Double,
     ratio: Float,
-    color: androidx.compose.ui.graphics.Color
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = color.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.22f))
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(color, RoundedCornerShape(3.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f).padding(end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(color, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = "${fmtCompact(amount)} (${(ratio * 100).toInt()}%)",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = color
+                ),
+                maxLines = 1
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.bodySmall)
         }
-        Text(
-            text = "${fmtCZK(amount)} (${(ratio * 100).toInt()}%)",
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-        )
     }
 }

@@ -59,6 +59,7 @@ import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.MonteCarloFanChart
 import com.example.ui.components.NetWorthChart
+import com.example.ui.components.DcaTrajectoryBarChart
 import com.example.ui.components.ScenarioSimulatorChips
 import com.example.ui.components.StressComparisonChart
 import com.example.ui.components.infoTapHold
@@ -170,17 +171,54 @@ private fun TrajectorySubTab(
         accentColor = BrandTeal
     )
 
+    var selectedTrajectoryChart by rememberSaveable { mutableIntStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
-        // Primary 35-Year Trajectory Chart
-        NetWorthChart(
-            data = state.dualTrajectory,
-            cpiInflationPct = state.settings.cpiInflationPct
-        )
+        // Chart Selector Chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AssistChip(
+                onClick = { selectedTrajectoryChart = 0 },
+                label = { Text("Net Worth Curve", fontSize = 12.sp, fontWeight = if (selectedTrajectoryChart == 0) FontWeight.Bold else FontWeight.Normal) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (selectedTrajectoryChart == 0) BrandTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    labelColor = if (selectedTrajectoryChart == 0) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.weight(1f).testTag("chip_net_worth_curve")
+            )
+            AssistChip(
+                onClick = { selectedTrajectoryChart = 1 },
+                label = { Text("DCA & Growth Bars", fontSize = 12.sp, fontWeight = if (selectedTrajectoryChart == 1) FontWeight.Bold else FontWeight.Normal) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (selectedTrajectoryChart == 1) BrandGold.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    labelColor = if (selectedTrajectoryChart == 1) BrandGold else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.weight(1f).testTag("chip_dca_bars")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (selectedTrajectoryChart == 0) {
+            // Primary 35-Year Trajectory Chart
+            NetWorthChart(
+                data = state.dualTrajectory,
+                cpiInflationPct = state.settings.cpiInflationPct
+            )
+        } else {
+            // 35-Year DCA Bar Chart & Growth
+            DcaTrajectoryBarChart(
+                data = state.dualTrajectory,
+                settings = state.settings
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
