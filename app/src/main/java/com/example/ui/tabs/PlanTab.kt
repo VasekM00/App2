@@ -1787,7 +1787,7 @@ private fun PensionSubTab(
             }
         }
 
-        // 4. DPS "Lepší Penzijko" State Subsidy & Fee Protection Card
+        // 4. DPS Deposit Optimization Matrix & Lepší Penzijko Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -1796,11 +1796,75 @@ private fun PensionSubTab(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
-                    title = "DPS 'Lepší Penzijko' & Fee Protection",
-                    subtitle = "State cash matching, statutory fee caps & early liquidity rules",
-                    badgeText = "ACT NO. 427/2011",
+                    title = "DPS Deposit Optimization Matrix",
+                    subtitle = "Monthly deposit tiers, state subsidy & tax deduction",
+                    badgeText = "SCENARIOS",
                     accentColor = BrandGold
                 )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dps.scenarios.forEach { sc ->
+                        val isCurrentTier = abs(sc.monthly - s.dpsOwnContributionMonthly) < 1.0
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCurrentTier) BrandGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isCurrentTier) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = fmtCZK(sc.monthly),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    )
+                                    if (isCurrentTier) {
+                                        ColorPill(
+                                            text = "CURRENT",
+                                            color = BrandGold,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            horizontalPadding = 5.dp,
+                                            verticalPadding = 1.5.dp
+                                        )
+                                    }
+                                    if (sc.badgeLabel != null) {
+                                        ColorPill(
+                                            text = sc.badgeLabel,
+                                            color = if (sc.badgeLabel == "STATUTORY MAX") GoodGreen else BrandGold,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            horizontalPadding = 5.dp,
+                                            verticalPadding = 1.5.dp
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = if (sc.totalAnnualBenefit > 0) "+${fmtCZK(sc.totalAnnualBenefit)}" else "0 Kč",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (sc.totalAnnualBenefit > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 

@@ -210,6 +210,16 @@ data class PortfolioYearPoint(
     val status: String
 )
 
+data class DpsScenario(
+    val monthly: Double,
+    val annual: Double,
+    val monthlySubsidy: Double,
+    val annualSubsidy: Double,
+    val annualTaxSaved: Double,
+    val totalAnnualBenefit: Double,
+    val badgeLabel: String?
+)
+
 data class DpsProjection(
     val yearsTo60: Int,
     val ownTotal: Double,
@@ -220,7 +230,8 @@ data class DpsProjection(
     val margin: Double,
     val balanceAt36: Double,
     val earlyWithdrawalLimitAt36: Double,
-    val youthSubsidyActive: Boolean
+    val youthSubsidyActive: Boolean,
+    val scenarios: List<DpsScenario> = emptyList()
 )
 
 data class DipScenario(
@@ -741,6 +752,35 @@ object FinancialEngine {
             ownValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0)
         } else 0.0
 
+        val dpsLevels = listOf(0.0, 500.0, 1000.0, 1700.0, 3700.0, 5700.0)
+        val scenarios = dpsLevels.map { monthly: Double ->
+            val subMonthly = dpsSubsidy(monthly, settings.primaryAge, settings, settings.baseYear)
+            val subAnnual = subMonthly * 12.0
+            val scenarioSettings = settings.copy(
+                dpsOwnContributionMonthly = monthly,
+                dipContributionMonthly = 0.0,
+                eDpsOwnContributionMonthly = 0.0,
+                eDipContributionMonthly = 0.0
+            )
+            val taxSavedAnnual = dipTaxSavingYear(scenarioSettings)
+            val totalBenefit = subAnnual + taxSavedAnnual
+            val badge = when {
+                monthly >= 5700.0 -> "STATUTORY MAX"
+                abs(monthly - 1700.0) < 1.0 -> "SUBSIDY MAX"
+                abs(monthly - 500.0) < 1.0 -> "MIN SUBSIDY"
+                else -> null
+            }
+            DpsScenario(
+                monthly = monthly,
+                annual = monthly * 12.0,
+                monthlySubsidy = subMonthly,
+                annualSubsidy = subAnnual,
+                annualTaxSaved = taxSavedAnnual,
+                totalAnnualBenefit = totalBenefit,
+                badgeLabel = badge
+            )
+        }
+
         return DpsProjection(
             yearsTo60 = years,
             ownTotal = totalOwn,
@@ -751,7 +791,8 @@ object FinancialEngine {
             margin = dpsBal - etfBal,
             balanceAt36 = balAt36,
             earlyWithdrawalLimitAt36 = earlyWithdrawalLimitAt36,
-            youthSubsidyActive = (settings.primaryAge < settings.dpsYouthAgeLimit) && (settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
+            youthSubsidyActive = (settings.primaryAge < settings.dpsYouthAgeLimit) && (settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR),
+            scenarios = scenarios
         )
     }
 
