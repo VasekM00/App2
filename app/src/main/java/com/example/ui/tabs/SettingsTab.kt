@@ -756,22 +756,22 @@ fun SettingsTab(
                                 isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                             )
                             TaxSummaryRow(
-                                label = "Eleonora Tax Credit Eligible (§ 35ba)",
+                                label = "Eleonora Tax Credit Eligible",
                                 status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
                                 isGood = state.taxReturnHelper.spouseEligible
                             )
                             TaxSummaryRow(
-                                label = "Child 1 Tax Bonus (§ 35c)",
+                                label = "Child 1 Tax Bonus",
                                 status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
                                 isGood = s.child1Enabled
                             )
                             TaxSummaryRow(
-                                label = "Child 2 Tax Bonus (§ 35c)",
+                                label = "Child 2 Tax Bonus",
                                 status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
                                 isGood = s.child2Enabled
                             )
                             TaxSummaryRow(
-                                label = "Total Child Tax Bonus (§ 35c)",
+                                label = "Total Child Tax Bonus",
                                 status = "+${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
                                 isGood = true
                             )
@@ -1616,6 +1616,6 @@ private fun liveDataSubtitle(data: com.example.domain.CzechRegulatoryData?): Str
     return if (data != null) {
         "ČSÚ CPI: ${data.csuCpiInflationPct}% · EUR: ${String.format("%.2f", data.eurCzkRate)} · USD: ${String.format("%.2f", data.usdCzkRate)}"
     } else {
-        "Check live ČSÚ CPI, ČNB rates, and ZDP tax credits"
+        "Check live ČSÚ CPI, ČNB rates, and statutory tax credits"
     }
 }

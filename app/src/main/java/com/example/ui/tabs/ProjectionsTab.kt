@@ -575,7 +575,7 @@ private fun PortfolioAccountsView(
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
                     title = "Pension & DIP Statutory Regulations",
-                    subtitle = "Statutory fee caps, subsidies & tax shield (§ 15a ZDP) (Tap for insight)",
+                    subtitle = "Fee caps, state subsidies & tax shield on regulated accounts",
                     badgeText = "STATUTORY RULES",
                     accentColor = BrandTeal
                 )
@@ -603,7 +603,7 @@ private fun PortfolioAccountsView(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow(
-                    label = "Retirement Deduction Base (§ 15a ZDP)",
+                    label = "Retirement Deduction Base",
                     value = fmtCZK(state.taxReturnHelper.retirementDeductionBase),
                     info = dipTaxShieldInfo,
                     onShowInfo = onShowInfo

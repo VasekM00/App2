@@ -128,7 +128,7 @@ object CzechEconomicSyncService {
         val isChild1Diff = abs(current.child1TaxBonusAnnual - live.child1TaxBonusAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Czech Tax Law (§ 35c)",
+                category = "Child Tax Framework",
                 label = "Child 1 Tax Bonus",
                 currentValueFormatted = fmtCZK(current.child1TaxBonusAnnual),
                 liveValueFormatted = fmtCZK(live.child1TaxBonusAnnual),
@@ -141,7 +141,7 @@ object CzechEconomicSyncService {
         val isChild2Diff = abs(current.child2TaxBonusAnnual - live.child2TaxBonusAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Czech Tax Law (§ 35c)",
+                category = "Child Tax Framework",
                 label = "Child 2 Tax Bonus",
                 currentValueFormatted = fmtCZK(current.child2TaxBonusAnnual),
                 liveValueFormatted = fmtCZK(live.child2TaxBonusAnnual),
@@ -154,7 +154,7 @@ object CzechEconomicSyncService {
         val isTaxpayerCreditDiff = abs(current.taxpayerCreditAnnual - live.taxpayerCreditAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Czech Tax Law (§ 35ba)",
+                category = "Personal Tax Credits",
                 label = "Basic Taxpayer Credit",
                 currentValueFormatted = fmtCZK(current.taxpayerCreditAnnual),
                 liveValueFormatted = fmtCZK(live.taxpayerCreditAnnual),
@@ -167,7 +167,7 @@ object CzechEconomicSyncService {
         val isDeductionCeilingDiff = abs(current.taxDeductionCeilingAnnual - live.dipDpsCombinedCeilingAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Retirement Framework (§ 15/15a)",
+                category = "Retirement Deductions",
                 label = "DIP + DPS Combined Tax Deduction",
                 currentValueFormatted = fmtCZK(current.taxDeductionCeilingAnnual),
                 liveValueFormatted = fmtCZK(live.dipDpsCombinedCeilingAnnual),
@@ -193,7 +193,7 @@ object CzechEconomicSyncService {
         val isProgThresholdDiff = abs(current.taxSecondBracketThresholdAnnual - live.progressive23ThresholdAnnual) > 1.0
         list.add(
             SyncDifferenceItem(
-                category = "Czech Tax Law (§ 16)",
+                category = "Progressive Tax Threshold",
                 label = "23% Tax Bracket Threshold",
                 currentValueFormatted = fmtCZK(current.taxSecondBracketThresholdAnnual),
                 liveValueFormatted = fmtCZK(live.progressive23ThresholdAnnual),

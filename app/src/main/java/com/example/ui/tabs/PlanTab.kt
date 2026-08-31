@@ -1458,7 +1458,7 @@ private fun PensionSubTab(
             )
         }
 
-        // 2. Main Hero Card: DIP & DPS Statutory Tax Shield (§ 15a + § 15(5) ZDP)
+        // 2. Main Hero Card: DIP & DPS Statutory Tax Shield
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1471,9 +1471,9 @@ private fun PensionSubTab(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
-                    title = "Retirement Tax Shield (§ 15a + § 15(5) ZDP)",
-                    subtitle = "Statutory personal income tax deduction up to 48,000 CZK / earner",
-                    badgeText = "§ 15a ZDP",
+                    title = "Retirement Tax Shield (DIP & DPS)",
+                    subtitle = "Personal income tax deduction up to 48,000 CZK / earner",
+                    badgeText = "TAX SHIELD",
                     accentColor = GoodGreen,
                     trailingContent = {
                         IconButton(
@@ -1583,7 +1583,7 @@ private fun PensionSubTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Václav's 48k Ceiling (§ 15a / § 15)",
+                            text = "Václav's 48k Annual Ceiling",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         ColorPill(
@@ -1936,7 +1936,7 @@ private fun PensionSubTab(
                         ) {
                             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GoodGreen, modifier = Modifier.size(16.dp))
                             Column {
-                                Text("120-Month Rule & Age 60 Gate (§ 15a ZDP)", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("120-Month Rule & Age 60 Gate", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                                 Text("Contract must run for minimum 120 months (10 years) and withdrawals occur after reaching age 60 to retain 100% tax exemption.", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp))
                             }
                         }
@@ -1974,7 +1974,7 @@ private fun PensionSubTab(
                         ) {
                             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GoodGreen, modifier = Modifier.size(16.dp))
                             Column {
-                                Text("Employer Contribution Exemption (§ 6(9)(d) ZDP)", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("Employer Contribution Exemption", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                                 Text("Employers can contribute up to 50,000 CZK/yr per employee into DIP/DPS completely exempt from income tax, social security, and health insurance.", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp))
                             }
                         }

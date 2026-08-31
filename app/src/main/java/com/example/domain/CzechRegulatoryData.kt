@@ -6,7 +6,7 @@ package com.example.domain
  */
 data class CzechRegulatoryData(
     val timestamp: Long = System.currentTimeMillis(),
-    val sourceName: String = "ČSÚ, ČNB & ZDP Official Registry",
+    val sourceName: String = "ČSÚ, ČNB & Statutory Registry",
     val effectiveYear: Int = 2026,
     
     // Macroeconomics (ČSÚ & ČNB)
