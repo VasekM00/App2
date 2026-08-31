@@ -770,7 +770,7 @@ object FinancialEngine {
             val dipAnnual = monthly * 12.0
             
             val risk = when {
-                monthly >= 4000.0 -> "Optimal Max"
+                monthly >= 4000.0 -> "Statutory Max"
                 monthly >= 2500.0 -> "Balanced"
                 monthly > 0.0 -> "Light"
                 else -> "None"

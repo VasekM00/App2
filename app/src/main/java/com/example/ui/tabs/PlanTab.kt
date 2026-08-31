@@ -1742,49 +1742,44 @@ private fun PensionSubTab(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = fmtCZK(sc.monthly),
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                        )
-                                        if (isCurrentTier) {
-                                            ColorPill(
-                                                text = "CURRENT",
-                                                color = BrandTeal,
-                                                fontSize = 8.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                horizontalPadding = 5.dp,
-                                                verticalPadding = 1.5.dp
-                                            )
-                                        }
-                                        if (sc.monthly >= 4000.0) {
-                                            ColorPill(
-                                                text = "OPTIMAL MAX",
-                                                color = GoodGreen,
-                                                fontSize = 8.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                horizontalPadding = 5.dp,
-                                                verticalPadding = 1.5.dp
-                                            )
-                                        }
-                                    }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
-                                        text = "${fmtCZK(sc.annual)} deposit / yr",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
+                                        text = fmtCZK(sc.monthly),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     )
+                                    if (isCurrentTier) {
+                                        ColorPill(
+                                            text = "CURRENT",
+                                            color = BrandTeal,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            horizontalPadding = 5.dp,
+                                            verticalPadding = 1.5.dp
+                                        )
+                                    }
+                                    if (sc.monthly >= 4000.0) {
+                                        ColorPill(
+                                            text = "STATUTORY MAX",
+                                            color = GoodGreen,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            horizontalPadding = 5.dp,
+                                            verticalPadding = 1.5.dp
+                                        )
+                                    }
                                 }
 
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "+${fmtCZK(sc.annualTaxSaved)}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = if (sc.annualTaxSaved > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
+                                Text(
+                                    text = if (sc.annualTaxSaved > 0) "+${fmtCZK(sc.annualTaxSaved)}" else "0 Kč",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (sc.annualTaxSaved > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontFamily = FontFamily.Monospace
                                     )
-                                    Text(
-                                        text = if (sc.headroom > 0) "${fmtCompact(sc.headroom)} headroom" else "Maxed",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                                    )
-                                }
+                                )
                             }
                         }
                     }
