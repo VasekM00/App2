@@ -1409,60 +1409,7 @@ private fun PensionSubTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. KPI Highlights Row (2x2 Grid)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            KpiCard(
-                title = "Annual Tax Refund",
-                value = fmtCZK(yearlyTaxSaved),
-                hint = "Direct tax saving / yr",
-                accentColor = GoodGreen,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dipDeduction,
-                onShowInfo = onShowInfo
-            )
-            KpiCard(
-                title = "Pension Monthly Deposit",
-                value = fmtCZK(totalMonthlyDip),
-                hint = "Monthly contribution",
-                accentColor = BrandTeal,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dipDeduction,
-                onShowInfo = onShowInfo
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            KpiCard(
-                title = "State Subsidy Match",
-                value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% (Standard)",
-                hint = if (dps.youthSubsidyActive) {
-                    "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)}"
-                } else {
-                    "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)} (40% in 2027)"
-                },
-                accentColor = BrandGold,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dpsLepsiPenzijko,
-                onShowInfo = onShowInfo
-            )
-            KpiCard(
-                title = "DIP + DPS at Age 60",
-                value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
-                hint = "Projected pension wealth",
-                accentColor = BrandBlue,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dpsAge36,
-                onShowInfo = onShowInfo
-            )
-        }
-
-        // 2. Main Hero Card: DIP & DPS Statutory Tax Shield
+        // 1. Main Hero Card: DIP & DPS Statutory Tax Shield
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1823,16 +1770,16 @@ private fun PensionSubTab(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Youth Subsidy Rate",
+                                text = "Youth Subsidy",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (dps.youthSubsidyActive) "40% (<30 yrs)" else "20% (40% in 2027)",
+                                text = if (dps.youthSubsidyActive) "40% (<30 yrs)" else "20% (Standard)",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                             )
                             Text(
-                                text = if (dps.youthSubsidyActive) "Max ${fmtCZK(s.dpsYouthSubsidyMaxMonthly)}/mo" else "Max ${fmtCZK(s.dpsStandardSubsidyMaxMonthly)}/mo",
+                                text = if (dps.youthSubsidyActive) "Max ${fmtCZK(s.dpsYouthSubsidyMaxMonthly)}/mo" else "40% starts in 2027",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }
@@ -1846,7 +1793,7 @@ private fun PensionSubTab(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Age 36 1/3 Liquidity",
+                                text = "Age 36 Liquidity",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -1855,7 +1802,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal, fontFamily = FontFamily.Monospace)
                             )
                             Text(
-                                text = "Penalty-free at 120m",
+                                text = "1/3 after 120m",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }
@@ -1869,7 +1816,7 @@ private fun PensionSubTab(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Statutory Fee Cap",
+                                text = "Fee Cap",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -1878,7 +1825,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen)
                             )
                             Text(
-                                text = "vs 1.5% legacy funds",
+                                text = "Index funds",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }
