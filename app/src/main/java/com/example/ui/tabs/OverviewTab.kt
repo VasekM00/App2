@@ -99,7 +99,7 @@ fun OverviewTab(
         accentColor = BrandTeal
     )
 
-    val pensionAgeDesc = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
+    val pensionAgeDesc = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
         "age ${state.settings.vStatePensionAge}"
     } else {
         "ages ${state.settings.vStatePensionAge}/${state.settings.eStatePensionAge}"

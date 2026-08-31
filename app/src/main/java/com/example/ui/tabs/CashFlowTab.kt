@@ -450,7 +450,7 @@ private fun IncomeSubTab(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet), info = CashFlowMetricInfos.vaclavSalary, onShowInfo = onShowInfo)
+                IncomeRow(label = "Václav's Net Salary", value = fmtCZK(state.settings.vSalary), info = CashFlowMetricInfos.vaclavSalary, onShowInfo = onShowInfo)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 if (inc.eleonoraSalary > 0.0) {
                     IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary), info = CashFlowMetricInfos.eleonoraSalary, onShowInfo = onShowInfo)

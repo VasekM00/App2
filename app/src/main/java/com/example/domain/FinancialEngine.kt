@@ -478,7 +478,7 @@ object FinancialEngine {
         val b = eleonoraBenefitMonthly(year, settings)
         val lec = eleonoraLecturingMonthly(year, settings)
         val gift = settings.familyGiftMonthly
-        val eOther = if (!settings.isSingleHousehold) settings.eOtherInflowsMonthly else 0.0
+        val eOther = settings.eOtherInflowsMonthly
         val total = v + e + b + lec + gift + settings.vMealVouchersMonthly + eOther
 
         return YearlyIncome(
