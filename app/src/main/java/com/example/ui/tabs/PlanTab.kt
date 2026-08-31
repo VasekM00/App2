@@ -1424,9 +1424,9 @@ private fun PensionSubTab(
                 onShowInfo = onShowInfo
             )
             KpiCard(
-                title = "Real Net Monthly Cost",
-                value = fmtCZK(dip.netCostMonthly),
-                hint = "After tax deduction refund",
+                title = "Pension Monthly Deposit",
+                value = fmtCZK(totalMonthlyDip),
+                hint = "Monthly contribution",
                 accentColor = BrandTeal,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dipDeduction,
@@ -1441,7 +1441,7 @@ private fun PensionSubTab(
             KpiCard(
                 title = "State Subsidy Match",
                 value = if (dps.youthSubsidyActive) "40% (Youth)" else "20%",
-                hint = "${fmtCZK(currentSubsidy)}/mo on ${fmtCZK(s.dpsOwnContributionMonthly)}",
+                hint = "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)}",
                 accentColor = BrandGold,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dpsLepsiPenzijko,
@@ -1472,7 +1472,7 @@ private fun PensionSubTab(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "Retirement Tax Shield (DIP & DPS)",
-                    subtitle = "Personal income tax deduction up to 48,000 CZK / earner",
+                    subtitle = "Personal tax deduction up to 48 000 Kč per earner",
                     badgeText = "TAX SHIELD",
                     accentColor = GoodGreen,
                     trailingContent = {
@@ -1492,10 +1492,10 @@ private fun PensionSubTab(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 3 Core Metric Stat Boxes
+                // 2 Symmetrical Hero Metric Boxes (Clean & Single-Line)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -1503,20 +1503,20 @@ private fun PensionSubTab(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = "Monthly Deposit",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = fmtCZK(totalMonthlyDip) + "/mo",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                text = fmtCZK(totalMonthlyDip),
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             )
                             if (vDipMonthly > 0 || eDipMonthly > 0) {
                                 Text(
                                     text = "V: ${fmtCompact(vDipMonthly)} · E: ${fmtCompact(eDipMonthly)}",
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                 )
                             }
                         }
@@ -1526,44 +1526,21 @@ private fun PensionSubTab(
                         shape = RoundedCornerShape(12.dp),
                         color = GoodGreen.copy(alpha = 0.08f),
                         border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1.15f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "Annual Tax Refund",
-                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "+${fmtCZK(yearlyTaxSaved)}/yr",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace)
-                            )
-                            Text(
-                                text = "${String.format("%.1f", s.taxRatePct)}% refund on base",
-                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen.copy(alpha = 0.8f), fontSize = 9.5.sp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Net Cost / mo",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
+                                text = "Annual Tax Refund",
+                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = fmtCZK(dip.netCostMonthly) + "/mo",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = BrandTeal)
+                                text = "+${fmtCZK(yearlyTaxSaved)}",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace)
                             )
                             Text(
-                                text = "Real out-of-pocket",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                text = "${String.format("%.0f", s.taxRatePct)}% tax relief",
+                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen.copy(alpha = 0.85f), fontSize = 10.sp)
                             )
                         }
                     }
@@ -1583,11 +1560,11 @@ private fun PensionSubTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Václav's 48k Annual Ceiling",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                            text = "Václav (48k Max)",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         ColorPill(
-                            text = if (vHeadroom <= 0) "100% MAXED" else "${fmtCZK(vDeductionAnnual)} / ${fmtCZK(s.taxDeductionCeilingAnnual)}",
+                            text = if (vHeadroom <= 0) "100% MAXED" else "${fmtCZK(vDeductionAnnual)} / ${fmtCompact(s.taxDeductionCeilingAnnual)}",
                             color = if (vHeadroom <= 0) GoodGreen else BrandTeal,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -1602,12 +1579,12 @@ private fun PensionSubTab(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(10.dp)
+                            .height(8.dp)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(5.dp)
+                                shape = RoundedCornerShape(4.dp)
                             )
-                            .padding(1.dp),
+                            .padding(0.5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (vDipPortionRatio > 0f) {
@@ -1639,14 +1616,15 @@ private fun PensionSubTab(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "DIP: ${fmtCZK(vDipMonthly * 12.0)} · DPS (>1.7k): ${fmtCZK(vDpsAbove * 12.0)}",
+                            text = "DIP: ${fmtCompact(vDipMonthly * 12.0)} · DPS: ${fmtCompact(vDpsAbove * 12.0)}",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                         )
                         Text(
-                            text = if (vHeadroom > 0) "Headroom: ${fmtCZK(vHeadroom)}" else "Full 7,200 CZK saved",
+                            text = if (vHeadroom > 0) "Headroom: ${fmtCompact(vHeadroom)}" else "Full refund active",
                             style = MaterialTheme.typography.labelSmall.copy(color = if (vHeadroom > 0) MaterialTheme.colorScheme.onSurfaceVariant else GoodGreen, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
                         )
                     }
@@ -1663,11 +1641,11 @@ private fun PensionSubTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Eleonora's 48k Ceiling",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                text = "Eleonora (48k Max)",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             ColorPill(
-                                text = "${fmtCZK(eDeductionAnnual)} / ${fmtCZK(s.taxDeductionCeilingAnnual)}",
+                                text = "${fmtCZK(eDeductionAnnual)} / ${fmtCompact(s.taxDeductionCeilingAnnual)}",
                                 color = BrandGold,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1680,12 +1658,12 @@ private fun PensionSubTab(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(10.dp)
+                                .height(8.dp)
                                 .background(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(5.dp)
+                                    shape = RoundedCornerShape(4.dp)
                                 )
-                                .padding(1.dp)
+                                .padding(0.5.dp)
                         ) {
                             if (eUtilizedRatio > 0f) {
                                 Box(
@@ -1715,7 +1693,7 @@ private fun PensionSubTab(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "Household statutory ceiling: 96,000 CZK/yr combined (Václav 48k + Eleonora 48k)",
+                        text = "Combined household capacity: 96 000 Kč / yr (Václav 48k + Eleonora 48k)",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
@@ -1736,7 +1714,7 @@ private fun PensionSubTab(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "DIP Deposit Optimization Matrix",
-                    subtitle = "Statutory tiers & net cost after 15% / 23% tax deduction refund",
+                    subtitle = "Monthly deposit tiers & annual tax deduction refund",
                     badgeText = "SCENARIOS",
                     accentColor = BrandTeal
                 )
@@ -1758,14 +1736,14 @@ private fun PensionSubTab(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(
-                                            text = fmtCZK(sc.monthly) + " / mo",
+                                            text = fmtCZK(sc.monthly),
                                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                         )
                                         if (isCurrentTier) {
@@ -1790,18 +1768,18 @@ private fun PensionSubTab(
                                         }
                                     }
                                     Text(
-                                        text = "${fmtCZK(sc.annual)}/yr deposit · Real cost: ${fmtCZK(sc.netCostMonthly)}/mo",
+                                        text = "${fmtCZK(sc.annual)} deposit / yr",
                                         style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp)
                                     )
                                 }
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "+${fmtCZK(sc.annualTaxSaved)}/yr",
+                                        text = "+${fmtCZK(sc.annualTaxSaved)}",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = if (sc.annualTaxSaved > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
                                     )
                                     Text(
-                                        text = if (sc.headroom > 0) "Headroom: ${fmtCompact(sc.headroom)}" else "100% maxed",
+                                        text = if (sc.headroom > 0) "${fmtCompact(sc.headroom)} headroom" else "Maxed",
                                         style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                     )
                                 }
