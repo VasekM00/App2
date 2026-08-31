@@ -1440,8 +1440,12 @@ private fun PensionSubTab(
         ) {
             KpiCard(
                 title = "State Subsidy Match",
-                value = if (dps.youthSubsidyActive) "40% (Youth)" else "20%",
-                hint = "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)}",
+                value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% (Standard)",
+                hint = if (dps.youthSubsidyActive) {
+                    "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)}"
+                } else {
+                    "${fmtCZK(currentSubsidy)} on ${fmtCZK(s.dpsOwnContributionMonthly)} (40% in 2027)"
+                },
                 accentColor = BrandGold,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dpsLepsiPenzijko,
@@ -1824,11 +1828,11 @@ private fun PensionSubTab(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (dps.youthSubsidyActive) "40% (<30 yrs)" else "20% Standard",
+                                text = if (dps.youthSubsidyActive) "40% (<30 yrs)" else "20% (40% in 2027)",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                             )
                             Text(
-                                text = "Max ${fmtCZK(s.dpsYouthSubsidyMaxMonthly)}/mo",
+                                text = if (dps.youthSubsidyActive) "Max ${fmtCZK(s.dpsYouthSubsidyMaxMonthly)}/mo" else "Max ${fmtCZK(s.dpsStandardSubsidyMaxMonthly)}/mo",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }

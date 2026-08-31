@@ -597,7 +597,7 @@ private fun PortfolioAccountsView(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow(
                     label = "Youth Subsidy Rate (<${state.settings.dpsYouthAgeLimit} y/o)",
-                    value = if (state.dps.youthSubsidyActive) "40% Boost (Active)" else "Standard 20%",
+                    value = if (state.dps.youthSubsidyActive) "40% Boost (Active)" else "20% (40% in 2027)",
                     info = youthSubsidyInfo,
                     onShowInfo = onShowInfo
                 )

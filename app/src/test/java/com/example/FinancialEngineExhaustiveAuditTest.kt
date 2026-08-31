@@ -177,38 +177,42 @@ class FinancialEngineExhaustiveAuditTest {
 
     @Test
     fun `test 4 - lepsi penzijko DPS reform dynamic subsidy rates and limits`() {
-        // Under 30 (youth active) -> 40% up to 680 CZK
-        val youthSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 26, defaultSettings)
+        // 2026 (current year): Standard 20% applies to all ages (youth 40% starts from 2027)
+        val subsidy2026At26 = FinancialEngine.dpsSubsidy(1000.0, 26, defaultSettings, year = 2026)
+        assertEquals(200.0, subsidy2026At26, 0.001) // 1000 * 0.20 = 200 <= 340
+
+        // 2027+ (Lepší penzijko active): Under 30 (youth active) -> 40% up to 680 CZK
+        val youthSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 26, defaultSettings, year = 2027)
         assertEquals(400.0, youthSubsidy1000, 0.001) // 1000 * 0.40 = 400 <= 680
 
-        val youthSubsidy1700 = FinancialEngine.dpsSubsidy(1700.0, 26, defaultSettings)
+        val youthSubsidy1700 = FinancialEngine.dpsSubsidy(1700.0, 26, defaultSettings, year = 2027)
         assertEquals(680.0, youthSubsidy1700, 0.001) // 1700 * 0.40 = 680 (capped at 680)
 
-        val youthSubsidy2500 = FinancialEngine.dpsSubsidy(2500.0, 26, defaultSettings)
+        val youthSubsidy2500 = FinancialEngine.dpsSubsidy(2500.0, 26, defaultSettings, year = 2027)
         assertEquals(680.0, youthSubsidy2500, 0.001) // Capped at 680
 
-        // Over 30 (standard rate) -> 20% up to 340 CZK
-        val stdSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 31, defaultSettings)
+        // Over 30 in 2027+ (standard rate) -> 20% up to 340 CZK
+        val stdSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 31, defaultSettings, year = 2027)
         assertEquals(200.0, stdSubsidy1000, 0.001) // 1000 * 0.20 = 200 <= 340
 
-        val stdSubsidy1700 = FinancialEngine.dpsSubsidy(1700.0, 31, defaultSettings)
+        val stdSubsidy1700 = FinancialEngine.dpsSubsidy(1700.0, 31, defaultSettings, year = 2027)
         assertEquals(340.0, stdSubsidy1700, 0.001) // 1700 * 0.20 = 340 (capped at 340)
 
         // Below minimum deposit for subsidy (< 500 CZK) -> 0 CZK
-        val belowMin = FinancialEngine.dpsSubsidy(400.0, 26, defaultSettings)
+        val belowMin = FinancialEngine.dpsSubsidy(400.0, 26, defaultSettings, year = 2027)
         assertEquals(0.0, belowMin, 0.001)
 
-        // Mutate custom youth parameters: Youth limit = 35, youth rate = 50%, youth max = 1000, min deposit = 600
+        // Mutate custom youth parameters in 2027+: Youth limit = 35, youth rate = 50%, youth max = 1000, min deposit = 600
         val customDpsSettings = defaultSettings.copy(
             dpsYouthAgeLimit = 35,
             dpsSubsidyRateYouthPct = 50.0,
             dpsYouthSubsidyMaxMonthly = 1000.0,
             dpsMinDepositForSubsidy = 600.0
         )
-        val customYouthAt32 = FinancialEngine.dpsSubsidy(1800.0, 32, customDpsSettings)
+        val customYouthAt32 = FinancialEngine.dpsSubsidy(1800.0, 32, customDpsSettings, year = 2027)
         assertEquals(900.0, customYouthAt32, 0.001) // 1800 * 0.50 = 900 <= 1000
 
-        val customBelowMin = FinancialEngine.dpsSubsidy(500.0, 32, customDpsSettings)
+        val customBelowMin = FinancialEngine.dpsSubsidy(500.0, 32, customDpsSettings, year = 2027)
         assertEquals(0.0, customBelowMin, 0.001) // 500 < 600
     }
 

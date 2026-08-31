@@ -61,7 +61,8 @@ object RegulatoryConstants {
     const val LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT = 0.5
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE = 36
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT = 100.0 / 3.0
-    const val LEPSI_PENZIJKO_LAW_REF = "Novela zákona o doplňkovém penzijním spoření (Lepší penzijko, schváleno vládou 8/2026)"
+    const val LEPSI_PENZIJKO_EFFECTIVE_YEAR = 2027
+    const val LEPSI_PENZIJKO_LAW_REF = "Novela zákona o doplňkovém penzijním spoření (Lepší penzijko, účinnost od 1. 1. 2027)"
 
     // --- Minimální mzda v ČR ---
     const val STATUTORY_MIN_WAGE_MONTHLY_2026 = 22400.0

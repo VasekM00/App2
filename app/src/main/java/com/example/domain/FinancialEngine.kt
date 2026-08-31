@@ -494,16 +494,18 @@ object FinancialEngine {
     }
 
     // Lepší penzijko Reform: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps
-    fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null): Double {
+    // (Standard: 20% max 340 CZK; Youth < 30 y/o: 40% max 680 CZK effective starting from 2027)
+    fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null, year: Int = settings?.baseYear ?: 2026): Double {
         val minDeposit = settings?.dpsMinDepositForSubsidy ?: 500.0
         if (monthlyDeposit < minDeposit) return 0.0
         val youthAge = settings?.dpsYouthAgeLimit ?: 30
         val stdRate = (settings?.dpsSubsidyRateStandardPct ?: 20.0) / 100.0
         val youthRate = (settings?.dpsSubsidyRateYouthPct ?: 40.0) / 100.0
-        val rate = if (age < youthAge) youthRate else stdRate
+        val isYouthEligible = (age < youthAge) && (year >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
+        val rate = if (isYouthEligible) youthRate else stdRate
         val youthCap = settings?.dpsYouthSubsidyMaxMonthly ?: 680.0
         val standardCap = settings?.dpsStandardSubsidyMaxMonthly ?: 340.0
-        val maxSub = if (age < youthAge) youthCap else standardCap
+        val maxSub = if (isYouthEligible) youthCap else standardCap
         return min(monthlyDeposit * rate, maxSub)
     }
 
@@ -702,9 +704,10 @@ object FinancialEngine {
 
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
+            val currentYear = settings.baseYear + (m / 12)
             val currentAge = settings.primaryAge + (m / 12)
-            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
-            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
+            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings, currentYear)
+            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings, currentYear) else 0.0
             val sub = subV + subE
 
             totalSubsidy += sub
@@ -721,9 +724,10 @@ object FinancialEngine {
         var ownValueTo36 = 0.0
         if (monthsTo36 in 1..totalMonths) {
             for (m in 0 until monthsTo36) {
+                val currentYear = settings.baseYear + (m / 12)
                 val currentAge = settings.primaryAge + (m / 12)
-                val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings)
-                val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings) else 0.0
+                val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings, currentYear)
+                val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings, currentYear) else 0.0
                 ownValueTo36 = max(0.0, (ownValueTo36 + own) * max(0.0, 1.0 + monthlyRateDPS))
                 balAt36 = max(0.0, (balAt36 + own + subV + subE + emp) * max(0.0, 1.0 + monthlyRateDPS))
             }
@@ -747,7 +751,7 @@ object FinancialEngine {
             margin = dpsBal - etfBal,
             balanceAt36 = balAt36,
             earlyWithdrawalLimitAt36 = earlyWithdrawalLimitAt36,
-            youthSubsidyActive = settings.primaryAge < settings.dpsYouthAgeLimit
+            youthSubsidyActive = (settings.primaryAge < settings.dpsYouthAgeLimit) && (settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
         )
     }
 
