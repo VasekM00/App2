@@ -1409,7 +1409,60 @@ private fun PensionSubTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Main Hero Card: DIP & DPS Statutory Tax Shield
+        // 1. KPI Highlights Hero Grid (2x2)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            KpiCard(
+                title = "Annual Tax Refund",
+                value = "+${fmtCZK(yearlyTaxSaved)}",
+                hint = "${String.format("%.0f", s.taxRatePct)}% relief via tax return",
+                accentColor = GoodGreen,
+                modifier = Modifier.weight(1f),
+                info = PlanMetricInfos.dipDeduction,
+                onShowInfo = onShowInfo
+            )
+            KpiCard(
+                title = "Monthly Deposit",
+                value = fmtCZK(totalMonthlyDip),
+                hint = if (vDipMonthly > 0 || eDipMonthly > 0) "V: ${fmtCompact(vDipMonthly)} · E: ${fmtCompact(eDipMonthly)}" else "Combined DIP & DPS",
+                accentColor = BrandTeal,
+                modifier = Modifier.weight(1f),
+                info = PlanMetricInfos.dipDeduction,
+                onShowInfo = onShowInfo
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            KpiCard(
+                title = "State Subsidy Match",
+                value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
+                hint = if (dps.youthSubsidyActive) {
+                    "${fmtCZK(currentSubsidy)}/mo on ${fmtCompact(s.dpsOwnContributionMonthly)}"
+                } else {
+                    "${fmtCZK(currentSubsidy)}/mo (40% in 2027)"
+                },
+                accentColor = BrandGold,
+                modifier = Modifier.weight(1f),
+                info = PlanMetricInfos.dpsLepsiPenzijko,
+                onShowInfo = onShowInfo
+            )
+            KpiCard(
+                title = "DIP + DPS at Age 60",
+                value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
+                hint = "Tax-free compound wealth",
+                accentColor = BrandBlue,
+                modifier = Modifier.weight(1f),
+                info = PlanMetricInfos.dpsAge36,
+                onShowInfo = onShowInfo
+            )
+        }
+
+        // 2. Main Hero Card: DIP & DPS Statutory Tax Shield
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1443,7 +1496,7 @@ private fun PensionSubTab(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 2 Symmetrical Hero Metric Boxes (Clean & Single-Line)
+                // 2 Symmetrical Metric Boxes: Deduction Base & Max Capacity
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1456,20 +1509,18 @@ private fun PensionSubTab(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Monthly Deposit",
+                                text = "Deduction Base",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = fmtCZK(totalMonthlyDip),
+                                text = "${fmtCZK(vDeductionAnnual + (if (eDipMonthly > 0 || eDpsAbove > 0) eDeductionAnnual else 0.0))} / yr",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             )
-                            if (vDipMonthly > 0 || eDipMonthly > 0) {
-                                Text(
-                                    text = "V: ${fmtCompact(vDipMonthly)} · E: ${fmtCompact(eDipMonthly)}",
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                                )
-                            }
+                            Text(
+                                text = "Applied to tax return",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                            )
                         }
                     }
 
@@ -1481,7 +1532,7 @@ private fun PensionSubTab(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Annual Tax Refund",
+                                text = "Annual Tax Shield",
                                 style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             )
                             Spacer(modifier = Modifier.height(3.dp))
@@ -1490,7 +1541,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace)
                             )
                             Text(
-                                text = "${String.format("%.0f", s.taxRatePct)}% tax relief",
+                                text = "${String.format("%.0f", s.taxRatePct)}% refund on claimed base",
                                 style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen.copy(alpha = 0.85f), fontSize = 10.sp)
                             )
                         }
