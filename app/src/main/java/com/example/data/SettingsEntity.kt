@@ -43,7 +43,7 @@ data class SettingsEntity(
     val dpsGrossReturnPct: Double = 6.0,
     val dpsAnnualFeePct: Double = 0.5, // Statutory cap under Lepší penzijko
     val dipContributionMonthly: Double = 1700.0,
-    val employerRetirementMonthly: Double = 2800.0,
+    val employerRetirementMonthly: Double = 233.0, // 2 800 Kč/yr ÷ 12
     // Eleonora's Investments & Accounts
     val eLiquidPortfolioCurrent: Double = 50000.0,
     val ePortuDcaMonthly: Double = 3000.0,

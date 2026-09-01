@@ -13,8 +13,10 @@ class FinancialRepository(
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
         .map { entity ->
             val s = entity ?: SettingsEntity.freshDefaults()
-            if (s.employerRetirementMonthly in 230.0..235.0) {
-                s.copy(employerRetirementMonthly = 2800.0)
+            // Migrate: old data stored 2800.0 as if it were monthly (incorrectly).
+            // The real annual employer contribution is 2 800 Kč/yr = 233 Kč/mo.
+            if (s.employerRetirementMonthly >= 2795.0 && s.employerRetirementMonthly <= 2805.0) {
+                s.copy(employerRetirementMonthly = 233.0)
             } else {
                 s
             }

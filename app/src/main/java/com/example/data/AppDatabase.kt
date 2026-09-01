@@ -170,9 +170,9 @@ abstract class AppDatabase : RoomDatabase() {
                 }
 
                 val employerRetirementMonthlyCol = when {
-                    columns.contains("employerRetirementMonthly") -> "CASE WHEN employerRetirementMonthly > 230.0 AND employerRetirementMonthly < 235.0 THEN 2800.0 ELSE employerRetirementMonthly END"
-                    columns.contains("employerRetirementAnnual") -> "CASE WHEN employerRetirementAnnual <= 5000.0 THEN employerRetirementAnnual ELSE (employerRetirementAnnual / 12.0) END"
-                    else -> "2800.0"
+                    columns.contains("employerRetirementMonthly") -> "CASE WHEN employerRetirementMonthly >= 2795.0 AND employerRetirementMonthly <= 2805.0 THEN 233.0 ELSE employerRetirementMonthly END"
+                    columns.contains("employerRetirementAnnual") -> "CASE WHEN employerRetirementAnnual <= 5000.0 THEN (employerRetirementAnnual / 12.0) ELSE (employerRetirementAnnual / 12.0) END"
+                    else -> "233.0"
                 }
 
                 val eEmployerRetirementMonthlyCol = when {
