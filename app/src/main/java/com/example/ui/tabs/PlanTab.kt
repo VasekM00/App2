@@ -1459,10 +1459,11 @@ private fun PensionSubTab(
                 info = PlanMetricInfos.dpsLepsiPenzijko,
                 onShowInfo = onShowInfo
             )
+            val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT))
             KpiCard(
                 title = "DIP + DPS at Age 60",
                 value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
-                hint = "Tax-free compound wealth",
+                hint = "DIP ${String.format("%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format("%.1f", dpsNetReturnPct)}% net",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dpsAge36,
@@ -1640,10 +1641,12 @@ private fun PensionSubTab(
                     }
                 }
 
-                // Eleonora Ceiling (if contributing or employed)
-                if (eDipMonthly > 0 || eDpsAbove > 0) {
+                // Eleonora Ceiling — always visible (even at 0 to surface uncaptured opportunity)
+                if (!s.isSingleHousehold) {
                     Spacer(modifier = Modifier.height(10.dp))
                     val eUtilizedRatio = (eDeductionAnnual / s.taxDeductionCeilingAnnual).toFloat().coerceIn(0f, 1f)
+                    val eIsActive = eDipMonthly > 0 || eDpsAbove > 0
+                    val eOpportunityTax = max(0.0, s.taxDeductionCeilingAnnual * (s.taxRatePct / 100.0))
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1654,15 +1657,27 @@ private fun PensionSubTab(
                                 text = "Eleonora (48k Max)",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            ColorPill(
-                                text = "${fmtCZK(eDeductionAnnual)} / ${fmtCompact(s.taxDeductionCeilingAnnual)}",
-                                color = BrandGold,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                horizontalPadding = 6.dp,
-                                verticalPadding = 2.dp
-                            )
+                            if (eIsActive) {
+                                ColorPill(
+                                    text = if (eHeadroom <= 0) "100% MAXED" else "${fmtCZK(eDeductionAnnual)} / ${fmtCompact(s.taxDeductionCeilingAnnual)}",
+                                    color = if (eHeadroom <= 0) GoodGreen else BrandGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp
+                                )
+                            } else {
+                                ColorPill(
+                                    text = "0 / 48k — UNUSED",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
@@ -1675,7 +1690,7 @@ private fun PensionSubTab(
                                 )
                                 .padding(0.5.dp)
                         ) {
-                            if (eUtilizedRatio > 0f) {
+                            if (eIsActive && eUtilizedRatio > 0f) {
                                 Box(
                                     modifier = Modifier
                                         .weight(eUtilizedRatio)
@@ -1683,8 +1698,46 @@ private fun PensionSubTab(
                                         .background(BrandGold, RoundedCornerShape(4.dp))
                                 )
                             }
-                            if (1f - eUtilizedRatio > 0.01f) {
-                                Box(modifier = Modifier.weight(1f - eUtilizedRatio).fillMaxHeight())
+                            // Always show the empty remainder (full bar when 0)
+                            Box(modifier = Modifier.weight(maxOf(1f - eUtilizedRatio, 0.01f)).fillMaxHeight())
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (!eIsActive) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "No DIP / DPS contributions set",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                                Text(
+                                    text = "+${fmtCZK(eOpportunityTax)}/yr uncaptured",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = BrandGold,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "DIP: ${fmtCompact(eDipMonthly * 12.0)} · DPS: ${fmtCompact(eDpsAbove * 12.0)}",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                )
+                                Text(
+                                    text = if (eHeadroom > 0) "Headroom: ${fmtCompact(eHeadroom)}" else "Full refund active",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = if (eHeadroom > 0) MaterialTheme.colorScheme.onSurfaceVariant else GoodGreen, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
+                                )
                             }
                         }
                     }
