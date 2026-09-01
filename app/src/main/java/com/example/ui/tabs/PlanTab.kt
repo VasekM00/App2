@@ -90,9 +90,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
+import com.example.data.ELEONORA_BIRTH_YEAR
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.domain.RegulatoryConstants
 import com.example.domain.parseCustomLifeGoals
 import com.example.domain.serializeCustomLifeGoals
 import com.example.ui.components.CardHeaderPill
@@ -1423,10 +1425,13 @@ private fun PensionSubTab(
                 info = PlanMetricInfos.dipDeduction,
                 onShowInfo = onShowInfo
             )
+            val totalMonthlyRetirement = vDipMonthly + eDipMonthly + s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly
+            val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
+            val eTotalRetirement = eDipMonthly + s.eDpsOwnContributionMonthly
             KpiCard(
                 title = "Monthly Deposit",
-                value = fmtCZK(totalMonthlyDip),
-                hint = if (vDipMonthly > 0 || eDipMonthly > 0) "V: ${fmtCompact(vDipMonthly)} · E: ${fmtCompact(eDipMonthly)}" else "Combined DIP & DPS",
+                value = fmtCZK(totalMonthlyRetirement),
+                hint = if (s.isSingleHousehold) "DIP: ${fmtCompact(vDipMonthly)} · DPS: ${fmtCompact(s.dpsOwnContributionMonthly)}" else "V: ${fmtCompact(vTotalRetirement)} · E: ${fmtCompact(eTotalRetirement)}",
                 accentColor = BrandTeal,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dipDeduction,
@@ -1438,13 +1443,16 @@ private fun PensionSubTab(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            val eAge = s.baseYear - ELEONORA_BIRTH_YEAR
+            val totalSubsidyMonthly = currentSubsidy + (if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0)
+            val dpsTotalDeposit = s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
             KpiCard(
                 title = "State Subsidy Match",
                 value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
                 hint = if (dps.youthSubsidyActive) {
-                    "${fmtCZK(currentSubsidy)}/mo on ${fmtCompact(s.dpsOwnContributionMonthly)}"
+                    "${fmtCZK(totalSubsidyMonthly)}/mo on ${fmtCompact(dpsTotalDeposit)}"
                 } else {
-                    "${fmtCZK(currentSubsidy)}/mo (40% in 2027)"
+                    "${fmtCZK(totalSubsidyMonthly)}/mo (40% in 2027)"
                 },
                 accentColor = BrandGold,
                 modifier = Modifier.weight(1f),
