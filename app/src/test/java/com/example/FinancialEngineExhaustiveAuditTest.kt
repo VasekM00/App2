@@ -403,4 +403,56 @@ class FinancialEngineExhaustiveAuditTest {
         val invalidParsed = parseCustomLifeGoals("invalid-json{}}")
         assertEquals(3, invalidParsed.size)
     }
+
+    @Test
+    fun `test 11 - dip and dps deposit optimization matrix scenarios and dynamic tier inclusion`() {
+        val state = FinancialEngine.calculate(defaultSettings)
+        val dip = state.dip
+        val dps = state.dps
+
+        // 1. DIP Scenarios Verification
+        val dipMonthlyTiers = dip.scenarios.map { it.monthly }
+        assertTrue("DIP scenarios contain default 1700 tier", dipMonthlyTiers.contains(1700.0))
+        assertTrue("DIP scenarios contain 4000 statutory max", dipMonthlyTiers.contains(4000.0))
+
+        val dip1700 = dip.scenarios.first { it.monthly == 1700.0 }
+        assertEquals(3060.0, dip1700.annualTaxSaved, 0.001) // 20 400 * 15%
+
+        val dip4000 = dip.scenarios.first { it.monthly == 4000.0 }
+        assertEquals(7200.0, dip4000.annualTaxSaved, 0.001) // 48 000 * 15%
+        assertEquals("Statutory Max", dip4000.riskLevel)
+
+        // 2. DPS Scenarios Verification
+        val dpsMonthlyTiers = dps.scenarios.map { it.monthly }
+        assertTrue("DPS scenarios contain 500 min subsidy", dpsMonthlyTiers.contains(500.0))
+        assertTrue("DPS scenarios contain default 1700 tier", dpsMonthlyTiers.contains(1700.0))
+        assertTrue("DPS scenarios contain 5700 statutory max", dpsMonthlyTiers.contains(5700.0))
+
+        val dps500 = dps.scenarios.first { it.monthly == 500.0 }
+        assertEquals(100.0, dps500.monthlySubsidy, 0.001)
+        assertEquals(1200.0, dps500.annualSubsidy, 0.001)
+        assertEquals("MIN SUBSIDY", dps500.badgeLabel)
+
+        val dps1700 = dps.scenarios.first { it.monthly == 1700.0 }
+        assertEquals(340.0, dps1700.monthlySubsidy, 0.001) // 2026 standard 20%
+        assertEquals(4080.0, dps1700.annualSubsidy, 0.001)
+        assertEquals(0.0, dps1700.annualTaxSaved, 0.001)
+        assertEquals(4080.0, dps1700.totalAnnualBenefit, 0.001)
+        assertEquals("SUBSIDY MAX", dps1700.badgeLabel)
+
+        val dps5700 = dps.scenarios.first { it.monthly == 5700.0 }
+        assertEquals(340.0, dps5700.monthlySubsidy, 0.001)
+        assertEquals(7200.0, dps5700.annualTaxSaved, 0.001)
+        assertEquals(11280.0, dps5700.totalAnnualBenefit, 0.001)
+        assertEquals("STATUTORY MAX", dps5700.badgeLabel)
+
+        // 3. Dynamic Custom Level Inclusion
+        val customSettings = defaultSettings.copy(
+            dipContributionMonthly = 2500.0,
+            dpsOwnContributionMonthly = 3200.0
+        )
+        val customState = FinancialEngine.calculate(customSettings)
+        assertTrue("Custom 2500 DIP dynamically injected", customState.dip.scenarios.any { it.monthly == 2500.0 })
+        assertTrue("Custom 3200 DPS dynamically injected", customState.dps.scenarios.any { it.monthly == 3200.0 })
+    }
 }

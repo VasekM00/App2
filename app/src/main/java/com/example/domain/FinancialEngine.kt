@@ -816,7 +816,12 @@ object FinancialEngine {
             .sorted()
 
         val scenarios = dipLevels.map { monthly: Double ->
-            val scenarioSettings = settings.copy(dipContributionMonthly = monthly, eDipContributionMonthly = 0.0)
+            val scenarioSettings = settings.copy(
+                dipContributionMonthly = monthly,
+                dpsOwnContributionMonthly = 0.0,
+                eDipContributionMonthly = 0.0,
+                eDpsOwnContributionMonthly = 0.0
+            )
             val asave = dipTaxSavingYear(scenarioSettings)
             val dipAnnual = monthly * 12.0
             
