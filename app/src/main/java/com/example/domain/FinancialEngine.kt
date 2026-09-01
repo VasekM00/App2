@@ -752,7 +752,12 @@ object FinancialEngine {
             ownValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0)
         } else 0.0
 
-        val dpsLevels = listOf(0.0, 500.0, 1000.0, 1700.0, 3700.0, 5700.0)
+        val baseDpsLevels = listOf(0.0, 500.0, 1000.0, 1700.0, 3700.0, 5700.0)
+        val dpsLevels = (baseDpsLevels + listOf(settings.dpsOwnContributionMonthly, settings.eDpsOwnContributionMonthly))
+            .filter { it >= 0.0 }
+            .distinct()
+            .sorted()
+
         val scenarios = dpsLevels.map { monthly: Double ->
             val subMonthly = dpsSubsidy(monthly, settings.primaryAge, settings, settings.baseYear)
             val subAnnual = subMonthly * 12.0
@@ -804,8 +809,13 @@ object FinancialEngine {
         val totalMonthlyDip = vDipMonthly + eDipMonthly
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
 
-        val levels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
-        val scenarios = levels.map { monthly: Double ->
+        val baseDipLevels = listOf(0.0, 1000.0, 1700.0, 2000.0, 3000.0, 4000.0)
+        val dipLevels = (baseDipLevels + listOf(settings.dipContributionMonthly, settings.eDipContributionMonthly))
+            .filter { it >= 0.0 }
+            .distinct()
+            .sorted()
+
+        val scenarios = dipLevels.map { monthly: Double ->
             val scenarioSettings = settings.copy(dipContributionMonthly = monthly, eDipContributionMonthly = 0.0)
             val asave = dipTaxSavingYear(scenarioSettings)
             val dipAnnual = monthly * 12.0

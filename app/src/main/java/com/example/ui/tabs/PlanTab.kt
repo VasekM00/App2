@@ -1716,7 +1716,7 @@ private fun PensionSubTab(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "DIP Deposit Optimization Matrix",
-                    subtitle = "Monthly deposit tiers & annual tax deduction refund",
+                    subtitle = "Per-earner deposit tiers & annual tax deduction refund",
                     badgeText = "SCENARIOS",
                     accentColor = BrandTeal
                 )
@@ -1725,13 +1725,16 @@ private fun PensionSubTab(
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     dip.scenarios.forEach { sc ->
-                        val isCurrentTier = abs(sc.monthly - vDipMonthly) < 1.0
+                        val isVaclav = abs(sc.monthly - vDipMonthly) < 1.0
+                        val isEleonora = !s.isSingleHousehold && abs(sc.monthly - eDipMonthly) < 1.0
+                        val isBoth = isVaclav && isEleonora
+                        val isHighlighted = isVaclav || isEleonora
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (isCurrentTier) BrandTeal.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            color = if (isHighlighted) BrandTeal.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                             border = BorderStroke(
                                 1.dp,
-                                if (isCurrentTier) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                                if (isHighlighted) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1750,15 +1753,49 @@ private fun PensionSubTab(
                                         text = fmtCZK(sc.monthly),
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     )
-                                    if (isCurrentTier) {
-                                        ColorPill(
-                                            text = "CURRENT",
-                                            color = BrandTeal,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            horizontalPadding = 5.dp,
-                                            verticalPadding = 1.5.dp
-                                        )
+                                    if (s.isSingleHousehold) {
+                                        if (isVaclav) {
+                                            ColorPill(
+                                                text = "CURRENT",
+                                                color = BrandTeal,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 5.dp,
+                                                verticalPadding = 1.5.dp
+                                            )
+                                        }
+                                    } else {
+                                        if (isBoth) {
+                                            ColorPill(
+                                                text = "V & E CURRENT",
+                                                color = BrandTeal,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 5.dp,
+                                                verticalPadding = 1.5.dp
+                                            )
+                                        } else {
+                                            if (isVaclav) {
+                                                ColorPill(
+                                                    text = "VÁCLAV",
+                                                    color = BrandTeal,
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    horizontalPadding = 5.dp,
+                                                    verticalPadding = 1.5.dp
+                                                )
+                                            }
+                                            if (isEleonora) {
+                                                ColorPill(
+                                                    text = "ELEONORA",
+                                                    color = BrandGold,
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    horizontalPadding = 5.dp,
+                                                    verticalPadding = 1.5.dp
+                                                )
+                                            }
+                                        }
                                     }
                                     if (sc.monthly >= 4000.0) {
                                         ColorPill(
@@ -1797,7 +1834,7 @@ private fun PensionSubTab(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "DPS Deposit Optimization Matrix",
-                    subtitle = "Monthly deposit tiers, state subsidy & tax deduction",
+                    subtitle = "Per-earner deposit tiers, state subsidy & tax deduction",
                     badgeText = "SCENARIOS",
                     accentColor = BrandGold
                 )
@@ -1806,13 +1843,16 @@ private fun PensionSubTab(
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     dps.scenarios.forEach { sc ->
-                        val isCurrentTier = abs(sc.monthly - s.dpsOwnContributionMonthly) < 1.0
+                        val isVaclav = abs(sc.monthly - s.dpsOwnContributionMonthly) < 1.0
+                        val isEleonora = !s.isSingleHousehold && abs(sc.monthly - s.eDpsOwnContributionMonthly) < 1.0
+                        val isBoth = isVaclav && isEleonora
+                        val isHighlighted = isVaclav || isEleonora
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (isCurrentTier) BrandGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            color = if (isHighlighted) BrandGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                             border = BorderStroke(
                                 1.dp,
-                                if (isCurrentTier) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                                if (isHighlighted) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1831,15 +1871,49 @@ private fun PensionSubTab(
                                         text = fmtCZK(sc.monthly),
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     )
-                                    if (isCurrentTier) {
-                                        ColorPill(
-                                            text = "CURRENT",
-                                            color = BrandGold,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            horizontalPadding = 5.dp,
-                                            verticalPadding = 1.5.dp
-                                        )
+                                    if (s.isSingleHousehold) {
+                                        if (isVaclav) {
+                                            ColorPill(
+                                                text = "CURRENT",
+                                                color = BrandGold,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 5.dp,
+                                                verticalPadding = 1.5.dp
+                                            )
+                                        }
+                                    } else {
+                                        if (isBoth) {
+                                            ColorPill(
+                                                text = "V & E CURRENT",
+                                                color = BrandGold,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 5.dp,
+                                                verticalPadding = 1.5.dp
+                                            )
+                                        } else {
+                                            if (isVaclav) {
+                                                ColorPill(
+                                                    text = "VÁCLAV",
+                                                    color = BrandGold,
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    horizontalPadding = 5.dp,
+                                                    verticalPadding = 1.5.dp
+                                                )
+                                            }
+                                            if (isEleonora) {
+                                                ColorPill(
+                                                    text = "ELEONORA",
+                                                    color = BrandTeal,
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    horizontalPadding = 5.dp,
+                                                    verticalPadding = 1.5.dp
+                                                )
+                                            }
+                                        }
                                     }
                                     if (sc.badgeLabel != null) {
                                         ColorPill(
