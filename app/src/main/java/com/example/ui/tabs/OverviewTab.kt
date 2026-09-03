@@ -94,7 +94,7 @@ fun OverviewTab(
         category = "Cash Flow & Inflows",
         formulaOrRule = "Net Take-Home Pay + Meal Vouchers + Employer Pension Matching",
         explanation = "Measures true monthly cash generation after all personal Czech taxes (15%/23%), social security (7.1%), and health insurance (4.5%). Employer contributions to DIP and DPS enter directly into tax-sheltered investment accounts without personal tax drag.",
-        statutoryReference = "§ 6 odst. 9 písm. d) ZDP (50k/yr employer limit)",
+        statutoryReference = "§ 6 odst. 9 písm. m) ZDP (50k/yr employer limit)",
         practicalImplication = "Maximizing tax-exempt employer matching provides an immediate 100% risk-free return on capital before market compounding.",
         accentColor = BrandTeal
     )

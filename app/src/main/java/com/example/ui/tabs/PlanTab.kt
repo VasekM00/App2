@@ -1523,7 +1523,7 @@ private fun PensionSubTab(
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "${fmtCZK(vDeductionAnnual + (if (eDipMonthly > 0 || eDpsAbove > 0) eDeductionAnnual else 0.0))} / yr",
+                                text = "${fmtCZK(if (s.isSingleHousehold) vDeductionAnnual else totalDeductionAnnual)} / yr",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             )
                             Text(

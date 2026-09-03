@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.domain.FullCalculationState
+import com.example.domain.RegulatoryConstants
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.theme.BadRed
@@ -109,6 +110,7 @@ import com.example.ui.components.CashFlowProjectionChart
 import com.example.ui.components.DcaTrajectoryBarChart
 import com.example.ui.components.DcaAllocationBreakdownBar
 import kotlin.math.abs
+import kotlin.math.min
 
 fun nextYearMonth(ym: String): String {
     val parts = ym.split("-")
@@ -1988,6 +1990,7 @@ private fun SummarySubTab(
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    val s = state.settings
     val availableMonths = remember(ledgerEntries) {
         listOf("Current Baseline") + ledgerEntries.sortedByDescending { it.yearMonth }.map { it.yearMonth }
     }
@@ -2013,7 +2016,10 @@ private fun SummarySubTab(
     val netFlow = totalInc - totalExp
     val savingsRatePct = if (totalInc > 0) (netFlow / totalInc) * 100.0 else 0.0
     val investmentsMonthly = state.investMonthlyTotal
-    val unallocatedSurplus = (netFlow - investmentsMonthly).coerceAtLeast(0.0)
+    val personalInvestMonthly = s.portuDcaMonthly + (if (!s.isSingleHousehold) s.ePortuDcaMonthly else 0.0) +
+            s.dipContributionMonthly + (if (!s.isSingleHousehold) s.eDipContributionMonthly else 0.0) +
+            s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
+    val unallocatedSurplus = (netFlow - personalInvestMonthly).coerceAtLeast(0.0)
 
     Column(
         modifier = Modifier
@@ -2376,6 +2382,18 @@ private fun SummarySubTab(
                 if (!s.isSingleHousehold && s.eDpsOwnContributionMonthly > 0) {
                     if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "DPS Pension (${s.spouseName})", value = fmtCZK(s.eDpsOwnContributionMonthly))
+                    isFirstRow = false
+                }
+                val vEmpMonthly = min(s.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
+                if (vEmpMonthly > 0) {
+                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Employer Pension Match (${s.primaryName})", value = fmtCZK(vEmpMonthly))
+                    isFirstRow = false
+                }
+                val eEmpMonthly = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) else 0.0
+                if (eEmpMonthly > 0) {
+                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    IncomeRow(label = "Employer Pension Match (${s.spouseName})", value = fmtCZK(eEmpMonthly))
                     isFirstRow = false
                 }
 

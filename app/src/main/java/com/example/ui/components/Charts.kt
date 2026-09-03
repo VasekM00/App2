@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.MonteCarloPoint
 import com.example.domain.PortfolioYearPoint
+import com.example.domain.RegulatoryConstants
 import com.example.domain.StressScenarioResult
 import com.example.data.SettingsEntity
 import com.example.ui.theme.BadRed
@@ -73,7 +74,7 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.mutableIntStateOf
 import kotlin.math.max
-
+import kotlin.math.min
 import kotlin.math.pow
 
 @Composable
@@ -1241,6 +1242,8 @@ fun DcaAllocationBreakdownBar(
     val dipE = if (!isSingle) settings.eDipContributionMonthly else 0.0
     val dpsV = settings.dpsOwnContributionMonthly
     val dpsE = if (!isSingle) settings.eDpsOwnContributionMonthly else 0.0
+    val empV = min(settings.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
+    val empE = if (!isSingle) min(settings.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) else 0.0
 
     val cPortuV = BrandTeal
     val cPortuE = BrandGold
@@ -1248,8 +1251,10 @@ fun DcaAllocationBreakdownBar(
     val cDipE = Color(0xFF059669)
     val cDpsV = BrandBlue
     val cDpsE = Color(0xFF38BDF8)
+    val cEmpV = Color(0xFF8B5CF6)
+    val cEmpE = Color(0xFFA78BFA)
 
-    val streams = remember(settings, isSingle, portuV, portuE, dipV, dipE, dpsV, dpsE, cPortuV, cPortuE, cDipV, cDipE, cDpsV, cDpsE) {
+    val streams = remember(settings, isSingle, portuV, portuE, dipV, dipE, dpsV, dpsE, empV, empE, cPortuV, cPortuE, cDipV, cDipE, cDpsV, cDpsE, cEmpV, cEmpE) {
         buildList {
             if (portuV > 0.0) {
                 add(DcaStreamItem(label = "Brokerage · ${settings.primaryName}", amount = portuV, color = cPortuV))
@@ -1268,6 +1273,12 @@ fun DcaAllocationBreakdownBar(
             }
             if (dpsE > 0.0) {
                 add(DcaStreamItem(label = "DPS · ${settings.spouseName}", amount = dpsE, color = cDpsE))
+            }
+            if (empV > 0.0) {
+                add(DcaStreamItem(label = "Employer · ${settings.primaryName}", amount = empV, color = cEmpV))
+            }
+            if (empE > 0.0) {
+                add(DcaStreamItem(label = "Employer · ${settings.spouseName}", amount = empE, color = cEmpE))
             }
         }
     }
