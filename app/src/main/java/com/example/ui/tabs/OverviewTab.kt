@@ -69,11 +69,13 @@ import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.infoTapHold
 import com.example.ui.components.rememberMetricInfoState
+import com.example.data.LedgerEntryEntity
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverviewTab(
     state: FullCalculationState,
+    ledgerEntries: List<LedgerEntryEntity> = emptyList(),
     actionStates: Map<String, Boolean> = emptyMap(),
     onToggleAction: ((year: Int, actionId: String, currentIsDone: Boolean) -> Unit)? = null,
     onNavigateToIncome: (() -> Unit)? = null,
@@ -203,7 +205,92 @@ fun OverviewTab(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Collapsible Action Checklist Banner
+        // Emergency Reserve & Runway Goal Tracker Widget
+        EmergencyReserveWidget(
+            state = state,
+            onShowInfo = { infoState.show(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Net Worth Chart
+        NetWorthChart(
+            data = state.dualTrajectory,
+            cpiInflationPct = state.settings.cpiInflationPct,
+            ledgerEntries = ledgerEntries
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Quick Highlights
+        val surplusVal = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+        val surplusInfo = MetricInfo(
+            title = "Monthly Capital Surplus",
+            category = "Cash Flow & DCA Engine",
+            formulaOrRule = "Surplus = Total Net Monthly Inflows - All Fixed/Variable Living Expenses",
+            explanation = "Represents your monthly discretionary investment firepower. In pure FIRE math, your savings rate (Surplus / Inflows) is the single most dominant lever governing years-to-financial-independence, outweighing investment returns during early accumulation.",
+            practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
+            accentColor = BrandTeal
+        )
+
+        val dipSavingInfo = MetricInfo(
+            title = "DIP & DPS Statutory Tax Shield",
+            category = "Czech Tax Optimization",
+            formulaOrRule = "Tax Refund = min(DIP + DPS Deposits - Subsidy Threshold, 48k CZK) × Tax Rate (15% / 23%)",
+            explanation = "Under § 15a of the Czech Income Tax Act (ZDP), taxpayers can deduct up to 48,000 CZK combined annually from their personal taxable base across qualifying Long-Term Investment Products (DIP) and Supplementary Pension Savings (DPS).",
+            statutoryReference = "§ 15 odst. 5 & § 15a Act No. 586/1992 Coll. (ZDP)",
+            practicalImplication = "Contributing 4,000 CZK/month into DIP unlocks the full 48k ceiling, providing an immediate risk-free 15% (7,200 CZK) or 23% (11,040 CZK) annual tax refund.",
+            accentColor = GoodGreen
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                CardHeaderPill(
+                    title = "Strategic Highlights",
+                    subtitle = "Monthly dynamics & tax efficiency (Tap for deep insight)",
+                    badgeText = "KEY STATS",
+                    accentColor = BrandTeal
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                SummaryRow(
+                    label = "Monthly surplus",
+                    value = fmtCZK(surplusVal),
+                    valueColor = if (surplusVal < 0) BadRed else GoodGreen,
+                    info = surplusInfo,
+                    onShowInfo = { infoState.show(it) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SummaryRow(
+                    label = "Monthly savings rate",
+                    value = fmtPct(state.savingsRatePct, 1),
+                    info = MetricInfo(
+                        title = "Monthly Savings Rate",
+                        category = "Wealth Accumulation Velocity",
+                        formulaOrRule = "Savings Rate = Net Monthly Surplus / Total Net Inflows",
+                        explanation = "Indicates the proportion of total monthly cash inflows preserved and deployed toward building financial independence capital.",
+                        practicalImplication = "Elevating savings rate reduces working years exponentially due to the dual effect of higher investment deposits and lower required baseline lifestyle expenses.",
+                        accentColor = BrandTeal
+                    ),
+                    onShowInfo = { infoState.show(it) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SummaryRow(
+                    label = "Annual DIP tax saving",
+                    value = fmtCZK(state.taxReturnHelper.dipSaving),
+                    info = dipSavingInfo,
+                    onShowInfo = { infoState.show(it) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Collapsible Action Checklist Banner (Execution Checklist at bottom)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -346,90 +433,6 @@ fun OverviewTab(
                         }
                     }
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Emergency Reserve & Runway Goal Tracker Widget
-        EmergencyReserveWidget(
-            state = state,
-            onShowInfo = { infoState.show(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Net Worth Chart
-        NetWorthChart(
-            data = state.dualTrajectory,
-            cpiInflationPct = state.settings.cpiInflationPct
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Quick Highlights
-        val surplusVal = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
-        val surplusInfo = MetricInfo(
-            title = "Monthly Capital Surplus",
-            category = "Cash Flow & DCA Engine",
-            formulaOrRule = "Surplus = Total Net Monthly Inflows - All Fixed/Variable Living Expenses",
-            explanation = "Represents your monthly discretionary investment firepower. In pure FIRE math, your savings rate (Surplus / Inflows) is the single most dominant lever governing years-to-financial-independence, outweighing investment returns during early accumulation.",
-            practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
-            accentColor = BrandTeal
-        )
-
-        val dipSavingInfo = MetricInfo(
-            title = "DIP & DPS Statutory Tax Shield",
-            category = "Czech Tax Optimization",
-            formulaOrRule = "Tax Refund = min(DIP + DPS Deposits - Subsidy Threshold, 48k CZK) × Tax Rate (15% / 23%)",
-            explanation = "Under § 15a of the Czech Income Tax Act (ZDP), taxpayers can deduct up to 48,000 CZK combined annually from their personal taxable base across qualifying Long-Term Investment Products (DIP) and Supplementary Pension Savings (DPS).",
-            statutoryReference = "§ 15 odst. 5 & § 15a Act No. 586/1992 Coll. (ZDP)",
-            practicalImplication = "Contributing 4,000 CZK/month into DIP unlocks the full 48k ceiling, providing an immediate risk-free 15% (7,200 CZK) or 23% (11,040 CZK) annual tax refund.",
-            accentColor = GoodGreen
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Strategic Highlights",
-                    subtitle = "Monthly dynamics & tax efficiency (Tap for deep insight)",
-                    badgeText = "KEY STATS",
-                    accentColor = BrandTeal
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                SummaryRow(
-                    label = "Monthly surplus",
-                    value = fmtCZK(surplusVal),
-                    valueColor = if (surplusVal < 0) BadRed else GoodGreen,
-                    info = surplusInfo,
-                    onShowInfo = { infoState.show(it) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SummaryRow(
-                    label = "Monthly savings rate",
-                    value = fmtPct(state.savingsRatePct, 1),
-                    info = MetricInfo(
-                        title = "Monthly Savings Rate",
-                        category = "Wealth Accumulation Velocity",
-                        formulaOrRule = "Savings Rate = Net Monthly Surplus / Total Net Inflows",
-                        explanation = "Indicates the proportion of total monthly cash inflows preserved and deployed toward building financial independence capital.",
-                        practicalImplication = "Elevating savings rate reduces working years exponentially due to the dual effect of higher investment deposits and lower required baseline lifestyle expenses.",
-                        accentColor = BrandTeal
-                    ),
-                    onShowInfo = { infoState.show(it) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SummaryRow(
-                    label = "Annual DIP tax saving",
-                    value = fmtCZK(state.taxReturnHelper.dipSaving),
-                    info = dipSavingInfo,
-                    onShowInfo = { infoState.show(it) }
-                )
             }
         }
 

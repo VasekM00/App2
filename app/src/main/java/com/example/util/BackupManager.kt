@@ -180,7 +180,7 @@ object BackupManager {
                 vStatePensionAge = json.optInt("vStatePensionAge", json.optInt("statePensionAge", fallback.vStatePensionAge)),
                 eStatePensionAge = json.optInt("eStatePensionAge", json.optInt("statePensionAge", fallback.eStatePensionAge)),
                 vStatePensionMonthly = json.optDouble("vStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly)),
-                eStatePensionMonthly = json.optDouble("eStatePensionMonthly", fallback.eStatePensionMonthly),
+                eStatePensionMonthly = json.optDouble("eStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.eStatePensionMonthly)),
                 lifestyleCostAtFireMonthly = json.optDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
 
                 rentMonthly = json.optDouble("rentMonthly", fallback.rentMonthly),

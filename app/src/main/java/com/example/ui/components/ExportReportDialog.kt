@@ -80,7 +80,7 @@ fun ExportReportDialog(
         appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")
         appendLine("• DIP Annual Tax Saved: ${fmtCZK(state.taxReturnHelper.dipSaving)}")
         appendLine("• DPS Pension Balance: ${fmtCZK(state.settings.dpsBalanceCurrent + state.settings.eDpsBalanceCurrent)}")
-        appendLine("• DPS Statutory Fee Cap: 0.5% p.a.")
+        appendLine("• DPS Statutory Fee Cap: ${String.format(java.util.Locale.ROOT, "%.1f", state.settings.dpsAnnualFeePct)}% p.a.")
         appendLine()
         appendLine("MONTE CARLO STRESS TEST")
         appendLine("• FIRE Success Probability: ${String.format(java.util.Locale.ROOT, "%.1f%%", state.monteCarlo.successRatePct)}")

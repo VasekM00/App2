@@ -298,7 +298,7 @@ class AbsoluteStressFuzzingTest {
             "[{\"name\": \"<script>alert(1)</script>\", \"amount\": \"not_a_number\"}]",
             "DROP TABLE app_settings;--",
             "{\"custom\": 123}",
-            "\uD83D\uDE00\uD83D\uDE80", // emoji surrogates
+            "\u0000\uFFFD\u0001\uFFFE", // invalid unicode (non-emoji)
             "[[[[[[[]]]]]]]"
         )
 

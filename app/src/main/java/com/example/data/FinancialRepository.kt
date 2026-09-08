@@ -8,13 +8,14 @@ import kotlinx.coroutines.withContext
 class FinancialRepository(
     private val settingsDao: SettingsDao,
     private val ledgerDao: LedgerDao,
-    private val actionStateDao: ActionStateDao
+    private val actionStateDao: ActionStateDao,
+    private val importedTransactionDao: ImportedTransactionDao
 ) {
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
         .map { entity ->
             val s = entity ?: SettingsEntity.freshDefaults()
             // Migrate: old data stored 2800.0 as if it were monthly (incorrectly).
-            // The real annual employer contribution is 2 800 Kč/yr = 233 Kč/mo.
+            // The real annual employer contribution is 2 800 CZK/yr = 233 CZK/mo.
             if (s.employerRetirementMonthly >= 2795.0 && s.employerRetirementMonthly <= 2805.0) {
                 s.copy(employerRetirementMonthly = 233.0)
             } else {
@@ -47,6 +48,10 @@ class FinancialRepository(
         ledgerDao.getAllYearMonths().toSet()
     }
 
+    suspend fun getLedgerEntryByYearMonth(yearMonth: String): LedgerEntryEntity? = withContext(Dispatchers.IO) {
+        ledgerDao.getEntryByYearMonth(yearMonth)
+    }
+
     suspend fun deleteLedgerEntry(id: Long) = withContext(Dispatchers.IO) {
         ledgerDao.deleteEntry(id)
     }
@@ -63,6 +68,27 @@ class FinancialRepository(
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
         ledgerDao.deleteAllEntries()
         actionStateDao.deleteAllActionStates()
+        importedTransactionDao.deleteAllTransactions()
+    }
+
+    fun getImportedTransactions(yearMonth: String): Flow<List<ImportedBankTransactionEntity>> {
+        return importedTransactionDao.getTransactionsForMonth(yearMonth)
+    }
+
+    suspend fun getImportedTransactionsDirect(yearMonth: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
+        importedTransactionDao.getTransactionsForMonthDirect(yearMonth)
+    }
+
+    suspend fun saveImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
+        importedTransactionDao.insertTransactions(transactions)
+    }
+
+    suspend fun updateImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
+        importedTransactionDao.updateTransactions(transactions)
+    }
+
+    suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
+        importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
     }
 }
 

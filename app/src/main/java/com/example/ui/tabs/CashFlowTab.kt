@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
@@ -57,10 +59,13 @@ import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.components.infoTapHold
+import com.example.ui.components.StatementImportReviewDialog
+import com.example.ui.components.YoYRetrospectiveCard
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandBlue
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -89,6 +94,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
@@ -155,13 +161,26 @@ fun prevYearMonth(ym: String): String {
 fun CashFlowTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>,
-    onAddLedgerEntry: (String, Double, Double, Double, Double, Double, String) -> Unit,
+    onAddLedgerEntry: (String, Double, Double, Double, Double, Double, String, Double, Double, Double) -> Unit,
     onUpdateLedgerEntry: (LedgerEntryEntity) -> Unit = {},
     onDeleteLedgerEntry: (Long) -> Unit,
     onImportCsv: (Uri) -> Unit = {},
+    pendingStatementImport: com.example.util.StatementParseSummary? = null,
+    onConfirmStatementImport: (com.example.util.StatementParseSummary) -> Unit = {},
+    onDismissStatementImport: () -> Unit = {},
+    onUpdateTransactionCategory: ((Int, com.example.util.BankTransactionType, Boolean) -> Unit)? = null,
+    activeAuditReport: com.example.util.CrossStatementAuditReport? = null,
+    onShowAuditReport: ((String) -> Unit)? = null,
+    onDismissAuditReport: () -> Unit = {},
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
+    val csvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onImportCsv(it) }
+    }
+
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
     val subTabs = listOf("Budget & Incomes", "Monthly Ledger")
     var showAddDialog by remember { mutableStateOf(false) }
@@ -221,12 +240,14 @@ fun CashFlowTab(
                     },
                     onEditEntry = { entry -> editingEntry = entry },
                     onDelete = onDeleteLedgerEntry,
-                    onImportCsv = onImportCsv
+                    onTriggerImportCsv = { csvLauncher.launch("*/*") },
+                    onShowInfo = { infoState.show(it) },
+                    onShowAuditReport = onShowAuditReport
                 )
             }
         }
 
-        if (selectedSubTab == 1) {
+        if (selectedSubTab == 1 && ledgerEntries.isNotEmpty()) {
             FloatingActionButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -235,20 +256,18 @@ fun CashFlowTab(
                 },
                 containerColor = BrandTeal,
                 contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
+                shape = CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 24.dp)
+                    .padding(end = 18.dp, bottom = 22.dp)
+                    .size(52.dp)
                     .testTag("fab_add_ledger_entry")
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Entry")
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("New Entry", fontWeight = FontWeight.Bold)
-                }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New Entry",
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -262,8 +281,9 @@ fun CashFlowTab(
                 showAddDialog = false
                 duplicateFromEntry = null
             },
-            onSave = { ym, incV, incE, incU, expR, expL, notes ->
-                onAddLedgerEntry(ym, incV, incE, incU, expR, expL, notes)
+            onTriggerImportCsv = { csvLauncher.launch("*/*") },
+            onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
+                onAddLedgerEntry(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
                 showAddDialog = false
                 duplicateFromEntry = null
             }
@@ -276,7 +296,8 @@ fun CashFlowTab(
             entries = ledgerEntries,
             initialEntry = entry,
             onDismiss = { editingEntry = null },
-            onSave = { ym, incV, incE, incU, expR, expL, notes ->
+            onTriggerImportCsv = { csvLauncher.launch("*/*") },
+            onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
                 onUpdateLedgerEntry(
                     entry.copy(
                         yearMonth = ym,
@@ -286,7 +307,10 @@ fun CashFlowTab(
                         expRent = expR,
                         expGroceries = expL,
                         expOther = 0.0,
-                        notes = notes
+                        notes = notes,
+                        portfolioBalanceAtMonthEnd = balPortu,
+                        pensionBalanceAtMonthEnd = balPension,
+                        emergencyReserveAtMonthEnd = balReserve
                     )
                 )
                 editingEntry = null
@@ -298,6 +322,25 @@ fun CashFlowTab(
         info = infoState.currentInfo,
         onDismiss = { infoState.dismiss() }
     )
+
+    pendingStatementImport?.let { summary ->
+        StatementImportReviewDialog(
+            summary = summary,
+            onConfirm = onConfirmStatementImport,
+            onDismiss = onDismissStatementImport,
+            onShowNettingAudit = {
+                onShowAuditReport?.invoke(summary.yearMonth)
+            },
+            onUpdateTransactionCategory = onUpdateTransactionCategory
+        )
+    }
+
+    activeAuditReport?.let { report ->
+        com.example.ui.components.CrossAccountNettingAuditDialog(
+            auditReport = report,
+            onDismiss = onDismissAuditReport
+        )
+    }
 }
 
 private object CashFlowMetricInfos {
@@ -420,6 +463,69 @@ private object CashFlowMetricInfos {
         formulaOrRule = "(Total Inflows - Living Expenses) / Total Inflows",
         explanation = "The single most powerful determinant of your early retirement date. A 50%+ savings rate guarantees financial independence in ~15 years; a 65%+ rate cuts the timeline to ~10 years.",
         practicalImplication = "Every 5% boost in savings rate compounds exponentially into faster FIRE milestones.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    fun ledgerIncomes(entry: LedgerEntryEntity, baselineInc: Double) = MetricInfo(
+        title = "Monthly Inflows · ${entry.yearMonth}",
+        category = "Actual Bank Record",
+        formulaOrRule = "Václav (${fmtCZK(entry.incVaclav)}) + Eleonora (${fmtCZK(entry.incEleonora)}) + Other (${fmtCZK(entry.incUnforeseen)})",
+        explanation = "Total liquid cash deposited into your household accounts during ${entry.yearMonth}. Inflows reflect net take-home pay after Czech income taxes (15%/23%), social security (7.1%), and health insurance (4.5%).",
+        practicalImplication = if (entry.incVaclav + entry.incEleonora + entry.incUnforeseen >= baselineInc)
+            "Inflows exceeded your standard monthly budget baseline (${fmtCZK(baselineInc)}) by ${fmtCZK((entry.incVaclav + entry.incEleonora + entry.incUnforeseen) - baselineInc)}."
+        else
+            "Inflows were ${fmtCZK(baselineInc - (entry.incVaclav + entry.incEleonora + entry.incUnforeseen))} below your baseline budget (${fmtCZK(baselineInc)}).",
+        accentColor = Color(0xFF16A34A)
+    )
+
+    fun ledgerExpenses(entry: LedgerEntryEntity, baselineExp: Double) = MetricInfo(
+        title = "Monthly Living Expenses · ${entry.yearMonth}",
+        category = "Actual Bank Record",
+        formulaOrRule = "Rent (${fmtCZK(entry.expRent)}) + Groceries (${fmtCZK(entry.expGroceries)}) + Other Living (${fmtCZK(entry.expOther)})",
+        explanation = "Combined operational burn rate logged for ${entry.yearMonth}. Groceries and day-to-day spending are tracked separately from housing rent to highlight discretionary lifestyle inflation.",
+        practicalImplication = if (entry.expRent + entry.expGroceries + entry.expOther <= baselineExp)
+            "Total spending remained ${fmtCZK(baselineExp - (entry.expRent + entry.expGroceries + entry.expOther))} below your baseline plan (${fmtCZK(baselineExp)}), creating extra investment capacity."
+        else
+            "Spending exceeded your baseline living plan (${fmtCZK(baselineExp)}) by ${fmtCZK((entry.expRent + entry.expGroceries + entry.expOther) - baselineExp)}.",
+        accentColor = Color(0xFFDC2626)
+    )
+
+    fun ledgerNetFlow(entry: LedgerEntryEntity, totalInc: Double, totalExp: Double, netFlow: Double, savingsRate: Double) = MetricInfo(
+        title = "Net Cash Flow · ${entry.yearMonth}",
+        category = "Actual Capital Generation",
+        formulaOrRule = "Total Inflows (${fmtCZK(totalInc)}) - Living Expenses (${fmtCZK(totalExp)}) = ${fmtCZK(netFlow)}",
+        explanation = "Net uncommitted liquidity produced by the household in ${entry.yearMonth}. Your savings rate for this month was ${savingsRate.toInt()}%.",
+        practicalImplication = "This cash surplus funds your automated ETF DCA allocations (Portu, DIP, DPS) and expands your liquid emergency reserve.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    fun ledgerBudgetVariance(diff: Double, baselineSurplus: Double, actualNet: Double) = MetricInfo(
+        title = "vs Baseline Budget Performance",
+        category = "Monthly Variance Analysis",
+        formulaOrRule = "Actual Net (${fmtCZK(actualNet)}) - Baseline Plan Net (${fmtCZK(baselineSurplus)}) = ${if (diff >= 0) "+" else ""}${fmtCZK(diff)}",
+        explanation = "Measures how much more (or less) uncommitted capital your household generated this month compared to your planned baseline financial budget.",
+        practicalImplication = if (diff >= 0)
+            "Positive budget outperformance. You generated ${fmtCZK(diff)} more capital than planned, accelerating your FIRE timeline."
+        else
+            "Negative variance of ${fmtCZK(-diff)}. Review discretionary lifestyle spending or unexpected expenses to re-align with budget.",
+        accentColor = if (diff >= 0) Color(0xFF16A34A) else Color(0xFFDC2626)
+    )
+
+    fun ledgerMonthEndWealth(entry: LedgerEntryEntity) = MetricInfo(
+        title = "Month-End Wealth Snapshot · ${entry.yearMonth}",
+        category = "Net Worth Point-in-Time",
+        formulaOrRule = "Reserve (${fmtCZK(entry.emergencyReserveAtMonthEnd)}) + Portu (${fmtCZK(entry.portfolioBalanceAtMonthEnd)}) + Pension (${fmtCZK(entry.pensionBalanceAtMonthEnd)})",
+        explanation = "Your point-in-time closing balance of liquid safety reserves and tracked investment portfolios as of the end of ${entry.yearMonth}.",
+        practicalImplication = "Tracking your month-end cash reserve ensures your emergency runway (6+ months) remains protected as market values fluctuate.",
+        accentColor = Color(0xFFD97706)
+    )
+
+    fun ledgerBankImport(entry: LedgerEntryEntity) = MetricInfo(
+        title = "Bank Statement Source & Provenance",
+        category = "Automated Import Record",
+        formulaOrRule = entry.notes.ifBlank { "Direct Bank Statement Import" },
+        explanation = "This month's figures were automatically populated from your bank statement. Inflows, grocery purchases, and retirement contributions were categorized, and internal transfers between Moneta, ČSOB, and mBank were netted out to prevent double counting.",
+        practicalImplication = "The closing accounting balance was automatically stored as your liquid emergency reserve for this month.",
         accentColor = Color(0xFF0F766E)
     )
 }
@@ -755,14 +861,10 @@ private fun LedgerSubTab(
     onDuplicateEntry: (LedgerEntryEntity) -> Unit,
     onEditEntry: (LedgerEntryEntity) -> Unit,
     onDelete: (Long) -> Unit,
-    onImportCsv: (Uri) -> Unit
+    onTriggerImportCsv: () -> Unit,
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onShowAuditReport: ((String) -> Unit)? = null
 ) {
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { onImportCsv(it) }
-    }
-
     val sortedEntries = remember(entries) {
         entries.sortedByDescending { it.yearMonth }
     }
@@ -812,171 +914,320 @@ private fun LedgerSubTab(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilledTonalButton(
+                    onClick = onAddClick,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = BrandTeal.copy(alpha = 0.12f),
+                        contentColor = BrandTeal
+                    ),
+                    modifier = Modifier.testTag("toolbar_add_entry_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "New Entry",
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("New", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+
                 if (latestEntry != null) {
-                    AssistChip(
+                    FilledTonalButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onDuplicateEntry(latestEntry)
                         },
-                        label = { Text("Copy Latest", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = BrandTeal.copy(alpha = 0.12f),
-                            labelColor = BrandTeal
-                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
                         modifier = Modifier.testTag("duplicate_latest_button")
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy Latest",
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Copy Latest", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
-                TextButton(
-                    onClick = { launcher.launch("text/comma-separated-values") },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+
+                FilledTonalButton(
+                    onClick = onTriggerImportCsv,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = BrandTeal.copy(alpha = 0.15f),
+                        contentColor = BrandTeal
+                    ),
                     modifier = Modifier.testTag("import_csv_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.FileUpload,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        contentDescription = "Import Statement",
+                        modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Import", fontSize = 11.5.sp)
+                    Text("Import Statement", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
 
-        if (sortedEntries.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = BrandTeal.copy(alpha = 0.1f),
-                    modifier = Modifier.size(64.dp)
+        val scrollState = rememberScrollState()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+        ) {
+            if (sortedEntries.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = null,
-                            tint = BrandTeal,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "No monthly records logged yet",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Track your actual salary and living spending vs budget month-by-month to observe real FIRE velocity.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onAddClick,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandTeal)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Log First Month", fontWeight = FontWeight.Bold)
-                }
-            }
-        } else {
-            // Horizontal Month Pill Selector Strip
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(sortedEntries, key = { it.id }) { entry ->
-                    val isSelected = entry.yearMonth == (activeEntry?.yearMonth ?: "")
-                    val net = (entry.incVaclav + entry.incEleonora + entry.incUnforeseen) - (entry.expRent + entry.expGroceries + entry.expOther)
-                    val netColor = if (net >= 0) GoodGreen else BadRed
-
                     Surface(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedYm = entry.yearMonth
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                        ),
-                        modifier = Modifier.testTag("month_chip_${entry.yearMonth}")
+                        shape = CircleShape,
+                        color = BrandTeal.copy(alpha = 0.1f),
+                        modifier = Modifier.size(60.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = BrandTeal,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "No monthly records logged yet",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Track your actual salary and living spending vs budget month-by-month to observe real FIRE velocity.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Action Buttons Side-by-Side
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = onAddClick,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                            modifier = Modifier.testTag("log_first_month_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("New Entry", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = onTriggerImportCsv,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.5.dp, BrandTeal),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandTeal),
+                            modifier = Modifier.testTag("empty_state_import_csv_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Import Statement", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Supported Bank Statement Formats Guide Card
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalance,
+                                    contentDescription = null,
+                                    tint = BrandTeal,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Direct Bank Statement Import",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                            }
+
                             Text(
-                                text = entry.yearMonth,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontFamily = FontFamily.Monospace,
+                                text = "Import official monthly PDF or CSV statements from your accounts:",
+                                style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.5.sp,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = BrandTeal.copy(alpha = 0.12f),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Moneta", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandTeal)
+                                        Text("Václav", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = BrandGold.copy(alpha = 0.12f),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("ČSOB", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandGold)
+                                        Text("Eleonora", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("mBank", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                        Text("Shared", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+
                             Text(
-                                text = (if (net >= 0) "+" else "") + fmtCompact(net),
+                                text = "Internal transfers between Moneta, ČSOB, and mBank are automatically matched and netted out to prevent double counting.",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else netColor
+                                    fontSize = 10.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                                 )
                             )
                         }
                     }
-                }
-            }
 
-            // Active Month Featured Showcase Card
-            if (activeEntry != null) {
-                ActiveMonthOverviewCard(
-                    state = state,
-                    entry = activeEntry,
-                    baselineInc = baselineInc,
-                    baselineExp = baselineExp,
-                    baselineSurplus = baselineSurplus,
-                    onEdit = { onEditEntry(activeEntry) },
-                    onDuplicate = { onDuplicateEntry(activeEntry) },
-                    onDelete = { onDelete(activeEntry.id) },
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            } else {
+                // Horizontal Month Pill Selector Strip
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(sortedEntries, key = { it.id }) { entry ->
+                        val isSelected = entry.yearMonth == (activeEntry?.yearMonth ?: "")
+                        val net = (entry.incVaclav + entry.incEleonora + entry.incUnforeseen) - (entry.expRent + entry.expGroceries + entry.expOther)
+                        val netColor = if (net >= 0) GoodGreen else BadRed
+
+                        Surface(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                selectedYm = entry.yearMonth
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                            ),
+                            modifier = Modifier.testTag("month_chip_${entry.yearMonth}")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = entry.yearMonth,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.5.sp,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = (if (net >= 0) "+" else "") + fmtCompact(net),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else netColor
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Active Month Featured Showcase Card
+                if (activeEntry != null) {
+                    ActiveMonthOverviewCard(
+                        state = state,
+                        entry = activeEntry,
+                        baselineInc = baselineInc,
+                        baselineExp = baselineExp,
+                        baselineSurplus = baselineSurplus,
+                        onEdit = { onEditEntry(activeEntry) },
+                        onDuplicate = { onDuplicateEntry(activeEntry) },
+                        onDelete = { onDelete(activeEntry.id) },
+                        onShowInfo = onShowInfo,
+                        onShowAudit = { onShowAuditReport?.invoke(activeEntry.yearMonth) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
+
+                // 6 Months Inflows vs Outflows Visualizer
+                LedgerChart(
+                    entries = sortedEntries,
+                    selectedYm = activeEntry?.yearMonth ?: "",
+                    onSelectMonth = { ym -> selectedYm = ym },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
-            }
 
-            // 6 Months Inflows vs Outflows Visualizer
-            LedgerChart(
-                entries = sortedEntries,
-                selectedYm = activeEntry?.yearMonth ?: "",
-                onSelectMonth = { ym -> selectedYm = ym },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-            Spacer(modifier = Modifier.height(80.dp)) // padding for FAB
+                // Year-Over-Year (YoY) Retrospective Card
+                YoYRetrospectiveCard(
+                    ledgerEntries = sortedEntries,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(110.dp)) // padding for FAB
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveMonthOverviewCard(
     state: FullCalculationState,
@@ -987,6 +1238,8 @@ private fun ActiveMonthOverviewCard(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onShowAudit: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val totalInc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
@@ -1029,10 +1282,10 @@ private fun ActiveMonthOverviewCard(
             .testTag("active_ledger_card_${entry.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.35f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header row with YearMonth, Edit & Delete actions
+            // Header row with YearMonth, Savings Pill & Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1097,7 +1350,7 @@ private fun ActiveMonthOverviewCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 3-Metric Inflow / Outflow / Net Grid (Single Row, 0 scroll)
+            // 3-Metric Inflow / Outflow / Net Grid (Tap-Enabled with Info Modals)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1105,26 +1358,42 @@ private fun ActiveMonthOverviewCard(
                 // Incomes
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = GoodGreen.copy(alpha = 0.06f),
-                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.2f)),
-                    modifier = Modifier.weight(1f)
+                    color = GoodGreen.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .infoTapHold(CashFlowMetricInfos.ledgerIncomes(entry, baselineInc), onShowInfo)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)) {
-                        Text(
-                            text = "Incomes",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Incomes",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Incomes Info",
+                                tint = GoodGreen.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = fmtCompact(totalInc),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
                                 color = GoodGreen,
-                                fontSize = 13.sp
+                                fontSize = 13.5.sp
                             )
                         )
                     }
@@ -1133,55 +1402,87 @@ private fun ActiveMonthOverviewCard(
                 // Expenses
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = BadRed.copy(alpha = 0.06f),
-                    border = BorderStroke(1.dp, BadRed.copy(alpha = 0.2f)),
-                    modifier = Modifier.weight(1f)
+                    color = BadRed.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .infoTapHold(CashFlowMetricInfos.ledgerExpenses(entry, baselineExp), onShowInfo)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)) {
-                        Text(
-                            text = "Expenses",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Expenses",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Expenses Info",
+                                tint = BadRed.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = fmtCompact(totalExp),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
                                 color = BadRed,
-                                fontSize = 13.sp
+                                fontSize = 13.5.sp
                             )
                         )
                     }
                 }
 
-                // Net Surplus
+                // Net Cash Flow
                 val netColor = if (netFlow >= 0) BrandTeal else BadRed
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = netColor.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, netColor.copy(alpha = 0.25f)),
-                    modifier = Modifier.weight(1.1f)
+                    color = netColor.copy(alpha = 0.09f),
+                    border = BorderStroke(1.dp, netColor.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .infoTapHold(CashFlowMetricInfos.ledgerNetFlow(entry, totalInc, totalExp, netFlow, savingsRate), onShowInfo)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)) {
-                        Text(
-                            text = "Net Savings",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Net Cash Flow",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Net Cash Flow Info",
+                                tint = netColor.copy(alpha = 0.7f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = (if (netFlow >= 0) "+ " else "") + fmtCompact(netFlow),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
                                 color = netColor,
-                                fontSize = 13.sp
+                                fontSize = 13.5.sp
                             )
                         )
                     }
@@ -1190,74 +1491,266 @@ private fun ActiveMonthOverviewCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Variance vs Target Strip (Rent vs Living details)
+            // Net Cash Flow vs Budget Performance Strip
+            val isSurplusPositive = surplusDiff >= 0
+            val varianceColor = if (isSurplusPositive) GoodGreen else BadRed
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                color = varianceColor.copy(alpha = 0.07f),
+                border = BorderStroke(1.dp, varianceColor.copy(alpha = 0.28f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .infoTapHold(CashFlowMetricInfos.ledgerBudgetVariance(surplusDiff, baselineSurplus, netFlow), onShowInfo)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Rent: ${fmtCompact(entry.expRent)}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.5.sp,
-                                fontFamily = FontFamily.Monospace
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSurplusPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                                contentDescription = null,
+                                tint = varianceColor,
+                                modifier = Modifier.size(16.dp)
                             )
-                        )
-                        Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                        Text(
-                            text = "Living: ${fmtCompact(entry.expGroceries + entry.expOther)}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.5.sp,
-                                fontFamily = FontFamily.Monospace
+                            Text(
+                                text = "vs Baseline Budget",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 11.5.sp
+                                )
                             )
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Budget Info",
+                                tint = varianceColor.copy(alpha = 0.6f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+
+                        ColorPill(
+                            text = "${if (isSurplusPositive) "+" else ""}${fmtCompact(surplusDiff)} vs budget",
+                            color = varianceColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
                         )
                     }
 
-                    // Delta badge vs Budget
-                    val surplusBadgeColor = if (surplusDiff >= 0) GoodGreen else BadRed
                     Text(
-                        text = "${if (surplusDiff >= 0) "+" else ""}${fmtCompact(surplusDiff)} vs budget",
+                        text = "Rent ${fmtCompact(entry.expRent)} · Living ${fmtCompact(entry.expGroceries + entry.expOther)}",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
                             fontSize = 10.5.sp,
-                            color = surplusBadgeColor
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                 }
             }
 
-            if (entry.notes.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+            if (entry.totalNetWorthAtMonthEnd > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandGold.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .infoTapHold(CashFlowMetricInfos.ledgerMonthEndWealth(entry), onShowInfo)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Notes,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = entry.notes,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        ),
-                        softWrap = true
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = BrandGold,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Month-End Wealth Snapshot",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Wealth Info",
+                                    tint = BrandGold.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                            }
+                            Text(
+                                text = fmtCZK(entry.totalNetWorthAtMonthEnd),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = BrandGold,
+                                    fontSize = 12.sp
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (entry.portfolioBalanceAtMonthEnd > 0) {
+                                ColorPill(
+                                    text = "Portu: " + fmtCompact(entry.portfolioBalanceAtMonthEnd),
+                                    color = BrandGold,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 1.5.dp
+                                )
+                            }
+                            if (entry.pensionBalanceAtMonthEnd > 0) {
+                                ColorPill(
+                                    text = "Pension: " + fmtCompact(entry.pensionBalanceAtMonthEnd),
+                                    color = BrandGold,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 1.5.dp
+                                )
+                            }
+                            if (entry.emergencyReserveAtMonthEnd > 0) {
+                                ColorPill(
+                                    text = "Reserve: " + fmtCompact(entry.emergencyReserveAtMonthEnd),
+                                    color = BrandTeal,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 1.5.dp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (entry.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                val isBankImport = entry.notes.contains("Imported from", ignoreCase = true)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isBankImport) BrandTeal.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, if (isBankImport) BrandTeal.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isBankImport && onShowAudit != null) {
+                                Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onShowAudit() }
+                            } else if (isBankImport) {
+                                Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .infoTapHold(CashFlowMetricInfos.ledgerBankImport(entry), onShowInfo)
+                            } else Modifier
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (isBankImport) Icons.Default.AccountBalance else Icons.AutoMirrored.Filled.Notes,
+                                contentDescription = null,
+                                tint = if (isBankImport) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = entry.notes,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (isBankImport) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isBankImport) FontWeight.SemiBold else FontWeight.Normal
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (isBankImport) {
+                            if (onShowAudit != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = BrandTeal.copy(alpha = 0.15f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.VerifiedUser,
+                                            contentDescription = "Audit Proof",
+                                            tint = BrandTeal,
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Text(
+                                            text = "Audit Proof",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.5.sp,
+                                                color = BrandTeal,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "Info",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.5.sp,
+                                        color = BrandTeal.copy(alpha = 0.8f),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1271,7 +1764,8 @@ private fun AddLedgerEntryDialog(
     initialEntry: LedgerEntryEntity? = null,
     duplicateFrom: LedgerEntryEntity? = null,
     onDismiss: () -> Unit,
-    onSave: (String, Double, Double, Double, Double, Double, String) -> Unit
+    onTriggerImportCsv: () -> Unit = {},
+    onSave: (String, Double, Double, Double, Double, Double, String, Double, Double, Double) -> Unit
 ) {
     val defaultRent = state.settings.rentMonthly.toInt().toString()
     val baselineLiving = (state.settings.groceriesMonthly + state.settings.cafesMonthly + state.settings.entertainmentMonthly + state.settings.otherDiscretionaryMonthly).toInt().toString()
@@ -1296,7 +1790,9 @@ private fun AddLedgerEntryDialog(
     var expR by remember { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
     var expL by remember { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: baselineLiving) }
     var notes by remember { mutableStateOf(sourceEntry?.notes ?: "") }
-    var isRentCustom by remember { mutableStateOf(sourceEntry != null && sourceEntry.expRent > 0 && sourceEntry.expRent != state.settings.rentMonthly) }
+    var balPortu by remember { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var balPension by remember { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var balReserve by remember { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
 
     val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
     val primaryName = state.settings.primaryName.ifBlank { "Primary Earner" }
@@ -1354,121 +1850,127 @@ private fun AddLedgerEntryDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                // 1. Period Selector & Quick Presets Strip
+                // 1. Period Selector & Quick Presets Strip (Compact)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            IconButton(
+                                onClick = { ym = prevYearMonth(ym) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Previous Month",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            OutlinedTextField(
+                                value = ym,
+                                onValueChange = { ym = it },
+                                singleLine = true,
+                                shape = RoundedCornerShape(6.dp),
+                                textStyle = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    fontSize = 12.sp
+                                ),
+                                modifier = Modifier
+                                    .width(88.dp)
+                                    .testTag("ledger_input_ym")
+                            )
+                            IconButton(
+                                onClick = { ym = nextYearMonth(ym) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Next Month",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+
+                        // Presets Chips Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { ym = prevYearMonth(ym) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Previous Month",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-
-                                OutlinedTextField(
-                                    value = ym,
-                                    onValueChange = { ym = it },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(8.dp),
-                                    textStyle = MaterialTheme.typography.bodySmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            if (latestEntry != null && initialEntry == null) {
+                                AssistChip(
+                                    onClick = {
+                                        ym = nextYearMonth(latestEntry.yearMonth)
+                                        incV = latestEntry.incVaclav.toInt().toString()
+                                        incE = latestEntry.incEleonora.toInt().toString()
+                                        incU = latestEntry.incUnforeseen.toInt().toString()
+                                        expR = latestEntry.expRent.toInt().toString()
+                                        expL = (latestEntry.expGroceries + latestEntry.expOther).toInt().toString()
+                                        notes = latestEntry.notes
+                                        balPortu = latestEntry.portfolioBalanceAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
+                                        balPension = latestEntry.pensionBalanceAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
+                                        balReserve = latestEntry.emergencyReserveAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
+                                    },
+                                    label = { Text("Copy", fontSize = 10.sp) },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = BrandTeal.copy(alpha = 0.12f),
+                                        labelColor = BrandTeal
                                     ),
-                                    modifier = Modifier
-                                        .width(110.dp)
-                                        .testTag("ledger_input_ym")
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.height(28.dp)
                                 )
-
-                                IconButton(
-                                    onClick = { ym = nextYearMonth(ym) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
+                            }
+                            AssistChip(
+                                onClick = {
+                                    incV = defaultVaclav
+                                    incE = defaultEleonora
+                                    incU = "0"
+                                    expR = defaultRent
+                                    expL = baselineLiving
+                                },
+                                label = { Text("Budget", fontSize = 10.sp) },
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.height(28.dp)
+                            )
+                            AssistChip(
+                                onClick = {
+                                    onDismiss()
+                                    onTriggerImportCsv()
+                                },
+                                label = { Text("Import", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Next Month",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
+                                        imageVector = Icons.Default.FileUpload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(11.dp)
                                     )
-                                }
-                            }
-
-                            // Presets in the same strip
-                            if (initialEntry == null) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                                ) {
-                                    if (latestEntry != null) {
-                                        AssistChip(
-                                            onClick = {
-                                                ym = nextYearMonth(latestEntry.yearMonth)
-                                                incV = latestEntry.incVaclav.toInt().toString()
-                                                incE = latestEntry.incEleonora.toInt().toString()
-                                                incU = latestEntry.incUnforeseen.toInt().toString()
-                                                expR = latestEntry.expRent.toInt().toString()
-                                                expL = (latestEntry.expGroceries + latestEntry.expOther).toInt().toString()
-                                                notes = latestEntry.notes
-                                            },
-                                            label = { Text("Copy ${latestEntry.yearMonth}", fontSize = 10.5.sp) },
-                                            colors = AssistChipDefaults.assistChipColors(
-                                                containerColor = BrandTeal.copy(alpha = 0.12f),
-                                                labelColor = BrandTeal
-                                            ),
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                    }
-
-                                    AssistChip(
-                                        onClick = {
-                                            incV = defaultVaclav
-                                            incE = defaultEleonora
-                                            incU = "0"
-                                            expR = defaultRent
-                                            expL = baselineLiving
-                                            isRentCustom = false
-                                        },
-                                        label = { Text("Budget", fontSize = 10.5.sp) },
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-
-                                    AssistChip(
-                                        onClick = {
-                                            incV = "0"
-                                            incE = "0"
-                                            incU = "0"
-                                            expR = "0"
-                                            expL = "0"
-                                            isRentCustom = true
-                                            notes = ""
-                                        },
-                                        label = { Text("Clear", fontSize = 10.5.sp) },
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                }
-                            }
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = BrandGold.copy(alpha = 0.15f),
+                                    labelColor = BrandGold
+                                ),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.height(28.dp)
+                            )
                         }
                     }
                 }
@@ -1480,8 +1982,8 @@ private fun AddLedgerEntryDialog(
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1511,7 +2013,7 @@ private fun AddLedgerEntryDialog(
                                 OutlinedTextField(
                                     value = incV,
                                     onValueChange = { incV = it },
-                                    label = { Text(primaryName, maxLines = 1) },
+                                    label = { Text(primaryName, fontSize = 11.sp) },
                                     suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
                                     singleLine = true,
                                     shape = RoundedCornerShape(8.dp),
@@ -1523,7 +2025,7 @@ private fun AddLedgerEntryDialog(
                                 OutlinedTextField(
                                     value = incE,
                                     onValueChange = { incE = it },
-                                    label = { Text(spouseName, maxLines = 1) },
+                                    label = { Text(spouseName, fontSize = 11.sp) },
                                     suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
                                     singleLine = true,
                                     shape = RoundedCornerShape(8.dp),
@@ -1537,7 +2039,7 @@ private fun AddLedgerEntryDialog(
                             OutlinedTextField(
                                 value = incV,
                                 onValueChange = { incV = it },
-                                label = { Text("$primaryName Net Income") },
+                                label = { Text("$primaryName Net", fontSize = 11.sp) },
                                 suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(8.dp),
@@ -1551,7 +2053,7 @@ private fun AddLedgerEntryDialog(
                         OutlinedTextField(
                             value = incU,
                             onValueChange = { incU = it },
-                            label = { Text("Other Inflows / Bonuses (optional)") },
+                            label = { Text("Other Inflows / Bonuses (optional)", fontSize = 11.sp) },
                             suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
                             singleLine = true,
                             shape = RoundedCornerShape(8.dp),
@@ -1568,8 +2070,8 @@ private fun AddLedgerEntryDialog(
                     border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1591,157 +2093,217 @@ private fun AddLedgerEntryDialog(
                             )
                         }
 
-                        // Variable Living Expenses (Groceries & Lifestyle)
-                        OutlinedTextField(
-                            value = expL,
-                            onValueChange = { expL = it },
-                            label = { Text("Variable Living Expenses (Groceries, Dining, Bills)") },
-                            suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("ledger_input_exp_living")
-                        )
-
-                        // Fixed Housing / Rent (Ultra compact row)
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        // Expenses Fields: Housing/Rent and Variable Living
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isRentCustom) Icons.Default.LockOpen else Icons.Default.Lock,
-                                            contentDescription = null,
-                                            tint = if (isRentCustom) BrandGold else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Text(
-                                            text = "Housing & Rent: ${fmtCZK(valExpR)}",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                        if (!isRentCustom) {
-                                            Text(
-                                                text = "(Fixed)",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = 10.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            )
-                                        }
-                                    }
-
-                                    TextButton(
-                                        onClick = {
-                                            if (isRentCustom) {
-                                                expR = defaultRent
-                                                isRentCustom = false
-                                            } else {
-                                                isRentCustom = true
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(6.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isRentCustom) "Reset" else "Edit",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = BrandTeal,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                    }
-                                }
-
-                                if (isRentCustom) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    OutlinedTextField(
-                                        value = expR,
-                                        onValueChange = { expR = it },
-                                        label = { Text("Rent Override") },
-                                        suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(8.dp),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .testTag("ledger_input_exp_rent")
-                                    )
-                                }
-                            }
+                            OutlinedTextField(
+                                value = expR,
+                                onValueChange = { expR = it },
+                                label = { Text("Rent / Housing", fontSize = 11.sp) },
+                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ledger_input_exp_rent")
+                            )
+                            OutlinedTextField(
+                                value = expL,
+                                onValueChange = { expL = it },
+                                label = { Text("Variable Living", fontSize = 11.sp) },
+                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ledger_input_exp_living")
+                            )
                         }
                     }
                 }
 
-                // 4. Live Net Flow Strip (Single-line)
+                // 4. Live Net Cash Flow & Budget Variance Strip
+                val netColor = if (netFlow >= 0) BrandTeal else BadRed
+                val varianceColor = if (surplusDiff >= 0) GoodGreen else BadRed
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                    color = netColor.copy(alpha = 0.05f),
+                    border = BorderStroke(1.dp, netColor.copy(alpha = 0.25f))
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 10.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (netFlow >= 0) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                                    contentDescription = null,
+                                    tint = netColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Net Cash Flow",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                            }
                             Text(
-                                text = "Net Cash Flow:",
+                                text = (if (netFlow >= 0) "+ " else "") + fmtCZK(netFlow),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.5.sp,
+                                    color = netColor
+                                )
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "vs Baseline Budget",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
                             ColorPill(
-                                text = (if (netFlow >= 0) "+ " else "") + fmtCZK(netFlow),
-                                color = if (netFlow >= 0) GoodGreen else BadRed,
-                                fontSize = 11.sp,
+                                text = "${if (surplusDiff >= 0) "+" else ""}${fmtCompact(surplusDiff)} vs budget",
+                                color = varianceColor,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
                                 horizontalPadding = 6.dp,
                                 verticalPadding = 2.dp
                             )
                         }
+                    }
+                }
 
-                        Text(
-                            text = "${if (surplusDiff >= 0) "+" else ""}${fmtCompact(surplusDiff)} vs budget",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = if (surplusDiff >= 0) BrandTeal else BadRed
+                // 5. Month-End Wealth Snapshot (Compact, Unclipped)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandGold.copy(alpha = 0.05f),
+                    border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.3f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        val vPortu = balPortu.toDoubleOrNull() ?: 0.0
+                        val vPension = balPension.toDoubleOrNull() ?: 0.0
+                        val vReserve = balReserve.toDoubleOrNull() ?: 0.0
+                        val vTotalNetWorth = vPortu + vPension + vReserve
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Month-End Wealth Snapshot",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.5.sp
+                                )
                             )
+                            if (vTotalNetWorth > 0) {
+                                ColorPill(
+                                    text = fmtCZK(vTotalNetWorth),
+                                    color = BrandGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 1.5.dp
+                                )
+                            } else {
+                                Text(
+                                    text = "Optional",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        // 3 Fields Layout:
+                        // Row 1: Portu and Reserve side-by-side (labels fit with no ellipses)
+                        // Row 2: Pension (DIP + DPS)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = balPortu,
+                                onValueChange = { balPortu = it },
+                                label = { Text("Portu", fontSize = 11.sp) },
+                                placeholder = { Text("Broker", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ledger_input_bal_portu")
+                            )
+                            OutlinedTextField(
+                                value = balReserve,
+                                onValueChange = { balReserve = it },
+                                label = { Text("Reserve", fontSize = 11.sp) },
+                                placeholder = { Text("Cash fund", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ledger_input_bal_reserve")
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = balPension,
+                            onValueChange = { balPension = it },
+                            label = { Text("Pension (DIP + DPS)", fontSize = 11.sp) },
+                            placeholder = { Text("Combined total", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+                            suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("ledger_input_bal_pension")
                         )
                     }
                 }
 
-                // 5. Notes / Comments Field (Compact)
+                // 6. Notes / Comments Field (Compact)
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Notes & Memos (optional)") },
+                    label = { Text("Notes & Memos (optional)", fontSize = 11.sp) },
                     placeholder = { Text("e.g. Travel, bonus, car service...") },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
@@ -1759,14 +2321,15 @@ private fun AddLedgerEntryDialog(
                         incU.toDoubleOrNull() ?: 0.0,
                         expR.toDoubleOrNull() ?: 0.0,
                         expL.toDoubleOrNull() ?: 0.0,
-                        notes
+                        notes,
+                        balPortu.toDoubleOrNull() ?: 0.0,
+                        balPension.toDoubleOrNull() ?: 0.0,
+                        balReserve.toDoubleOrNull() ?: 0.0
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
                 shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("save_ledger_entry_button")
+                modifier = Modifier.testTag("save_ledger_entry_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -1782,10 +2345,7 @@ private fun AddLedgerEntryDialog(
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            TextButton(onClick = onDismiss) {
                 Text("Cancel", fontSize = 13.sp)
             }
         }
@@ -1910,13 +2470,24 @@ fun LedgerChart(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
+                        val monthLabel = remember(entry.yearMonth) {
+                            val parts = entry.yearMonth.split("-")
+                            if (parts.size == 2) {
+                                val monthNum = parts[1].toIntOrNull() ?: 1
+                                val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                                if (monthNum in 1..12) "${months[monthNum - 1]} '${parts[0].takeLast(2)}" else parts[1]
+                            } else {
+                                entry.yearMonth.takeLast(2)
+                            }
+                        }
                         Text(
-                            text = entry.yearMonth.takeLast(2),
+                            text = monthLabel,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            ),
+                            maxLines = 1
                         )
                     }
                 }
@@ -2131,7 +2702,7 @@ private fun SummarySubTab(
                 CashAllocationBar(
                     totalIncome = totalInc,
                     expenses = totalExp,
-                    investments = investmentsMonthly,
+                    investments = personalInvestMonthly,
                     unallocated = unallocatedSurplus
                 )
             }
@@ -2232,17 +2803,19 @@ private fun SummarySubTab(
                     val inc = state.currentIncome
                     IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    if (inc.eleonoraSalary > 0.0) {
-                        IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
-                    if (inc.benefit > 0.0) {
-                        IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
-                    if (inc.lecturing > 0.0) {
-                        IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    if (!state.settings.isSingleHousehold) {
+                        if (inc.eleonoraSalary > 0.0) {
+                            IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                        if (inc.benefit > 0.0) {
+                            IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
+                        if (inc.lecturing > 0.0) {
+                            IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        }
                     }
                     IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

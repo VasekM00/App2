@@ -529,7 +529,8 @@ object FinancialEngine {
         val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val eDeduction = min(eDipAnnual + eDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
 
-        return vDeduction + eDeduction
+        val eTotal = if (!settings.isSingleHousehold) eDeduction else 0.0
+        return vDeduction + eTotal
     }
 
     private fun singleEarnerRetirementTaxSaved(
@@ -805,12 +806,17 @@ object FinancialEngine {
         val years = max(0, 60 - settings.primaryAge)
         val tsYear = dipTaxSavingYear(settings)
         val vDipMonthly = settings.dipContributionMonthly
-        val eDipMonthly = settings.eDipContributionMonthly
+        val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
         val totalMonthlyDip = vDipMonthly + eDipMonthly
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
 
         val baseDipLevels = listOf(0.0, 1000.0, 1700.0, 2000.0, 3000.0, 4000.0)
-        val dipLevels = (baseDipLevels + listOf(settings.dipContributionMonthly, settings.eDipContributionMonthly))
+        val candidateDipLevels = if (!settings.isSingleHousehold) {
+            listOf(settings.dipContributionMonthly, settings.eDipContributionMonthly)
+        } else {
+            listOf(settings.dipContributionMonthly)
+        }
+        val dipLevels = (baseDipLevels + candidateDipLevels)
             .filter { it >= 0.0 }
             .distinct()
             .sorted()
@@ -843,13 +849,14 @@ object FinancialEngine {
 
         val annualRateDIP = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
         val monthlyRate = (1.0 + annualRateDIP).pow(1.0 / 12.0) - 1.0
-        var dipBal = settings.dipBalanceCurrent + settings.eDipBalanceCurrent
+        val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
+        var dipBal = settings.dipBalanceCurrent + eDipBal
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
             dipBal = max(0.0, (dipBal + totalMonthlyDip) * max(0.0, 1.0 + monthlyRate))
         }
 
-        val totalCeiling = settings.taxDeductionCeilingAnnual * 2.0
+        val totalCeiling = if (settings.isSingleHousehold) settings.taxDeductionCeilingAnnual else settings.taxDeductionCeilingAnnual * 2.0
         val totalUtilized = annualRetirementDeduction(settings)
 
         return DipProjection(
@@ -1161,7 +1168,8 @@ object FinancialEngine {
         val childAgeValid = (settings.child1Enabled && child1AgeAtBase in 0..2) || (settings.child2Enabled && child2AgeAtBase in 0..2)
         val hasChildUnder3 = settings.hasChildUnder3 && childAgeValid
 
-        val spouseEligible = settings.includeSpouseCredit &&
+        val spouseEligible = !settings.isSingleHousehold &&
+                settings.includeSpouseCredit &&
                 hasChildUnder3 &&
                 (spouseInc <= settings.spouseIncomeLimitAnnual)
 

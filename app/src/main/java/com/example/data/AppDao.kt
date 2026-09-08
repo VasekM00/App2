@@ -27,6 +27,9 @@ interface LedgerDao {
     @Query("SELECT yearMonth FROM ledger_entries")
     suspend fun getAllYearMonths(): List<String>
 
+    @Query("SELECT * FROM ledger_entries WHERE yearMonth = :yearMonth LIMIT 1")
+    suspend fun getEntryByYearMonth(yearMonth: String): LedgerEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEntry(entry: LedgerEntryEntity)
 
@@ -56,4 +59,28 @@ interface ActionStateDao {
 
     @Query("DELETE FROM action_states")
     suspend fun deleteAllActionStates()
+}
+
+@Dao
+interface ImportedTransactionDao {
+    @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth ORDER BY date ASC, id ASC")
+    fun getTransactionsForMonth(yearMonth: String): Flow<List<ImportedBankTransactionEntity>>
+
+    @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth ORDER BY date ASC, id ASC")
+    suspend fun getTransactionsForMonthDirect(yearMonth: String): List<ImportedBankTransactionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTransactions(transactions: List<ImportedBankTransactionEntity>)
+
+    @Update
+    suspend fun updateTransactions(transactions: List<ImportedBankTransactionEntity>)
+
+    @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName")
+    suspend fun deleteTransactionsForBankAndMonth(yearMonth: String, bankName: String)
+
+    @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth")
+    suspend fun deleteTransactionsForMonth(yearMonth: String)
+
+    @Query("DELETE FROM imported_bank_transactions")
+    suspend fun deleteAllTransactions()
 }

@@ -105,6 +105,8 @@ fun MainScreen(
     val actionStates by viewModel.actionStates.collectAsState()
     val liveRegulatoryData by viewModel.liveRegulatoryData.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val pendingStatementImport by viewModel.pendingStatementImport.collectAsState()
+    val activeAuditReport by viewModel.activeAuditReport.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -322,6 +324,7 @@ fun MainScreen(
                         when (selectedTab) {
                             0 -> OverviewTab(
                                 state = state,
+                                ledgerEntries = ledgerEntries,
                                 actionStates = actionStates,
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
@@ -344,18 +347,28 @@ fun MainScreen(
                             1 -> CashFlowTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
-                                onAddLedgerEntry = { ym, incV, incE, incU, expR, expL, notes ->
-                                    viewModel.addLedgerEntry(ym, incV, incE, incU, expR, expL, notes)
+                                onAddLedgerEntry = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
+                                    viewModel.addLedgerEntry(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
                                 },
                                 onUpdateLedgerEntry = { entry ->
                                     viewModel.updateLedgerEntry(entry)
                                 },
                                 onDeleteLedgerEntry = { id -> viewModel.deleteLedgerEntry(id) },
                                 onImportCsv = { uri -> viewModel.importCsvData(uri) },
+                                pendingStatementImport = pendingStatementImport,
+                                onConfirmStatementImport = { summary -> viewModel.confirmStatementImport(summary) },
+                                onDismissStatementImport = { viewModel.dismissStatementImport() },
+                                onUpdateTransactionCategory = { idx, cat, remember ->
+                                    viewModel.updatePendingTransactionCategory(idx, cat, remember)
+                                },
+                                activeAuditReport = activeAuditReport,
+                                onShowAuditReport = { ym -> viewModel.loadAuditReportForMonth(ym) },
+                                onDismissAuditReport = { viewModel.clearAuditReport() },
                                 initialSubTab = targetCashFlowSubTab
                             )
                             2 -> ProjectionsTab(
                                 state = state,
+                                ledgerEntries = ledgerEntries,
                                 onApplySettings = { viewModel.updateSettings(it) },
                                 initialSubTab = targetProjectionsSubTab
                             )

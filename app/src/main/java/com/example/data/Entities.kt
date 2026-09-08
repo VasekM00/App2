@@ -17,8 +17,14 @@ data class LedgerEntryEntity(
     val expRent: Double = 0.0,
     val expGroceries: Double = 0.0,
     val expOther: Double = 0.0,
-    val notes: String = ""
-)
+    val notes: String = "",
+    val portfolioBalanceAtMonthEnd: Double = 0.0,
+    val pensionBalanceAtMonthEnd: Double = 0.0,
+    val emergencyReserveAtMonthEnd: Double = 0.0
+) {
+    val totalNetWorthAtMonthEnd: Double
+        get() = portfolioBalanceAtMonthEnd + pensionBalanceAtMonthEnd + emergencyReserveAtMonthEnd
+}
 
 @Entity(
     tableName = "action_states",

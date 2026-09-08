@@ -87,6 +87,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
@@ -167,7 +168,7 @@ private object PlanMetricInfos {
         category = "Retirement Tax Shield",
         formulaOrRule = "§ 15a ZDP · Up to 48,000 CZK/yr personal tax deduction",
         explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48,000 CZK combined with DPS saves 7,200 CZK (15% bracket) or 11,040 CZK (23% bracket) per person annually.\n\n" +
-                "📊 Statutory Deduction Matrix:\n" +
+                "Statutory Deduction Matrix:\n" +
                 "• 1,000 CZK/mo (12k/yr) → Saves 1,800 CZK/yr (15%)\n" +
                 "• 2,000 CZK/mo (24k/yr) → Saves 3,600 CZK/yr (15%)\n" +
                 "• 3,000 CZK/mo (36k/yr) → Saves 5,400 CZK/yr (15%)\n" +
@@ -339,9 +340,10 @@ private fun FireRoadmapSubTab(
     val fireYear = state.fireDualPoint?.year ?: (currentYear + 10)
     val targetWorth = roundTo10k(state.fireBaseTargetToday)
     val monthlyPassiveIncome = roundTo1k((targetWorth * (state.settings.safeWithdrawalRatePct / 100.0)) / 12.0)
-    val investableNetWorth = state.settings.liquidPortfolioCurrent + state.settings.eLiquidPortfolioCurrent +
-            state.settings.dpsBalanceCurrent + state.settings.eDpsBalanceCurrent +
-            state.settings.dipBalanceCurrent + state.settings.eDipBalanceCurrent
+    val isSingleHh = state.settings.isSingleHousehold
+    val investableNetWorth = state.settings.liquidPortfolioCurrent + (if (!isSingleHh) state.settings.eLiquidPortfolioCurrent else 0.0) +
+            state.settings.dpsBalanceCurrent + (if (!isSingleHh) state.settings.eDpsBalanceCurrent else 0.0) +
+            state.settings.dipBalanceCurrent + (if (!isSingleHh) state.settings.eDipBalanceCurrent else 0.0)
 
     val primaryProgress = if (targetWorth > 0) ((investableNetWorth / targetWorth) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
@@ -1315,28 +1317,32 @@ private fun LifeGoalsSimulatorSubTab(
                     OutlinedTextField(
                         value = goalName,
                         onValueChange = { goalName = it },
-                        label = { Text("Goal Name (e.g. Dream Cottage)") },
+                        label = { Text("Goal Name (e.g. Dream Cottage)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = targetYearStr,
                         onValueChange = { targetYearStr = it },
-                        label = { Text("Target Year") },
+                        label = { Text("Target Year", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = targetAmountStr,
                         onValueChange = { targetAmountStr = it },
-                        label = { Text("Target Capital") },
+                        label = { Text("Target Capital", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = currentSavedStr,
                         onValueChange = { currentSavedStr = it },
-                        label = { Text("Current Savings") },
+                        label = { Text("Current Savings", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1425,9 +1431,10 @@ private fun PensionSubTab(
                 info = PlanMetricInfos.dipDeduction,
                 onShowInfo = onShowInfo
             )
-            val totalMonthlyRetirement = vDipMonthly + eDipMonthly + s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly
+            val isSingle = s.isSingleHousehold
+            val totalMonthlyRetirement = vDipMonthly + (if (!isSingle) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!isSingle) s.eDpsOwnContributionMonthly else 0.0)
             val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
-            val eTotalRetirement = eDipMonthly + s.eDpsOwnContributionMonthly
+            val eTotalRetirement = if (!isSingle) eDipMonthly + s.eDpsOwnContributionMonthly else 0.0
             KpiCard(
                 title = "Monthly Deposit",
                 value = fmtCZK(totalMonthlyRetirement),
@@ -1698,8 +1705,9 @@ private fun PensionSubTab(
                                         .background(BrandGold, RoundedCornerShape(4.dp))
                                 )
                             }
-                            // Always show the empty remainder (full bar when 0)
-                            Box(modifier = Modifier.weight(maxOf(1f - eUtilizedRatio, 0.01f)).fillMaxHeight())
+                            if (1f - eUtilizedRatio > 0.005f) {
+                                Box(modifier = Modifier.weight(1f - eUtilizedRatio).fillMaxHeight())
+                            }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (!eIsActive) {
@@ -1709,7 +1717,7 @@ private fun PensionSubTab(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "No DIP / DPS contributions set",
+                                    text = "No tax-deductible contributions set",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.sp
@@ -1756,7 +1764,11 @@ private fun PensionSubTab(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "Combined household capacity: 96 000 Kč / yr (Václav 48k + Eleonora 48k)",
+                        text = if (s.isSingleHousehold) {
+                            "Statutory annual capacity: 48 000 Kč / yr"
+                        } else {
+                            "Combined household capacity: 96 000 Kč / yr (Václav 48k + Eleonora 48k)"
+                        },
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
@@ -2168,9 +2180,10 @@ private fun FireMilestonesComparisonCard(
     onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
-    val investableNetWorth = state.settings.liquidPortfolioCurrent + state.settings.eLiquidPortfolioCurrent +
-            state.settings.dpsBalanceCurrent + state.settings.eDpsBalanceCurrent +
-            state.settings.dipBalanceCurrent + state.settings.eDipBalanceCurrent
+    val isSingleHh = state.settings.isSingleHousehold
+    val investableNetWorth = state.settings.liquidPortfolioCurrent + (if (!isSingleHh) state.settings.eLiquidPortfolioCurrent else 0.0) +
+            state.settings.dpsBalanceCurrent + (if (!isSingleHh) state.settings.eDpsBalanceCurrent else 0.0) +
+            state.settings.dipBalanceCurrent + (if (!isSingleHh) state.settings.eDipBalanceCurrent else 0.0)
 
     val items = listOf(
         MilestoneConfig(
@@ -2660,7 +2673,7 @@ private fun FireMilestonesComparisonCard(
                             if (isCurrentOverride) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     ColorPill(
-                                        text = "⭐ Active Primary FIRE Goal",
+                                        text = "Active Primary FIRE Goal",
                                         color = BrandGold,
                                         fontSize = 10.sp,
                                         horizontalPadding = 7.dp,

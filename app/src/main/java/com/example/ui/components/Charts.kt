@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -81,18 +82,26 @@ import kotlin.math.pow
 fun NetWorthChart(
     data: List<PortfolioYearPoint>,
     cpiInflationPct: Double = 2.8,
+    ledgerEntries: List<com.example.data.LedgerEntryEntity> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
 
     val cTeal = BrandTeal
     val cGold = BrandGold
+    val cGreen = GoodGreen
     val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
     var isRealPurchasingPower by remember { mutableStateOf(false) }
+
+    val actualPoints = remember(ledgerEntries) {
+        ledgerEntries
+            .filter { it.totalNetWorthAtMonthEnd > 0 }
+            .sortedBy { it.yearMonth }
+    }
 
     val displayData = remember(data, isRealPurchasingPower, cpiInflationPct) {
         if (!isRealPurchasingPower) {
@@ -222,9 +231,15 @@ fun NetWorthChart(
 
                 // Legend
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (actualPoints.isNotEmpty()) {
+                        Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Actual", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Portfolio", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(text = "Model", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
@@ -234,9 +249,11 @@ fun NetWorthChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val maxActual = actualPoints.maxOfOrNull { it.totalNetWorthAtMonthEnd } ?: 0.0
             val maxVal = (maxOf(
                 displayData.maxOfOrNull { it.portfolio } ?: 0.0,
-                displayData.maxOfOrNull { it.target } ?: 0.0
+                displayData.maxOfOrNull { it.target } ?: 0.0,
+                maxActual
             ) * 1.1).coerceAtLeast(100.0)
 
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
@@ -245,11 +262,12 @@ fun NetWorthChart(
             val paddingLeft = 85f // Space for Y-Axis labels
             val paddingRight = 32f // Space on right to prevent clipping of curve and labels
             val paddingBottom = 50f // Space for X-Axis labels
+            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
-            val textPaint = remember(textColor) {
+            val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 22f
+                    textSize = textPx
                     isAntiAlias = true
                 }
             }
@@ -380,6 +398,44 @@ fun NetWorthChart(
                         color = cTeal,
                         style = Stroke(width = 6f, cap = StrokeCap.Round)
                     )
+
+                    // Draw Actual Historical Wealth Path (Solid GoodGreen)
+                    if (actualPoints.isNotEmpty()) {
+                        val baseYear = displayData.firstOrNull()?.year ?: 2026
+                        val actualPath = Path()
+                        actualPoints.forEachIndexed { i, entry ->
+                            val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
+                            val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
+                            val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
+                            val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                            val discountedNw = entry.totalNetWorthAtMonthEnd / discount
+                            val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
+                            val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
+                            if (i == 0) actualPath.moveTo(ax, ay) else actualPath.lineTo(ax, ay)
+                        }
+
+                        if (actualPoints.size >= 2) {
+                            drawPath(
+                                path = actualPath,
+                                color = cGreen,
+                                style = Stroke(width = 6.5f, cap = StrokeCap.Round)
+                            )
+                        }
+
+                        actualPoints.forEach { entry ->
+                            val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
+                            val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
+                            val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
+                            val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                            val discountedNw = entry.totalNetWorthAtMonthEnd / discount
+                            val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
+                            val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
+
+                            drawCircle(color = cGreen.copy(alpha = 0.3f), radius = 13f, center = Offset(ax, ay))
+                            drawCircle(color = cGreen, radius = 7f, center = Offset(ax, ay))
+                            drawCircle(color = Color.White, radius = 3.5f, center = Offset(ax, ay))
+                        }
+                    }
 
                     // Draw Current Position (Now / Start Year) Indicator Dot
                     if (displayData.isNotEmpty()) {
@@ -538,11 +594,12 @@ fun MonteCarloFanChart(
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
+            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
-            val textPaint = remember(textColor) {
+            val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 22f
+                    textSize = textPx
                     isAntiAlias = true
                 }
             }
@@ -850,11 +907,12 @@ fun CashFlowProjectionChart(
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
+            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
-            val textPaint = remember(textColor) {
+            val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 22f
+                    textSize = textPx
                     isAntiAlias = true
                 }
             }
@@ -1110,11 +1168,12 @@ fun StressComparisonChart(
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
+            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
-            val textPaint = remember(textColor) {
+            val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 22f
+                    textSize = textPx
                     isAntiAlias = true
                 }
             }

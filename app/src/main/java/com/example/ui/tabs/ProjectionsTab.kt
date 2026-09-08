@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.domain.RegulatoryConstants
+import kotlin.math.min
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
@@ -71,11 +73,13 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
+import com.example.data.LedgerEntryEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectionsTab(
     state: FullCalculationState,
+    ledgerEntries: List<LedgerEntryEntity> = emptyList(),
     onApplySettings: (SettingsEntity) -> Unit = {},
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
@@ -112,7 +116,7 @@ fun ProjectionsTab(
         }
 
         when (selectedSubTab) {
-            0 -> TrajectorySubTab(state = state, onShowInfo = { infoState.show(it) })
+            0 -> TrajectorySubTab(state = state, ledgerEntries = ledgerEntries, onShowInfo = { infoState.show(it) })
             1 -> WhatIfSandboxSubTab(state = state, onApplySettings = onApplySettings, onShowInfo = { infoState.show(it) })
             2 -> MonteCarloAndStressSubTab(state = state, onShowInfo = { infoState.show(it) })
         }
@@ -130,6 +134,7 @@ fun ProjectionsTab(
 @Composable
 private fun TrajectorySubTab(
     state: FullCalculationState,
+    ledgerEntries: List<LedgerEntryEntity> = emptyList(),
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -209,7 +214,8 @@ private fun TrajectorySubTab(
             // Primary 35-Year Trajectory Chart
             NetWorthChart(
                 data = state.dualTrajectory,
-                cpiInflationPct = state.settings.cpiInflationPct
+                cpiInflationPct = state.settings.cpiInflationPct,
+                ledgerEntries = ledgerEntries
             )
         } else {
             // 35-Year DCA Bar Chart & Growth
@@ -396,7 +402,7 @@ private fun PortfolioAccountsView(
     )
 
     val dipTaxShieldInfo = MetricInfo(
-        title = "Retirement Tax Shield (§ 15a ZDP)",
+        title = "Retirement Tax Shield",
         category = "Czech Tax Optimization",
         formulaOrRule = "Tax Deduction = min(DIP + DPS Deposits - Subsidy Threshold, 48,000 CZK)",
         explanation = "Enables deducting up to 48,000 CZK combined annually from your taxable income base. At the 15% income tax rate, this yields a 7,200 CZK refund; at 23%, an 11,040 CZK refund.",
@@ -455,14 +461,23 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow("Brokerage / ETF DCA", fmtCZK(s.portuDcaMonthly + s.ePortuDcaMonthly))
+                val isSingle = s.isSingleHousehold
+                val portuTotal = s.portuDcaMonthly + if (!isSingle) s.ePortuDcaMonthly else 0.0
+                val dipTotal = s.dipContributionMonthly + if (!isSingle) s.eDipContributionMonthly else 0.0
+                val dpsTotal = s.dpsOwnContributionMonthly + if (!isSingle) s.eDpsOwnContributionMonthly else 0.0
+                val empCap = RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0
+                val empV = min(s.employerRetirementMonthly, empCap)
+                val empE = if (!isSingle) min(s.eEmployerRetirementMonthly, empCap) else 0.0
+                val empTotal = empV + empE
+
+                ProjectionMetricRow("Brokerage / ETF DCA", fmtCZK(portuTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DIP Contribution", fmtCZK(s.dipContributionMonthly + s.eDipContributionMonthly))
+                ProjectionMetricRow("DIP Contribution", fmtCZK(dipTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DPS Own Contribution", fmtCZK(s.dpsOwnContributionMonthly + s.eDpsOwnContributionMonthly))
+                ProjectionMetricRow("DPS Own Contribution", fmtCZK(dpsTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                if (empMonthly > 0) {
-                    ProjectionMetricRow("Employer Benefit (Equiv.)", fmtCZK(empMonthly))
+                if (empTotal > 0) {
+                    ProjectionMetricRow("Employer Benefit (Equiv.)", fmtCZK(empTotal))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
                 ProjectionMetricRow("Total Combined Investment", fmtCZK(state.investMonthlyTotal), isBold = true, highlightColor = BrandTeal)
@@ -519,48 +534,50 @@ private fun PortfolioAccountsView(
                 }
             }
 
-            // Eleonora Card
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Eleonora",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
-                        )
-                        ColorPill(
-                            text = "ACCUMULATING",
-                            color = BrandGold,
-                            fontSize = 8.sp,
-                            horizontalPadding = 5.dp,
-                            verticalPadding = 2.dp
-                        )
+            // Eleonora Card (Only shown in dual-earner household)
+            if (!s.isSingleHousehold) {
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Eleonora",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                            )
+                            ColorPill(
+                                text = "ACCUMULATING",
+                                color = BrandGold,
+                                fontSize = 8.sp,
+                                horizontalPadding = 5.dp,
+                                verticalPadding = 2.dp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.eLiquidPortfolioCurrent))
+                        AccountBreakdownItem(label = "DIP Account", value = fmtCZK(s.eDipBalanceCurrent))
+                        AccountBreakdownItem(label = "DPS Pension", value = fmtCZK(s.eDpsBalanceCurrent))
+                        AccountBreakdownItem(label = "Total Balance", value = fmtCZK(eTotalBal), isBold = true, color = BrandGold)
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+                        ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.ePortuDcaMonthly))
+                        AccountBreakdownItem(label = "DIP DCA", value = fmtCZK(s.eDipContributionMonthly))
+                        AccountBreakdownItem(label = "DPS DCA", value = fmtCZK(s.eDpsOwnContributionMonthly))
+                        AccountBreakdownItem(label = "Total DCA", value = fmtCZK(eTotalDca), isBold = true, color = GoodGreen)
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    ColorPill(text = "BALANCES", color = MaterialTheme.colorScheme.primary, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.eLiquidPortfolioCurrent))
-                    AccountBreakdownItem(label = "DIP Account", value = fmtCZK(s.eDipBalanceCurrent))
-                    AccountBreakdownItem(label = "DPS Pension", value = fmtCZK(s.eDpsBalanceCurrent))
-                    AccountBreakdownItem(label = "Total Balance", value = fmtCZK(eTotalBal), isBold = true, color = BrandGold)
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-
-                    ColorPill(text = "MONTHLY DCA", color = GoodGreen, fontSize = 7.5.sp, horizontalPadding = 4.dp, verticalPadding = 1.dp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AccountBreakdownItem(label = "Brokerage ETF", value = fmtCZK(s.ePortuDcaMonthly))
-                    AccountBreakdownItem(label = "DIP DCA", value = fmtCZK(s.eDipContributionMonthly))
-                    AccountBreakdownItem(label = "DPS DCA", value = fmtCZK(s.eDpsOwnContributionMonthly))
-                    AccountBreakdownItem(label = "Total DCA", value = fmtCZK(eTotalDca), isBold = true, color = GoodGreen)
                 }
             }
         }
@@ -737,7 +754,7 @@ private fun MonteCarloAndStressSubTab(
 
         state.stressScenarios.forEach { scenario ->
             val scenarioInfo = MetricInfo(
-                title = "${scenario.iconEmoji} ${scenario.name}",
+                title = scenario.name,
                 category = "Stress Regime Parameters",
                 formulaOrRule = "${String.format("%.1f%%", scenario.nominalReturnPct)} Nominal Return | ${String.format("%.1f%%", scenario.cpiInflationPct)} CPI Inflation",
                 explanation = scenario.description,
@@ -764,7 +781,7 @@ private fun MonteCarloAndStressSubTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${scenario.iconEmoji} ${scenario.name}",
+                            text = scenario.name,
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         ColorPill(

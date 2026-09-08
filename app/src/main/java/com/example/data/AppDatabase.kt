@@ -8,14 +8,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class],
-    version = 21,
+    entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
+    version = 23,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun settingsDao(): SettingsDao
     abstract fun ledgerDao(): LedgerDao
     abstract fun actionStateDao(): ActionStateDao
+    abstract fun importedTransactionDao(): ImportedTransactionDao
 
     companion object {
         @Volatile
@@ -393,6 +394,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ledger_entries ADD COLUMN portfolioBalanceAtMonthEnd REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE ledger_entries ADD COLUMN pensionBalanceAtMonthEnd REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE ledger_entries ADD COLUMN emergencyReserveAtMonthEnd REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS imported_bank_transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        yearMonth TEXT NOT NULL,
+                        bankName TEXT NOT NULL,
+                        date TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        counterpartyAccount TEXT NOT NULL,
+                        counterpartyName TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        variableSymbol TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        isNetted INTEGER NOT NULL DEFAULT 0,
+                        nettingReason TEXT NOT NULL DEFAULT '',
+                        matchedTxId INTEGER
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_yearMonth ON imported_bank_transactions(yearMonth)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_bankName ON imported_bank_transactions(bankName)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -403,7 +436,8 @@ abstract class AppDatabase : RoomDatabase() {
                     .addMigrations(
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                        MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21
+                        MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
+                        MIGRATION_21_22, MIGRATION_22_23
                     )
                     .fallbackToDestructiveMigration(true)
                     .build()

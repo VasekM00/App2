@@ -73,7 +73,7 @@ class UIAccessibilityStressTest {
                 CashFlowTab(
                     state = defaultCalcState,
                     ledgerEntries = emptyList(),
-                    onAddLedgerEntry = { _, _, _, _, _, _, _ -> },
+                    onAddLedgerEntry = { _, _, _, _, _, _, _, _, _, _ -> },
                     onUpdateLedgerEntry = {},
                     onDeleteLedgerEntry = {},
                     onImportCsv = {}
@@ -114,7 +114,7 @@ class UIAccessibilityStressTest {
                 CashFlowTab(
                     state = zeroCalcState,
                     ledgerEntries = emptyList(),
-                    onAddLedgerEntry = { _, _, _, _, _, _, _ -> },
+                    onAddLedgerEntry = { _, _, _, _, _, _, _, _, _, _ -> },
                     onUpdateLedgerEntry = {},
                     onDeleteLedgerEntry = {},
                     onImportCsv = {}
@@ -155,7 +155,7 @@ class UIAccessibilityStressTest {
                 CashFlowTab(
                     state = maxCalcState,
                     ledgerEntries = emptyList(),
-                    onAddLedgerEntry = { _, _, _, _, _, _, _ -> },
+                    onAddLedgerEntry = { _, _, _, _, _, _, _, _, _, _ -> },
                     onUpdateLedgerEntry = {},
                     onDeleteLedgerEntry = {},
                     onImportCsv = {}

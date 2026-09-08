@@ -244,6 +244,7 @@ class SecurityAuditTest {
         val emojiRegex = Regex(
             "[\uD83C-\uDBFF][\uDC00-\uDFFF]|" +
             "[\u2600-\u27BF]|" +
+            "[\u2B00-\u2BFF]|" +
             "[\uE000-\uF8FF]|" +
             "[\uFE00-\uFE0F]"
         )
