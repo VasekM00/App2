@@ -1,10 +1,7 @@
 package com.example.ui.tabs
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,17 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,11 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.ActionMeta
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
@@ -84,11 +72,6 @@ fun OverviewTab(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val currentYear = state.settings.baseYear
-    val completedActionsCount = ActionMeta.items.count { meta ->
-        actionStates["${currentYear}_${meta.id}"] == true
-    }
-    var isActionBannerExpanded by remember { mutableStateOf(false) }
     val infoState = rememberMetricInfoState()
 
     val incomeInfo = MetricInfo(
@@ -278,163 +261,32 @@ fun OverviewTab(
                     ),
                     onShowInfo = { infoState.show(it) }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                val coastMilestone = state.fireMilestones.coastFire
                 SummaryRow(
-                    label = "Annual DIP tax saving",
-                    value = fmtCZK(state.taxReturnHelper.dipSaving),
-                    info = dipSavingInfo,
+                    label = if (coastMilestone.isAchieved) "Coast FIRE achieved" else "Coast FIRE progress",
+                    value = if (coastMilestone.isAchieved) {
+                        "Age ${coastMilestone.estimatedAge ?: "—"}"
+                    } else {
+                        fmtPct(coastMilestone.progressPct, 0)
+                    },
+                    valueColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold,
+                    info = MetricInfo(
+                        title = "Coast FIRE",
+                        category = "Financial Independence Milestones",
+                        formulaOrRule = "Coast FIRE Target = FIRE Target / (1 + Real Return)^(Years to Age 65)",
+                        explanation = "Coast FIRE is the portfolio size at which compound growth alone — with zero further contributions — will reach your full FIRE target by traditional retirement age. Once reached, you could theoretically stop saving entirely and still retire on time.",
+                        practicalImplication = if (coastMilestone.isAchieved) {
+                            "You have crossed the Coast FIRE threshold. Every additional contribution now accelerates your FIRE date beyond the baseline."
+                        } else {
+                            "You are ${fmtPct(coastMilestone.progressPct, 0)} of the way to Coast FIRE (target: ${fmtCompact(coastMilestone.targetAmountToday)}). Keep contributing to reach this milestone."
+                        },
+                        accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
+                    ),
                     onShowInfo = { infoState.show(it) }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Collapsible Action Checklist Banner (Execution Checklist at bottom)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("overview_action_banner"),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isActionBannerExpanded = !isActionBannerExpanded },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(GoodGreen.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ListAlt,
-                                contentDescription = null,
-                                tint = GoodGreen,
-                                modifier = Modifier.size(17.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Execution Checklist",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
-                                ColorPill(
-                                    text = "YEAR $currentYear",
-                                    color = GoodGreen,
-                                    fontSize = 9.sp,
-                                    horizontalPadding = 6.dp,
-                                    verticalPadding = 2.dp
-                                )
-                            }
-                            Text(
-                                text = "$completedActionsCount of ${ActionMeta.items.size} optimization moves completed",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                        }
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ColorPill(
-                            text = "${if (ActionMeta.items.isEmpty()) 0 else ((completedActionsCount.toDouble() / ActionMeta.items.size) * 100).toInt()}% DONE",
-                            color = GoodGreen,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            horizontalPadding = 7.dp,
-                            verticalPadding = 3.dp
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        IconButton(
-                            onClick = { isActionBannerExpanded = !isActionBannerExpanded },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isActionBannerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isActionBannerExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                AnimatedVisibility(visible = isActionBannerExpanded) {
-                    Column(modifier = Modifier.padding(top = 10.dp)) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(bottom = 8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
-                        ActionMeta.items.forEach { meta ->
-                            val key = "${currentYear}_${meta.id}"
-                            val isDone = actionStates[key] == true
-                            val impact = state.actionsImpacts[meta.id] ?: 0.0
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onToggleAction?.invoke(currentYear, meta.id, isDone)
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = isDone,
-                                    onCheckedChange = {
-                                        onToggleAction?.invoke(currentYear, meta.id, isDone)
-                                    },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = GoodGreen,
-                                        uncheckedColor = MaterialTheme.colorScheme.outline
-                                    ),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = meta.title,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontWeight = if (isDone) FontWeight.Normal else FontWeight.SemiBold,
-                                            color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    )
-                                    if (impact > 0) {
-                                        Text(
-                                            text = "+${fmtCZK(impact)} / yr impact",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = 10.sp,
-                                                color = GoodGreen,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(96.dp))
     }

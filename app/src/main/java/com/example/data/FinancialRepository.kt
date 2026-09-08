@@ -52,6 +52,10 @@ class FinancialRepository(
         ledgerDao.getEntryByYearMonth(yearMonth)
     }
 
+    suspend fun getAllLedgerEntriesDirect(): List<LedgerEntryEntity> = withContext(Dispatchers.IO) {
+        ledgerDao.getAllEntriesDirect()
+    }
+
     suspend fun deleteLedgerEntry(id: Long) = withContext(Dispatchers.IO) {
         ledgerDao.deleteEntry(id)
     }

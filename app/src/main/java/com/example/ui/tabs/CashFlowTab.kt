@@ -173,6 +173,7 @@ fun CashFlowTab(
     onShowAuditReport: ((String) -> Unit)? = null,
     onDismissAuditReport: () -> Unit = {},
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
+    lastImportTimestamp: Long? = null,
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -244,7 +245,8 @@ fun CashFlowTab(
                     onTriggerImportCsv = { csvLauncher.launch("*/*") },
                     onShowInfo = { infoState.show(it) },
                     onShowAuditReport = onShowAuditReport,
-                    importedBankSourcesByMonth = importedBankSourcesByMonth
+                    importedBankSourcesByMonth = importedBankSourcesByMonth,
+                    lastImportTimestamp = lastImportTimestamp
                 )
             }
         }
@@ -601,46 +603,6 @@ private fun IncomeSubTab(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Visual DCA Trajectory Bar Chart & Cash Flow Projections
-        var chartViewIndex by remember { mutableIntStateOf(0) }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            AssistChip(
-                onClick = { chartViewIndex = 0 },
-                label = { Text("DCA Bar Chart", fontSize = 12.sp, fontWeight = if (chartViewIndex == 0) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (chartViewIndex == 0) BrandTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    labelColor = if (chartViewIndex == 0) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.weight(1f).testTag("chip_dca_bar_chart")
-            )
-            AssistChip(
-                onClick = { chartViewIndex = 1 },
-                label = { Text("Line Trajectory", fontSize = 12.sp, fontWeight = if (chartViewIndex == 1) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (chartViewIndex == 1) BrandGold.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    labelColor = if (chartViewIndex == 1) BrandGold else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.weight(1f).testTag("chip_line_trajectory")
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        if (chartViewIndex == 0) {
-            DcaTrajectoryBarChart(
-                data = state.dualTrajectory,
-                settings = state.settings
-            )
-        } else {
-            CashFlowProjectionChart(data = state.dualTrajectory)
-        }
-
         Spacer(modifier = Modifier.height(96.dp))
     }
 }
@@ -875,13 +837,32 @@ private fun LedgerSubTab(
     onTriggerImportCsv: () -> Unit,
     onShowInfo: (MetricInfo) -> Unit = {},
     onShowAuditReport: ((String) -> Unit)? = null,
-    importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap()
+    importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
+    lastImportTimestamp: Long? = null
 ) {
     val sortedEntries = remember(entries) {
         entries.sortedByDescending { it.yearMonth }
     }
     val latestEntry = remember(sortedEntries) {
         sortedEntries.firstOrNull()
+    }
+
+    val daysSinceLastImport = remember(lastImportTimestamp, entries) {
+        val ts = lastImportTimestamp ?: run {
+            val latest = entries.maxOfOrNull { it.yearMonth }
+            if (latest != null) {
+                try {
+                    val ym = java.time.YearMonth.parse(latest)
+                    val endOfMonth = ym.atEndOfMonth().atTime(23, 59)
+                    val zone = java.time.ZoneId.systemDefault()
+                    endOfMonth.atZone(zone).toInstant().toEpochMilli()
+                } catch (e: Exception) { null }
+            } else null
+        }
+        if (ts != null && ts > 0L) {
+            val diffMs = System.currentTimeMillis() - ts
+            (diffMs / (1000L * 60 * 60 * 24)).toInt().coerceAtLeast(0)
+        } else null
     }
 
     // Interactive Month Carousel Selection
@@ -1009,6 +990,47 @@ private fun LedgerSubTab(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         softWrap = false
+                    )
+                }
+            }
+        }
+
+        if (daysSinceLastImport != null && daysSinceLastImport >= 25) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = BrandGold.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable { onTriggerImportCsv() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(BrandGold, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Last statement import: $daysSinceLastImport days ago",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "Import fresh",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandGold
+                        )
                     )
                 }
             }
@@ -2718,35 +2740,15 @@ private fun SummarySubTab(
 ) {
     val scrollState = rememberScrollState()
     val s = state.settings
-    val availableMonths = remember(ledgerEntries) {
-        listOf("Current Baseline") + ledgerEntries.sortedByDescending { it.yearMonth }.map { it.yearMonth }
-    }
-    var selectedMonth by remember { mutableStateOf("Current Baseline") }
 
-    val entry = remember(selectedMonth, ledgerEntries) {
-        if (selectedMonth == "Current Baseline") null
-        else ledgerEntries.find { it.yearMonth == selectedMonth }
-    }
-
-    val totalInc = if (entry != null) {
-        entry.incVaclav + entry.incEleonora + entry.incUnforeseen
-    } else {
-        state.currentIncome.totalMonthly
-    }
-
-    val totalExp = if (entry != null) {
-        entry.expRent + entry.expGroceries + entry.expOther
-    } else {
-        state.totalLivingCostMonthly
-    }
-
+    val totalInc = state.currentIncome.totalMonthly
+    val totalExp = state.totalLivingCostMonthly
     val netFlow = totalInc - totalExp
-    val savingsRatePct = if (totalInc > 0) (netFlow / totalInc) * 100.0 else 0.0
-    val investmentsMonthly = state.investMonthlyTotal
     val personalInvestMonthly = s.portuDcaMonthly + (if (!s.isSingleHousehold) s.ePortuDcaMonthly else 0.0) +
             s.dipContributionMonthly + (if (!s.isSingleHousehold) s.eDipContributionMonthly else 0.0) +
             s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
     val unallocatedSurplus = (netFlow - personalInvestMonthly).coerceAtLeast(0.0)
+    val investmentsMonthly = state.investMonthlyTotal
 
     Column(
         modifier = Modifier
@@ -2754,47 +2756,6 @@ private fun SummarySubTab(
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
-        // Month Selector Chips
-        if (availableMonths.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Period:",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    availableMonths.forEach { month ->
-                        val isSelected = month == selectedMonth
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .clickable { selectedMonth = month }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = month,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = if (isSelected) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // 1. Key Metrics Header Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -2804,7 +2765,7 @@ private fun SummarySubTab(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = if (selectedMonth == "Current Baseline") "Monthly Cash Flow Summary" else "Summary for $selectedMonth",
+                    title = "Monthly Cash Flow Summary",
                     subtitle = "Income, living expenses & net monthly surplus · Tap for info",
                     badgeText = "SUMMARY",
                     accentColor = BrandTeal
@@ -2861,205 +2822,6 @@ private fun SummarySubTab(
                     investments = personalInvestMonthly,
                     unallocated = unallocatedSurplus
                 )
-            }
-        }
-
-        // Monthly Difference / Variance vs Baseline Budget Indicator Card (when viewing a specific recorded month)
-        if (entry != null) {
-            val baselineInc = state.currentIncome.totalMonthly
-            val baselineExp = state.totalLivingCostMonthly
-            val baselineSurplus = baselineInc - baselineExp
-            val incDiff = totalInc - baselineInc
-            val expDiff = totalExp - baselineExp
-            val surplusDiff = netFlow - baselineSurplus
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    CardHeaderPill(
-                        title = "Variance vs Baseline Budget",
-                        subtitle = "Performance deviation against baseline target",
-                        badgeText = if (surplusDiff >= 0) "+${fmtCompact(surplusDiff)} Net" else "${fmtCompact(surplusDiff)} Net",
-                        accentColor = if (surplusDiff >= 0) GoodGreen else MaterialTheme.colorScheme.error
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Max),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MetricStatBox(
-                            label = "Income Variance",
-                            value = "${if (incDiff >= 0) "+" else ""}${fmtCZK(incDiff)}",
-                            valueColor = if (incDiff >= 0) GoodGreen else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        MetricStatBox(
-                            label = "Expense Variance",
-                            value = "${if (expDiff > 0) "+" else ""}${fmtCZK(expDiff)}",
-                            valueColor = if (expDiff <= 0) GoodGreen else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        MetricStatBox(
-                            label = "Surplus Variance",
-                            value = "${if (surplusDiff >= 0) "+" else ""}${fmtCZK(surplusDiff)}",
-                            valueColor = if (surplusDiff >= 0) BrandTeal else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = if (surplusDiff >= 0) {
-                            "In $selectedMonth, you saved ${fmtCZK(abs(expDiff))} ${if (expDiff <= 0) "more" else "less"} on expenses and had a net surplus ${fmtCZK(surplusDiff)} above plan."
-                        } else {
-                            "In $selectedMonth, net cash surplus was ${fmtCZK(abs(surplusDiff))} below your baseline target."
-                        },
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 2. Income Breakdown
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Income Breakdown",
-                    subtitle = "Monthly take-home earnings & cash inflows",
-                    badgeText = "INCOME",
-                    accentColor = GoodGreen
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (entry != null) {
-                    IncomeRow(label = "Václav Net Income", value = fmtCZK(entry.incVaclav))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora Net Income", value = fmtCZK(entry.incEleonora))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Other / Unforeseen Income", value = fmtCZK(entry.incUnforeseen))
-                } else {
-                    val inc = state.currentIncome
-                    IncomeRow(label = "Václav's Net Salary", value = fmtCZK(inc.vaclavNet))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    if (!state.settings.isSingleHousehold) {
-                        if (inc.eleonoraSalary > 0.0) {
-                            IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary))
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        }
-                        if (inc.benefit > 0.0) {
-                            IncomeRow(label = "Eleonora's Parental Allowance", value = fmtCZK(inc.benefit))
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        }
-                        if (inc.lecturing > 0.0) {
-                            IncomeRow(label = "Eleonora's Lecturing", value = fmtCZK(inc.lecturing))
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        }
-                    }
-                    IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift))
-                    if (state.settings.vOtherInflowsMonthly > 0.0) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
-                    }
-                    if (!state.settings.isSingleHousehold && state.settings.eOtherInflowsMonthly > 0.0) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(state.settings.eOtherInflowsMonthly))
-                    }
-                }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 2.dp,
-                    color = BrandTeal
-                )
-
-                IncomeRow(
-                    label = "TOTAL INCOME",
-                    value = fmtCZK(totalInc),
-                    isBold = true
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 3. Living Expenses Breakdown
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Living Expenses Breakdown",
-                    subtitle = "Monthly necessities, lifestyle & child allocations",
-                    badgeText = "EXPENSES",
-                    accentColor = BrandTeal
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (entry != null) {
-                    ExpenseItem("Housing & Rent (Fixed)", entry.expRent)
-                    ExpenseItem("Variable Living Expenses (Groceries & Lifestyle)", entry.expGroceries + entry.expOther)
-                } else {
-                    val s = state.settings
-                    val deletedSet = com.example.domain.parseDeletedCategories(s.deletedCategoriesJson)
-                    if (!deletedSet.contains("rent")) ExpenseItem("Rent / Housing", s.rentMonthly)
-                    if (!deletedSet.contains("groceries")) ExpenseItem("Groceries & Daily Living", s.groceriesMonthly)
-                    if (!deletedSet.contains("other_discretionary") && s.otherDiscretionaryMonthly > 0.0) {
-                        ExpenseItem("Other Discretionary", s.otherDiscretionaryMonthly)
-                    }
-                    if (!deletedSet.contains("cafes")) ExpenseItem("Cafes & Restaurants", s.cafesMonthly)
-                    if (!deletedSet.contains("therapy")) ExpenseItem("Therapy / Physio", s.therapyMonthly)
-                    if (!deletedSet.contains("charity")) ExpenseItem("Charity", s.charityMonthly)
-                    if (!deletedSet.contains("entertainment")) ExpenseItem("Entertainment", s.entertainmentMonthly)
-                    if (!deletedSet.contains("transport")) ExpenseItem("Transport", s.transportMonthly)
-                    if (!deletedSet.contains("subscriptions")) ExpenseItem("Subscriptions", s.subscriptionsMonthly)
-
-                    if (s.childExpensesEnabled) {
-                        if (s.child1Enabled) {
-                            val c1 = com.example.domain.FinancialEngine.childMonthlyExpense(s.child1BirthYear, s.baseYear, s)
-                            if (c1 > 0) ExpenseItem("Child 1 Expenses (Age ${s.baseYear - s.child1BirthYear})", c1)
-                        }
-                        if (s.child2Enabled) {
-                            val c2 = com.example.domain.FinancialEngine.childMonthlyExpense(s.child2BirthYear, s.baseYear, s)
-                            if (c2 > 0) ExpenseItem("Child 2 Expenses (Age ${s.baseYear - s.child2BirthYear})", c2)
-                        }
-                    }
-
-                    val customCategories = com.example.domain.parseCustomExpenses(s.customExpensesJson)
-                    customCategories.forEach { customItem ->
-                        ExpenseItem(customItem.name, customItem.amount)
-                    }
-                }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 2.dp,
-                    color = BrandTeal
-                )
-
-                ExpenseItem("TOTAL LIVING EXPENSES", totalExp, isBold = true)
             }
         }
 

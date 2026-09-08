@@ -24,6 +24,9 @@ interface LedgerDao {
     @Query("SELECT * FROM ledger_entries ORDER BY yearMonth DESC")
     fun getAllEntries(): Flow<List<LedgerEntryEntity>>
 
+    @Query("SELECT * FROM ledger_entries ORDER BY yearMonth ASC")
+    suspend fun getAllEntriesDirect(): List<LedgerEntryEntity>
+
     @Query("SELECT yearMonth FROM ledger_entries")
     suspend fun getAllYearMonths(): List<String>
 

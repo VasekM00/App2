@@ -232,7 +232,10 @@ object CrossStatementReconciliationEngine {
 
         // 2b. Cross-Month Boundary Pairing: match remaining unmatched debits in workingList against boundary credits in adjacent months
         val boundaryCredits = workingBoundary.filter { it.amount > 0 && !it.isNetted }.toMutableList()
-        val remainingDebits = workingList.filter { !it.isNetted && it.amount < 0 && it.category != BankTransactionType.HOUSING_RENT.name }
+        val remainingDebits = workingList.filter { debit ->
+            debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name &&
+            matchedPairs.none { it.debitTx.id == debit.id && it.debitTx.bankName == debit.bankName }
+        }
 
         for (debit in remainingDebits) {
             val debitDate = parseDate(debit.date) ?: continue
@@ -287,7 +290,10 @@ object CrossStatementReconciliationEngine {
 
         // 2c. Cross-Month Boundary Pairing: match remaining unmatched credits in workingList against boundary debits in adjacent months
         val boundaryDebits = workingBoundary.filter { it.amount < 0 && !it.isNetted && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
-        val remainingCredits = workingList.filter { !it.isNetted && it.amount > 0 }
+        val remainingCredits = workingList.filter { credit ->
+            credit.amount > 0 &&
+            matchedPairs.none { it.creditTx.id == credit.id && it.creditTx.bankName == credit.bankName }
+        }
 
         for (credit in remainingCredits) {
             val creditDate = parseDate(credit.date) ?: continue

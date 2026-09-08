@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -87,6 +88,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Pending bank statement import review
     private val _pendingStatementImport = MutableStateFlow<com.example.util.StatementParseSummary?>(null)
     val pendingStatementImport: StateFlow<com.example.util.StatementParseSummary?> = _pendingStatementImport.asStateFlow()
+
+    // Statement import recency tracking
+    private val importPrefs = application.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
+    private val _lastImportTimestamp = MutableStateFlow<Long?>(
+        importPrefs.getLong("last_import_all", 0L).let { if (it > 0L) it else null }
+    )
+    val lastImportTimestamp: StateFlow<Long?> = _lastImportTimestamp.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val entries = repository.getAllLedgerEntriesDirect()
+            if (entries.isNotEmpty()) {
+                val cur = repository.settingsFlow.first()
+                val isSingle = cur.isSingleHousehold
+                val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
+                val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
+                for (e in entries) {
+                    if (e.portfolioBalanceAtMonthEnd <= 0.0 && e.totalNetWorthAtMonthEnd <= 0.0) {
+                        val reserve = if (e.emergencyReserveAtMonthEnd > 0.0) e.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
+                        repository.updateLedgerEntry(
+                            e.copy(
+                                portfolioBalanceAtMonthEnd = snapLiquid,
+                                pensionBalanceAtMonthEnd = snapPension,
+                                emergencyReserveAtMonthEnd = reserve
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     fun syncLiveCzechData() {
         viewModelScope.launch {
@@ -301,10 +333,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         activeAuditReport.value = null
     }
 
-    fun importStatementData(uri: android.net.Uri) {
-        importCsvData(uri)
-    }
-
     suspend fun recalculateMonthLedger(targetYm: String) {
         val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
         if (allMonthTxs.isEmpty()) return
@@ -471,6 +499,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // The closing balance belongs to the latest month of the statement
                 val closingBalance = if (targetYm == latestMonth) summary.monthEndBalance else null
 
+                val cur = settingsState.value
+                val isSingle = cur.isSingleHousehold
+                val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
+                val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
+
                 if (existingEntry != null) {
                     val updated = existingEntry.copy(
                         incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
@@ -480,7 +513,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
                         expOther = if (expOther > 0) expOther else existingEntry.expOther,
                         notes = autoNotes,
-                        emergencyReserveAtMonthEnd = closingBalance ?: existingEntry.emergencyReserveAtMonthEnd
+                        portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
+                        pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
+                        emergencyReserveAtMonthEnd = closingBalance ?: if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
                     )
                     repository.updateLedgerEntry(updated)
                 } else {
@@ -493,11 +528,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         expGroceries = expGroceries,
                         expOther = expOther,
                         notes = autoNotes,
-                        emergencyReserveAtMonthEnd = closingBalance ?: 0.0
+                        portfolioBalanceAtMonthEnd = snapLiquid,
+                        pensionBalanceAtMonthEnd = snapPension,
+                        emergencyReserveAtMonthEnd = closingBalance ?: cur.emergencyReserveCurrent
                     )
                     repository.addLedgerEntry(newEntry)
                 }
             }
+
+            val now = System.currentTimeMillis()
+            importPrefs.edit()
+                .putLong("last_import_all", now)
+                .putLong("last_import_${summary.detectedBank.name}", now)
+                .apply()
+            _lastImportTimestamp.value = now
 
             val monthsLabel = affectedMonths.joinToString(", ")
             _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${summary.transactions.size} txs from ${summary.detectedBank.name})"))
