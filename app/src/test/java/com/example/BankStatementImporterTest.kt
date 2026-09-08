@@ -348,4 +348,48 @@ class BankStatementImporterTest {
         assertEquals(450.0, entry.expOther, 0.01)
         assertEquals(0.0, entry.expRent, 0.01)
     }
+
+    @Test
+    fun testStandingOrderRentCategorization() {
+        val statementCsv = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
+            20.07.2026;123456/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Platba
+        """.trimIndent()
+
+        val summary = BankStatementImporter.parseStatement(statementCsv.byteInputStream(Charsets.UTF_8))
+
+        assertEquals(1, summary.transactions.size)
+        val tx = summary.transactions[0]
+        assertEquals(BankTransactionType.HOUSING_RENT, tx.category)
+        assertEquals(false, tx.isNetted)
+        assertEquals(18950.0, summary.expRent, 0.01)
+        assertEquals(0, summary.internalTransfersCount)
+    }
+
+    @Test
+    fun testMultiMonthStatementDateSplitting() {
+        val multiMonthCsv = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
+            10.07.2026;123456/0800;Albert Česká republika s.r.o.;-1 200,00;CZK;Potraviny
+            20.07.2026;987654/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Platba
+            02.08.2026;555666/0800;Billa s.r.o.;-800,00;CZK;Nákup
+            05.08.2026;777888/2010;Rohlik.cz;-1 500,00;CZK;Online potraviny
+        """.trimIndent()
+
+        val summary = BankStatementImporter.parseStatement(multiMonthCsv.byteInputStream(Charsets.UTF_8))
+
+        assertEquals(4, summary.transactions.size)
+        val byMonth = summary.transactions.groupBy { it.date.take(7) }
+        assertEquals(setOf("2026-07", "2026-08"), byMonth.keys)
+
+        val julyTxs = byMonth["2026-07"]!!
+        assertEquals(2, julyTxs.size)
+        assertEquals(BankTransactionType.GROCERIES, julyTxs[0].category)
+        assertEquals(BankTransactionType.HOUSING_RENT, julyTxs[1].category)
+
+        val augustTxs = byMonth["2026-08"]!!
+        assertEquals(2, augustTxs.size)
+        assertEquals(BankTransactionType.GROCERIES, augustTxs[0].category)
+        assertEquals(BankTransactionType.GROCERIES, augustTxs[1].category)
+    }
 }

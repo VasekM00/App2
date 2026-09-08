@@ -419,7 +419,7 @@ fun CategoryPickerModal(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Cancel", fontSize = 12.sp)
+                        Text("Cancel", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
 
                     Button(
@@ -430,7 +430,7 @@ fun CategoryPickerModal(
                         colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
                         modifier = Modifier.weight(1.4f)
                     ) {
-                        Text("Apply Category", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Apply Category", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                     }
                 }
             }

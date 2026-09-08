@@ -90,5 +90,56 @@ class FinancialRepository(
     suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
         importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
     }
+
+    fun getAllImportedTransactions(): kotlinx.coroutines.flow.Flow<List<ImportedBankTransactionEntity>> {
+        return importedTransactionDao.getAllImportedTransactions()
+    }
+
+    suspend fun getTransactionsForBankAndMonthDirect(yearMonth: String, bankName: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
+        importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+    }
+
+    suspend fun getTransactionsInDateRangeDirect(startDate: String, endDate: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
+        importedTransactionDao.getTransactionsInDateRangeDirect(startDate, endDate)
+    }
+
+    suspend fun saveImportedTransactionsSmartMerge(
+        yearMonth: String,
+        bankName: String,
+        newTransactions: List<ImportedBankTransactionEntity>
+    ): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
+        val existing = importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+        if (existing.isEmpty()) {
+            importedTransactionDao.insertTransactions(newTransactions)
+            return@withContext newTransactions
+        }
+
+        val existingCounts = mutableMapOf<String, Int>()
+        for (tx in existing) {
+            val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
+                tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+            )
+            existingCounts[fp] = (existingCounts[fp] ?: 0) + 1
+        }
+
+        val incomingCounts = mutableMapOf<String, Int>()
+        val toInsert = mutableListOf<ImportedBankTransactionEntity>()
+        for (tx in newTransactions) {
+            val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
+                tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+            )
+            val seen = incomingCounts[fp] ?: 0
+            val existingCount = existingCounts[fp] ?: 0
+            if (seen >= existingCount) {
+                toInsert.add(tx)
+            }
+            incomingCounts[fp] = seen + 1
+        }
+
+        if (toInsert.isNotEmpty()) {
+            importedTransactionDao.insertTransactions(toInsert)
+        }
+        return@withContext toInsert
+    }
 }
 

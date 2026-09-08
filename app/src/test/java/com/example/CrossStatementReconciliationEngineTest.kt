@@ -258,8 +258,8 @@ class CrossStatementReconciliationEngineTest {
 
     @Test
     fun testRealMonetaPdfSampleStatementSelfTransfers() {
-        // Moneta PDF sample statement transaction: 2026-07-20 QR payment to MARTINU VACLAV
-        val qrSelfDebit = ImportedBankTransactionEntity(
+        // Moneta PDF sample statement transaction: 2026-07-20 rent payment on Václav's statement
+        val rentDebit = ImportedBankTransactionEntity(
             id = 10L,
             yearMonth = "2026-07",
             bankName = "MONETA",
@@ -267,11 +267,11 @@ class CrossStatementReconciliationEngineTest {
             amount = -18946.0,
             counterpartyAccount = "240123456/2010",
             counterpartyName = "MARTINU VACLAV",
-            message = "QR Platba",
-            category = BankTransactionType.UNCATEGORIZED.name
+            message = "QR Platba - Najem",
+            category = BankTransactionType.HOUSING_RENT.name
         )
 
-        // Moneta PDF sample statement transaction: 2026-07-31 Sent from Revolut
+        // Moneta PDF sample statement transaction: 2026-07-31 Sent from Revolut (incoming self transfer)
         val revolutCredit = ImportedBankTransactionEntity(
             id = 11L,
             yearMonth = "2026-07",
@@ -285,16 +285,47 @@ class CrossStatementReconciliationEngineTest {
         )
 
         val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
-            transactions = listOf(qrSelfDebit, revolutCredit),
+            transactions = listOf(rentDebit, revolutCredit),
             yearMonth = "2026-07"
         )
 
-        // Both are netted
-        assertTrue(reconciled[0].isNetted)
+        // Rent payment must NOT be netted out as self transfer
+        assertFalse(reconciled[0].isNetted)
+        assertEquals(BankTransactionType.HOUSING_RENT.name, reconciled[0].category)
+
+        // Incoming credit from Revolut IS a self transfer and is netted
         assertTrue(reconciled[1].isNetted)
+        assertEquals(BankTransactionType.INTERNAL_TRANSFER.name, reconciled[1].category)
+
         assertEquals(0.0, auditReport.reconciledInflows, 0.01)
-        assertEquals(0.0, auditReport.reconciledExpenses, 0.01)
-        assertEquals(40944.62, auditReport.totalNettedAmount, 0.01)
+        assertEquals(18946.0, auditReport.reconciledExpenses, 0.01)
+        assertEquals(21998.62, auditReport.totalNettedAmount, 0.01)
+    }
+
+    @Test
+    fun testStandingOrderRentPaymentNotInternalTransfer() {
+        // Standing order debit for 18,950 CZK where payer is Václav Martinů
+        val standingOrderRent = ImportedBankTransactionEntity(
+            id = 15L,
+            yearMonth = "2026-07",
+            bankName = "MONETA",
+            date = "2026-07-20",
+            amount = -18950.0,
+            counterpartyAccount = "123456789/0300",
+            counterpartyName = "Trvalý příkaz k úhradě Příkazce: Václav Martinů",
+            message = "",
+            category = BankTransactionType.HOUSING_RENT.name
+        )
+
+        val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
+            transactions = listOf(standingOrderRent),
+            yearMonth = "2026-07"
+        )
+
+        assertFalse(reconciled[0].isNetted)
+        assertEquals(BankTransactionType.HOUSING_RENT.name, reconciled[0].category)
+        assertEquals(18950.0, auditReport.reconciledExpenses, 0.01)
+        assertEquals(0.0, auditReport.totalNettedAmount, 0.01)
     }
 
     @Test
@@ -349,5 +380,108 @@ class CrossStatementReconciliationEngineTest {
         assertEquals(0.0, auditReport.reconciledInflows, 0.01)
         assertEquals(0.0, auditReport.reconciledExpenses, 0.01)
         assertEquals(0.0, auditReport.reconciledNetCashFlow, 0.01)
+    }
+
+    @Test
+    fun testCrossMonthBoundaryPairingDebitInMonthCreditInNextMonth() {
+        // Moneta debit on July 31, 2026 (-18 000 CZK)
+        val julyDebit = ImportedBankTransactionEntity(
+            id = 101L,
+            yearMonth = "2026-07",
+            bankName = "MONETA",
+            date = "2026-07-31",
+            amount = -18000.0,
+            counterpartyAccount = "123/0300",
+            counterpartyName = "Vaclav Martinu",
+            message = "Prevod na CSOB",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+
+        // CSOB credit on August 1, 2026 (+18 000 CZK) in boundary transactions
+        val augCredit = ImportedBankTransactionEntity(
+            id = 102L,
+            yearMonth = "2026-08",
+            bankName = "CSOB",
+            date = "2026-08-01",
+            amount = 18000.0,
+            counterpartyAccount = "456/0600",
+            counterpartyName = "Vaclav Martinu",
+            message = "Prevod z Moneta",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+
+        val result = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
+            transactions = listOf(julyDebit),
+            yearMonth = "2026-07",
+            boundaryTransactions = listOf(augCredit)
+        )
+
+        assertEquals(1, result.auditReport.matchedPairs.size)
+        val pair = result.auditReport.matchedPairs.first()
+        assertEquals(1L, pair.daysApart)
+        assertEquals(18000.0, pair.amount, 0.01)
+
+        // Both July transaction and August boundary transaction must be marked as netted
+        assertTrue(result.currentMonthTxs.first().isNetted)
+        assertEquals(BankTransactionType.INTERNAL_TRANSFER.name, result.currentMonthTxs.first().category)
+        assertTrue(result.updatedBoundaryTxs.first().isNetted)
+        assertEquals(BankTransactionType.INTERNAL_TRANSFER.name, result.updatedBoundaryTxs.first().category)
+
+        assertEquals(0.0, result.auditReport.reconciledInflows, 0.01)
+        assertEquals(0.0, result.auditReport.reconciledExpenses, 0.01)
+    }
+
+    @Test
+    fun testCrossMonthBoundaryPairingCreditInMonthDebitInPrevMonth() {
+        // CSOB debit on June 30, 2026 (-12 000 CZK) in boundary transactions
+        val juneDebit = ImportedBankTransactionEntity(
+            id = 201L,
+            yearMonth = "2026-06",
+            bankName = "CSOB",
+            date = "2026-06-30",
+            amount = -12000.0,
+            counterpartyAccount = "456/0600",
+            counterpartyName = "Vaclav Martinu",
+            message = "Prevod na Moneta",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+
+        // Moneta credit on July 2, 2026 (+12 000 CZK) in current month
+        val julyCredit = ImportedBankTransactionEntity(
+            id = 202L,
+            yearMonth = "2026-07",
+            bankName = "MONETA",
+            date = "2026-07-02",
+            amount = 12000.0,
+            counterpartyAccount = "123/0300",
+            counterpartyName = "Vaclav Martinu",
+            message = "Prevod z CSOB",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+
+        val result = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
+            transactions = listOf(julyCredit),
+            yearMonth = "2026-07",
+            boundaryTransactions = listOf(juneDebit)
+        )
+
+        assertEquals(1, result.auditReport.matchedPairs.size)
+        val pair = result.auditReport.matchedPairs.first()
+        assertEquals(2L, pair.daysApart)
+        assertEquals(12000.0, pair.amount, 0.01)
+
+        assertTrue(result.currentMonthTxs.first().isNetted)
+        assertTrue(result.updatedBoundaryTxs.first().isNetted)
+    }
+
+    @Test
+    fun testFingerprintDeterminism() {
+        val fp1 = CrossStatementReconciliationEngine.computeFingerprint(
+            "2026-07-15", "MONETA", -450.0, "12345/0300", "Billa", "Nakup", "123"
+        )
+        val fp2 = CrossStatementReconciliationEngine.computeFingerprint(
+            "2026-07-15", "moneta", -450.0, " 12345 / 0300 ", "Billa ", " Nakup", "123"
+        )
+        assertEquals(fp1, fp2)
     }
 }

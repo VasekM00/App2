@@ -107,6 +107,7 @@ fun MainScreen(
     val isSyncing by viewModel.isSyncing.collectAsState()
     val pendingStatementImport by viewModel.pendingStatementImport.collectAsState()
     val activeAuditReport by viewModel.activeAuditReport.collectAsState()
+    val importedBankSourcesByMonth by viewModel.importedBankSourcesByMonth.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -364,6 +365,7 @@ fun MainScreen(
                                 activeAuditReport = activeAuditReport,
                                 onShowAuditReport = { ym -> viewModel.loadAuditReportForMonth(ym) },
                                 onDismissAuditReport = { viewModel.clearAuditReport() },
+                                importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 initialSubTab = targetCashFlowSubTab
                             )
                             2 -> ProjectionsTab(

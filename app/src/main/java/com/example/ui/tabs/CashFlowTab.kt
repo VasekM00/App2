@@ -172,6 +172,7 @@ fun CashFlowTab(
     activeAuditReport: com.example.util.CrossStatementAuditReport? = null,
     onShowAuditReport: ((String) -> Unit)? = null,
     onDismissAuditReport: () -> Unit = {},
+    importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -242,7 +243,8 @@ fun CashFlowTab(
                     onDelete = onDeleteLedgerEntry,
                     onTriggerImportCsv = { csvLauncher.launch("*/*") },
                     onShowInfo = { infoState.show(it) },
-                    onShowAuditReport = onShowAuditReport
+                    onShowAuditReport = onShowAuditReport,
+                    importedBankSourcesByMonth = importedBankSourcesByMonth
                 )
             }
         }
@@ -854,6 +856,15 @@ private fun ExpenseItem(
 }
 
 @Composable
+private fun bankBadgeColor(bankName: String): Color = when {
+    bankName.contains("Moneta", ignoreCase = true) -> BrandTeal
+    bankName.contains("ČSOB", ignoreCase = true) || bankName.contains("CSOB", ignoreCase = true) -> BrandGold
+    bankName.contains("mBank", ignoreCase = true) -> BrandBlue
+    bankName.contains("Revolut", ignoreCase = true) -> Color(0xFF7B1FA2)
+    else -> BrandTeal
+}
+
+@Composable
 private fun LedgerSubTab(
     state: FullCalculationState,
     entries: List<LedgerEntryEntity>,
@@ -863,7 +874,8 @@ private fun LedgerSubTab(
     onDelete: (Long) -> Unit,
     onTriggerImportCsv: () -> Unit,
     onShowInfo: (MetricInfo) -> Unit = {},
-    onShowAuditReport: ((String) -> Unit)? = null
+    onShowAuditReport: ((String) -> Unit)? = null,
+    importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap()
 ) {
     val sortedEntries = remember(entries) {
         entries.sortedByDescending { it.yearMonth }
@@ -896,11 +908,17 @@ private fun LedgerSubTab(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
                 Text(
                     text = "Monthly Ledger",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (sortedEntries.isNotEmpty()) {
                     ColorPill(
@@ -915,51 +933,8 @@ private fun LedgerSubTab(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilledTonalButton(
-                    onClick = onAddClick,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = BrandTeal.copy(alpha = 0.12f),
-                        contentColor = BrandTeal
-                    ),
-                    modifier = Modifier.testTag("toolbar_add_entry_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New Entry",
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
-                }
-
-                if (latestEntry != null) {
-                    FilledTonalButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onDuplicateEntry(latestEntry)
-                        },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.testTag("duplicate_latest_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy Latest",
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Copy Latest", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-
-                FilledTonalButton(
                     onClick = onTriggerImportCsv,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = BrandTeal.copy(alpha = 0.15f),
@@ -972,8 +947,69 @@ private fun LedgerSubTab(
                         contentDescription = "Import Statement",
                         modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Import Statement", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "Import",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                if (latestEntry != null) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onDuplicateEntry(latestEntry)
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.testTag("duplicate_latest_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy Latest",
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Copy",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = onAddClick,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = BrandTeal.copy(alpha = 0.12f),
+                        contentColor = BrandTeal
+                    ),
+                    modifier = Modifier.testTag("toolbar_add_entry_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "New Entry",
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "New",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -1031,7 +1067,7 @@ private fun LedgerSubTab(
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Entry", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("New Entry", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
                         }
 
                         OutlinedButton(
@@ -1043,7 +1079,7 @@ private fun LedgerSubTab(
                         ) {
                             Icon(imageVector = Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import Statement", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Import Statement", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
                         }
                     }
 
@@ -1185,6 +1221,31 @@ private fun LedgerSubTab(
                                         color = if (isSelected) Color.White.copy(alpha = 0.9f) else netColor
                                     )
                                 )
+                                val chipBanks = importedBankSourcesByMonth[entry.yearMonth] ?: emptySet()
+                                if (chipBanks.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        chipBanks.sorted().forEach { bank ->
+                                            val badgeText = when {
+                                                bank.contains("MONETA", ignoreCase = true) -> "MON"
+                                                bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
+                                                bank.contains("MBANK", ignoreCase = true) -> "mB"
+                                                else -> bank.take(3).uppercase()
+                                            }
+                                            ColorPill(
+                                                text = badgeText,
+                                                color = if (isSelected) Color.White.copy(alpha = 0.9f) else bankBadgeColor(bank),
+                                                fontSize = 7.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 3.dp,
+                                                verticalPadding = 0.5.dp
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1203,6 +1264,7 @@ private fun LedgerSubTab(
                         onDelete = { onDelete(activeEntry.id) },
                         onShowInfo = onShowInfo,
                         onShowAudit = { onShowAuditReport?.invoke(activeEntry.yearMonth) },
+                        importedBankSourcesByMonth = importedBankSourcesByMonth,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
@@ -1240,6 +1302,7 @@ private fun ActiveMonthOverviewCard(
     onDelete: () -> Unit,
     onShowInfo: (MetricInfo) -> Unit = {},
     onShowAudit: (() -> Unit)? = null,
+    importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val totalInc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
@@ -1285,13 +1348,17 @@ private fun ActiveMonthOverviewCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header row with YearMonth, Savings Pill & Actions
+            // Header row with YearMonth, Savings Pill, Bank Badges & Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     ColorPill(
                         text = entry.yearMonth,
                         color = BrandTeal,
@@ -1309,6 +1376,23 @@ private fun ActiveMonthOverviewCard(
                         horizontalPadding = 6.dp,
                         verticalPadding = 2.dp
                     )
+                    val activeBanks = importedBankSourcesByMonth[entry.yearMonth] ?: emptySet()
+                    activeBanks.sorted().forEach { bank ->
+                        val displayName = when {
+                            bank.contains("MONETA", ignoreCase = true) -> "Moneta"
+                            bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
+                            bank.contains("MBANK", ignoreCase = true) -> "mBank"
+                            else -> bank
+                        }
+                        ColorPill(
+                            text = displayName,
+                            color = bankBadgeColor(bank),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 5.dp,
+                            verticalPadding = 1.5.dp
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1368,22 +1452,19 @@ private fun ActiveMonthOverviewCard(
                     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Incomes",
+                                text = "Inflows",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Incomes Info",
-                                tint = GoodGreen.copy(alpha = 0.7f),
-                                modifier = Modifier.size(11.dp)
+                                ),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
@@ -1394,7 +1475,10 @@ private fun ActiveMonthOverviewCard(
                                 fontFamily = FontFamily.Monospace,
                                 color = GoodGreen,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
                 }
@@ -1412,7 +1496,7 @@ private fun ActiveMonthOverviewCard(
                     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -1421,13 +1505,10 @@ private fun ActiveMonthOverviewCard(
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Expenses Info",
-                                tint = BadRed.copy(alpha = 0.7f),
-                                modifier = Modifier.size(11.dp)
+                                ),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
@@ -1438,7 +1519,10 @@ private fun ActiveMonthOverviewCard(
                                 fontFamily = FontFamily.Monospace,
                                 color = BadRed,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
                 }
@@ -1457,22 +1541,19 @@ private fun ActiveMonthOverviewCard(
                     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Net Cash Flow",
+                                text = "Net Flow",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Net Cash Flow Info",
-                                tint = netColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(11.dp)
+                                ),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(3.dp))
@@ -1483,7 +1564,10 @@ private fun ActiveMonthOverviewCard(
                                 fontFamily = FontFamily.Monospace,
                                 color = netColor,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
                 }
@@ -1559,6 +1643,78 @@ private fun ActiveMonthOverviewCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
+                }
+            }
+
+            // DCA Investment Flow tracking row
+            if (entry.notes.contains("Invested:", ignoreCase = true)) {
+                Spacer(modifier = Modifier.height(8.dp))
+                val invFull = entry.notes.substringAfter("Invested: ").substringBefore(" |")
+                val invTotalStr = invFull.substringBefore(" (").trim()
+                val invBreakdown = invFull.substringAfter("(", "").substringBefore(")")
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandBlue.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.28f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                    contentDescription = null,
+                                    tint = BrandBlue,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Tracked Investments (DCA)",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            Text(
+                                text = invTotalStr,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = BrandBlue,
+                                    fontSize = 12.sp
+                                )
+                            )
+                        }
+                        if (invBreakdown.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                invBreakdown.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach { part ->
+                                    ColorPill(
+                                        text = part,
+                                        color = BrandBlue,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = FontFamily.Monospace,
+                                        horizontalPadding = 5.dp,
+                                        verticalPadding = 1.5.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -3018,27 +3174,17 @@ private fun MetricStatBox(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.5.sp,
-                        letterSpacing = 0.4.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    maxLines = 2,
-                    softWrap = true
-                )
-                if (info != null) {
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Info",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
-            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.5.sp,
+                    letterSpacing = 0.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 2,
+                softWrap = true,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = value,

@@ -24,7 +24,7 @@ import kotlin.random.Random
  * multi-iteration fuzzing across 1,000+ random configurations, and extreme edge conditions.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class AbsoluteStressFuzzingTest {
 
     @Test

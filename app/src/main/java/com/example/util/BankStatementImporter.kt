@@ -362,7 +362,7 @@ object BankStatementImporter {
             val counterpartyAcc = extractAccount(blockText)
             val vs = extractVariableSymbol(blockText)
             val cleanDesc = cleanTransactionDescription(blockText, dateStr, amounts, counterpartyAcc, vs)
-            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides)
+            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = blockText)
 
             transactions.add(
                 ParsedBankTransaction(
@@ -437,6 +437,15 @@ object BankStatementImporter {
             Regex("""(?i)\bodchoz[ií]\s+[uú]hrada\b"""),
             Regex("""(?i)\bp[rř][ií]choz[ií]\s+platba\b"""),
             Regex("""(?i)\bodchoz[ií]\s+platba\b"""),
+            Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz\s+k\s+[uú]hrad[eě]:?\b"""),
+            Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz:?\b"""),
+            Regex("""(?i)\bp[rř][ií]kazce:\s*(?:v[aá]clav\s+martin[uů]|martin[uů]\s+v[aá]clav)?\b"""),
+            Regex("""(?i)\bpl[aá]tce:\s*(?:v[aá]clav\s+martin[uů]|martin[uů]\s+v[aá]clav)?\b"""),
+            Regex("""(?i)\bp[rř][ií]kazce:?\b"""),
+            Regex("""(?i)\bpl[aá]tce:?\b"""),
+            Regex("""(?i)\bmajitel\s+[uú][cč]tu:?\b"""),
+            Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+pl[aá]tce:?\b"""),
+            Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+p[rř][ií]kazce:?\b"""),
             Regex("""(?i)\bzpr[aá]va\s+pro\s+p[rř][ií]jemce:?\b"""),
             Regex("""(?i)\bpopis\s+transakce:?\b"""),
             Regex("""(?i)\bdetaily\s+platby:?\b"""),
@@ -494,6 +503,10 @@ object BankStatementImporter {
             .replace("Zpráva pro příjemce", "", ignoreCase = true)
             .replace("Popis transakce", "", ignoreCase = true)
             .replace("Detaily platby", "", ignoreCase = true)
+            .replace("Trvalý příkaz k úhradě", "", ignoreCase = true)
+            .replace("Trvaly prikaz k uhrade", "", ignoreCase = true)
+            .replace("Trvalý příkaz", "", ignoreCase = true)
+            .replace("Trvaly prikaz", "", ignoreCase = true)
 
         clean = cleanPaymentDescription(clean)
 
@@ -502,7 +515,13 @@ object BankStatementImporter {
         }
         val result = words.joinToString(" ").trim()
         val finalClean = Regex("""^\s*\d{1,2}\s+\d{1,2}\s+""").replace(result, "").trim()
-        return finalClean.ifBlank { blockText.trim() }
+        return finalClean.ifBlank {
+            if (blockText.contains("trvalý", ignoreCase = true) || blockText.contains("trvaly", ignoreCase = true)) {
+                "Trvalý příkaz"
+            } else {
+                blockText.trim()
+            }
+        }
     }
 
     internal fun extractAllAmountsPublic(text: String): List<Double> = extractAllAmounts(text)
@@ -805,9 +824,29 @@ object BankStatementImporter {
         message: String,
         vs: String,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        rawContext: String = ""
     ): BankTransactionType {
-        if (CrossStatementReconciliationEngine.isSelfOrFamilyTransfer(counterpartyName, counterpartyAcc, message, familyAccounts)) {
+        val combinedText = "$counterpartyName $message $rawContext".lowercase(Locale.ROOT)
+
+        // Rent & Housing Priority Check (standing orders, rent keywords, 18,950 CZK rent payments)
+        if (amount < 0) {
+            if (combinedText.contains("nájem") || combinedText.contains("najem") ||
+                combinedText.contains("nájemné") || combinedText.contains("najemne") ||
+                combinedText.contains("činže") || combinedText.contains("cinze") ||
+                combinedText.contains("fond oprav") || combinedText.contains("svj") ||
+                combinedText.contains("platba najmu") || combinedText.contains("bydleni") ||
+                combinedText.contains("byt") ||
+                (kotlin.math.abs(amount) in 15000.0..25000.0 && (
+                    combinedText.contains("trvalý") || combinedText.contains("trvaly") ||
+                    combinedText.contains("příkaz") || combinedText.contains("prikaz")
+                ))
+            ) {
+                return BankTransactionType.HOUSING_RENT
+            }
+        }
+
+        if (CrossStatementReconciliationEngine.isSelfOrFamilyTransfer(counterpartyName, counterpartyAcc, message, familyAccounts, isDebit = amount < 0)) {
             return BankTransactionType.INTERNAL_TRANSFER
         }
 
@@ -815,8 +854,6 @@ object BankStatementImporter {
         if (familyAccounts.any { cleanAcc.contains(it.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)) && it.isNotBlank() }) {
             return BankTransactionType.INTERNAL_TRANSFER
         }
-
-        val combinedText = "$counterpartyName $message".lowercase(Locale.ROOT)
 
         if (amount > 0) {
             return when {
@@ -849,9 +886,6 @@ object BankStatementImporter {
             return BankTransactionType.INVESTMENT_DPS
         }
 
-        if (combinedText.contains("nájem") || combinedText.contains("najem") || combinedText.contains("činže") || combinedText.contains("cinze") || combinedText.contains("byt")) {
-            return BankTransactionType.HOUSING_RENT
-        }
         if (combinedText.contains("albert") || combinedText.contains("billa") || combinedText.contains("lidl") ||
             combinedText.contains("tesco") || combinedText.contains("penny") || combinedText.contains("kaufland") ||
             combinedText.contains("rohlík") || combinedText.contains("rohlik") || combinedText.contains("košík") ||

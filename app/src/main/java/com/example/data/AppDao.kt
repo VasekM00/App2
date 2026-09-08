@@ -69,6 +69,15 @@ interface ImportedTransactionDao {
     @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth ORDER BY date ASC, id ASC")
     suspend fun getTransactionsForMonthDirect(yearMonth: String): List<ImportedBankTransactionEntity>
 
+    @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName ORDER BY date ASC, id ASC")
+    suspend fun getTransactionsForBankAndMonthDirect(yearMonth: String, bankName: String): List<ImportedBankTransactionEntity>
+
+    @Query("SELECT * FROM imported_bank_transactions ORDER BY date ASC, id ASC")
+    fun getAllImportedTransactions(): Flow<List<ImportedBankTransactionEntity>>
+
+    @Query("SELECT * FROM imported_bank_transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC, id ASC")
+    suspend fun getTransactionsInDateRangeDirect(startDate: String, endDate: String): List<ImportedBankTransactionEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransactions(transactions: List<ImportedBankTransactionEntity>)
 

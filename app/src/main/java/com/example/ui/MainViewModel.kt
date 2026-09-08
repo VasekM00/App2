@@ -20,8 +20,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.YearMonth
 
 sealed interface UiMessage {
     data class ShowSnackbar(val message: String) : UiMessage
@@ -59,6 +61,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = SettingsEntity()
+        )
+
+    val importedBankSourcesByMonth: StateFlow<Map<String, Set<String>>> = repository.getAllImportedTransactions()
+        .map { txList ->
+            txList.groupBy { it.yearMonth }
+                .mapValues { (_, txs) -> txs.map { it.bankName }.filter { it.isNotBlank() }.toSet() }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
         )
 
     // Sensitivity slider override states
@@ -291,90 +305,203 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         importCsvData(uri)
     }
 
+    suspend fun recalculateMonthLedger(targetYm: String) {
+        val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
+        if (allMonthTxs.isEmpty()) return
+
+        val incVaclav = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
+        val incEleonora = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
+        val incOther = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
+        val expRent = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.sumOf { kotlin.math.abs(it.amount) }
+        val expGroceries = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.sumOf { kotlin.math.abs(it.amount) }
+        val expOther = allMonthTxs.filter { !it.isNetted && (
+            it.category == com.example.util.BankTransactionType.LIFESTYLE_LIVING.name ||
+            it.category == com.example.util.BankTransactionType.DINING_RESTAURANT.name ||
+            it.category == com.example.util.BankTransactionType.TRANSPORTATION.name ||
+            it.category == com.example.util.BankTransactionType.SHOPPING_GOODS.name ||
+            it.category == com.example.util.BankTransactionType.HEALTH_DRUGSTORE.name ||
+            it.category == com.example.util.BankTransactionType.SUBSCRIPTIONS_MEDIA.name ||
+            it.category == com.example.util.BankTransactionType.SERVICES_UTILITIES.name ||
+            it.category == com.example.util.BankTransactionType.ATM_CASH.name ||
+            it.category == com.example.util.BankTransactionType.CHARITY_DONATION.name ||
+            it.category == com.example.util.BankTransactionType.GENERAL_EXPENSE.name ||
+            (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount < 0)
+        ) }.sumOf { kotlin.math.abs(it.amount) }
+
+        val invPortu = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.sumOf { kotlin.math.abs(it.amount) }
+        val invDip = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.sumOf { kotlin.math.abs(it.amount) }
+        val invDps = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.sumOf { kotlin.math.abs(it.amount) }
+        val totalInvested = invPortu + invDip + invDps
+
+        val existingEntry = repository.getLedgerEntryByYearMonth(targetYm)
+        val participatingBanks = allMonthTxs.map { it.bankName }.filter { it.isNotBlank() }.distinct().sorted()
+        val banksSummary = participatingBanks.joinToString(" + ")
+        val nettedCount = allMonthTxs.count { it.isNetted }
+        val nettingNote = if (nettedCount > 0) " | $nettedCount txs netted" else ""
+        val investNote = if (totalInvested > 0) {
+            val parts = mutableListOf<String>()
+            if (invPortu > 0) parts.add("Portu: ${com.example.util.Formatters.fmtCompact(invPortu)}")
+            if (invDip > 0) parts.add("DIP: ${com.example.util.Formatters.fmtCompact(invDip)}")
+            if (invDps > 0) parts.add("DPS: ${com.example.util.Formatters.fmtCompact(invDps)}")
+            " | Invested: ${com.example.util.Formatters.fmtCompact(totalInvested)} (${parts.joinToString(", ")})"
+        } else ""
+        val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
+
+        if (existingEntry != null) {
+            val updated = existingEntry.copy(
+                incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
+                incEleonora = if (incEleonora > 0) incEleonora else existingEntry.incEleonora,
+                incUnforeseen = if (incOther > 0) incOther else existingEntry.incUnforeseen,
+                expRent = if (expRent > 0) expRent else existingEntry.expRent,
+                expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
+                expOther = if (expOther > 0) expOther else existingEntry.expOther,
+                notes = autoNotes
+            )
+            repository.updateLedgerEntry(updated)
+        }
+    }
+
     fun confirmStatementImport(summary: com.example.util.StatementParseSummary) {
         viewModelScope.launch {
-            // 1. Remove previous transactions for this bank and yearMonth to prevent duplicates on re-import
-            repository.deleteImportedTransactionsForBankAndMonth(summary.yearMonth, summary.detectedBank.name)
-
-            // 2. Map summary transactions to entities and persist to Room (v23)
-            val txEntities = summary.transactions.map { tx ->
-                com.example.data.ImportedBankTransactionEntity(
-                    yearMonth = summary.yearMonth,
-                    bankName = summary.detectedBank.name,
-                    date = tx.date,
-                    amount = tx.amount,
-                    counterpartyAccount = tx.counterpartyAccount,
-                    counterpartyName = tx.counterpartyName,
-                    message = tx.message,
-                    variableSymbol = tx.variableSymbol,
-                    category = tx.category.name,
-                    isNetted = tx.isNetted,
-                    nettingReason = tx.nettingReason
-                )
+            // Group transactions by calendar month (YYYY-MM)
+            val txsByMonth = summary.transactions.groupBy { tx ->
+                val ym = tx.date.take(7)
+                if (ym.matches(Regex("""\d{4}-\d{2}"""))) ym else summary.yearMonth
             }
-            repository.saveImportedTransactions(txEntities)
 
-            // 3. Reconcile across all banks for this month (Cross-Statement Pairwise Matcher with 5-day clearing window)
-            val allMonthTxs = repository.getImportedTransactionsDirect(summary.yearMonth)
-            val (reconciledTxs, auditReport) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(allMonthTxs, summary.yearMonth)
-            repository.updateImportedTransactions(reconciledTxs)
+            val latestMonth = txsByMonth.keys.maxOrNull() ?: summary.yearMonth
+            val affectedMonths = txsByMonth.keys.sorted()
 
-            // 4. Update or insert LedgerEntryEntity with true reconciled figures
-            val existingEntry = repository.getLedgerEntryByYearMonth(summary.yearMonth)
-            val banksSummary = auditReport.participatingBanks.joinToString(" + ")
-            val nettingNote = if (auditReport.totalNettedAmount > 0) " | ${auditReport.matchedPairs.size} cross-transfers netted (${com.example.util.Formatters.fmtCompact(auditReport.totalNettedAmount)})" else ""
-            val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote"
+            for ((targetYm, monthTxs) in txsByMonth) {
+                // 1. Smart Fingerprint Merge: insert only new non-duplicate transactions for this bank and month
+                val txEntities = monthTxs.map { tx ->
+                    com.example.data.ImportedBankTransactionEntity(
+                        yearMonth = targetYm,
+                        bankName = summary.detectedBank.name,
+                        date = tx.date,
+                        amount = tx.amount,
+                        counterpartyAccount = tx.counterpartyAccount,
+                        counterpartyName = tx.counterpartyName,
+                        message = tx.message,
+                        variableSymbol = tx.variableSymbol,
+                        category = tx.category.name,
+                        isNetted = tx.isNetted,
+                        nettingReason = tx.nettingReason
+                    )
+                }
+                repository.saveImportedTransactionsSmartMerge(targetYm, summary.detectedBank.name, txEntities)
 
-            // Compute clean categorized sums directly from reconciled transactions
-            val incVaclav = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
-            val incEleonora = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
-            val incOther = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
-            val expRent = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.sumOf { kotlin.math.abs(it.amount) }
-            val expGroceries = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.sumOf { kotlin.math.abs(it.amount) }
-            val expOther = reconciledTxs.filter { !it.isNetted && (
-                it.category == com.example.util.BankTransactionType.LIFESTYLE_LIVING.name ||
-                it.category == com.example.util.BankTransactionType.DINING_RESTAURANT.name ||
-                it.category == com.example.util.BankTransactionType.TRANSPORTATION.name ||
-                it.category == com.example.util.BankTransactionType.SHOPPING_GOODS.name ||
-                it.category == com.example.util.BankTransactionType.HEALTH_DRUGSTORE.name ||
-                it.category == com.example.util.BankTransactionType.SUBSCRIPTIONS_MEDIA.name ||
-                it.category == com.example.util.BankTransactionType.SERVICES_UTILITIES.name ||
-                it.category == com.example.util.BankTransactionType.ATM_CASH.name ||
-                it.category == com.example.util.BankTransactionType.CHARITY_DONATION.name ||
-                it.category == com.example.util.BankTransactionType.GENERAL_EXPENSE.name ||
-                (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount < 0)
-            ) }.sumOf { kotlin.math.abs(it.amount) }
+                // 2. Fetch boundary transactions within ±5 days across month borders for cross-month pairing
+                val ymObj = try { YearMonth.parse(targetYm) } catch (e: Exception) { null }
+                val boundaryTxs = if (ymObj != null) {
+                    val firstDay = ymObj.atDay(1)
+                    val lastDay = ymObj.atEndOfMonth()
+                    val prevStart = firstDay.minusDays(5).toString()
+                    val prevEnd = firstDay.minusDays(1).toString()
+                    val nextStart = lastDay.plusDays(1).toString()
+                    val nextEnd = lastDay.plusDays(5).toString()
 
-            if (existingEntry != null) {
-                val updated = existingEntry.copy(
-                    incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
-                    incEleonora = if (incEleonora > 0) incEleonora else existingEntry.incEleonora,
-                    incUnforeseen = if (incOther > 0) incOther else existingEntry.incUnforeseen,
-                    expRent = if (expRent > 0) expRent else existingEntry.expRent,
-                    expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
-                    expOther = if (expOther > 0) expOther else existingEntry.expOther,
-                    notes = autoNotes,
-                    emergencyReserveAtMonthEnd = summary.monthEndBalance ?: existingEntry.emergencyReserveAtMonthEnd
+                    val prevTxs = repository.getTransactionsInDateRangeDirect(prevStart, prevEnd)
+                    val nextTxs = repository.getTransactionsInDateRangeDirect(nextStart, nextEnd)
+                    (prevTxs + nextTxs).filter { !it.isNetted }
+                } else emptyList()
+
+                // 3. Reconcile across all banks for targetYm including cross-month boundaries
+                val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
+                val reconcileResult = com.example.util.CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
+                    transactions = allMonthTxs,
+                    yearMonth = targetYm,
+                    boundaryTransactions = boundaryTxs
                 )
-                repository.updateLedgerEntry(updated)
-                _uiEvent.emit(UiMessage.ShowSnackbar("Reconciled ${summary.yearMonth}: ${allMonthTxs.size} transactions from $banksSummary"))
-            } else {
-                val newEntry = com.example.data.LedgerEntryEntity(
-                    yearMonth = summary.yearMonth,
-                    incVaclav = incVaclav,
-                    incEleonora = incEleonora,
-                    incUnforeseen = incOther,
-                    expRent = expRent,
-                    expGroceries = expGroceries,
-                    expOther = expOther,
-                    notes = autoNotes,
-                    emergencyReserveAtMonthEnd = summary.monthEndBalance ?: 0.0
-                )
-                repository.addLedgerEntry(newEntry)
-                _uiEvent.emit(UiMessage.ShowSnackbar("Saved ${summary.yearMonth} from $banksSummary (${allMonthTxs.size} transactions)"))
+                val reconciledTxs = reconcileResult.currentMonthTxs
+                val auditReport = reconcileResult.auditReport
+                repository.updateImportedTransactions(reconciledTxs)
+
+                // Persist updated adjacent boundary transactions and recalculate adjacent month ledgers
+                if (reconcileResult.updatedBoundaryTxs.isNotEmpty()) {
+                    repository.updateImportedTransactions(reconcileResult.updatedBoundaryTxs)
+                    val affectedAdjacentMonths = reconcileResult.updatedBoundaryTxs.map { it.yearMonth }.distinct().filter { it != targetYm }
+                    for (adjYm in affectedAdjacentMonths) {
+                        recalculateMonthLedger(adjYm)
+                    }
+                }
+
+                if (targetYm == latestMonth || targetYm == summary.yearMonth) {
+                    activeAuditReport.value = auditReport
+                }
+
+                // 4. Compute clean categorized sums and investment DCA flows
+                val incVaclav = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
+                val incEleonora = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
+                val incOther = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
+                val expRent = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.sumOf { kotlin.math.abs(it.amount) }
+                val expGroceries = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.sumOf { kotlin.math.abs(it.amount) }
+                val expOther = reconciledTxs.filter { !it.isNetted && (
+                    it.category == com.example.util.BankTransactionType.LIFESTYLE_LIVING.name ||
+                    it.category == com.example.util.BankTransactionType.DINING_RESTAURANT.name ||
+                    it.category == com.example.util.BankTransactionType.TRANSPORTATION.name ||
+                    it.category == com.example.util.BankTransactionType.SHOPPING_GOODS.name ||
+                    it.category == com.example.util.BankTransactionType.HEALTH_DRUGSTORE.name ||
+                    it.category == com.example.util.BankTransactionType.SUBSCRIPTIONS_MEDIA.name ||
+                    it.category == com.example.util.BankTransactionType.SERVICES_UTILITIES.name ||
+                    it.category == com.example.util.BankTransactionType.ATM_CASH.name ||
+                    it.category == com.example.util.BankTransactionType.CHARITY_DONATION.name ||
+                    it.category == com.example.util.BankTransactionType.GENERAL_EXPENSE.name ||
+                    (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount < 0)
+                ) }.sumOf { kotlin.math.abs(it.amount) }
+
+                val invPortu = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.sumOf { kotlin.math.abs(it.amount) }
+                val invDip = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.sumOf { kotlin.math.abs(it.amount) }
+                val invDps = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.sumOf { kotlin.math.abs(it.amount) }
+                val totalInvested = invPortu + invDip + invDps
+
+                // 5. Update or insert LedgerEntryEntity with true reconciled figures
+                val existingEntry = repository.getLedgerEntryByYearMonth(targetYm)
+                val banksSummary = auditReport.participatingBanks.joinToString(" + ")
+                val nettingNote = if (auditReport.totalNettedAmount > 0) " | ${auditReport.matchedPairs.size} cross-transfers netted (${com.example.util.Formatters.fmtCompact(auditReport.totalNettedAmount)})" else ""
+                val investNote = if (totalInvested > 0) {
+                    val parts = mutableListOf<String>()
+                    if (invPortu > 0) parts.add("Portu: ${com.example.util.Formatters.fmtCompact(invPortu)}")
+                    if (invDip > 0) parts.add("DIP: ${com.example.util.Formatters.fmtCompact(invDip)}")
+                    if (invDps > 0) parts.add("DPS: ${com.example.util.Formatters.fmtCompact(invDps)}")
+                    " | Invested: ${com.example.util.Formatters.fmtCompact(totalInvested)} (${parts.joinToString(", ")})"
+                } else ""
+                val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
+
+                // The closing balance belongs to the latest month of the statement
+                val closingBalance = if (targetYm == latestMonth) summary.monthEndBalance else null
+
+                if (existingEntry != null) {
+                    val updated = existingEntry.copy(
+                        incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
+                        incEleonora = if (incEleonora > 0) incEleonora else existingEntry.incEleonora,
+                        incUnforeseen = if (incOther > 0) incOther else existingEntry.incUnforeseen,
+                        expRent = if (expRent > 0) expRent else existingEntry.expRent,
+                        expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
+                        expOther = if (expOther > 0) expOther else existingEntry.expOther,
+                        notes = autoNotes,
+                        emergencyReserveAtMonthEnd = closingBalance ?: existingEntry.emergencyReserveAtMonthEnd
+                    )
+                    repository.updateLedgerEntry(updated)
+                } else {
+                    val newEntry = com.example.data.LedgerEntryEntity(
+                        yearMonth = targetYm,
+                        incVaclav = incVaclav,
+                        incEleonora = incEleonora,
+                        incUnforeseen = incOther,
+                        expRent = expRent,
+                        expGroceries = expGroceries,
+                        expOther = expOther,
+                        notes = autoNotes,
+                        emergencyReserveAtMonthEnd = closingBalance ?: 0.0
+                    )
+                    repository.addLedgerEntry(newEntry)
+                }
             }
+
+            val monthsLabel = affectedMonths.joinToString(", ")
+            _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${summary.transactions.size} txs from ${summary.detectedBank.name})"))
             _pendingStatementImport.value = null
-            activeAuditReport.value = auditReport
         }
     }
 

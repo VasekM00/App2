@@ -86,25 +86,35 @@ fun StatementImportReviewDialog(
         BankType.GENERIC -> MaterialTheme.colorScheme.primary
     }
 
+    val distinctMonths = remember(summary.transactions) {
+        summary.transactions.map { it.date.take(7) }.filter { it.matches(Regex("""\d{4}-\d{2}""")) }.distinct().sorted()
+    }
+    var selectedMonthFilter by remember { mutableStateOf<String?>(null) }
+
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     val filterLabels = listOf("All (${summary.transactions.size})", "Inflows", "Expenses", "Investments", "Transfers")
 
-    val filteredTransactions = remember(selectedFilterIndex, summary.transactions) {
+    val filteredTransactions = remember(selectedFilterIndex, selectedMonthFilter, summary.transactions) {
+        val baseList = if (selectedMonthFilter != null) {
+            summary.transactions.filter { it.date.startsWith(selectedMonthFilter!!) }
+        } else {
+            summary.transactions
+        }
         when (selectedFilterIndex) {
-            1 -> summary.transactions.filter { it.amount > 0 }
-            2 -> summary.transactions.filter {
+            1 -> baseList.filter { it.amount > 0 }
+            2 -> baseList.filter {
                 it.amount < 0 && it.category != BankTransactionType.INVESTMENT_PORTU &&
                         it.category != BankTransactionType.INVESTMENT_DIP &&
                         it.category != BankTransactionType.INVESTMENT_DPS &&
                         it.category != BankTransactionType.INTERNAL_TRANSFER
             }
-            3 -> summary.transactions.filter {
+            3 -> baseList.filter {
                 it.category == BankTransactionType.INVESTMENT_PORTU ||
                         it.category == BankTransactionType.INVESTMENT_DIP ||
                         it.category == BankTransactionType.INVESTMENT_DPS
             }
-            4 -> summary.transactions.filter { it.category == BankTransactionType.INTERNAL_TRANSFER }
-            else -> summary.transactions
+            4 -> baseList.filter { it.category == BankTransactionType.INTERNAL_TRANSFER }
+            else -> baseList
         }
     }
 
@@ -162,18 +172,38 @@ fun StatementImportReviewDialog(
                                         color = bankColor
                                     )
                                 )
-                                ColorPill(
-                                    text = summary.yearMonth,
-                                    color = bankColor,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    horizontalPadding = 6.dp,
-                                    verticalPadding = 2.dp
-                                )
+                                if (distinctMonths.size > 1) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        distinctMonths.forEach { ym ->
+                                            ColorPill(
+                                                text = ym,
+                                                color = bankColor,
+                                                fontSize = 10.5.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
+                                                horizontalPadding = 5.dp,
+                                                verticalPadding = 2.dp
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    ColorPill(
+                                        text = summary.yearMonth,
+                                        color = bankColor,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        horizontalPadding = 6.dp,
+                                        verticalPadding = 2.dp
+                                    )
+                                }
                             }
                             Text(
-                                text = "Statement Review · ${summary.transactions.size} transactions parsed",
+                                text = if (distinctMonths.size > 1) {
+                                    "Split into ${distinctMonths.size} ledgers (${distinctMonths.joinToString(" & ")}) · ${summary.transactions.size} txs"
+                                } else {
+                                    "Statement Review · ${summary.transactions.size} transactions parsed"
+                                },
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -580,6 +610,38 @@ fun StatementImportReviewDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (distinctMonths.size > 1) {
+                        FilterChip(
+                            selected = selectedMonthFilter == null,
+                            onClick = { selectedMonthFilter = null },
+                            label = { Text("All (${summary.transactions.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = bankColor.copy(alpha = 0.18f),
+                                selectedLabelColor = bankColor
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        distinctMonths.forEach { ym ->
+                            val mCount = summary.transactions.count { it.date.startsWith(ym) }
+                            FilterChip(
+                                selected = selectedMonthFilter == ym,
+                                onClick = { selectedMonthFilter = ym },
+                                label = { Text("$ym ($mCount)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = bankColor.copy(alpha = 0.18f),
+                                    selectedLabelColor = bankColor
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(20.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        )
+                    }
+
                     filterLabels.forEachIndexed { index, label ->
                         FilterChip(
                             selected = selectedFilterIndex == index,
@@ -647,7 +709,7 @@ fun StatementImportReviewDialog(
                             .weight(1f)
                             .testTag("cancel_statement_import")
                     ) {
-                        Text("Cancel", fontWeight = FontWeight.SemiBold)
+                        Text("Cancel", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                     }
 
                     Button(
@@ -665,9 +727,11 @@ fun StatementImportReviewDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Save to Ledger",
+                            text = if (distinctMonths.size > 1) "Split & Save (${distinctMonths.size} Months)" else "Save to Ledger",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
