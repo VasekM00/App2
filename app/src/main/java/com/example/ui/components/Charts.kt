@@ -76,9 +76,35 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.mutableIntStateOf
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
+
+/**
+ * Picks a handful of "nice" 1-2-5 decade values between [min] and [max] for logarithmic axes.
+ */
+private fun logScaleTicks(min: Double, max: Double): List<Double> {
+    val floor = min.coerceAtLeast(1.0)
+    val ceil = max.coerceAtLeast(floor * 10.0)
+    val candidates = mutableListOf<Double>()
+    var decade = 1.0
+    while (decade <= ceil * 1.01 && candidates.size < 40) {
+        for (multiplier in doubleArrayOf(1.0, 2.0, 5.0)) {
+            val v = multiplier * decade
+            if (v >= floor * 0.999 && v <= ceil * 1.05) candidates.add(v)
+        }
+        decade *= 10.0
+    }
+    if (candidates.size <= 2) return candidates.ifEmpty { listOf(floor, ceil) }
+    val wanted = 5
+    if (candidates.size <= wanted + 1) return candidates
+    val step = (candidates.size - 1).toDouble() / wanted
+    return (0..wanted)
+        .map { candidates[(it * step).roundToInt().coerceIn(0, candidates.size - 1)] }
+        .distinct()
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -100,6 +126,9 @@ fun NetWorthChart(
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
     var isRealPurchasingPower by remember { mutableStateOf(false) }
+    // Long-horizon compound growth is exponential; a log scale removes the empty upper-left
+    // region and shows contribution phases clearly. Users can switch back to linear.
+    var isLogScale by remember { mutableStateOf(true) }
 
     val actualPoints = remember(ledgerEntries) {
         ledgerEntries
@@ -196,7 +225,7 @@ fun NetWorthChart(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Purchasing Power Toggle & Legend Row
+            // Purchasing Power & Y-Scale Toggles
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -230,29 +259,72 @@ fun NetWorthChart(
                                 .clickable { isRealPurchasingPower = true }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Real (Today's CZK)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = realFg)
+                            Text("Real", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = realFg)
                         }
                     }
                 }
 
-                // Legend
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (actualPoints.isNotEmpty()) {
+                // Linear vs Logarithmic Y-Axis Toggle Pills
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                ) {
+                    Row(modifier = Modifier.padding(2.dp)) {
+                        val logBg = if (isLogScale) BrandTeal else Color.Transparent
+                        val logFg = if (isLogScale) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        val linBg = if (!isLogScale) BrandTeal else Color.Transparent
+                        val linFg = if (!isLogScale) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(logBg)
+                                .clickable { isLogScale = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Log", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = logFg)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(linBg)
+                                .clickable { isLogScale = false }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Linear", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = linFg)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Legend — wraps as whole items so labels never squeeze into one character per line
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (actualPoints.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(text = "Actual", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
                     }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = if (hasPension) "Liquid" else "Model", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    if (hasPension) {
+                }
+                if (hasPension) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(modifier = Modifier.size(8.dp).background(cPurple, CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(text = "Total (incl. DIP/DPS)", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
                     }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
@@ -272,9 +344,9 @@ fun NetWorthChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
-            val paddingLeft = 85f // Space for Y-Axis labels
+            val paddingLeft = 110f // Space for Y-Axis labels (log ticks can be long)
             val paddingRight = 32f // Space on right to prevent clipping of curve and labels
-            val paddingBottom = 50f // Space for X-Axis labels
+            val paddingBottom = 62f // Space for X-Axis labels
             val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
             val textPaint = remember(textColor, textPx) {
@@ -316,12 +388,28 @@ fun NetWorthChart(
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
 
-                    // Draw Y-Axis lines and numeric labels
-                    val ySteps = 4
+                    // Y-value -> pixel mapping (linear or logarithmic)
+                    fun yPix(value: Double): Float {
+                        val frac = if (!isLogScale) {
+                            (value / maxVal).coerceIn(0.0, 1.0)
+                        } else {
+                            val floor = 100.0
+                            val v = value.coerceAtLeast(floor)
+                            val hi = maxVal.coerceAtLeast(floor * 10.0)
+                            ((ln(v) - ln(floor)) / (ln(hi) - ln(floor))).coerceIn(0.0, 1.0)
+                        }
+                        return (plotH - plotH * frac).toFloat()
+                    }
 
-                    for (i in 0..ySteps) {
-                        val valAtStep = maxVal * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
+                    // Draw Y-Axis lines and numeric labels
+                    val tickValues = if (isLogScale) {
+                        logScaleTicks(100.0, maxVal)
+                    } else {
+                        (0..4).map { maxVal * it / 4.0 }
+                    }
+
+                    for (valAtStep in tickValues) {
+                        val y = yPix(valAtStep)
 
                         // Horizontal Gridline
                         drawLine(
@@ -383,7 +471,7 @@ fun NetWorthChart(
                     val targetPath = Path()
                     displayData.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        val y = plotH - (plotH * (pt.target / maxVal)).toFloat()
+                        val y = yPix(pt.target)
                         if (i == 0) targetPath.moveTo(x, y) else targetPath.lineTo(x, y)
                     }
 
@@ -391,7 +479,7 @@ fun NetWorthChart(
                     val portfolioPath = Path()
                     displayData.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        val y = plotH - (plotH * (pt.portfolio / maxVal)).toFloat()
+                        val y = yPix(pt.portfolio)
                         if (i == 0) portfolioPath.moveTo(x, y) else portfolioPath.lineTo(x, y)
                     }
 
@@ -410,7 +498,7 @@ fun NetWorthChart(
                         val totalPath = Path()
                         displayData.forEachIndexed { i, pt ->
                             val x = paddingLeft + panOffsetX + (i * stepX)
-                            val y = plotH - (plotH * (pt.totalPortfolio / maxVal)).toFloat()
+                            val y = yPix(pt.totalPortfolio)
                             if (i == 0) totalPath.moveTo(x, y) else totalPath.lineTo(x, y)
                         }
                         drawPath(
@@ -441,7 +529,7 @@ fun NetWorthChart(
                             val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
                             val discountedNw = investable / discount
                             val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
-                            val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
+                            val ay = yPix(discountedNw)
                             if (i == 0) actualPath.moveTo(ax, ay) else actualPath.lineTo(ax, ay)
                         }
 
@@ -461,7 +549,7 @@ fun NetWorthChart(
                             val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
                             val discountedNw = investable / discount
                             val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
-                            val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
+                            val ay = yPix(discountedNw)
 
                             drawCircle(color = cGreen.copy(alpha = 0.3f), radius = 13f, center = Offset(ax, ay))
                             drawCircle(color = cGreen, radius = 7f, center = Offset(ax, ay))
@@ -472,7 +560,7 @@ fun NetWorthChart(
                     // Draw Current Position (Now / Start Year) Indicator Dot
                     if (displayData.isNotEmpty()) {
                         val curX = paddingLeft + panOffsetX + (0 * stepX)
-                        val curY = plotH - (plotH * (displayData[0].portfolio / maxVal)).toFloat()
+                        val curY = yPix(displayData[0].portfolio)
                         drawLine(
                             color = cTeal.copy(alpha = 0.35f),
                             start = Offset(curX, curY),
@@ -488,7 +576,7 @@ fun NetWorthChart(
                     // Draw FIRE Milestone marker dot
                     if (fireReachedIndex >= 0) {
                         val fx = paddingLeft + panOffsetX + (fireReachedIndex * stepX)
-                        val fy = plotH - (plotH * (displayData[fireReachedIndex].portfolio / maxVal)).toFloat()
+                        val fy = yPix(displayData[fireReachedIndex].portfolio)
                         drawCircle(color = cGold, radius = 12f, center = Offset(fx, fy))
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
@@ -496,7 +584,7 @@ fun NetWorthChart(
                     // Draw Selected Point Highlight Line and Marker
                     selectedPointIndex?.let { idx ->
                         val sx = paddingLeft + panOffsetX + (idx * stepX)
-                        val sy = plotH - (plotH * (displayData[idx].portfolio / maxVal)).toFloat()
+                        val sy = yPix(displayData[idx].portfolio)
                         drawLine(
                             color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
