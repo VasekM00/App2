@@ -7,6 +7,8 @@ object BackupManager {
 
     fun serializeSettingsToJson(s: SettingsEntity): String {
         val json = JSONObject()
+        json.put("_format", "martinu-settings")
+        json.put("_schema", 1)
         json.put("baseYear", s.baseYear)
         json.put("primaryAge", s.primaryAge)
         json.put("primaryName", s.primaryName)
@@ -122,6 +124,7 @@ object BackupManager {
         json.put("monteCarloN", s.monteCarloN)
         json.put("monteCarloVolatilityPct", s.monteCarloVolatilityPct)
         json.put("monteCarloSeed", s.monteCarloSeed)
+        json.put("retirementHorizonYears", s.retirementHorizonYears)
 
         return json.toString()
     }
@@ -238,7 +241,8 @@ object BackupManager {
                 // Monte Carlo configuration
                 monteCarloN = json.optInt("monteCarloN", fallback.monteCarloN),
                 monteCarloVolatilityPct = json.optDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
-                monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed)
+                monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed),
+                retirementHorizonYears = json.optInt("retirementHorizonYears", fallback.retirementHorizonYears)
             )
             sanitizeRestored(restored, fallback)
         } catch (_: Exception) {
@@ -262,6 +266,7 @@ object BackupManager {
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
             dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
             monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
+            retirementHorizonYears = if (s.retirementHorizonYears in 10..60) s.retirementHorizonYears else f.retirementHorizonYears,
             vSalary = money(s.vSalary, f.vSalary),
             vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
             vOtherInflowsMonthly = money(s.vOtherInflowsMonthly, f.vOtherInflowsMonthly),

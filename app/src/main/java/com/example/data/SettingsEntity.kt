@@ -109,6 +109,7 @@ data class SettingsEntity(
     val monteCarloN: Int = 400,
     val monteCarloVolatilityPct: Double = 15.0,
     val monteCarloSeed: Long = 42L,
+    val retirementHorizonYears: Int = 35,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]",
     val customLumpSumsJson: String = "[]",

@@ -159,9 +159,9 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
-    fun test6_databaseVersion_matchesTarget24() {
+    fun test6_databaseVersion_matchesTarget25() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(24, version)
+        assertEquals(25, version)
     }
 
     @Test

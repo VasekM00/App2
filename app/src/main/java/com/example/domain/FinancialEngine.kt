@@ -288,6 +288,22 @@ data class MonteCarloResult(
     val probabilityTable: List<MonteCarloAgeProbability>
 )
 
+/**
+ * Answers the question the accumulation Monte Carlo cannot: once FIRE is reached,
+ * does the portfolio actually survive withdrawals for the planned retirement horizon?
+ * Withdrawals are inflation-adjusted lifestyle costs minus indexed state pensions,
+ * simulated against the same stochastic market model.
+ */
+data class RetirementSurvivalResult(
+    val successRatePct: Double,
+    val fireProbabilityPct: Double,
+    val horizonYears: Int,
+    val medianEndBalanceToday: Double,
+    val p5EndBalanceToday: Double,
+    val medianDepletionAge: Int?,
+    val sampleSize: Int
+)
+
 data class StressScenarioResult(
     val id: String,
     val name: String,
@@ -341,6 +357,7 @@ data class FullCalculationState(
     val dip: DipProjection,
     val taxReturnHelper: TaxReturnHelperData,
     val monteCarlo: MonteCarloResult,
+    val retirementSurvival: RetirementSurvivalResult,
     val stressScenarios: List<StressScenarioResult>,
     val fireMilestones: FireMilestonesSummary,
     val savingsRatePct: Double,
@@ -1080,6 +1097,137 @@ object FinancialEngine {
         return result
     }
 
+    @Volatile
+    private var cachedSurvivalKey: SettingsEntity? = null
+    @Volatile
+    private var cachedSurvivalResult: RetirementSurvivalResult? = null
+
+    /**
+     * Simulates accumulation to FIRE and then a full withdrawal phase to the configured
+     * retirement horizon. Success = the portfolio never depletes among paths that reach FIRE.
+     */
+    fun runRetirementSurvival(settings: SettingsEntity): RetirementSurvivalResult {
+        cachedSurvivalResult?.let { result ->
+            if (cachedSurvivalKey == settings) return result
+        }
+
+        val sims = settings.monteCarloN.coerceIn(100, 400)
+        val meanReturn = settings.portfolioNominalReturnPct / 100.0
+        val sigma = settings.monteCarloVolatilityPct / 100.0
+        val random = Random(settings.monteCarloSeed + 1L)
+
+        val baseYear = settings.baseYear
+        val baseAge = settings.primaryAge
+        val cpi = settings.cpiInflationPct / 100.0
+        val maxAccumYears = 35
+        val horizon = settings.retirementHorizonYears.coerceIn(10, 60)
+
+        val lifestyleToday = max(
+            0.0,
+            if (settings.lifestyleCostAtFireMonthly > 0.0) {
+                settings.lifestyleCostAtFireMonthly
+            } else {
+                totalLivingCostMonthly(settings.copy(childExpensesEnabled = false), baseYear)
+            }
+        )
+        val vPensionToday = max(0.0, settings.vStatePensionMonthly)
+        val ePensionToday = if (!settings.isSingleHousehold) max(0.0, settings.eStatePensionMonthly) else 0.0
+        val initial = max(
+            0.0,
+            settings.liquidPortfolioCurrent +
+                (if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0)
+        )
+
+        val additions = DoubleArray(maxAccumYears) { y ->
+            val sy = baseYear + y
+            val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
+            val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(y) else 1.0
+            val baseDca = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
+            val eleonoraSal = if (!settings.isSingleHousehold && sy >= settings.eReturnYear) {
+                eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
+            } else 0.0
+            baseDca + eleonoraSal + lumpSumForYear(sy, settings)
+        }
+        val targets = DoubleArray(maxAccumYears) { y ->
+            fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1)
+        }
+
+        var fireReached = 0
+        var survived = 0
+        val endBalancesToday = ArrayList<Double>(sims)
+        val depletionAges = ArrayList<Int>()
+
+        for (i in 0 until sims) {
+            var bal = initial
+            var fireYear = -1
+            for (y in 0 until maxAccumYears) {
+                val ret = max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                bal = max(0.0, (bal + additions[y]) * max(0.0, 1.0 + ret))
+                if (bal >= targets[y]) {
+                    fireYear = baseYear + y + 1
+                    break
+                }
+            }
+            if (fireYear < 0) continue
+            fireReached++
+
+            var depletedAge: Int? = null
+            for (k in 0 until horizon) {
+                val year = fireYear + k
+                val age = baseAge + (year - baseYear)
+                val indexation = (1.0 + cpi).pow((year - baseYear).coerceAtLeast(0))
+                val lifestyleAnnual = lifestyleToday * 12.0 * indexation
+                var pensionAnnual = 0.0
+                if (age >= settings.vStatePensionAge) pensionAnnual += vPensionToday * 12.0 * indexation
+                if (!settings.isSingleHousehold && age >= settings.eStatePensionAge) {
+                    pensionAnnual += ePensionToday * 12.0 * indexation
+                }
+                val need = max(0.0, lifestyleAnnual - pensionAnnual)
+                bal -= need
+                if (bal <= 0.0) {
+                    bal = 0.0
+                    depletedAge = age
+                    break
+                }
+                val ret = max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                bal *= max(0.0, 1.0 + ret)
+            }
+
+            if (depletedAge == null) {
+                survived++
+            } else {
+                depletionAges.add(depletedAge)
+            }
+            val deflator = (1.0 + cpi).pow(horizon)
+            endBalancesToday.add(if (deflator.isFinite() && deflator > 0.0) bal / deflator else bal)
+        }
+
+        val successRate = if (fireReached > 0) survived.toDouble() / fireReached * 100.0 else 0.0
+        val fireProbability = (fireReached.toDouble() / sims) * 100.0
+
+        endBalancesToday.sort()
+        val p5 = if (endBalancesToday.isNotEmpty()) {
+            endBalancesToday[(endBalancesToday.size * 0.05).toInt().coerceIn(0, endBalancesToday.size - 1)]
+        } else 0.0
+        val p50 = if (endBalancesToday.isNotEmpty()) endBalancesToday[endBalancesToday.size / 2] else 0.0
+
+        depletionAges.sort()
+        val medianDepletionAge = if (depletionAges.isNotEmpty()) depletionAges[depletionAges.size / 2] else null
+
+        val result = RetirementSurvivalResult(
+            successRatePct = if (successRate.isFinite()) successRate.coerceIn(0.0, 100.0) else 0.0,
+            fireProbabilityPct = if (fireProbability.isFinite()) fireProbability.coerceIn(0.0, 100.0) else 0.0,
+            horizonYears = horizon,
+            medianEndBalanceToday = if (p50.isFinite()) max(0.0, p50) else 0.0,
+            p5EndBalanceToday = if (p5.isFinite()) max(0.0, p5) else 0.0,
+            medianDepletionAge = medianDepletionAge,
+            sampleSize = sims
+        )
+        cachedSurvivalKey = settings
+        cachedSurvivalResult = result
+        return result
+    }
+
     fun calculateStressScenarios(settings: SettingsEntity, runMonteCarlo: Boolean = true): List<StressScenarioResult> {
         val baseLivingCost = totalLivingCostMonthly(settings)
 
@@ -1284,6 +1432,11 @@ object FinancialEngine {
         )
 
         val monteCarlo = if (runMonteCarlo) runMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
+        val retirementSurvival = if (runMonteCarlo) {
+            runRetirementSurvival(settings)
+        } else {
+            RetirementSurvivalResult(0.0, 0.0, settings.retirementHorizonYears.coerceIn(10, 60), 0.0, 0.0, null, 0)
+        }
         val stressScenarios = calculateStressScenarios(settings, runMonteCarlo = runMonteCarlo)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {
@@ -1436,6 +1589,7 @@ object FinancialEngine {
             dip = dip,
             taxReturnHelper = taxHelper,
             monteCarlo = monteCarlo,
+            retirementSurvival = retirementSurvival,
             stressScenarios = stressScenarios,
             fireMilestones = fireMilestones,
             savingsRatePct = savingsRate,

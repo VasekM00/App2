@@ -225,6 +225,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val bytes = inputStream.use { it.readBytes() }
 
+                if (!com.example.util.BankStatementImporter.isWithinSizeLimit(bytes.size)) {
+                    _uiEvent.emit(UiMessage.ShowSnackbar("Statement file is too large (max 25 MB)"))
+                    return@launch
+                }
+
                 // 1. Try bank statement parser first (Moneta, CSOB, mBank) - supports PDF and CSV
                 try {
                     val overrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication())

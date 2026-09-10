@@ -89,6 +89,11 @@ data class StatementParseSummary(
 
 object BankStatementImporter {
 
+    /** Hard upper bound for statement imports to avoid OOM on pathological files. */
+    const val MAX_STATEMENT_BYTES: Int = 25 * 1024 * 1024
+
+    fun isWithinSizeLimit(byteCount: Int): Boolean = byteCount in 1..MAX_STATEMENT_BYTES
+
     fun parseStatement(
         bytes: ByteArray,
         knownFamilyAccounts: Set<String> = emptySet(),
@@ -1150,20 +1155,28 @@ object BankStatementImporter {
     fun normalizeDate(str: String): String {
         val clean = str.trim().replace("/", ".").replace("-", ".")
         val parts = clean.split(".").map { it.trim() }.filter { it.isNotBlank() }
-        if (parts.size == 3) {
-            if (parts[0].length == 4 && parts[0].all { it.isDigit() }) {
-                val y = parts[0]
-                val m = parts[1].padStart(2, '0')
-                val d = parts[2].padStart(2, '0')
-                return "$y-$m-$d"
-            } else if (parts[2].length == 4 && parts[2].all { it.isDigit() }) {
-                val d = parts[0].padStart(2, '0')
-                val m = parts[1].padStart(2, '0')
-                val y = parts[2]
-                return "$y-$m-$d"
-            }
+        if (parts.size != 3) return ""
+
+        val (yearToken, monthToken, dayToken) = when {
+            parts[0].length == 4 && parts[0].all { it.isDigit() } -> Triple(parts[0], parts[1], parts[2])
+            parts[2].length == 4 && parts[2].all { it.isDigit() } -> Triple(parts[2], parts[1], parts[0])
+            else -> return ""
         }
-        return ""
+        if (!yearToken.all { it.isDigit() } || !monthToken.all { it.isDigit() } || !dayToken.all { it.isDigit() }) {
+            return ""
+        }
+
+        val year = yearToken.toIntOrNull() ?: return ""
+        val month = monthToken.toIntOrNull() ?: return ""
+        val day = dayToken.toIntOrNull() ?: return ""
+        if (year !in 1900..2200 || month !in 1..12 || day !in 1..31) return ""
+
+        // Reject calendar-invalid dates (e.g. 31.02) instead of emitting malformed ISO strings.
+        return try {
+            java.time.LocalDate.of(year, month, day).toString()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun splitLine(line: String, delimiter: Char): List<String> {

@@ -35,20 +35,21 @@ class RoomMigrationInstrumentedTest {
         AppDatabase.MIGRATION_20_21,
         AppDatabase.MIGRATION_21_22,
         AppDatabase.MIGRATION_22_23,
-        AppDatabase.MIGRATION_23_24
+        AppDatabase.MIGRATION_23_24,
+        AppDatabase.MIGRATION_24_25
     )
 
     @Test
     fun migrateFromEverySupportedVersionToLatest() {
-        for (start in 16..23) {
+        for (start in 16..24) {
             val applicable = migrationsInOrder.filter { it.startVersion >= start }
             helper.createDatabase(TEST_DB, start).close()
-            helper.runMigrationsAndValidate(TEST_DB, 24, true, *applicable.toTypedArray()).close()
+            helper.runMigrationsAndValidate(TEST_DB, 25, true, *applicable.toTypedArray()).close()
         }
     }
 
     @Test
-    fun migrateFullChain16To24PreservesLedgerDataAndAddsSnapshotColumns() {
+    fun migrateFullChain16To25PreservesLedgerDataAndAddsSnapshotColumns() {
         val db16 = helper.createDatabase(TEST_DB, 16)
         db16.execSQL(
             "INSERT INTO ledger_entries " +
@@ -57,19 +58,28 @@ class RoomMigrationInstrumentedTest {
         )
         db16.close()
 
-        val db24 = helper.runMigrationsAndValidate(TEST_DB, 24, true, *migrationsInOrder.toTypedArray())
-        db24.query(
+        val db25 = helper.runMigrationsAndValidate(TEST_DB, 25, true, *migrationsInOrder.toTypedArray())
+        db25.query(
             "SELECT incVaclav, notes, portfolioBalanceAtMonthEnd, pensionBalanceAtMonthEnd, " +
                 "emergencyReserveAtMonthEnd FROM ledger_entries WHERE id = 1"
         ).use { cursor ->
-            assertTrue("Ledger row must survive the full 16 -> 24 chain", cursor.moveToFirst())
+            assertTrue("Ledger row must survive the full 16 -> 25 chain", cursor.moveToFirst())
             assertEquals(31000.0, cursor.getDouble(0), 0.001)
             assertEquals("legacy", cursor.getString(1))
             assertEquals(0.0, cursor.getDouble(2), 0.001)
             assertEquals(0.0, cursor.getDouble(3), 0.001)
             assertEquals(0.0, cursor.getDouble(4), 0.001)
         }
-        db24.close()
+        val settingsColumns = mutableListOf<String>()
+        db25.query("PRAGMA table_info(app_settings)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) settingsColumns.add(cursor.getString(nameIndex))
+        }
+        assertTrue(
+            "app_settings must gain retirementHorizonYears in schema 25, found: $settingsColumns",
+            settingsColumns.contains("retirementHorizonYears")
+        )
+        db25.close()
     }
 
     @Test

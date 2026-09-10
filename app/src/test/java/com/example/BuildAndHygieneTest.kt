@@ -116,7 +116,10 @@ class BuildAndHygieneTest {
             .substringBefore("fun deserializeSettingsFromJson")
 
         val jsonPutRegex = Regex("""json\.put\(\s*"([^"]+)"""")
-        val serializedFields = jsonPutRegex.findAll(serializeFunctionBody).map { it.groupValues[1] }.toSet()
+        val serializedFields = jsonPutRegex.findAll(serializeFunctionBody)
+            .map { it.groupValues[1] }
+            .filter { !it.startsWith("_") }
+            .toSet()
 
         assertEquals(
             "SettingsEntity must declare exactly non-id configuration parameters matching BackupManager",

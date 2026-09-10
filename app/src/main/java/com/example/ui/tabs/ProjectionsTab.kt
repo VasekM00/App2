@@ -498,6 +498,7 @@ private fun MonteCarloAndStressSubTab(
 ) {
     val scrollState = rememberScrollState()
     val mc = state.monteCarlo
+    val survival = state.retirementSurvival
 
     val successRateInfo = MetricInfo(
         title = "Monte Carlo Success Probability",
@@ -506,6 +507,15 @@ private fun MonteCarloAndStressSubTab(
         explanation = "Runs ${state.settings.monteCarloN} log-normal randomized market paths incorporating historical volatility, sequence-of-returns risk, and prolonged market crashes. A success rate above 90% is widely regarded in quantitative financial planning as bulletproof.",
         practicalImplication = "Exposing the portfolio to random sequence shocks prevents the fallacy of assuming smooth average returns.",
         accentColor = BrandTeal
+    )
+
+    val survivalInfo = MetricInfo(
+        title = "Retirement Sustainability",
+        category = "Withdrawal-Phase Risk",
+        formulaOrRule = "Survival = % of FIRE paths where the portfolio never depletes over ${survival.horizonYears} years of inflation-adjusted withdrawals",
+        explanation = "Continues every simulated path past FIRE, withdrawing your inflation-adjusted lifestyle costs minus indexed state pensions. This answers the question accumulation charts cannot: whether the money actually lasts through retirement.",
+        practicalImplication = "A high accumulation success rate with a low sustainability rate means the plan reaches FIRE but is fragile afterwards. Aim for 85%+ on both metrics.",
+        accentColor = BrandGold
     )
 
     val percentileInfo = MetricInfo(
@@ -568,6 +578,31 @@ private fun MonteCarloAndStressSubTab(
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                ProjectionMetricRow(
+                    label = "Retirement Sustainability (${survival.horizonYears}-Year Horizon)",
+                    value = fmtPct(survival.successRatePct),
+                    isBold = true,
+                    highlightColor = BrandGold,
+                    info = survivalInfo,
+                    onShowInfo = onShowInfo
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                ProjectionMetricRow(
+                    label = "Median Wealth at Horizon End",
+                    value = fmtCZK(survival.medianEndBalanceToday),
+                    info = survivalInfo,
+                    onShowInfo = onShowInfo
+                )
+                survival.medianDepletionAge?.let { depletionAge ->
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    ProjectionMetricRow(
+                        label = "Median Depletion Age (failing paths)",
+                        value = "Age $depletionAge",
+                        info = survivalInfo,
+                        onShowInfo = onShowInfo
+                    )
+                }
             }
         }
 

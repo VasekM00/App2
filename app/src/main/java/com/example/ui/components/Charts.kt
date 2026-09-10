@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -78,6 +80,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NetWorthChart(
     data: List<PortfolioYearPoint>,
@@ -537,9 +540,10 @@ fun NetWorthChart(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = "Liquid: ${fmtCompact(pt.portfolio)}",
@@ -574,6 +578,7 @@ fun NetWorthChart(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MonteCarloFanChart(
     points: List<MonteCarloPoint>,
@@ -806,10 +811,10 @@ fun MonteCarloFanChart(
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 text = "Year ${pt.year} (Age ${pt.age}) Monte Carlo Range:",
@@ -824,9 +829,10 @@ fun MonteCarloFanChart(
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = "P5 (Pessimistic): ${fmtCompact(pt.p5)}",
