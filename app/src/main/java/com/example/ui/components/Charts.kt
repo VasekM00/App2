@@ -436,7 +436,10 @@ fun NetWorthChart(
                             val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
                             val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
                             val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
-                            val discountedNw = entry.totalNetWorthAtMonthEnd / discount
+                            // Compare like-for-like with the model: investable assets only (liquid + pension),
+                            // the emergency reserve is a separate safety buffer and not part of the trajectory.
+                            val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
+                            val discountedNw = investable / discount
                             val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
                             val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
                             if (i == 0) actualPath.moveTo(ax, ay) else actualPath.lineTo(ax, ay)
@@ -455,7 +458,8 @@ fun NetWorthChart(
                             val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
                             val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
                             val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
-                            val discountedNw = entry.totalNetWorthAtMonthEnd / discount
+                            val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
+                            val discountedNw = investable / discount
                             val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
                             val ay = plotH - (plotH * (discountedNw / maxVal)).toFloat()
 
@@ -508,8 +512,8 @@ fun NetWorthChart(
                 }
             }
 
-            // Interactive Detail Tooltip Box
-            val activePoint = selectedPointIndex?.let { displayData.getOrNull(it) } ?: displayData.lastOrNull()
+            // Interactive Detail Tooltip Box — defaults to the current position, never the horizon end
+            val activePoint = selectedPointIndex?.let { displayData.getOrNull(it) } ?: displayData.firstOrNull()
             activePoint?.let { pt ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(

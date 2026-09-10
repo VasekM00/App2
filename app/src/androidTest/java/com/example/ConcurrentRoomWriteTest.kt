@@ -76,10 +76,12 @@ class ConcurrentRoomWriteTest {
                         )
                     )
 
-                    // 2. Concurrent Individual Ledger Entry Insertions
+                    // 2. Concurrent Individual Ledger Entry Insertions (unique month per worker)
+                    val singleYear = 2026 + (index - 1) / 12
+                    val singleMonth = ((index - 1) % 12) + 1
                     ledgerDao.insertEntry(
                         LedgerEntryEntity(
-                            yearMonth = "2026-%02d".format((index % 12) + 1),
+                            yearMonth = "%04d-%02d".format(singleYear, singleMonth),
                             incVaclav = 35000.0 + index,
                             incEleonora = 13000.0,
                             expRent = 21770.0,
@@ -88,16 +90,19 @@ class ConcurrentRoomWriteTest {
                         )
                     )
 
-                    // 3. Concurrent Bulk Ledger Entry Insertions
+                    // 3. Concurrent Bulk Ledger Entry Insertions (unique months per worker)
+                    val batchAYear = 2100 + (index - 1) / 12
+                    val batchBYear = 2200 + (index - 1) / 12
+                    val batchMonth = ((index - 1) % 12) + 1
                     val batchEntries = listOf(
                         LedgerEntryEntity(
-                            yearMonth = "2027-%02d".format((index % 12) + 1),
+                            yearMonth = "%04d-%02d".format(batchAYear, batchMonth),
                             incVaclav = 38000.0,
                             expRent = 22000.0,
                             notes = "Batch A worker $index"
                         ),
                         LedgerEntryEntity(
-                            yearMonth = "2028-%02d".format((index % 12) + 1),
+                            yearMonth = "%04d-%02d".format(batchBYear, batchMonth),
                             incVaclav = 40000.0,
                             expRent = 23000.0,
                             notes = "Batch B worker $index"

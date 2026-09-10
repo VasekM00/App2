@@ -36,20 +36,21 @@ class RoomMigrationInstrumentedTest {
         AppDatabase.MIGRATION_21_22,
         AppDatabase.MIGRATION_22_23,
         AppDatabase.MIGRATION_23_24,
-        AppDatabase.MIGRATION_24_25
+        AppDatabase.MIGRATION_24_25,
+        AppDatabase.MIGRATION_25_26
     )
 
     @Test
     fun migrateFromEverySupportedVersionToLatest() {
-        for (start in 16..24) {
+        for (start in 16..25) {
             val applicable = migrationsInOrder.filter { it.startVersion >= start }
             helper.createDatabase(TEST_DB, start).close()
-            helper.runMigrationsAndValidate(TEST_DB, 25, true, *applicable.toTypedArray()).close()
+            helper.runMigrationsAndValidate(TEST_DB, 26, true, *applicable.toTypedArray()).close()
         }
     }
 
     @Test
-    fun migrateFullChain16To25PreservesLedgerDataAndAddsSnapshotColumns() {
+    fun migrateFullChain16To26PreservesLedgerDataAndAddsSnapshotColumns() {
         val db16 = helper.createDatabase(TEST_DB, 16)
         db16.execSQL(
             "INSERT INTO ledger_entries " +
@@ -58,7 +59,7 @@ class RoomMigrationInstrumentedTest {
         )
         db16.close()
 
-        val db25 = helper.runMigrationsAndValidate(TEST_DB, 25, true, *migrationsInOrder.toTypedArray())
+        val db25 = helper.runMigrationsAndValidate(TEST_DB, 26, true, *migrationsInOrder.toTypedArray())
         db25.query(
             "SELECT incVaclav, notes, portfolioBalanceAtMonthEnd, pensionBalanceAtMonthEnd, " +
                 "emergencyReserveAtMonthEnd FROM ledger_entries WHERE id = 1"
@@ -80,6 +81,43 @@ class RoomMigrationInstrumentedTest {
             settingsColumns.contains("retirementHorizonYears")
         )
         db25.close()
+    }
+
+    @Test
+    fun migrate25To26DedupesLedgerMonthsAndEnforcesUniqueness() {
+        val allColumns =
+            "(id, yearMonth, incVaclav, incEleonora, incUnforeseen, expRent, expGroceries, expOther, notes, " +
+                "portfolioBalanceAtMonthEnd, pensionBalanceAtMonthEnd, emergencyReserveAtMonthEnd)"
+        val db25 = helper.createDatabase(TEST_DB, 25)
+        db25.execSQL(
+            "INSERT INTO ledger_entries $allColumns VALUES (1, '2026-01', 1000.0, 0, 0, 0, 0, 0, 'old', 0, 0, 0)"
+        )
+        db25.execSQL(
+            "INSERT INTO ledger_entries $allColumns VALUES (2, '2026-01', 2000.0, 0, 0, 0, 0, 0, 'new', 0, 0, 0)"
+        )
+        db25.close()
+
+        val db26 = helper.runMigrationsAndValidate(TEST_DB, 26, true, AppDatabase.MIGRATION_25_26)
+        db26.query("SELECT COUNT(*) FROM ledger_entries WHERE yearMonth = '2026-01'").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(1, cursor.getInt(0))
+        }
+        db26.query("SELECT notes FROM ledger_entries WHERE yearMonth = '2026-01'").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("new", cursor.getString(0))
+        }
+        var rejectedDuplicate = false
+        try {
+            db26.execSQL(
+                "INSERT INTO ledger_entries (yearMonth, incVaclav, incEleonora, incUnforeseen, expRent, " +
+                    "expGroceries, expOther, notes, portfolioBalanceAtMonthEnd, pensionBalanceAtMonthEnd, " +
+                    "emergencyReserveAtMonthEnd) VALUES ('2026-01', 3000.0, 0, 0, 0, 0, 0, 'dup', 0, 0, 0)"
+            )
+        } catch (_: Exception) {
+            rejectedDuplicate = true
+        }
+        assertTrue("Unique ledger month index must reject duplicate rows", rejectedDuplicate)
+        db26.close()
     }
 
     @Test

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 25,
+    version = 26,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -439,6 +439,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Exactly one ledger row per month: keep the newest row, then enforce uniqueness.
+                db.execSQL("DROP INDEX IF EXISTS index_ledger_entries_yearMonth")
+                db.execSQL(
+                    "DELETE FROM ledger_entries WHERE id NOT IN " +
+                        "(SELECT MAX(id) FROM ledger_entries GROUP BY yearMonth)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_ledger_entries_yearMonth ON ledger_entries(yearMonth)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -451,7 +463,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
-                        MIGRATION_24_25
+                        MIGRATION_24_25, MIGRATION_25_26
                     )
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()

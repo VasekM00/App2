@@ -43,6 +43,14 @@ class ScreenshotAuditTest {
     }
 
     @Test
+    @Config(qualifiers = "w411dp-h1600dp-xxhdpi")
+    fun captureOverviewTabTall() {
+        composeTestRule.setContent { MartinuFinancialsTheme { OverviewTab(state = state) } }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("build/roborazzi/overview_tall.png")
+    }
+
+    @Test
     fun captureCashFlowTab() {
         composeTestRule.setContent {
             MartinuFinancialsTheme {

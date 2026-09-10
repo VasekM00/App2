@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "ledger_entries",
-    indices = [Index(value = ["yearMonth"])]
+    indices = [Index(value = ["yearMonth"], unique = true)]
 )
 data class LedgerEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

@@ -196,8 +196,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 pensionBalanceAtMonthEnd = pensionBalance,
                 emergencyReserveAtMonthEnd = emergencyReserve
             )
-            repository.addLedgerEntry(entry)
-            _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry added for $yearMonth"))
+            val existing = repository.getLedgerEntryByYearMonth(yearMonth)
+            if (existing != null) {
+                repository.updateLedgerEntry(entry.copy(id = existing.id))
+                _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry updated for $yearMonth"))
+            } else {
+                repository.addLedgerEntry(entry)
+                _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry added for $yearMonth"))
+            }
         }
     }
 
@@ -292,7 +298,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else if (skippedDuplicates > 0) {
                     _uiEvent.emit(UiMessage.ShowSnackbar("All $skippedDuplicates entries already exist - nothing imported"))
                 } else {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("No valid entries found in statement"))
+                    _uiEvent.emit(UiMessage.ShowSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV."))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -508,9 +514,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else ""
                 val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
 
-                // The closing balance belongs to the latest month of the statement
-                val closingBalance = if (targetYm == latestMonth) summary.monthEndBalance else null
-
+                // The closing balance belongs to the latest month of the statement, but it is the
+                // account's cash balance — NOT the dedicated emergency reserve — so it must not be
+                // written into emergencyReserveAtMonthEnd (that corrupted the actual net-worth line).
                 val cur = settingsState.value
                 val isSingle = cur.isSingleHousehold
                 val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
@@ -527,7 +533,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         notes = autoNotes,
                         portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
                         pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
-                        emergencyReserveAtMonthEnd = closingBalance ?: if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
+                        emergencyReserveAtMonthEnd = if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
                     )
                     repository.updateLedgerEntry(updated)
                 } else {
@@ -542,7 +548,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         notes = autoNotes,
                         portfolioBalanceAtMonthEnd = snapLiquid,
                         pensionBalanceAtMonthEnd = snapPension,
-                        emergencyReserveAtMonthEnd = closingBalance ?: cur.emergencyReserveCurrent
+                        emergencyReserveAtMonthEnd = cur.emergencyReserveCurrent
                     )
                     repository.addLedgerEntry(newEntry)
                 }
