@@ -1,3 +1,5 @@
+@file:Suppress("InlinedApi")
+
 package com.example.ui.tabs
 
 import android.content.ClipData
@@ -1632,7 +1634,7 @@ private fun BooleanSettingField(
 
 private fun liveDataSubtitle(data: com.example.domain.CzechRegulatoryData?): String {
     return if (data != null) {
-        "ČSÚ CPI: ${data.csuCpiInflationPct}% · EUR: ${String.format("%.2f", data.eurCzkRate)} · USD: ${String.format("%.2f", data.usdCzkRate)}"
+        "ČSÚ CPI: ${data.csuCpiInflationPct}% · EUR: ${String.format(java.util.Locale.getDefault(), "%.2f", data.eurCzkRate)} · USD: ${String.format(java.util.Locale.getDefault(), "%.2f", data.usdCzkRate)}"
     } else {
         "Check live ČSÚ CPI, ČNB rates, and statutory tax credits"
     }

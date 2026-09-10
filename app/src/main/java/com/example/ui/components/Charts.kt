@@ -156,7 +156,7 @@ fun NetWorthChart(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = if (isRealPurchasingPower) "Discounted at ${String.format("%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal growth over 35-year investment horizon",
+                        text = if (isRealPurchasingPower) "Discounted at ${String.format(java.util.Locale.getDefault(), "%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal growth over 35-year investment horizon",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }

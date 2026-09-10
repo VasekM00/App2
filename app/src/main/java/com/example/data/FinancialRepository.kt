@@ -1,27 +1,20 @@
 package com.example.data
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 class FinancialRepository(
+    private val database: AppDatabase,
     private val settingsDao: SettingsDao,
     private val ledgerDao: LedgerDao,
     private val actionStateDao: ActionStateDao,
     private val importedTransactionDao: ImportedTransactionDao
 ) {
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
-        .map { entity ->
-            val s = entity ?: SettingsEntity.freshDefaults()
-            // Migrate: old data stored 2800.0 as if it were monthly (incorrectly).
-            // The real annual employer contribution is 2 800 CZK/yr = 233 CZK/mo.
-            if (s.employerRetirementMonthly >= 2795.0 && s.employerRetirementMonthly <= 2805.0) {
-                s.copy(employerRetirementMonthly = 233.0)
-            } else {
-                s
-            }
-        }
+        .map { it ?: SettingsEntity.freshDefaults() }
 
     val ledgerFlow: Flow<List<LedgerEntryEntity>> = ledgerDao.getAllEntries()
 
@@ -30,6 +23,18 @@ class FinancialRepository(
 
     suspend fun saveSettings(settings: SettingsEntity) = withContext(Dispatchers.IO) {
         settingsDao.saveSettings(settings)
+    }
+
+    /**
+     * One-time repair for databases written by older app versions that stored the employer
+     * retirement contribution as 2800 (monthly) instead of the correct 233 CZK/month
+     * (2800 CZK/yr). Persists the correction so the value stops drifting between DB and UI.
+     */
+    suspend fun repairLegacyEmployerContribution() = withContext(Dispatchers.IO) {
+        val current = settingsDao.getSettingsDirect() ?: return@withContext
+        if (current.employerRetirementMonthly >= 2795.0 && current.employerRetirementMonthly <= 2805.0) {
+            settingsDao.saveSettings(current.copy(employerRetirementMonthly = 233.0))
+        }
     }
 
     suspend fun addLedgerEntry(entry: LedgerEntryEntity) = withContext(Dispatchers.IO) {
@@ -74,9 +79,11 @@ class FinancialRepository(
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
-        ledgerDao.deleteAllEntries()
-        actionStateDao.deleteAllActionStates()
-        importedTransactionDao.deleteAllTransactions()
+        database.withTransaction {
+            ledgerDao.deleteAllEntries()
+            actionStateDao.deleteAllActionStates()
+            importedTransactionDao.deleteAllTransactions()
+        }
     }
 
     fun getImportedTransactions(yearMonth: String): Flow<List<ImportedBankTransactionEntity>> {
@@ -116,38 +123,42 @@ class FinancialRepository(
         bankName: String,
         newTransactions: List<ImportedBankTransactionEntity>
     ): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
-        val existing = importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
-        if (existing.isEmpty()) {
-            importedTransactionDao.insertTransactions(newTransactions)
-            return@withContext newTransactions
-        }
-
-        val existingCounts = mutableMapOf<String, Int>()
-        for (tx in existing) {
-            val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
-                tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
-            )
-            existingCounts[fp] = (existingCounts[fp] ?: 0) + 1
-        }
-
-        val incomingCounts = mutableMapOf<String, Int>()
-        val toInsert = mutableListOf<ImportedBankTransactionEntity>()
-        for (tx in newTransactions) {
-            val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
-                tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
-            )
-            val seen = incomingCounts[fp] ?: 0
-            val existingCount = existingCounts[fp] ?: 0
-            if (seen >= existingCount) {
-                toInsert.add(tx)
+        // Read-modify-write must be atomic: two concurrent imports of the same
+        // bank/month would otherwise both observe the same existing set and double-insert.
+        database.withTransaction {
+            val existing = importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+            if (existing.isEmpty()) {
+                importedTransactionDao.insertTransactions(newTransactions)
+                return@withTransaction newTransactions
             }
-            incomingCounts[fp] = seen + 1
-        }
 
-        if (toInsert.isNotEmpty()) {
-            importedTransactionDao.insertTransactions(toInsert)
+            val existingCounts = mutableMapOf<String, Int>()
+            for (tx in existing) {
+                val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
+                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+                )
+                existingCounts[fp] = (existingCounts[fp] ?: 0) + 1
+            }
+
+            val incomingCounts = mutableMapOf<String, Int>()
+            val toInsert = mutableListOf<ImportedBankTransactionEntity>()
+            for (tx in newTransactions) {
+                val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
+                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+                )
+                val seen = incomingCounts[fp] ?: 0
+                val existingCount = existingCounts[fp] ?: 0
+                if (seen >= existingCount) {
+                    toInsert.add(tx)
+                }
+                incomingCounts[fp] = seen + 1
+            }
+
+            if (toInsert.isNotEmpty()) {
+                importedTransactionDao.insertTransactions(toInsert)
+            }
+            toInsert
         }
-        return@withContext toInsert
     }
 }
 

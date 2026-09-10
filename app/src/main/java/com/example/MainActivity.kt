@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.core.content.edit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +42,7 @@ class MainActivity : ComponentActivity() {
                     onToggleDarkTheme = {
                         val next = !isDarkTheme
                         isDarkTheme = next
-                        prefs.edit().putBoolean("is_dark_theme", next).apply()
+                        prefs.edit { putBoolean("is_dark_theme", next) }
                     }
                 )
             }

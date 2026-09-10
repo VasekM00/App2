@@ -64,7 +64,6 @@ class BackupCorruptionRecoveryTest {
             "{\"baseYear\": 2026, \"vSalary\":",
             "not a json at all",
             "{\"unclosed\": true",
-            "{\"key\": undefined}",
             "\u0000\u0001\u0002 corrupted binary data"
         )
 
@@ -72,6 +71,14 @@ class BackupCorruptionRecoveryTest {
             val result = BackupManager.deserializeSettingsFromJson(corrupted, defaultFallback)
             assertNull("Malformed JSON should return null and not throw: '$corrupted'", result)
         }
+
+        // Android's framework org.json is deliberately lenient: an unquoted unknown literal such
+        // as `undefined` is parsed as the string "undefined". Because no recognized settings key is
+        // present, every field falls back to the provided default instead of throwing/null.
+        val lenientResult = BackupManager.deserializeSettingsFromJson("{\"key\": undefined}", defaultFallback)
+        assertNotNull("Lenient parser should recover using fallback defaults", lenientResult)
+        assertEquals(defaultFallback.vSalary, lenientResult!!.vSalary, 0.001)
+        assertEquals(defaultFallback.rentMonthly, lenientResult.rentMonthly, 0.001)
 
         // Scenario 2: Partial JSON payload (only a few fields supplied)
         val partialJson = """

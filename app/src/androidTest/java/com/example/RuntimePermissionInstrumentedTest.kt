@@ -104,7 +104,11 @@ class RuntimePermissionInstrumentedTest {
         var failureMessageEmitted = false
         for (i in 1..20) {
             delay(100)
-            if (emittedMessages.any { it.contains("CSV import failed") || it.contains("Error") || it.contains("Unable to open") }) {
+            if (emittedMessages.any {
+                    it.contains("failed", ignoreCase = true) ||
+                        it.contains("Error") ||
+                        it.contains("Unable to open")
+                }) {
                 failureMessageEmitted = true
                 break
             }

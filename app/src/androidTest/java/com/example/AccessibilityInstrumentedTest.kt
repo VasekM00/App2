@@ -82,21 +82,23 @@ class AccessibilityInstrumentedTest {
             .onNodeWithContentDescription("Settings")
             .assertExists()
 
-        // Verify Navigation items have appropriate content descriptions
+        // Verify Navigation items have appropriate content descriptions.
+        // NavigationBarItem merges descendant semantics, so the icon's content description
+        // is only observable in the unmerged tree.
         composeTestRule
-            .onNodeWithContentDescription("Overview")
+            .onNodeWithContentDescription("Overview", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Cash Flow")
+            .onNodeWithContentDescription("Cash Flow", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Projections")
+            .onNodeWithContentDescription("Projections", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Strategy")
+            .onNodeWithContentDescription("Strategy", useUnmergedTree = true)
             .assertExists()
     }
 }

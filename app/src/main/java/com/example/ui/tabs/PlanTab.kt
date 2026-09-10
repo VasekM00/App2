@@ -1321,7 +1321,7 @@ private fun PensionSubTab(
             KpiCard(
                 title = "Annual Tax Refund",
                 value = "+${fmtCZK(yearlyTaxSaved)}",
-                hint = "${String.format("%.0f", s.taxRatePct)}% relief via tax return",
+                hint = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% relief via tax return",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dipDeduction,
@@ -1366,7 +1366,7 @@ private fun PensionSubTab(
             KpiCard(
                 title = "DIP + DPS at Age 60",
                 value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
-                hint = "DIP ${String.format("%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format("%.1f", dpsNetReturnPct)}% net",
+                hint = "DIP ${String.format(java.util.Locale.getDefault(), "%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format(java.util.Locale.getDefault(), "%.1f", dpsNetReturnPct)}% net",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f),
                 info = PlanMetricInfos.dpsAge36,
@@ -1453,7 +1453,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace)
                             )
                             Text(
-                                text = "${String.format("%.0f", s.taxRatePct)}% refund on claimed base",
+                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% refund on claimed base",
                                 style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen.copy(alpha = 0.85f), fontSize = 10.sp)
                             )
                         }

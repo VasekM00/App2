@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.core.content.edit
 import kotlin.math.roundToInt
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -257,7 +258,7 @@ fun EmergencyReserveWidget(
                             selected = selectedTargetMode == mode,
                             onClick = {
                                 selectedTargetMode = mode
-                                prefs.edit().putString("emergency_reserve_mode", mode).apply()
+                                prefs.edit { putString("emergency_reserve_mode", mode) }
                             },
                             label = {
                                 Text(

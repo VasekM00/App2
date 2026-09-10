@@ -1,3 +1,5 @@
+@file:Suppress("InlinedApi")
+
 package com.example.ui.components
 
 import android.content.ClipData

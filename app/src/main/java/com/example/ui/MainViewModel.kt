@@ -3,6 +3,7 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.edit
 import com.example.data.AppDatabase
 import com.example.data.FinancialRepository
 import com.example.data.LedgerEntryEntity
@@ -34,6 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
     private val repository = FinancialRepository(
+        database = db,
         settingsDao = db.settingsDao(),
         ledgerDao = db.ledgerDao(),
         actionStateDao = db.actionStateDao(),
@@ -97,6 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val lastImportTimestamp: StateFlow<Long?> = _lastImportTimestamp.asStateFlow()
 
     init {
+        viewModelScope.launch { repository.repairLegacyEmployerContribution() }
         viewModelScope.launch(Dispatchers.IO) {
             val entries = repository.getAllLedgerEntriesDirect()
             if (entries.isNotEmpty()) {
@@ -541,10 +544,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val now = System.currentTimeMillis()
-            importPrefs.edit()
-                .putLong("last_import_all", now)
-                .putLong("last_import_${summary.detectedBank.name}", now)
-                .apply()
+            importPrefs.edit {
+                putLong("last_import_all", now)
+                putLong("last_import_${summary.detectedBank.name}", now)
+            }
             _lastImportTimestamp.value = now
 
             val monthsLabel = affectedMonths.joinToString(", ")

@@ -165,7 +165,7 @@ fun FundsAllocatorCard(
                 stepNumber = "1",
                 title = "Emergency Reserve Buffer",
                 currentAlloc = "${fmtCompact(reserveCurrent)} / ${fmtCompact(reserveTarget)}",
-                statusText = if (isReserveFilled) "FILLED (${String.format("%.1f", state.emergencyCoverageMonths)} mo)" else "BUILDING (${String.format("%.1f", state.emergencyCoverageMonths)} mo)",
+                statusText = if (isReserveFilled) "FILLED (${String.format(java.util.Locale.getDefault(), "%.1f", state.emergencyCoverageMonths)} mo)" else "BUILDING (${String.format(java.util.Locale.getDefault(), "%.1f", state.emergencyCoverageMonths)} mo)",
                 statusColor = if (isReserveFilled) GoodGreen else BrandGold,
                 recommendation = "Target 3–6 months essential living burn in high-yield account. Fund this first before locking capital.",
                 info = WaterfallMetricInfos.emergencyReserve,

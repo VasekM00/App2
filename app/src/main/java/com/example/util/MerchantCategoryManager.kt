@@ -1,6 +1,7 @@
 package com.example.util
 
 import android.content.Context
+import androidx.core.content.edit
 import org.json.JSONObject
 
 /**
@@ -49,7 +50,7 @@ object MerchantCategoryManager {
         for ((k, v) in currentMap) {
             json.put(k, v.name)
         }
-        prefs.edit().putString(KEY_OVERRIDES_JSON, json.toString()).apply()
+        prefs.edit { putString(KEY_OVERRIDES_JSON, json.toString()) }
     }
 
     fun removeOverride(context: Context, merchantPattern: String) {
@@ -62,11 +63,11 @@ object MerchantCategoryManager {
         for ((k, v) in currentMap) {
             json.put(k, v.name)
         }
-        prefs.edit().putString(KEY_OVERRIDES_JSON, json.toString()).apply()
+        prefs.edit { putString(KEY_OVERRIDES_JSON, json.toString()) }
     }
 
     fun clearOverrides(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().remove(KEY_OVERRIDES_JSON).apply()
+        prefs.edit { remove(KEY_OVERRIDES_JSON) }
     }
 }

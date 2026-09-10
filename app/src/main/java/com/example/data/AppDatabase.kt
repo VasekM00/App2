@@ -446,7 +446,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24
                     )
-                    .fallbackToDestructiveMigration(true)
+                    .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()
                 INSTANCE = instance
                 instance

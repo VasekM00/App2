@@ -153,7 +153,7 @@ private fun TrajectorySubTab(
         title = "Nominal vs Real Compound Returns",
         category = "Macroeconomic Assumptions",
         formulaOrRule = "Real CAGR = (1 + Nominal Return) / (1 + CPI Inflation) - 1",
-        explanation = "With an expected ${fmtPct(state.settings.portfolioNominalReturnPct)} nominal return and ${fmtPct(state.settings.cpiInflationPct)} inflation, your equity assets grow at ~${String.format("%.2f%%", ((1 + state.settings.portfolioNominalReturnPct/100.0)/(1 + state.settings.cpiInflationPct/100.0) - 1.0) * 100.0)} net purchasing power annually.",
+        explanation = "With an expected ${fmtPct(state.settings.portfolioNominalReturnPct)} nominal return and ${fmtPct(state.settings.cpiInflationPct)} inflation, your equity assets grow at ~${String.format(java.util.Locale.getDefault(), "%.2f%%", ((1 + state.settings.portfolioNominalReturnPct/100.0)/(1 + state.settings.cpiInflationPct/100.0) - 1.0) * 100.0)} net purchasing power annually.",
         statutoryReference = "Fisher Equation of Real Interest",
         practicalImplication = "Maintaining realistic inflation assumptions guarantees your FIRE target in today's CZK remains accurate in future purchasing power.",
         accentColor = BrandGold
@@ -603,7 +603,7 @@ private fun MonteCarloAndStressSubTab(
             val scenarioInfo = MetricInfo(
                 title = scenario.name,
                 category = "Stress Regime Parameters",
-                formulaOrRule = "${String.format("%.1f%%", scenario.nominalReturnPct)} Nominal Return | ${String.format("%.1f%%", scenario.cpiInflationPct)} CPI Inflation",
+                formulaOrRule = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.nominalReturnPct)} Nominal Return | ${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.cpiInflationPct)} CPI Inflation",
                 explanation = scenario.description,
                 practicalImplication = "Tests portfolio survivability under non-linear historical stress regimes (such as 1970s stagflation or prolonged tech drawdowns).",
                 accentColor = BadRed
@@ -651,7 +651,7 @@ private fun MonteCarloAndStressSubTab(
 
                     ProjectionMetricRow(
                         label = "Market Return / Inflation:",
-                        value = "${String.format("%.1f%%", scenario.nominalReturnPct)} / ${String.format("%.1f%%", scenario.cpiInflationPct)} CPI",
+                        value = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.nominalReturnPct)} / ${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.cpiInflationPct)} CPI",
                         info = scenarioInfo,
                         onShowInfo = onShowInfo
                     )
@@ -663,13 +663,13 @@ private fun MonteCarloAndStressSubTab(
                     )
                     ProjectionMetricRow(
                         label = "Monte Carlo Success Rate:",
-                        value = "${String.format("%.1f%%", scenario.successRatePct)}",
+                        value = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.successRatePct)}",
                         info = scenarioInfo,
                         onShowInfo = onShowInfo
                     )
                     ProjectionMetricRow(
                         label = "Emergency Reserve Survival:",
-                        value = "${String.format("%.1f", scenario.emergencySurvivalMonths)} months",
+                        value = "${String.format(java.util.Locale.getDefault(), "%.1f", scenario.emergencySurvivalMonths)} months",
                         info = scenarioInfo,
                         onShowInfo = onShowInfo
                     )
