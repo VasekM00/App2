@@ -76,35 +76,9 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.mutableIntStateOf
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
-import kotlin.math.roundToInt
-
-/**
- * Picks a handful of "nice" 1-2-5 decade values between [min] and [max] for logarithmic axes.
- */
-private fun logScaleTicks(min: Double, max: Double): List<Double> {
-    val floor = min.coerceAtLeast(1.0)
-    val ceil = max.coerceAtLeast(floor * 10.0)
-    val candidates = mutableListOf<Double>()
-    var decade = 1.0
-    while (decade <= ceil * 1.01 && candidates.size < 40) {
-        for (multiplier in doubleArrayOf(1.0, 2.0, 5.0)) {
-            val v = multiplier * decade
-            if (v >= floor * 0.999 && v <= ceil * 1.05) candidates.add(v)
-        }
-        decade *= 10.0
-    }
-    if (candidates.size <= 2) return candidates.ifEmpty { listOf(floor, ceil) }
-    val wanted = 5
-    if (candidates.size <= wanted + 1) return candidates
-    val step = (candidates.size - 1).toDouble() / wanted
-    return (0..wanted)
-        .map { candidates[(it * step).roundToInt().coerceIn(0, candidates.size - 1)] }
-        .distinct()
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -122,13 +96,9 @@ fun NetWorthChart(
     val cPurple = Color(0xFF6366F1)
     val cCardSurface = MaterialTheme.colorScheme.surface
 
-    var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
     var isRealPurchasingPower by remember { mutableStateOf(false) }
-    // Long-horizon compound growth is exponential; a log scale removes the empty upper-left
-    // region and shows contribution phases clearly. Users can switch back to linear.
-    var isLogScale by remember { mutableStateOf(true) }
 
     val actualPoints = remember(ledgerEntries) {
         ledgerEntries
@@ -214,7 +184,6 @@ fun NetWorthChart(
                         onClick = {
                             zoomScale = 1.0f
                             panOffsetX = 0.0f
-                            selectedPointIndex = null
                         },
                         modifier = Modifier.size(48.dp).testTag("chart_zoom_reset")
                     ) {
@@ -260,38 +229,6 @@ fun NetWorthChart(
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text("Real", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = realFg)
-                        }
-                    }
-                }
-
-                // Linear vs Logarithmic Y-Axis Toggle Pills
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-                ) {
-                    Row(modifier = Modifier.padding(2.dp)) {
-                        val logBg = if (isLogScale) BrandTeal else Color.Transparent
-                        val logFg = if (isLogScale) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                        val linBg = if (!isLogScale) BrandTeal else Color.Transparent
-                        val linFg = if (!isLogScale) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(logBg)
-                                .clickable { isLogScale = true }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("Log", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = logFg)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(linBg)
-                                .clickable { isLogScale = false }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("Linear", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = linFg)
                         }
                     }
                 }
@@ -373,40 +310,18 @@ fun NetWorthChart(
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
                             }
                         }
-                        .pointerInput(displayData, zoomScale, panOffsetX) {
-                            detectTapGestures { offset ->
-                                val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
-                                val relativeX = offset.x - paddingLeft - panOffsetX
-                                val stepX = if (displayData.size > 1) chartWidth / (displayData.size - 1).toFloat() else chartWidth
-                                val clickedIdx = if (displayData.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, displayData.size - 1) else 0
-                                selectedPointIndex = clickedIdx
-                            }
-                        }
                 ) {
                     val w = size.width
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
 
-                    // Y-value -> pixel mapping (linear or logarithmic)
-                    fun yPix(value: Double): Float {
-                        val frac = if (!isLogScale) {
-                            (value / maxVal).coerceIn(0.0, 1.0)
-                        } else {
-                            val floor = 100.0
-                            val v = value.coerceAtLeast(floor)
-                            val hi = maxVal.coerceAtLeast(floor * 10.0)
-                            ((ln(v) - ln(floor)) / (ln(hi) - ln(floor))).coerceIn(0.0, 1.0)
-                        }
-                        return (plotH - plotH * frac).toFloat()
-                    }
+                    // Y-value -> pixel mapping (linear axis: 0 .. maxVal)
+                    fun yPix(value: Double): Float =
+                        (plotH - plotH * (value / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Draw Y-Axis lines and numeric labels
-                    val tickValues = if (isLogScale) {
-                        logScaleTicks(100.0, maxVal)
-                    } else {
-                        (0..4).map { maxVal * it / 4.0 }
-                    }
+                    val tickValues = (0..4).map { maxVal * it / 4.0 }
 
                     for (valAtStep in tickValues) {
                         val y = yPix(valAtStep)
@@ -581,89 +496,7 @@ fun NetWorthChart(
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
 
-                    // Draw Selected Point Highlight Line and Marker
-                    selectedPointIndex?.let { idx ->
-                        val sx = paddingLeft + panOffsetX + (idx * stepX)
-                        val sy = yPix(displayData[idx].portfolio)
-                        drawLine(
-                            color = cTeal.copy(alpha = 0.5f),
-                            start = Offset(sx, 0f),
-                            end = Offset(sx, plotH),
-                            strokeWidth = 2f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
-                        )
-                        drawCircle(color = cTeal, radius = 14f, center = Offset(sx, sy))
-                        drawCircle(color = cCardSurface, radius = 7f, center = Offset(sx, sy))
-                    }
-
                     drawContext.canvas.restore()
-                }
-            }
-
-            // Interactive Detail Tooltip Box — defaults to the current position, never the horizon end
-            val activePoint = selectedPointIndex?.let { displayData.getOrNull(it) } ?: displayData.firstOrNull()
-            activePoint?.let { pt ->
-                Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth().testTag("chart_tooltip_box")
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Year ${pt.year} (Age ${pt.age}):",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = pt.status,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (pt.status == "FIRE OK") GoodGreen else cGold
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Liquid: ${fmtCompact(pt.portfolio)}",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    color = BrandTeal,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            if (pt.pensionPortfolio > 0.0) {
-                                Text(
-                                    text = "Total: ${fmtCompact(pt.totalPortfolio)}",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        color = cPurple,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                            Text(
-                                text = "Target: ${fmtCompact(pt.target)}",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    color = cGold
-                                )
-                            )
-                        }
-                    }
                 }
             }
         }

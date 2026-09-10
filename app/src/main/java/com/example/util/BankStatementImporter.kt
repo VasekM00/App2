@@ -9,6 +9,22 @@ enum class BankType {
     MONETA,
     CSOB,
     MBANK,
+    CESKA_SPORITELNA,
+    KOMERCNI_BANKA,
+    FIO,
+    RAIFFEISENBANK,
+    AIR_BANK,
+    UNICREDIT,
+    CREDITAS,
+    MAX_BANKA,
+    PARTNERS,
+    PPF,
+    JT,
+    EQUA,
+    ING,
+    OBERBANK,
+    REVOLUT,
+    WISE,
     GENERIC
 }
 
@@ -112,26 +128,48 @@ object BankStatementImporter {
             return parsePdfStatement(bytes, knownFamilyAccounts, userOverrides)
         }
 
-        // 2. Otherwise parse as standard CSV
-        var content = try {
-            String(bytes, Charsets.UTF_8)
-        } catch (_: Exception) {
-            String(bytes, Charset.forName("windows-1250"))
-        }
-
-        if (content.contains("\uFFFD")) {
-            content = String(bytes, Charset.forName("windows-1250"))
-        }
-
+        // 2. Otherwise parse as CSV/TSV text (UTF-8 / UTF-16 / Windows-1250 / ISO-8859-2)
+        val content = decodeStatementText(bytes)
         val lines = splitCsvLines(content)
         val bankType = detectBankType(lines)
 
-        return when (bankType) {
+        // Known-bank layouts keep their dedicated parser; if it yields nothing, or the bank is
+        // not one of the legacy three, the universal engine handles any Czech bank CSV/TSV.
+        val legacy = when (bankType) {
             BankType.MONETA -> parseMonetaCsv(lines, knownFamilyAccounts, userOverrides)
             BankType.CSOB -> parseCsobCsv(lines, knownFamilyAccounts, userOverrides)
             BankType.MBANK -> parseMbankCsv(lines, knownFamilyAccounts, userOverrides)
-            BankType.GENERIC -> parseGenericCsv(lines, knownFamilyAccounts, userOverrides)
+            else -> null
         }
+        if (legacy != null && legacy.transactions.isNotEmpty()) return legacy
+
+        val universal = parseUniversalCsv(lines, bankType, knownFamilyAccounts, userOverrides)
+        if (universal.transactions.isNotEmpty()) return universal
+        return legacy ?: parseGenericCsv(lines, knownFamilyAccounts, userOverrides)
+    }
+
+    /**
+     * Decodes statement bytes into text, handling BOMs and the encodings Czech banks actually use.
+     */
+    private fun decodeStatementText(bytes: ByteArray): String {
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+            return String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+        }
+        val utf8 = String(bytes, Charsets.UTF_8)
+        if (!utf8.contains('\uFFFD')) return utf8
+        val cp1250 = try {
+            String(bytes, Charset.forName("windows-1250"))
+        } catch (_: Exception) {
+            ""
+        }
+        if (cp1250.isNotBlank() && !cp1250.contains('\uFFFD')) return cp1250
+        return if (cp1250.isNotBlank()) cp1250 else String(bytes, Charset.forName("ISO-8859-2"))
     }
 
     // ==========================================
@@ -155,26 +193,12 @@ object BankStatementImporter {
             BankType.MONETA -> parseMonetaPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
             BankType.CSOB -> parseCsobPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
             BankType.MBANK -> parseMbankPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
-            BankType.GENERIC -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
+            else -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, userOverrides, bankType)
         }
     }
 
     private fun detectPdfBankType(fullText: String, lines: List<String>): BankType {
-        val lower = fullText.lowercase(Locale.ROOT)
-        return when {
-            lower.contains("moneta") || lower.contains("/0600") || lower.contains(" 0600") || lower.contains("agbacz") -> BankType.MONETA
-            lower.contains("čsob") || lower.contains("csob") || lower.contains("československá obchodní banka") || lower.contains("/0300") || lower.contains("cekoce") -> BankType.CSOB
-            lower.contains("mbank") || lower.contains("/6210") || lower.contains("brexcz") || lower.contains("mkonto") -> BankType.MBANK
-            else -> {
-                for (line in lines.take(20)) {
-                    val l = line.lowercase(Locale.ROOT)
-                    if (l.contains("moneta")) return BankType.MONETA
-                    if (l.contains("csob") || l.contains("čsob")) return BankType.CSOB
-                    if (l.contains("mbank")) return BankType.MBANK
-                }
-                BankType.GENERIC
-            }
-        }
+        return detectBankFromText(foldHeader(fullText), lines)
     }
 
     private fun parseMonetaPdf(
@@ -260,11 +284,12 @@ object BankStatementImporter {
         lines: List<String>,
         fullText: String,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        bankType: BankType = BankType.GENERIC
     ): StatementParseSummary {
         val closingBalance = extractClosingBalance(fullText, lines)
         val transactions = extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides)
-        return buildSummary(BankType.GENERIC, transactions, closingBalance)
+        return buildSummary(bankType, transactions, closingBalance)
     }
 
     private data class DateBlock(
@@ -415,6 +440,19 @@ object BankStatementImporter {
                     }
                 }
                 amounts.add(parsed)
+            }
+        }
+
+        // Fallback for PDFs that print whole-koruna amounts (e.g. "1 234 Kč", "1234 CZK").
+        if (amounts.isEmpty()) {
+            val wholeCurrencyRegex = Regex("""(?<!\w)([+-]?\s*(?:\d{1,3}(?:[\s\u00A0]\d{3})+|\d+))\s*(?:CZK|Kč)(?!\w)""")
+            val lower = text.lowercase(Locale.ROOT)
+            for (m in wholeCurrencyRegex.findAll(text)) {
+                var parsed = parseCzechAmount(m.groupValues[1])
+                if (parsed > 0 && (lower.contains("odchozí") || lower.contains("debet") || lower.contains("platba kartou") || lower.contains("nákup"))) {
+                    parsed = -parsed
+                }
+                if (parsed != 0.0) amounts.add(parsed)
             }
         }
         return amounts
@@ -619,7 +657,7 @@ object BankStatementImporter {
     }
 
     fun detectCsvDelimiter(lines: List<String>): Char {
-        val sample = lines.take(20)
+        val sample = lines.take(30).filter { it.isNotBlank() }
         if (sample.isEmpty()) return ';'
 
         fun countUnquoted(line: String, delim: Char): Int {
@@ -642,33 +680,104 @@ object BankStatementImporter {
             return count
         }
 
-        val semiCounts = sample.map { countUnquoted(it, ';') }.filter { it > 0 }
-        val commaCounts = sample.map { countUnquoted(it, ',') }.filter { it > 0 }
-
-        val semiConsistent = semiCounts.isNotEmpty() && semiCounts.size >= (sample.size / 2).coerceAtLeast(1) && semiCounts.all { it == semiCounts.first() && it >= 1 }
-        val commaConsistent = commaCounts.isNotEmpty() && commaCounts.size >= (sample.size / 2).coerceAtLeast(1) && commaCounts.all { it == commaCounts.first() && it >= 1 }
-
-        return when {
-            semiConsistent && !commaConsistent -> ';'
-            commaConsistent && !semiConsistent -> ','
-            semiCounts.sum() > commaCounts.sum() -> ';'
-            commaCounts.sum() > semiCounts.sum() -> ','
-            else -> ';'
+        // Choose the delimiter with the most consistent non-zero column count across lines
+        // (supports ';', ',', TAB and '|'); ';' wins ties because Czech exports favor it.
+        var bestDelim = ';'
+        var bestScore = -1.0
+        for (delim in charArrayOf(';', ',', '\t', '|')) {
+            val counts = sample.map { countUnquoted(it, delim) }.filter { it > 0 }
+            if (counts.isEmpty()) continue
+            val mode = counts.groupingBy { it }.eachCount().maxByOrNull { it.value } ?: continue
+            val consistency = mode.value.toDouble() / counts.size
+            val score = consistency * 1000.0 + mode.key
+            if (score > bestScore) {
+                bestScore = score
+                bestDelim = delim
+            }
         }
+        return bestDelim
     }
 
     private fun detectBankType(lines: List<String>): BankType {
-        for (line in lines.take(15)) {
-            val lower = line.lowercase(Locale.ROOT)
-            if (lower.contains("#datum operace") || lower.contains("#popis transakce") || lower.contains("mbank")) {
-                return BankType.MBANK
-            }
-            if (lower.contains("číslo účtu protistrany") || lower.contains("název protistrany") || lower.contains("csob")) {
-                return BankType.CSOB
-            }
-            if (lower.contains("číslo protiúčtu") || lower.contains("banka protiúčtu") || lower.contains("moneta")) {
-                return BankType.MONETA
-            }
+        return detectBankFromText(foldHeader(lines.take(30).joinToString(" \n ")), lines)
+    }
+
+    /** Drops diacritics and collapses whitespace so Czech/English headers match reliably. */
+    private fun foldHeader(value: String): String {
+        val decomposed = java.text.Normalizer.normalize(value.trim().lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD)
+        return decomposed.replace(Regex("\\p{M}+"), "")
+            .replace('\u00A0', ' ')
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    /**
+     * Universal Czech-bank detection: explicit bank names first, then distinctive header
+     * signatures, and only then bank account codes (which can appear as counterparty accounts).
+     */
+    private fun detectBankFromText(folded: String, lines: List<String>): BankType {
+        val nameSignatures = listOf(
+            "moneta money bank" to BankType.MONETA,
+            "moneta" to BankType.MONETA,
+            "ceskoslovenska obchodni banka" to BankType.CSOB,
+            "csob" to BankType.CSOB,
+            "mbank" to BankType.MBANK,
+            "ceska sporitelna" to BankType.CESKA_SPORITELNA,
+            "sporitelna" to BankType.CESKA_SPORITELNA,
+            "komercni banka" to BankType.KOMERCNI_BANKA,
+            "fio banka" to BankType.FIO,
+            "fio" to BankType.FIO,
+            "raiffeisenbank" to BankType.RAIFFEISENBANK,
+            "raiffeisen" to BankType.RAIFFEISENBANK,
+            "air bank" to BankType.AIR_BANK,
+            "unicredit" to BankType.UNICREDIT,
+            "creditas" to BankType.CREDITAS,
+            "max banka" to BankType.MAX_BANKA,
+            "expobank" to BankType.MAX_BANKA,
+            "partners banka" to BankType.PARTNERS,
+            "ppf banka" to BankType.PPF,
+            "j&t banka" to BankType.JT,
+            "jt banka" to BankType.JT,
+            "equa bank" to BankType.EQUA,
+            "ing bank" to BankType.ING,
+            "oberbank" to BankType.OBERBANK,
+            "revolut" to BankType.REVOLUT,
+            "wise europe" to BankType.WISE,
+            "wise payments" to BankType.WISE
+        )
+        for ((keyword, bank) in nameSignatures) {
+            if (folded.contains(keyword)) return bank
+        }
+
+        val headerText = foldHeader(lines.take(30).joinToString(" | "))
+        if (headerText.contains("#datum operace") || headerText.contains("#popis transakce")) return BankType.MBANK
+        if (headerText.contains("cislo protiuctu") || headerText.contains("banka protiuctu") || headerText.contains("nazev protiuctu")) {
+            return BankType.MONETA
+        }
+        if (headerText.contains("cislo uctu protistrany") || headerText.contains("nazev protistrany")) return BankType.CSOB
+        if (headerText.contains("cislo uctu") && headerText.contains("smer")) return BankType.CESKA_SPORITELNA
+        if (headerText.contains("objem") && headerText.contains("protiucet")) return BankType.FIO
+
+        val accountCodes = listOf(
+            "0100" to BankType.KOMERCNI_BANKA,
+            "0300" to BankType.CSOB,
+            "0600" to BankType.MONETA,
+            "0800" to BankType.CESKA_SPORITELNA,
+            "2010" to BankType.FIO,
+            "2250" to BankType.CREDITAS,
+            "2700" to BankType.UNICREDIT,
+            "3030" to BankType.AIR_BANK,
+            "4000" to BankType.MAX_BANKA,
+            "5500" to BankType.RAIFFEISENBANK,
+            "5800" to BankType.JT,
+            "6000" to BankType.PPF,
+            "6100" to BankType.EQUA,
+            "6210" to BankType.MBANK,
+            "8040" to BankType.OBERBANK
+        )
+        val codeText = foldHeader(lines.take(40).joinToString(" "))
+        for ((code, bank) in accountCodes) {
+            if (Regex("/\\s*$code\\b").containsMatchIn(codeText)) return bank
         }
         return BankType.GENERIC
     }
@@ -904,6 +1013,159 @@ object BankStatementImporter {
     }
 
     // ==========================================
+    // Universal CSV engine (all Czech banks)
+    // ==========================================
+
+    private data class HeaderRoles(
+        val dateIdx: Int = -1,
+        val amountIdx: Int = -1,
+        val debitIdx: Int = -1,
+        val creditIdx: Int = -1,
+        val currencyIdx: Int = -1,
+        val accountIdx: Int = -1,
+        val nameIdx: Int = -1,
+        val messageIdx: Int = -1,
+        val vsIdx: Int = -1,
+        val balanceIdx: Int = -1,
+        val directionIdx: Int = -1
+    )
+
+    /**
+     * Maps header cells to semantic roles using Czech/English keyword heuristics.
+     * Handles signed single-amount columns as well as separate debit/credit columns.
+     */
+    private fun inferHeaderRoles(cells: List<String>): HeaderRoles {
+        fun find(vararg predicates: (String) -> Boolean): Int =
+            cells.indexOfFirst { cell -> cell.isNotBlank() && predicates.any { it(cell) } }
+
+        val dateIdx = find({ it.contains("datum") }, { it.contains("date") }, { it.contains("valuta") }, { it.contains("proved") }, { it.contains("zauc") })
+        val balanceIdx = find({ it.contains("zustatek") }, { it.contains("balance") })
+        val vsIdx = find({ it.contains("variabil") }, { it == "vs" }, { it.contains("var symbol") }, { it.contains("varsymbol") })
+        val currencyIdx = find({ it.contains("mena") }, { it.contains("currency") })
+        val debitIdx = find({ it.contains("debet") }, { it.contains("debit") }, { it.contains("odeps") }, { it.contains("na vrub") }, { it.contains("vydaj") })
+        val creditIdx = find({ it.contains("kredit") }, { it.contains("credit") }, { it.contains("prips") }, { it.contains("ve prospech") }, { it.contains("vklad") })
+        val amountIdx = find({ it.contains("castka") }, { it.contains("objem") }, { it.contains("amount") }, { it.contains("suma") }, { it.contains("hodnota") }, { it.contains("cena") })
+        val directionIdx = find({ it.contains("smer") }, { it.contains("direction") }, { it == "typ" }, { it.contains("druh") })
+        val messageIdx = find(
+            { it.contains("zprava") }, { it.contains("popis") }, { it.contains("message") },
+            { it.contains("description") }, { it.contains("poznamka") }, { it.contains("ucel") },
+            { it.contains("reference") }, { it.contains("detail") }, { it.contains("transakce") }, { it.contains("info") }
+        )
+        val nameIdx = find(
+            { it.contains("nazev") }, { it.contains("name") }, { it.contains("obchodnik") },
+            { it.contains("prijemce") }, { it.contains("platce") }, { it.contains("protistrana") }, { it.contains("majitel") }
+        )
+        val accountIdx = find(
+            { it.contains("protiuc") }, { it.contains("protistran") }, { it.contains("iban") },
+            { it.contains("account") }, { it.contains("protiucet") },
+            { it.contains("ucet") && it.contains("cislo") }
+        )
+        return HeaderRoles(dateIdx, amountIdx, debitIdx, creditIdx, currencyIdx, accountIdx, nameIdx, messageIdx, vsIdx, balanceIdx, directionIdx)
+    }
+
+    private fun extractDateToken(cell: String): String {
+        val match = Regex("""(\d{1,4}[./-]\d{1,2}[./-]\d{2,4})""").find(cell) ?: return ""
+        return normalizeDate(match.value)
+    }
+
+    private fun parseUniversalCsv(
+        lines: List<String>,
+        bankType: BankType,
+        familyAccounts: Set<String>,
+        userOverrides: Map<String, BankTransactionType> = emptyMap()
+    ): StatementParseSummary {
+        val delimiter = detectCsvDelimiter(lines)
+
+        var headerIdx = -1
+        var roles = HeaderRoles()
+        for (i in 0 until minOf(lines.size, 40)) {
+            val cells = splitLine(lines[i], delimiter).map { foldHeader(it) }
+            if (cells.size < 2) continue
+            val candidate = inferHeaderRoles(cells)
+            val hasAmount = candidate.amountIdx >= 0 || candidate.debitIdx >= 0 || candidate.creditIdx >= 0
+            if (candidate.dateIdx >= 0 && hasAmount) {
+                headerIdx = i
+                roles = candidate
+                break
+            }
+        }
+        if (headerIdx < 0) return emptySummary(bankType)
+
+        val rawTransactions = mutableListOf<ParsedBankTransaction>()
+        val balanceWithDates = mutableListOf<Pair<String, Double>>()
+
+        for (i in (headerIdx + 1) until lines.size) {
+            val line = lines[i]
+            val tokens = splitLine(line, delimiter)
+            if (tokens.isEmpty()) continue
+
+            val dateStr = extractDateToken(tokens.getOrNull(roles.dateIdx) ?: "")
+            if (dateStr.isBlank()) continue
+
+            var amount = 0.0
+            if (roles.amountIdx >= 0) {
+                amount = parseCzechAmount(tokens.getOrNull(roles.amountIdx) ?: "")
+            }
+            if (amount == 0.0 && (roles.debitIdx >= 0 || roles.creditIdx >= 0)) {
+                val debit = kotlin.math.abs(parseCzechAmount(tokens.getOrNull(roles.debitIdx) ?: ""))
+                val credit = kotlin.math.abs(parseCzechAmount(tokens.getOrNull(roles.creditIdx) ?: ""))
+                amount = credit - debit
+            }
+            if (amount != 0.0 && roles.directionIdx >= 0) {
+                val direction = foldHeader(tokens.getOrNull(roles.directionIdx) ?: "")
+                val outflow = direction.contains("odchoz") || direction.contains("debet") || direction.contains("vydaj") ||
+                    direction.contains("odeps") || direction.contains("na vrub") || direction.contains("out")
+                val inflow = direction.contains("prichoz") || direction.contains("kredit") || direction.contains("prips") ||
+                    direction.contains("vklad") || direction.contains("in")
+                if (outflow && amount > 0) amount = -amount
+                if (inflow && amount < 0) amount = -amount
+            }
+            if (amount == 0.0) continue
+
+            val counterpartyAcc = tokens.getOrNull(roles.accountIdx)?.trim() ?: ""
+            val counterpartyName = tokens.getOrNull(roles.nameIdx)?.trim() ?: ""
+            val message = tokens.getOrNull(roles.messageIdx)?.trim() ?: ""
+            val vs = tokens.getOrNull(roles.vsIdx)?.trim() ?: ""
+
+            val context = foldHeader("$counterpartyName $message")
+            if (context.contains("konecny zustatek") || context.contains("pocatecni zustatek") ||
+                context.contains("ucetni zustatek") || context.contains("obrat") || context.contains("celkem")
+            ) {
+                continue
+            }
+
+            if (roles.balanceIdx >= 0) {
+                val balance = parseCzechAmount(tokens.getOrNull(roles.balanceIdx) ?: "")
+                if (balance != 0.0) balanceWithDates.add(dateStr to balance)
+            }
+
+            val category = categorizeTransaction(
+                amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, rawContext = line
+            )
+            val cleanName = cleanPaymentDescription(counterpartyName)
+            val cleanMsg = cleanPaymentDescription(message)
+            val distinctMsg = if (cleanMsg.isNotBlank() && !cleanMsg.equals(cleanName, ignoreCase = true)) cleanMsg else ""
+            val isNetted = (category == BankTransactionType.INTERNAL_TRANSFER)
+            rawTransactions.add(
+                ParsedBankTransaction(
+                    date = dateStr,
+                    amount = amount,
+                    counterpartyAccount = counterpartyAcc,
+                    counterpartyName = cleanName,
+                    message = distinctMsg,
+                    variableSymbol = vs,
+                    category = category,
+                    isNetted = isNetted,
+                    nettingReason = determineNettingReason(category, cleanName, distinctMsg)
+                )
+            )
+        }
+
+        val closingBalance = balanceWithDates.maxByOrNull { it.first }?.second
+        return buildSummary(bankType, rawTransactions, closingBalance)
+    }
+
+    // ==========================================
     // Categorization & Normalization
     // ==========================================
 
@@ -929,6 +1191,8 @@ object BankStatementImporter {
                 combinedText.contains("platba najmu") || combinedText.contains("bydleni") ||
                 combinedText.contains("bydlení") || combinedText.contains("byt") ||
                 combinedText.contains("pronájem") || combinedText.contains("pronajem") ||
+                combinedText.contains("pronajímatel") || combinedText.contains("pronajimatel") ||
+                combinedText.contains("najemce") || combinedText.contains("nájemce") ||
                 combinedText.contains("podnájem") || combinedText.contains("podnajem") ||
                 combinedText.contains("sipo")
 
@@ -1160,6 +1424,7 @@ object BankStatementImporter {
         val (yearToken, monthToken, dayToken) = when {
             parts[0].length == 4 && parts[0].all { it.isDigit() } -> Triple(parts[0], parts[1], parts[2])
             parts[2].length == 4 && parts[2].all { it.isDigit() } -> Triple(parts[2], parts[1], parts[0])
+            parts[2].length == 2 && parts[2].all { it.isDigit() } -> Triple("20" + parts[2], parts[1], parts[0])
             else -> return ""
         }
         if (!yearToken.all { it.isDigit() } || !monthToken.all { it.isDigit() } || !dayToken.all { it.isDigit() }) {

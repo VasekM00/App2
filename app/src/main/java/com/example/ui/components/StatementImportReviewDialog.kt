@@ -83,6 +83,22 @@ fun StatementImportReviewDialog(
         BankType.MONETA -> BrandTeal
         BankType.CSOB -> BrandGold
         BankType.MBANK -> Color(0xFFE11D48)
+        BankType.CESKA_SPORITELNA -> Color(0xFF00539B)
+        BankType.KOMERCNI_BANKA -> Color(0xFFB0231E)
+        BankType.FIO -> Color(0xFF1E5AA8)
+        BankType.RAIFFEISENBANK -> Color(0xFFFFC400)
+        BankType.AIR_BANK -> Color(0xFF00A0E3)
+        BankType.UNICREDIT -> Color(0xFFE4002B)
+        BankType.CREDITAS -> Color(0xFF00695C)
+        BankType.MAX_BANKA -> Color(0xFF6A1B9A)
+        BankType.PARTNERS -> Color(0xFF00838F)
+        BankType.PPF -> Color(0xFF37474F)
+        BankType.JT -> Color(0xFF8D6E63)
+        BankType.EQUA -> Color(0xFFEF6C00)
+        BankType.ING -> Color(0xFFFF6200)
+        BankType.OBERBANK -> Color(0xFF00695C)
+        BankType.REVOLUT -> Color(0xFF191C1F)
+        BankType.WISE -> Color(0xFF7BB661)
         BankType.GENERIC -> MaterialTheme.colorScheme.primary
     }
 

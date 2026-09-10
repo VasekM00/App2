@@ -830,7 +830,16 @@ private fun bankBadgeColor(bankName: String): Color = when {
     bankName.contains("Moneta", ignoreCase = true) -> BrandTeal
     bankName.contains("ČSOB", ignoreCase = true) || bankName.contains("CSOB", ignoreCase = true) -> BrandGold
     bankName.contains("mBank", ignoreCase = true) -> BrandBlue
+    bankName.contains("Sporitelna", ignoreCase = true) -> Color(0xFF00539B)
+    bankName.contains("Komercni", ignoreCase = true) -> Color(0xFFB0231E)
+    bankName.contains("Fio", ignoreCase = true) -> Color(0xFF1E5AA8)
+    bankName.contains("Raiffeisen", ignoreCase = true) -> Color(0xFFFFC400)
+    bankName.contains("Air Bank", ignoreCase = true) -> Color(0xFF00A0E3)
+    bankName.contains("UniCredit", ignoreCase = true) -> Color(0xFFE4002B)
+    bankName.contains("Creditas", ignoreCase = true) -> Color(0xFF00695C)
     bankName.contains("Revolut", ignoreCase = true) -> Color(0xFF7B1FA2)
+    bankName.contains("Wise", ignoreCase = true) -> Color(0xFF7BB661)
+    bankName.contains("GENERIC", ignoreCase = true) -> Color(0xFF607D8B)
     else -> BrandTeal
 }
 
@@ -1146,7 +1155,7 @@ private fun LedgerSubTab(
                             }
 
                             Text(
-                                text = "Import official monthly PDF or CSV statements from your accounts:",
+                                text = "Import official monthly PDF or CSV statements from any Czech bank — Moneta, ČSOB, mBank, Česká spořitelna, Komerční banka, Fio, Air Bank, Raiffeisenbank, UniCredit, Creditas, Revolut and more:",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1190,7 +1199,7 @@ private fun LedgerSubTab(
                             }
 
                             Text(
-                                text = "Internal transfers between Moneta, ČSOB, and mBank are automatically matched and netted out to prevent double counting.",
+                                text = "Internal transfers between your own accounts (any bank) are automatically matched and netted out to prevent double counting.",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
@@ -1263,6 +1272,15 @@ private fun LedgerSubTab(
                                                 bank.contains("MONETA", ignoreCase = true) -> "MON"
                                                 bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
                                                 bank.contains("MBANK", ignoreCase = true) -> "mB"
+                                                bank.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
+                                                bank.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
+                                                bank.contains("FIO", ignoreCase = true) -> "Fio"
+                                                bank.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
+                                                bank.contains("AIR_BANK", ignoreCase = true) -> "Air"
+                                                bank.contains("UNICREDIT", ignoreCase = true) -> "UC"
+                                                bank.contains("CREDITAS", ignoreCase = true) -> "CR"
+                                                bank.contains("REVOLUT", ignoreCase = true) -> "Rev"
+                                                bank.contains("WISE", ignoreCase = true) -> "Wise"
                                                 else -> bank.take(3).uppercase()
                                             }
                                             ColorPill(
@@ -1412,6 +1430,15 @@ private fun ActiveMonthOverviewCard(
                             bank.contains("MONETA", ignoreCase = true) -> "Moneta"
                             bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
                             bank.contains("MBANK", ignoreCase = true) -> "mBank"
+                            bank.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
+                            bank.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
+                            bank.contains("FIO", ignoreCase = true) -> "Fio banka"
+                            bank.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
+                            bank.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
+                            bank.contains("UNICREDIT", ignoreCase = true) -> "UniCredit"
+                            bank.contains("CREDITAS", ignoreCase = true) -> "Banka Creditas"
+                            bank.contains("REVOLUT", ignoreCase = true) -> "Revolut"
+                            bank.contains("WISE", ignoreCase = true) -> "Wise"
                             else -> bank
                         }
                         ColorPill(
