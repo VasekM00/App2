@@ -182,4 +182,154 @@ class CzechMerchantCatalogTest {
         val expectedOther = 185.0 + 450.0 + 2490.0 + 320.0 + 149.0 + 2000.0
         assertEquals(expectedOther, summary.expOther, 0.01)
     }
+
+    @Test
+    fun testPortuAccountNumberCategorization() {
+        val portuTxs = listOf(
+            "76788295/2010" to BankTransactionType.INVESTMENT_PORTU,
+            "76788295" to BankTransactionType.INVESTMENT_PORTU,
+            "WOOD Retail Investments a.s." to BankTransactionType.INVESTMENT_PORTU,
+            "WOOD & Company" to BankTransactionType.INVESTMENT_PORTU,
+            "Portu vklad" to BankTransactionType.INVESTMENT_PORTU
+        )
+        for ((desc, expected) in portuTxs) {
+            val matched = CzechMerchantCatalog.matchCategory(desc)
+            assertEquals("Portu recipient '$desc' should map to $expected", expected, matched)
+        }
+
+        val csv = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce;Variabilní symbol
+            15.09.2026;76788295/2010;;-5 000,00;CZK;Pravidelna investice;10452389
+        """.trimIndent()
+        val summary = BankStatementImporter.parseStatement(csv.byteInputStream(Charsets.UTF_8))
+        assertEquals(1, summary.transactions.size)
+        assertEquals(BankTransactionType.INVESTMENT_PORTU, summary.transactions[0].category)
+        assertEquals(5000.0, summary.invPortu, 0.01)
+    }
+
+    @Test
+    fun testDpsAndXtbAccountNumberCategorization() {
+        val investmentTxs = listOf(
+            "5005004433/0800" to BankTransactionType.INVESTMENT_DPS,
+            "5005004433" to BankTransactionType.INVESTMENT_DPS,
+            "NN Penzijní společnost" to BankTransactionType.INVESTMENT_DPS,
+            "518746050/2700" to BankTransactionType.INVESTMENT_PORTU,
+            "518746050" to BankTransactionType.INVESTMENT_PORTU,
+            "XTB S.A." to BankTransactionType.INVESTMENT_PORTU,
+            "X-Trade Brokers" to BankTransactionType.INVESTMENT_PORTU
+        )
+        for ((desc, expected) in investmentTxs) {
+            val matched = CzechMerchantCatalog.matchCategory(desc)
+            assertEquals("Investment recipient '$desc' should map to $expected", expected, matched)
+        }
+
+        // Test end-to-end statement parsing for NN DPS and XTB
+        val csv = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce;Variabilní symbol
+            10.09.2026;5005004433/0800;NN Penzijni;-1 700,00;CZK;DPS sporeni;99887766
+            12.09.2026;518746050/2700;;-10 000,00;CZK;Vklad na obchodni ucet;123456
+        """.trimIndent()
+        val summary = BankStatementImporter.parseStatement(csv.byteInputStream(Charsets.UTF_8))
+        assertEquals(2, summary.transactions.size)
+        assertEquals(BankTransactionType.INVESTMENT_DPS, summary.transactions[0].category)
+        assertEquals(BankTransactionType.INVESTMENT_PORTU, summary.transactions[1].category)
+        assertEquals(1700.0, summary.invDps, 0.01)
+        assertEquals(10000.0, summary.invPortu, 0.01)
+    }
+
+    @Test
+    fun testBrnoRetailAndCafesCategorization() {
+        val brnoMerchants = listOf(
+            // Brno Specialty Coffee, Bakeries & Roasters
+            "Industra Coffee Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Monogram Espresso Bar" to BankTransactionType.DINING_RESTAURANT,
+            "Kafe Mitte Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Skog Urban Hub" to BankTransactionType.DINING_RESTAURANT,
+            "Kafec Orli" to BankTransactionType.DINING_RESTAURANT,
+            "Buchta Caffe" to BankTransactionType.DINING_RESTAURANT,
+            "Kocici kavarna Pelisek" to BankTransactionType.DINING_RESTAURANT,
+            "Cafe Falk" to BankTransactionType.DINING_RESTAURANT,
+            "Cafe Atlas" to BankTransactionType.DINING_RESTAURANT,
+            "Kavarna Spolek" to BankTransactionType.DINING_RESTAURANT,
+            "Cafe Momenta" to BankTransactionType.DINING_RESTAURANT,
+            "KofiKofi" to BankTransactionType.DINING_RESTAURANT,
+            "Sorry, peceme jinak" to BankTransactionType.DINING_RESTAURANT,
+            "Mlsna holka" to BankTransactionType.DINING_RESTAURANT,
+            "Bozsky kopecek" to BankTransactionType.DINING_RESTAURANT,
+            "Cukrarna Vetrnik" to BankTransactionType.DINING_RESTAURANT,
+
+            // Brno Bars, Bistros, Pubs & Dining
+            "Bar, ktery neexistuje" to BankTransactionType.DINING_RESTAURANT,
+            "Super Panda Circus" to BankTransactionType.DINING_RESTAURANT,
+            "4pokoje Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Bar Slast" to BankTransactionType.DINING_RESTAURANT,
+            "Atelier Bar & Bistro" to BankTransactionType.DINING_RESTAURANT,
+            "Element Bar & Restaurant" to BankTransactionType.DINING_RESTAURANT,
+            "Bucheck food truck" to BankTransactionType.DINING_RESTAURANT,
+            "Burger Inn Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Forky's Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Eggo Bistro" to BankTransactionType.DINING_RESTAURANT,
+            "Ramen Brno" to BankTransactionType.DINING_RESTAURANT,
+            "Vycep Na stojaka" to BankTransactionType.DINING_RESTAURANT,
+            "Pivovar Pegas" to BankTransactionType.DINING_RESTAURANT,
+            "Stopkova plzenska pivnice" to BankTransactionType.DINING_RESTAURANT,
+            "Lokal U Caipla" to BankTransactionType.DINING_RESTAURANT,
+            "Ochutnavkova pivnice" to BankTransactionType.DINING_RESTAURANT,
+            "Pivnice U Capa" to BankTransactionType.DINING_RESTAURANT,
+            "Monte Bu Restaurant" to BankTransactionType.DINING_RESTAURANT,
+            "Borgo Agnese" to BankTransactionType.DINING_RESTAURANT,
+            "Castellana Trattoria" to BankTransactionType.DINING_RESTAURANT,
+
+            // Brno Bakeries, Markets, Butchers & Groceries
+            "William Thomas Bakery Jaselska" to BankTransactionType.GROCERIES,
+            "WT Bakery Brno" to BankTransactionType.GROCERIES,
+            "Pekarstvi Carlini" to BankTransactionType.GROCERIES,
+            "Pekarstvi Makovec" to BankTransactionType.GROCERIES,
+            "Pekarstvi Krizak" to BankTransactionType.GROCERIES,
+            "Karlova pekarna Brno" to BankTransactionType.GROCERIES,
+            "Sklizeno Josefska" to BankTransactionType.GROCERIES,
+            "Brana ke zdravi" to BankTransactionType.GROCERIES,
+            "Trhy na Zelnaku" to BankTransactionType.GROCERIES,
+            "Mikrofarma Brno" to BankTransactionType.GROCERIES,
+            "Reznictvi u Krejcara" to BankTransactionType.GROCERIES,
+            "Steinhauser s.r.o." to BankTransactionType.GROCERIES,
+            "La Formaggeria Gran Moravia" to BankTransactionType.GROCERIES,
+
+            // Brno Shopping, Books & Design
+            "Galerie Vankovka" to BankTransactionType.SHOPPING_GOODS,
+            "Olympia Brno" to BankTransactionType.SHOPPING_GOODS,
+            "Avion Shopping Park Brno" to BankTransactionType.SHOPPING_GOODS,
+            "NC Kralovo Pole" to BankTransactionType.SHOPPING_GOODS,
+            "Velky Spalicek" to BankTransactionType.SHOPPING_GOODS,
+            "Knihkupectvi Barvic a Novotny" to BankTransactionType.SHOPPING_GOODS,
+            "Place Store Brno" to BankTransactionType.SHOPPING_GOODS,
+
+            // Brno Health, Wellness & STAREZ
+            "Chytra lekarna Brno" to BankTransactionType.HEALTH_DRUGSTORE,
+            "STAREZ Kravi hora" to BankTransactionType.HEALTH_DRUGSTORE,
+            "Koupaliste Riviera" to BankTransactionType.HEALTH_DRUGSTORE,
+            "Infinit Maximus" to BankTransactionType.HEALTH_DRUGSTORE,
+            "Big One Fitness" to BankTransactionType.HEALTH_DRUGSTORE,
+            "FN Brno Bohunice" to BankTransactionType.HEALTH_DRUGSTORE,
+
+            // Brno Transit
+            "DPMB pipni a jed" to BankTransactionType.TRANSPORTATION,
+            "KORDIS JMK" to BankTransactionType.TRANSPORTATION,
+
+            // Brno Culture & Utilities
+            "Kino Scala" to BankTransactionType.SERVICES_UTILITIES,
+            "Divadlo Husa na provazku" to BankTransactionType.SERVICES_UTILITIES,
+            "Narodni divadlo Brno" to BankTransactionType.SERVICES_UTILITIES,
+            "Teplarny Brno a.s." to BankTransactionType.SERVICES_UTILITIES
+        )
+
+        for ((merchant, expectedCategory) in brnoMerchants) {
+            val matched = CzechMerchantCatalog.matchCategory(merchant)
+            assertEquals(
+                "Brno merchant '$merchant' should map to $expectedCategory",
+                expectedCategory,
+                matched
+            )
+        }
+    }
 }

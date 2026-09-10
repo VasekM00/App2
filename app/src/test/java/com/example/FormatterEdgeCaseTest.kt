@@ -87,4 +87,45 @@ class FormatterEdgeCaseTest {
         assertNotNull(result)
         assertTrue(result.isNotEmpty())
     }
+
+    @Test
+    fun test5_14_formatTypographicBlock_prepositions() {
+        val input = "V bance a v obchodech s rodinou k 1. lednu o vikendu u stolu z uctu."
+        val formatted = Formatters.formatTypographicBlock(input)
+        assertFalse("Should not contain 'a ' with regular space", formatted.contains(" a "))
+        assertFalse("Should not contain 'v ' with regular space", formatted.contains(" v "))
+        assertFalse("Should not contain 's ' with regular space", formatted.contains(" s "))
+        assertFalse("Should not contain 'k ' with regular space", formatted.contains(" k "))
+        assertFalse("Should not contain 'o ' with regular space", formatted.contains(" o "))
+        assertFalse("Should not contain 'u ' with regular space", formatted.contains(" u "))
+        assertFalse("Should not contain 'z ' with regular space", formatted.contains(" z "))
+        assertTrue("Should contain 'a\\u00A0'", formatted.contains("a\u00A0"))
+        assertTrue("Should contain 'v\\u00A0'", formatted.contains("v\u00A0"))
+    }
+
+    @Test
+    fun test5_15_formatTypographicBlock_chainedPrepositions() {
+        val input = "a v Praze a i v Brne"
+        val formatted = Formatters.formatTypographicBlock(input)
+        assertEquals("a\u00A0v\u00A0Praze a\u00A0i\u00A0v\u00A0Brne", formatted)
+    }
+
+    @Test
+    fun test5_16_formatTypographicBlock_numbersAndSections() {
+        val input = "§ 15a ZDP with 48 000 Kč and 1 700 CZK at 15 %"
+        val formatted = Formatters.formatTypographicBlock(input)
+        assertTrue(formatted.contains("§\u00A015a"))
+        assertTrue(formatted.contains("48\u00A0000\u00A0Kč"))
+        assertTrue(formatted.contains("1\u00A0700\u00A0CZK"))
+        assertTrue(formatted.contains("15\u00A0%"))
+    }
+
+    @Test
+    fun test5_17_formatTypographicBlock_punctuation() {
+        val input = "(v bance) [k domu] \"o vikendu\""
+        val formatted = Formatters.formatTypographicBlock(input)
+        assertTrue(formatted.contains("(v\u00A0bance)"))
+        assertTrue(formatted.contains("[k\u00A0domu]"))
+        assertTrue(formatted.contains("\"o\u00A0vikendu\""))
+    }
 }

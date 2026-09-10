@@ -57,8 +57,8 @@ data class SettingsEntity(
     val lifestyleCostAtFireMonthly: Double = 0.0, // 0.0 = Auto-sync with current living expenses
     val vStatePensionMonthly: Double = 12000.0,
     val eStatePensionMonthly: Double = 12000.0,
-    val vStatePensionAge: Int = 65,
-    val eStatePensionAge: Int = 65,
+    val vStatePensionAge: Int = 67,
+    val eStatePensionAge: Int = 67,
     val safeWithdrawalRatePct: Double = 4.0,
     val safetyBufferPct: Double = 10.0,
     val cpiInflationPct: Double = 2.8, // Default matches ČSÚ live benchmark; updated by Live Sync
@@ -76,7 +76,7 @@ data class SettingsEntity(
     // Statutory & Tax parameters (Czech Tax Act No. 586/1992 Coll. & 2026/2027 Lepší penzijko)
     val taxRatePct: Double = 15.0, // ZDP § 16 basic bracket
     val taxRateSecondPct: Double = 23.0, // ZDP § 16 higher bracket
-    val taxSecondBracketThresholdAnnual: Double = 1582812.0, // 36x average wage
+    val taxSecondBracketThresholdAnnual: Double = 1762812.0, // 36x average wage (48 967 * 36 for 2026)
     val taxpayerCreditAnnual: Double = 30840.0, // ZDP § 35ba(1)(a)
     val taxDeductionCeilingAnnual: Double = 48000.0, // ZDP § 15 & § 15a combined DPS + DIP ceiling
     val spouseTaxCreditAnnual: Double = 24840.0, // ZDP § 35ba(1)(b)

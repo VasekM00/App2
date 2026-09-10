@@ -40,6 +40,10 @@ class FinancialRepository(
         ledgerDao.updateEntry(entry)
     }
 
+    suspend fun updateLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
+        ledgerDao.updateEntries(entries)
+    }
+
     suspend fun addLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
         ledgerDao.insertEntries(entries)
     }

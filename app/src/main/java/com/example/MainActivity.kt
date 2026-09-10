@@ -20,13 +20,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
         enableEdgeToEdge()
+        val prefs = getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
+        val initialDarkTheme = if (prefs.contains("is_dark_theme")) prefs.getBoolean("is_dark_theme", false) else null
+
         setContent {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val prefs = remember { context.getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE) }
             val systemDark = isSystemInDarkTheme()
             var isDarkTheme by remember {
-                mutableStateOf(prefs.getBoolean("is_dark_theme", systemDark))
+                mutableStateOf(initialDarkTheme ?: systemDark)
             }
 
             MartinuFinancialsTheme(darkTheme = isDarkTheme) {

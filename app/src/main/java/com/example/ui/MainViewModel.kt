@@ -104,10 +104,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val isSingle = cur.isSingleHousehold
                 val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
                 val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
+                val toUpdate = mutableListOf<LedgerEntryEntity>()
                 for (e in entries) {
                     if (e.portfolioBalanceAtMonthEnd <= 0.0 && e.totalNetWorthAtMonthEnd <= 0.0) {
                         val reserve = if (e.emergencyReserveAtMonthEnd > 0.0) e.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
-                        repository.updateLedgerEntry(
+                        toUpdate.add(
                             e.copy(
                                 portfolioBalanceAtMonthEnd = snapLiquid,
                                 pensionBalanceAtMonthEnd = snapPension,
@@ -115,6 +116,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         )
                     }
+                }
+                if (toUpdate.isNotEmpty()) {
+                    repository.updateLedgerEntries(toUpdate)
                 }
             }
         }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,16 +43,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
+import com.example.util.Formatters
 
 /**
  * Rich structural data model for on-demand metric info.
@@ -98,6 +104,7 @@ fun MetricInfoDialog(
 ) {
     if (info == null) return
     val effectiveAccent = info.accentColor ?: BrandTeal
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -106,6 +113,7 @@ fun MetricInfoDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .heightIn(max = screenHeight * 0.88f)
                 .clip(RoundedCornerShape(22.dp))
                 .testTag("metric_info_dialog"),
             shape = RoundedCornerShape(22.dp),
@@ -127,7 +135,7 @@ fun MetricInfoDialog(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
@@ -144,7 +152,7 @@ fun MetricInfoDialog(
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             ColorPill(
                                 text = info.category.uppercase(),
                                 color = effectiveAccent,
@@ -155,18 +163,21 @@ fun MetricInfoDialog(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = info.title,
+                                text = Formatters.formatTypographicBlock(info.title),
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
+                                ),
+                                softWrap = true
                             )
                         }
                     }
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -182,7 +193,7 @@ fun MetricInfoDialog(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                 )
 
-                // Formula / Rule Box (if present)
+                // Formula / Rule Box (if present, weight(1f) to prevent horizontal overflow)
                 if (!info.formulaOrRule.isNullOrBlank()) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -202,29 +213,35 @@ fun MetricInfoDialog(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = info.formulaOrRule,
+                                text = Formatters.formatTypographicBlock(info.formulaOrRule),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
+                                ),
+                                modifier = Modifier.weight(1f),
+                                softWrap = true
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                // Core Explanation
+                // Core Explanation (Justified in block, auto-hyphenation, paragraph line breaking, zero hanging letters)
                 Text(
-                    text = info.explanation,
+                    text = Formatters.formatTypographicBlock(info.explanation),
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        lineHeight = 20.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                    )
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Justify,
+                        hyphens = Hyphens.Auto,
+                        lineBreak = LineBreak.Paragraph
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                // Statutory Reference (if present)
+                // Statutory Reference (if present, justified in block)
                 if (!info.statutoryReference.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
@@ -233,27 +250,36 @@ fun MetricInfoDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Statutory Citation: ${info.statutoryReference}",
+                            text = Formatters.formatTypographicBlock("Statutory Citation: ${info.statutoryReference}"),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Justify,
+                                hyphens = Hyphens.Auto,
+                                lineBreak = LineBreak.Paragraph
                             ),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
 
-                // Practical / Strategic Implication
+                // Practical / Strategic Implication (Justified in block)
                 if (!info.practicalImplication.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "Strategy Takeaway: ${info.practicalImplication}",
+                        text = Formatters.formatTypographicBlock("Strategy Takeaway: ${info.practicalImplication}"),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.SemiBold,
                             color = effectiveAccent,
-                            lineHeight = 17.sp
-                        )
+                            lineHeight = 18.sp,
+                            textAlign = TextAlign.Justify,
+                            hyphens = Hyphens.Auto,
+                            lineBreak = LineBreak.Paragraph
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 

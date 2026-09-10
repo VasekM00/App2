@@ -100,6 +100,9 @@ import com.example.domain.parseCustomLifeGoals
 import com.example.domain.serializeCustomLifeGoals
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
+import com.example.ui.components.DipOptimizationMatrixCard
+import com.example.ui.components.DpsOptimizationMatrixCard
+import com.example.ui.components.FundsAllocatorCard
 import com.example.ui.components.KpiCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
@@ -180,21 +183,21 @@ private object PlanMetricInfos {
     )
 
     val dpsLepsiPenzijko = MetricInfo(
-        title = "DPS 'Lepší Penzijko' Reform",
+        title = "DPS 'Lepší Penzijko' Reform (Proposed 2027)",
         category = "State Subsidy & Pension",
         formulaOrRule = "20% standard match · 40% youth match (<30 yrs) up to 680 CZK/mo",
-        explanation = "State supplementary pension savings. Contributions between 500 CZK and 1,700 CZK receive direct monthly state cash subsidies. Contributions above 1,700 CZK qualify for the personal income tax deduction.",
-        statutoryReference = "Act No. 427/2011 Coll. & 2024 Amendments",
-        practicalImplication = "Youth under 30 get an immediate 40% guaranteed match on deposits up to 1,700 CZK/mo.",
+        explanation = "State supplementary pension savings. Current statutory law provides a 20% flat match (up to 340 CZK/mo). The 40% youth match (<30 yrs) and fee caps are approved government reform proposals with planned effect from 2027.",
+        statutoryReference = "Act No. 427/2011 Coll. & Proposed 2027 Reform",
+        practicalImplication = "Under current law, deposits between 500 CZK and 1,700 CZK receive 20% state subsidy. Proposed reform doubles this for youth under 30.",
         accentColor = Color(0xFF0F766E)
     )
 
     val dpsAge36 = MetricInfo(
-        title = "Age 36 One-Third DPS Withdrawal",
+        title = "Age 36 One-Third DPS Withdrawal (Proposed 2027)",
         category = "Statutory Liquidity Option",
-        formulaOrRule = "§ 12 Act No. 427/2011 Coll. · 1/3 penalty-free withdrawal",
-        explanation = "Participants in DPS participation funds who reach age 36 with at least 120 months (10 years) of contributions can withdraw up to one-third of their own accumulated balances without terminating the contract or losing future entitlement.",
-        statutoryReference = "§ 12 odst. 2 Act No. 427/2011 Coll.",
+        formulaOrRule = "Proposed 2027 Reform · 1/3 penalty-free withdrawal",
+        explanation = "Proposed reform feature targeting 1. 1. 2027 effect (not available under current 2026 law). Under the proposal, participants in DPS participation funds who reach age 36 with at least 120 months of contributions can withdraw up to one-third of their accumulated balance without penalty or clawbacks.",
+        statutoryReference = "Government Draft Amending Act No. 427/2011 Coll. (Lepší penzijko, expected 2027)",
         practicalImplication = "Provides intermediate liquidity for home down payment or major life milestone without forfeiting the pension plan.",
         accentColor = Color(0xFF0F766E)
     )
@@ -202,9 +205,9 @@ private object PlanMetricInfos {
     val etfTimeTest = MetricInfo(
         title = "3-Year ETF Time Test Exemption",
         category = "Czech Capital Gains Tax",
-        formulaOrRule = "§ 4 odst. 1 písm. w) ZDP · 3-year holding test",
-        explanation = "Capital gains from selling securities (stocks, ETFs like VWCE/SPPW) held by a natural person for more than 3 years are 100% exempt from Czech personal income tax, health insurance, and social security.",
-        statutoryReference = "§ 4 odst. 1 písm. w) Act No. 586/1992 Coll.",
+        formulaOrRule = "§ 4 odst. 1 písm. u) ZDP · 3-year holding test",
+        explanation = "Capital gains from selling securities (stocks, ETFs like VWCE/SPPW) held by a natural person for more than 3 years are 100% exempt from Czech personal income tax, health insurance, and social security (subject to 40M CZK annual exempt ceiling under 2025+ consolidation package).",
+        statutoryReference = "§ 4 odst. 1 písm. u) Act No. 586/1992 Coll.",
         practicalImplication = "Allows broad liquid ETF portfolios to compound and be liquidated during FIRE with completely tax-free cash returns.",
         accentColor = Color(0xFF16A34A)
     )
@@ -351,8 +354,10 @@ private fun FireRoadmapSubTab(
     var selectedSection by remember { mutableIntStateOf(0) }
     val sectionLabels = listOf("Milestones & Phases", "Action Checklist")
 
-    val completedActionsCount = ActionMeta.items.count { meta ->
-        actionStates["${currentYear}_${meta.id}"] == true
+    val completedActionsCount = remember(actionStates, currentYear) {
+        ActionMeta.items.count { meta ->
+            actionStates["${currentYear}_${meta.id}"] == true
+        }
     }
 
     Column(
@@ -1469,7 +1474,7 @@ private fun PensionSubTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Václav (48k Max)",
+                            text = if (s.primaryName.isNotBlank()) s.primaryName else "Václav",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         ColorPill(
@@ -1539,12 +1544,11 @@ private fun PensionSubTab(
                     }
                 }
 
-                // Eleonora Ceiling — always visible (even at 0 to surface uncaptured opportunity)
+                // Eleonora Ceiling — visible in dual-income mode
                 if (!s.isSingleHousehold) {
                     Spacer(modifier = Modifier.height(10.dp))
                     val eUtilizedRatio = (eDeductionAnnual / s.taxDeductionCeilingAnnual).toFloat().coerceIn(0f, 1f)
                     val eIsActive = eDipMonthly > 0 || eDpsAbove > 0
-                    val eOpportunityTax = max(0.0, s.taxDeductionCeilingAnnual * (s.taxRatePct / 100.0))
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1552,7 +1556,7 @@ private fun PensionSubTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Eleonora (48k Max)",
+                                text = if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             if (eIsActive) {
@@ -1602,27 +1606,13 @@ private fun PensionSubTab(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         if (!eIsActive) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "No tax-deductible contributions set",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.sp
-                                    )
+                            Text(
+                                text = "No tax-deductible contributions set",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
                                 )
-                                Text(
-                                    text = "+${fmtCZK(eOpportunityTax)}/yr uncaptured",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = BrandGold,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 10.sp
-                                    )
-                                )
-                            }
+                            )
                         } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1656,9 +1646,9 @@ private fun PensionSubTab(
                     )
                     Text(
                         text = if (s.isSingleHousehold) {
-                            "Statutory annual capacity: 48 000 Kč / yr"
+                            "Statutory annual capacity: 48 000 Kč"
                         } else {
-                            "Combined household capacity: 96 000 Kč / yr (Václav 48k + Eleonora 48k)"
+                            "Combined household capacity: 96 000 Kč"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1669,6 +1659,12 @@ private fun PensionSubTab(
                 }
             }
         }
+
+        FundsAllocatorCard(state = state, onShowInfo = onShowInfo)
+
+        DipOptimizationMatrixCard(state = state)
+
+        DpsOptimizationMatrixCard(state = state)
 
         Spacer(modifier = Modifier.height(80.dp))
     }

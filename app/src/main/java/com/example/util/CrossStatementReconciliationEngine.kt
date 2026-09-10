@@ -35,6 +35,26 @@ object CrossStatementReconciliationEngine {
     // Statutory interbank clearing window tolerance requested by user
     const val CLEARING_WINDOW_DAYS = 5L
 
+    private val EXTERNAL_EXPENSE_CATEGORIES = setOf(
+        BankTransactionType.GROCERIES.name,
+        BankTransactionType.HEALTH_DRUGSTORE.name,
+        BankTransactionType.SHOPPING_GOODS.name,
+        BankTransactionType.DINING_RESTAURANT.name,
+        BankTransactionType.TRANSPORTATION.name,
+        BankTransactionType.SUBSCRIPTIONS_MEDIA.name,
+        BankTransactionType.SERVICES_UTILITIES.name,
+        BankTransactionType.HOUSING_RENT.name,
+        BankTransactionType.CHARITY_DONATION.name,
+        BankTransactionType.GENERAL_EXPENSE.name,
+        BankTransactionType.LIFESTYLE_LIVING.name
+    )
+
+    private val EXTERNAL_INCOME_CATEGORIES = setOf(
+        BankTransactionType.SALARY_VACLAV.name,
+        BankTransactionType.SALARY_ELEONORA.name,
+        BankTransactionType.PARENTAL_BENEFIT.name
+    )
+
     fun computeFingerprint(
         date: String,
         bankName: String,
@@ -143,7 +163,9 @@ object CrossStatementReconciliationEngine {
         knownFamilyAccounts: Set<String> = emptySet(),
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList()
     ): ReconcileResult {
-        val workingList = transactions.map { it.copy() }.toMutableList()
+        val workingList = transactions.distinctBy {
+            "${it.bankName}|${it.date}|${it.amount}|${it.counterpartyAccount}|${it.counterpartyName}|${it.message}|${it.variableSymbol}"
+        }.map { it.copy() }.toMutableList()
         val workingBoundary = boundaryTransactions.map { it.copy() }.toMutableList()
 
         // 1. Initial pass: identify known self-transfers and family contributions
@@ -189,9 +211,16 @@ object CrossStatementReconciliationEngine {
                 val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
                 if (!amountMatches || !within5Days) return@indexOfFirst false
 
-                val isCrossBank = credit.bankName != debit.bankName
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
                         isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
+
+                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
+                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
+                if (debitIsExternal || creditIsExternal) {
+                    if (!isFlaggedSelf) return@indexOfFirst false
+                }
+
+                val isCrossBank = credit.bankName != debit.bankName
                 isCrossBank || isFlaggedSelf
             }
 
@@ -247,9 +276,16 @@ object CrossStatementReconciliationEngine {
                 val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
                 if (!amountMatches || !within5Days) return@indexOfFirst false
 
-                val isCrossBank = credit.bankName != debit.bankName
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
                         isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
+
+                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
+                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
+                if (debitIsExternal || creditIsExternal) {
+                    if (!isFlaggedSelf) return@indexOfFirst false
+                }
+
+                val isCrossBank = credit.bankName != debit.bankName
                 isCrossBank || isFlaggedSelf
             }
 

@@ -113,7 +113,7 @@ class NetworkAndSyncResilienceTest {
             taxpayerCreditAnnual = 30840.0,
             dipDpsCombinedCeilingAnnual = 48000.0,
             dpsYouthSubsidyMaxMonthly = 680.0,
-            progressive23ThresholdAnnual = 1582812.0
+            progressive23ThresholdAnnual = 1762812.0
         )
 
         val matchingSettings = SettingsEntity(
@@ -123,7 +123,7 @@ class NetworkAndSyncResilienceTest {
             taxpayerCreditAnnual = 30840.0,
             taxDeductionCeilingAnnual = 48000.0,
             dpsYouthSubsidyMaxMonthly = 680.0,
-            taxSecondBracketThresholdAnnual = 1582812.0
+            taxSecondBracketThresholdAnnual = 1762812.0
         )
 
         val differences: List<SyncDifferenceItem> =
@@ -149,7 +149,7 @@ class NetworkAndSyncResilienceTest {
             taxpayerCreditAnnual = 30840.0,
             dipDpsCombinedCeilingAnnual = 48000.0,
             dpsYouthSubsidyMaxMonthly = 680.0,
-            progressive23ThresholdAnnual = 1582812.0
+            progressive23ThresholdAnnual = 1762812.0
         )
 
         val divergentSettings = SettingsEntity(
@@ -159,7 +159,7 @@ class NetworkAndSyncResilienceTest {
             taxpayerCreditAnnual = 30840.0,
             taxDeductionCeilingAnnual = 48000.0,
             dpsYouthSubsidyMaxMonthly = 680.0,
-            taxSecondBracketThresholdAnnual = 1582812.0
+            taxSecondBracketThresholdAnnual = 1762812.0
         )
 
         val differences = CzechEconomicSyncService.computeDifferences(divergentSettings, liveData)
@@ -200,7 +200,7 @@ class NetworkAndSyncResilienceTest {
             csuCpiInflationPct = 2.8,
             baseTaxRatePct = 15.0,
             progressiveTaxRatePct = 23.0,
-            progressive23ThresholdAnnual = 1582812.0,
+            progressive23ThresholdAnnual = 1762812.0,
             taxpayerCreditAnnual = 30840.0,
             dipDpsCombinedCeilingAnnual = 48000.0,
             spouseTaxCreditAnnual = 24840.0,

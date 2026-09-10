@@ -145,7 +145,7 @@ object PdfTextExtractor {
 
         // Scan backwards from lastClose to find matching outer <<
         var depth = 0
-        var i = lastClose
+        var i = lastClose + 1
         var openIdx = -1
         while (i >= 1) {
             if (str[i] == '>' && str[i - 1] == '>') {
@@ -168,7 +168,7 @@ object PdfTextExtractor {
         return if (openIdx != -1) {
             str.substring(openIdx, lastClose + 2)
         } else {
-            val firstOpen = str.indexOf("<<")
+            val firstOpen = str.lastIndexOf("<<", lastClose)
             if (firstOpen != -1) str.substring(firstOpen, lastClose + 2) else str
         }
     }
@@ -317,6 +317,8 @@ object PdfTextExtractor {
 
         var curX = 0.0
         var curY = 0.0
+        var lineStartX = 0.0
+        var lineStartY = 0.0
         var inText = false
         val numBuffer = mutableListOf<Double>()
         val pendingToken = StringBuilder()
@@ -330,6 +332,8 @@ object PdfTextExtractor {
                 inText = true
                 curX = 0.0
                 curY = 0.0
+                lineStartX = 0.0
+                lineStartY = 0.0
                 numBuffer.clear()
                 pendingToken.setLength(0)
                 i += 2
@@ -365,7 +369,9 @@ object PdfTextExtractor {
                     var opIdx = strEnd + 1
                     while (opIdx < len && bytes[opIdx].toInt().toChar().isWhitespace()) opIdx++
                     if (opIdx < len && bytes[opIdx].toInt().toChar() == '\'') {
-                        curY -= 12.0
+                        lineStartY -= 12.0
+                        curX = lineStartX
+                        curY = lineStartY
                         if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
                         i = opIdx + 1
                     } else if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'j') {
@@ -438,20 +444,30 @@ object PdfTextExtractor {
                             when (tok) {
                                 "Td", "TD" -> {
                                     if (numBuffer.size >= 2) {
-                                        curX = numBuffer[numBuffer.size - 2]
-                                        curY = numBuffer[numBuffer.size - 1]
+                                        val tx = numBuffer[numBuffer.size - 2]
+                                        val ty = numBuffer[numBuffer.size - 1]
+                                        lineStartX += tx
+                                        lineStartY += ty
+                                        curX = lineStartX
+                                        curY = lineStartY
                                     }
                                     numBuffer.clear()
                                 }
                                 "Tm" -> {
                                     if (numBuffer.size >= 6) {
-                                        curX = numBuffer[numBuffer.size - 2]
-                                        curY = numBuffer[numBuffer.size - 1]
+                                        val tx = numBuffer[numBuffer.size - 2]
+                                        val ty = numBuffer[numBuffer.size - 1]
+                                        lineStartX = tx
+                                        lineStartY = ty
+                                        curX = tx
+                                        curY = ty
                                     }
                                     numBuffer.clear()
                                 }
                                 "T*" -> {
-                                    curY -= 12.0
+                                    lineStartY -= 12.0
+                                    curX = lineStartX
+                                    curY = lineStartY
                                     numBuffer.clear()
                                 }
                                 else -> {

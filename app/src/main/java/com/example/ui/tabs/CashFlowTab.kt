@@ -302,6 +302,14 @@ fun CashFlowTab(
             onDismiss = { editingEntry = null },
             onTriggerImportCsv = { csvLauncher.launch("*/*") },
             onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
+                val prevTotalLiving = entry.expGroceries + entry.expOther
+                val (newGroceries, newOther) = if (entry.expOther > 0.0 && prevTotalLiving > 0.0) {
+                    val otherRatio = (entry.expOther / prevTotalLiving).coerceIn(0.0, 1.0)
+                    val calculatedOther = kotlin.math.round(expL * otherRatio)
+                    (expL - calculatedOther) to calculatedOther
+                } else {
+                    expL to 0.0
+                }
                 onUpdateLedgerEntry(
                     entry.copy(
                         yearMonth = ym,
@@ -309,8 +317,8 @@ fun CashFlowTab(
                         incEleonora = incE,
                         incUnforeseen = incU,
                         expRent = expR,
-                        expGroceries = expL,
-                        expOther = 0.0,
+                        expGroceries = newGroceries,
+                        expOther = newOther,
                         notes = notes,
                         portfolioBalanceAtMonthEnd = balPortu,
                         pensionBalanceAtMonthEnd = balPension,

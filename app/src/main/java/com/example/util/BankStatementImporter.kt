@@ -90,6 +90,12 @@ data class StatementParseSummary(
 object BankStatementImporter {
 
     fun parseStatement(
+        bytes: ByteArray,
+        knownFamilyAccounts: Set<String> = emptySet(),
+        userOverrides: Map<String, BankTransactionType> = emptyMap()
+    ): StatementParseSummary = parseStatement(java.io.ByteArrayInputStream(bytes), knownFamilyAccounts, userOverrides)
+
+    fun parseStatement(
         inputStream: InputStream,
         knownFamilyAccounts: Set<String> = emptySet(),
         userOverrides: Map<String, BankTransactionType> = emptyMap()
@@ -112,7 +118,7 @@ object BankStatementImporter {
             content = String(bytes, Charset.forName("windows-1250"))
         }
 
-        val lines = content.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val lines = splitCsvLines(content)
         val bankType = detectBankType(lines)
 
         return when (bankType) {
@@ -567,6 +573,85 @@ object BankStatementImporter {
     // CSV Statement Parsing (Existing & Robust)
     // ==========================================
 
+    fun splitCsvLines(content: String): List<String> {
+        val lines = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        val len = content.length
+        while (i < len) {
+            val c = content[i]
+            when {
+                c == '"' && inQuotes && i + 1 < len && content[i + 1] == '"' -> {
+                    sb.append("\"\"")
+                    i++
+                }
+                c == '"' -> {
+                    inQuotes = !inQuotes
+                    sb.append(c)
+                }
+                (c == '\r' || c == '\n') && !inQuotes -> {
+                    if (c == '\r' && i + 1 < len && content[i + 1] == '\n') {
+                        i++
+                    }
+                    val line = sb.toString().trim()
+                    if (line.isNotBlank()) {
+                        lines.add(line)
+                    }
+                    sb.setLength(0)
+                }
+                else -> {
+                    sb.append(c)
+                }
+            }
+            i++
+        }
+        val remaining = sb.toString().trim()
+        if (remaining.isNotBlank()) {
+            lines.add(remaining)
+        }
+        return lines
+    }
+
+    fun detectCsvDelimiter(lines: List<String>): Char {
+        val sample = lines.take(20)
+        if (sample.isEmpty()) return ';'
+
+        fun countUnquoted(line: String, delim: Char): Int {
+            var count = 0
+            var inQuotes = false
+            var i = 0
+            while (i < line.length) {
+                val c = line[i]
+                if (c == '"') {
+                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                        i++
+                    } else {
+                        inQuotes = !inQuotes
+                    }
+                } else if (c == delim && !inQuotes) {
+                    count++
+                }
+                i++
+            }
+            return count
+        }
+
+        val semiCounts = sample.map { countUnquoted(it, ';') }.filter { it > 0 }
+        val commaCounts = sample.map { countUnquoted(it, ',') }.filter { it > 0 }
+
+        val semiConsistent = semiCounts.isNotEmpty() && semiCounts.size >= (sample.size / 2).coerceAtLeast(1) && semiCounts.all { it == semiCounts.first() && it >= 1 }
+        val commaConsistent = commaCounts.isNotEmpty() && commaCounts.size >= (sample.size / 2).coerceAtLeast(1) && commaCounts.all { it == commaCounts.first() && it >= 1 }
+
+        return when {
+            semiConsistent && !commaConsistent -> ';'
+            commaConsistent && !semiConsistent -> ','
+            semiCounts.sum() > commaCounts.sum() -> ';'
+            commaCounts.sum() > semiCounts.sum() -> ','
+            else -> ';'
+        }
+    }
+
     private fun detectBankType(lines: List<String>): BankType {
         for (line in lines.take(15)) {
             val lower = line.lowercase(Locale.ROOT)
@@ -588,7 +673,7 @@ object BankStatementImporter {
         familyAccounts: Set<String>,
         userOverrides: Map<String, BankTransactionType> = emptyMap()
     ): StatementParseSummary {
-        val delimiter = if (lines.firstOrNull { it.contains(";") } != null) ';' else ','
+        val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
         for (i in lines.indices) {
             val l = lines[i].lowercase(Locale.ROOT)
@@ -772,7 +857,7 @@ object BankStatementImporter {
         familyAccounts: Set<String>,
         userOverrides: Map<String, BankTransactionType> = emptyMap()
     ): StatementParseSummary {
-        val delimiter = if (lines.firstOrNull { it.contains(";") } != null) ';' else ','
+        val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
         for (i in lines.indices) {
             val l = lines[i].lowercase(Locale.ROOT)
@@ -817,7 +902,7 @@ object BankStatementImporter {
     // Categorization & Normalization
     // ==========================================
 
-    private fun categorizeTransaction(
+    fun categorizeTransaction(
         amount: Double,
         counterpartyAcc: String,
         counterpartyName: String,
@@ -829,19 +914,20 @@ object BankStatementImporter {
     ): BankTransactionType {
         val combinedText = "$counterpartyName $message $rawContext".lowercase(Locale.ROOT)
 
-        // Rent & Housing Priority Check (standing orders, rent keywords, 18,950 CZK rent payments)
+        // Rent & Housing Priority Check (standing orders with housing keywords, rent keywords, housing payments)
         if (amount < 0) {
-            if (combinedText.contains("nájem") || combinedText.contains("najem") ||
+            val isHouseholdRentAmount = kotlin.math.abs(kotlin.math.abs(amount) - 18950.0) < 0.01
+            val hasHousingKeyword = combinedText.contains("nájem") || combinedText.contains("najem") ||
                 combinedText.contains("nájemné") || combinedText.contains("najemne") ||
                 combinedText.contains("činže") || combinedText.contains("cinze") ||
                 combinedText.contains("fond oprav") || combinedText.contains("svj") ||
                 combinedText.contains("platba najmu") || combinedText.contains("bydleni") ||
-                combinedText.contains("byt") ||
-                (kotlin.math.abs(amount) in 15000.0..25000.0 && (
-                    combinedText.contains("trvalý") || combinedText.contains("trvaly") ||
-                    combinedText.contains("příkaz") || combinedText.contains("prikaz")
-                ))
-            ) {
+                combinedText.contains("bydlení") || combinedText.contains("byt") ||
+                combinedText.contains("pronájem") || combinedText.contains("pronajem") ||
+                combinedText.contains("podnájem") || combinedText.contains("podnajem") ||
+                combinedText.contains("sipo")
+
+            if (isHouseholdRentAmount || hasHousingKeyword) {
                 return BankTransactionType.HOUSING_RENT
             }
         }
@@ -857,7 +943,7 @@ object BankStatementImporter {
 
         if (amount > 0) {
             return when {
-                combinedText.contains("rodičov") || combinedText.contains("rodicov") || combinedText.contains("úřad práce") || combinedText.contains("urad prace") || combinedText.contains("čssz") || combinedText.contains("cssz") ->
+                combinedText.contains("rodičov") || combinedText.contains("rodicov") || combinedText.contains("úřad práce") || combinedText.contains("urad prace") ->
                     BankTransactionType.PARENTAL_BENEFIT
                 combinedText.contains("eleonora") ->
                     BankTransactionType.SALARY_ELEONORA
@@ -871,18 +957,35 @@ object BankStatementImporter {
         }
 
         // Consult Czech Merchant Catalog (with user custom overrides)
-        val catalogMatch = CzechMerchantCatalog.matchCategory("$counterpartyName $message", userOverrides)
+        val catalogMatch = CzechMerchantCatalog.matchCategory("$counterpartyName $counterpartyAcc $message $rawContext", userOverrides)
         if (catalogMatch != null) {
             return catalogMatch
         }
 
-        if (combinedText.contains("portu") || combinedText.contains("wood & company") || combinedText.contains("degiro") || combinedText.contains("xtb") || combinedText.contains("interactive brokers")) {
+        val isGeneralInvestmentAcc = cleanAcc.contains("76788295") || cleanAcc.contains("7678876788") ||
+            cleanAcc.contains("2038012508") || cleanAcc.contains("2555410109") ||
+            cleanAcc.contains("518746050") ||
+            combinedText.contains("76788295") || combinedText.contains("7678876788") ||
+            combinedText.contains("518746050")
+
+        if (isGeneralInvestmentAcc || combinedText.contains("portu") || combinedText.contains("wood & company") ||
+            combinedText.contains("wood company") || combinedText.contains("wood retail") ||
+            combinedText.contains("xtb") || combinedText.contains("x-trade") ||
+            combinedText.contains("degiro") || combinedText.contains("interactive brokers") ||
+            combinedText.contains("trading 212")
+        ) {
             return BankTransactionType.INVESTMENT_PORTU
         }
         if (combinedText.contains("dip") || vs.startsWith("7") || combinedText.contains("patria dip")) {
             return BankTransactionType.INVESTMENT_DIP
         }
-        if (combinedText.contains("penzij") || combinedText.contains("dps") || combinedText.contains("conseq") || combinedText.contains("generali") || combinedText.contains("allianz") || combinedText.contains("nn penzij")) {
+
+        val isDpsAcc = cleanAcc.contains("5005004433") || combinedText.contains("5005004433")
+        if (isDpsAcc || combinedText.contains("penzij") || combinedText.contains("dps") ||
+            combinedText.contains("conseq") || combinedText.contains("generali") ||
+            combinedText.contains("allianz") || combinedText.contains("nn penzij") ||
+            combinedText.contains("nn penze")
+        ) {
             return BankTransactionType.INVESTMENT_DPS
         }
 
@@ -1000,34 +1103,60 @@ object BankStatementImporter {
         )
     }
 
-    private fun parseCzechAmount(str: String): Double {
-        var clean = str.replace("CZK", "", ignoreCase = true)
-            .replace("Kč", "")
-            .replace("\u00A0", "")
-            .replace(" ", "")
-            .trim()
+    fun parseCzechAmount(str: String): Double {
+        var clean = str.trim()
+        if (clean.isBlank()) return 0.0
+
+        // Check for accounting parentheses e.g. (1 500,00) or (1500)
+        val isNegativeParentheses = clean.startsWith("(") && clean.endsWith(")")
+        if (isNegativeParentheses) {
+            clean = clean.substring(1, clean.length - 1).trim()
+        }
+
+        // Standardize all Unicode minus, en-dash, em-dash, figure dash, small dash, fullwidth hyphen to ASCII '-'
+        clean = clean.replace("\u2212", "-")
+            .replace("\u2013", "-")
+            .replace("\u2014", "-")
+            .replace("\u2012", "-")
+            .replace("\uFE63", "-")
+            .replace("\uFF0D", "-")
+            .replace("+", "")
+
+        // Strip currency symbols
+        clean = clean.replace("CZK", "", ignoreCase = true)
+            .replace("Kč", "", ignoreCase = true)
+            .replace("Kc", "", ignoreCase = true)
+
+        // Strip all Unicode whitespace categories:
+        // \p{Z} (space, line, paragraph separators), \s, \u00A0 (NBSP), \u202F (Narrow NBSP), \u200B (Zero-width), \uFEFF (BOM)
+        clean = clean.replace(Regex("[\\p{Z}\\s\\uFEFF]"), "").trim()
 
         if (clean.isBlank()) return 0.0
 
         clean = if (clean.contains(',') && clean.contains('.')) {
-            clean.replace(".", "").replace(',', '.')
+            if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+                clean.replace(".", "").replace(',', '.')
+            } else {
+                clean.replace(",", "")
+            }
         } else {
             clean.replace(',', '.')
         }
 
-        return clean.toDoubleOrNull() ?: 0.0
+        val result = clean.toDoubleOrNull() ?: 0.0
+        return if (isNegativeParentheses && result > 0) -result else result
     }
 
-    private fun normalizeDate(str: String): String {
+    fun normalizeDate(str: String): String {
         val clean = str.trim().replace("/", ".").replace("-", ".")
-        val parts = clean.split(".").filter { it.isNotBlank() }
+        val parts = clean.split(".").map { it.trim() }.filter { it.isNotBlank() }
         if (parts.size == 3) {
-            if (parts[0].length == 4) {
+            if (parts[0].length == 4 && parts[0].all { it.isDigit() }) {
                 val y = parts[0]
                 val m = parts[1].padStart(2, '0')
                 val d = parts[2].padStart(2, '0')
                 return "$y-$m-$d"
-            } else if (parts[2].length == 4) {
+            } else if (parts[2].length == 4 && parts[2].all { it.isDigit() }) {
                 val d = parts[0].padStart(2, '0')
                 val m = parts[1].padStart(2, '0')
                 val y = parts[2]

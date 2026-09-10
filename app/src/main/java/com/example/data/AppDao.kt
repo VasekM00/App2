@@ -39,6 +39,9 @@ interface LedgerDao {
     @Update
     suspend fun updateEntry(entry: LedgerEntryEntity)
 
+    @Update
+    suspend fun updateEntries(entries: List<LedgerEntryEntity>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEntries(entries: List<LedgerEntryEntity>)
 

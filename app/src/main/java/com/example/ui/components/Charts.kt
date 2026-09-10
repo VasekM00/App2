@@ -90,6 +90,7 @@ fun NetWorthChart(
     val cTeal = BrandTeal
     val cGold = BrandGold
     val cGreen = GoodGreen
+    val cPurple = Color(0xFF6366F1)
     val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
@@ -111,13 +112,15 @@ fun NetWorthChart(
                 val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
                 pt.copy(
                     portfolio = pt.portfolio / discount,
-                    target = pt.target / discount
+                    target = pt.target / discount,
+                    pensionPortfolio = pt.pensionPortfolio / discount
                 )
             }
         }
     }
 
     val fireReachedIndex = displayData.indexOfFirst { it.portfolio >= it.target }
+    val hasPension = displayData.any { it.pensionPortfolio > 0.0 }
 
     Card(
         modifier = modifier
@@ -239,8 +242,14 @@ fun NetWorthChart(
                     }
                     Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Model", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(text = if (hasPension) "Liquid" else "Model", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
                     Spacer(modifier = Modifier.width(8.dp))
+                    if (hasPension) {
+                        Box(modifier = Modifier.size(8.dp).background(cPurple, CircleShape))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Total (incl. DIP/DPS)", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
@@ -251,6 +260,7 @@ fun NetWorthChart(
 
             val maxActual = actualPoints.maxOfOrNull { it.totalNetWorthAtMonthEnd } ?: 0.0
             val maxVal = (maxOf(
+                displayData.maxOfOrNull { it.totalPortfolio } ?: 0.0,
                 displayData.maxOfOrNull { it.portfolio } ?: 0.0,
                 displayData.maxOfOrNull { it.target } ?: 0.0,
                 maxActual
@@ -392,7 +402,22 @@ fun NetWorthChart(
                         )
                     )
 
-                    // Draw Portfolio path
+                    // Draw Total Net Worth Path (Solid Purple/Indigo) if pension exists
+                    if (hasPension) {
+                        val totalPath = Path()
+                        displayData.forEachIndexed { i, pt ->
+                            val x = paddingLeft + panOffsetX + (i * stepX)
+                            val y = plotH - (plotH * (pt.totalPortfolio / maxVal)).toFloat()
+                            if (i == 0) totalPath.moveTo(x, y) else totalPath.lineTo(x, y)
+                        }
+                        drawPath(
+                            path = totalPath,
+                            color = cPurple,
+                            style = Stroke(width = 5f, cap = StrokeCap.Round)
+                        )
+                    }
+
+                    // Draw Portfolio path (Liquid Brokerage)
                     drawPath(
                         path = portfolioPath,
                         color = cTeal,
@@ -517,13 +542,23 @@ fun NetWorthChart(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Portfolio: ${fmtCompact(pt.portfolio)}",
+                                text = "Liquid: ${fmtCompact(pt.portfolio)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = BrandTeal,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
+                            if (pt.pensionPortfolio > 0.0) {
+                                Text(
+                                    text = "Total: ${fmtCompact(pt.totalPortfolio)}",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        color = cPurple,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
                             Text(
                                 text = "Target: ${fmtCompact(pt.target)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(

@@ -169,10 +169,10 @@ class FinancialEngineExhaustiveAuditTest {
 
         // Test state pension bridge years
         val bridgeYearsAt26 = FinancialEngine.statePensionBridgeYears(26, defaultSettings)
-        assertEquals(39, bridgeYearsAt26) // 65 - 26
+        assertEquals(41, bridgeYearsAt26) // 67 - 26
 
         val bridgeYearsAt70 = FinancialEngine.statePensionBridgeYears(70, defaultSettings)
-        assertEquals(0, bridgeYearsAt70) // max(0, 65 - 70)
+        assertEquals(0, bridgeYearsAt70) // max(0, 67 - 70)
     }
 
     @Test
@@ -412,21 +412,32 @@ class FinancialEngineExhaustiveAuditTest {
 
         // 1. DIP Scenarios Verification
         val dipMonthlyTiers = dip.scenarios.map { it.monthly }
+        assertTrue("DIP scenarios contain 0 baseline tier", dipMonthlyTiers.contains(0.0))
         assertTrue("DIP scenarios contain default 1700 tier", dipMonthlyTiers.contains(1700.0))
         assertTrue("DIP scenarios contain 4000 statutory max", dipMonthlyTiers.contains(4000.0))
+
+        val dip0 = dip.scenarios.first { it.monthly == 0.0 }
+        assertEquals(0.0, dip0.annualTaxSaved, 0.001)
 
         val dip1700 = dip.scenarios.first { it.monthly == 1700.0 }
         assertEquals(3060.0, dip1700.annualTaxSaved, 0.001) // 20 400 * 15%
 
         val dip4000 = dip.scenarios.first { it.monthly == 4000.0 }
         assertEquals(7200.0, dip4000.annualTaxSaved, 0.001) // 48 000 * 15%
-        assertEquals("Statutory Max", dip4000.riskLevel)
+        assertEquals("MAX SHIELD", dip4000.riskLevel)
 
         // 2. DPS Scenarios Verification
         val dpsMonthlyTiers = dps.scenarios.map { it.monthly }
+        assertTrue("DPS scenarios contain 0 baseline tier", dpsMonthlyTiers.contains(0.0))
         assertTrue("DPS scenarios contain 500 min subsidy", dpsMonthlyTiers.contains(500.0))
-        assertTrue("DPS scenarios contain default 1700 tier", dpsMonthlyTiers.contains(1700.0))
-        assertTrue("DPS scenarios contain 5700 statutory max", dpsMonthlyTiers.contains(5700.0))
+        assertTrue("DPS scenarios contain 1000 tier", dpsMonthlyTiers.contains(1000.0))
+        assertTrue("DPS scenarios contain 1500 tier", dpsMonthlyTiers.contains(1500.0))
+        assertTrue("DPS scenarios contain default 1700 subsidy max tier", dpsMonthlyTiers.contains(1700.0))
+        assertTrue("DPS scenarios contain 5700 combined max tier", dpsMonthlyTiers.contains(5700.0))
+
+        val dps0 = dps.scenarios.first { it.monthly == 0.0 }
+        assertEquals(0.0, dps0.monthlySubsidy, 0.001)
+        assertEquals(0.0, dps0.totalAnnualBenefit, 0.001)
 
         val dps500 = dps.scenarios.first { it.monthly == 500.0 }
         assertEquals(100.0, dps500.monthlySubsidy, 0.001)
@@ -438,15 +449,15 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(4080.0, dps1700.annualSubsidy, 0.001)
         assertEquals(0.0, dps1700.annualTaxSaved, 0.001)
         assertEquals(4080.0, dps1700.totalAnnualBenefit, 0.001)
-        assertEquals("SUBSIDY MAX", dps1700.badgeLabel)
+        assertEquals("MAX SUBSIDY", dps1700.badgeLabel)
 
         val dps5700 = dps.scenarios.first { it.monthly == 5700.0 }
         assertEquals(340.0, dps5700.monthlySubsidy, 0.001)
         assertEquals(7200.0, dps5700.annualTaxSaved, 0.001)
         assertEquals(11280.0, dps5700.totalAnnualBenefit, 0.001)
-        assertEquals("STATUTORY MAX", dps5700.badgeLabel)
+        assertEquals("DPS + DIP MAX", dps5700.badgeLabel)
 
-        // 3. Dynamic Custom Level Inclusion
+        // 3. Dynamic Custom Level Inclusion (e.g. 3200 DPS above subsidy cap)
         val customSettings = defaultSettings.copy(
             dipContributionMonthly = 2500.0,
             dpsOwnContributionMonthly = 3200.0
@@ -454,5 +465,14 @@ class FinancialEngineExhaustiveAuditTest {
         val customState = FinancialEngine.calculate(customSettings)
         assertTrue("Custom 2500 DIP dynamically injected", customState.dip.scenarios.any { it.monthly == 2500.0 })
         assertTrue("Custom 3200 DPS dynamically injected", customState.dps.scenarios.any { it.monthly == 3200.0 })
+
+        val dps3200 = customState.dps.scenarios.first { it.monthly == 3200.0 }
+        assertEquals(340.0, dps3200.monthlySubsidy, 0.001) // capped at 1700 subsidy ceiling
+        assertEquals(4080.0, dps3200.annualSubsidy, 0.001)
+        // 3200 - 1700 = 1500/mo = 18 000/yr. DIP uses 2500 * 12 = 30 000/yr. Headroom is 48 000 - 30 000 = 18 000.
+        // Tax saved = 18 000 * 15% = 2 700. Total = 4080 + 2700 = 6780.
+        assertEquals(2700.0, dps3200.annualTaxSaved, 0.001)
+        assertEquals(6780.0, dps3200.totalAnnualBenefit, 0.001)
+        assertEquals("ABOVE SUBSIDY CAP", dps3200.badgeLabel)
     }
 }

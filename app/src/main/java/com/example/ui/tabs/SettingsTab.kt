@@ -150,8 +150,8 @@ private object SettingsMetricInfos {
     val monteCarlo = MetricInfo(
         title = "Monte Carlo Volatility Modeling",
         category = "Statistical Simulation",
-        formulaOrRule = "Geometric Brownian Motion · 1,000 Iterations",
-        explanation = "Simulates 1,000 randomized market return paths using historical asset volatility (16% std dev) and expected inflation. Renders 5th percentile (bear worst case), 50th percentile (median), and 95th percentile (bull optimal) wealth trajectories.",
+        formulaOrRule = "Geometric Brownian Motion · 400 Iterations",
+        explanation = "Simulates 400 randomized market return paths using historical asset volatility (16% std dev) and expected inflation. Renders 5th percentile (bear worst case), 50th percentile (median), and 95th percentile (bull optimal) wealth trajectories.",
         practicalImplication = "Ensures financial planning accounts for unpredictable market sequences rather than unrealistic linear returns.",
         accentColor = Color(0xFF0F766E)
     )

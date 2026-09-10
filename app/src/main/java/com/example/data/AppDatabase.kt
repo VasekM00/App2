@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 23,
+    version = 24,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -423,6 +423,13 @@ abstract class AppDatabase : RoomDatabase() {
                 """)
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_yearMonth ON imported_bank_transactions(yearMonth)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_bankName ON imported_bank_transactions(bankName)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_date ON imported_bank_transactions(date)")
+            }
+        }
+
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_date ON imported_bank_transactions(date)")
             }
         }
 
@@ -437,7 +444,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
-                        MIGRATION_21_22, MIGRATION_22_23
+                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24
                     )
                     .fallbackToDestructiveMigration(true)
                     .build()

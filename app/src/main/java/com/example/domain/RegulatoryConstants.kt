@@ -38,12 +38,11 @@ object RegulatoryConstants {
     const val STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 = 1700.0
     const val STATUTORY_RETIREMENT_DEDUCTION_LAW_REF = "ZDP § 15 a § 15a (sdružený strop 48 000 Kč/rok pro DPS a DIP)"
 
-    // --- ZDP § 16 - Sazba daně z příjmů fyzických osob ---
-    // Základní sazba: 15 %
-    // Zvýšená progresivní sazba: 23 % pro příjem nad 36násobek průměrné mzdy (cca 1 582 812 Kč pro rok 2026)
+    // Zvýšená progresivní sazba: 23 % pro příjem nad 36násobek průměrné mzdy (1 762 812 Kč pro rok 2026, 1 676 052 Kč pro rok 2025)
     const val STATUTORY_INCOME_TAX_RATE_BASE_PCT = 15.0
     const val STATUTORY_INCOME_TAX_RATE_HIGH_PCT = 23.0
-    const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026 = 1582812.0
+    const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2025 = 1676052.0
+    const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026 = 1762812.0
     const val STATUTORY_INCOME_TAX_LAW_REF = "ZDP § 16 (15 % základní pásmo, 23 % nad 36× průměrné mzdy)"
 
     // --- REFORMA DPS "LEPŠÍ PENZIJKO" (novela zákona o doplňkovém penzijním spoření, schváleno vládou 8/2026) ---

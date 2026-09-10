@@ -8,7 +8,8 @@ import androidx.room.PrimaryKey
     tableName = "imported_bank_transactions",
     indices = [
         Index(value = ["yearMonth"]),
-        Index(value = ["bankName"])
+        Index(value = ["bankName"]),
+        Index(value = ["date"])
     ]
 )
 data class ImportedBankTransactionEntity(

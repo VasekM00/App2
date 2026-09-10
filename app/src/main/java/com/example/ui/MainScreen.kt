@@ -122,6 +122,7 @@ fun MainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val haptic = LocalHapticFeedback.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collectLatest { event ->
@@ -299,6 +300,7 @@ fun MainScreen(
                                             .fillMaxWidth()
                                             .clickable {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                focusManager.clearFocus()
                                                 selectedTab = result.tabIndex
                                                 when (result.tabIndex) {
                                                     1 -> targetCashFlowSubTab = result.subTabIndex

@@ -96,5 +96,42 @@ object Formatters {
         }
         return formatted.replace(' ', '\u00A0')
     }
+
+    /**
+     * Typography formatter for justified ("in block") text layout.
+     * Enforces Czech typographic standards (ČSN 01 6910) and prevents orphan characters:
+     * 1. Binds all single-letter prepositions and conjunctions (k, s, v, z, o, u, a, i, and uppercase K, S, V, Z, O, U, A, I, plus English a, I)
+     *    to the following word using a non-breaking space (NBSP, \u00A0) so they can never hang at the end of a line.
+     * 2. Binds section marks (§) to the following number/citation.
+     * 3. Binds numbers with currency/units/percentages (e.g. 1,700 Kč, 48k CZK, 15 %) so they never break across lines.
+     * 4. Binds Czech thousands separators within numbers (e.g. 48 000 -> 48\u00A0000).
+     */
+    fun formatTypographicBlock(text: String): String {
+        if (text.isBlank()) return text
+        var result = text
+
+        // 1. Bind section signs: "§ 15" -> "§\u00A015"
+        result = result.replace(Regex("§\\s+"), "§\u00A0")
+
+        // 2. Czech thousands separators within multi-digit numbers: "48 000" -> "48\u00A0000"
+        result = result.replace(Regex("(\\d{1,3})\\s+(\\d{3})"), "$1\u00A0$2")
+        result = result.replace(Regex("(\\d{1,3})\\s+(\\d{3})"), "$1\u00A0$2")
+
+        // 3. Numbers with currency, units, or percentages: "1,700 Kč", "48k CZK", "15 %"
+        result = result.replace(Regex("(\\d+)\\s+(Kč|CZK|EUR|USD|%)"), "$1\u00A0$2")
+        result = result.replace(Regex("(\\d+k)\\s+(Kč|CZK|EUR|USD)"), "$1\u00A0$2")
+        result = result.replace(Regex("(\\d+)\\s+(let|roky|roků|rok|měsíců|měsíce|dní|dnů|hodin|years|months|days)"), "$1\u00A0$2")
+
+        // 4. Single-letter prepositions & conjunctions (Czech: k, s, v, z, o, u, a, i; English: a, I)
+        // Matches when preceded by whitespace, NBSP, opening punctuation, or start of string/line.
+        val singleLetterRegex = Regex("(?<=[\\s\\u00A0\\u202F(\\[\"'“„]|^)([ksvzouaiIKSVZOUAI])\\s+")
+        result = result.replace(singleLetterRegex, "$1\u00A0")
+        result = result.replace(singleLetterRegex, "$1\u00A0")
+
+        // 5. Ordinals: "1st child" -> "1st\u00A0child", "2nd child" -> "2nd\u00A0child"
+        result = result.replace(Regex("(\\d+(?:st|nd|rd|th|\\.)?)\\s+(child|dítě|kroku|step|level)"), "$1\u00A0$2")
+
+        return result
+    }
 }
 

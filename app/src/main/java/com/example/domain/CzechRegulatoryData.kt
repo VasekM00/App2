@@ -12,7 +12,7 @@ data class CzechRegulatoryData(
     // Macroeconomics (ČSÚ & ČNB)
     val csuCpiInflationPct: Double = 2.8,
     val csuAnnualAverageCpiPct: Double = 2.5,
-    val csuNationalAverageWageMonthly: Double = 43967.0,
+    val csuNationalAverageWageMonthly: Double = 48967.0,
     val eurCzkRate: Double = 25.15,
     val usdCzkRate: Double = 23.25,
     val rateDate: String = "",
@@ -24,7 +24,7 @@ data class CzechRegulatoryData(
     // Czech Income Tax (Zákon č. 586/1992 Sb. - ZDP)
     val baseTaxRatePct: Double = 15.0,
     val progressiveTaxRatePct: Double = 23.0,
-    val progressive23ThresholdAnnual: Double = 1582812.0, // 36x average national wage
+    val progressive23ThresholdAnnual: Double = 1762812.0, // 36x average national wage
     val taxpayerCreditAnnual: Double = 30840.0, // § 35ba(1)(a)
     val spouseTaxCreditAnnual: Double = 24840.0, // § 35ba(1)(b)
     val spouseIncomeLimitAnnual: Double = 68000.0, // § 35ba(1)(b)
