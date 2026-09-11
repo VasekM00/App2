@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.ui.tabs.CashFlowTab
@@ -82,6 +84,28 @@ class ScreenshotAuditTest {
         composeTestRule.onNodeWithTag("projections_subtab_2").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onRoot().captureRoboImage("src/test/screenshots/projections_montecarlo.png")
+    }
+
+    @Test
+    fun captureProjectionsSandboxSubTab() {
+        composeTestRule.setContent { MartinuFinancialsTheme { ProjectionsTab(state = state) } }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("projections_subtab_1").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/projections_sandbox.png")
+    }
+
+    @Test
+    fun captureProjectionsSandboxLowerSection() {
+        composeTestRule.setContent { MartinuFinancialsTheme { ProjectionsTab(state = state) } }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("projections_subtab_1").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().performTouchInput { swipeUp() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().performTouchInput { swipeUp() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/projections_sandbox_lower.png")
     }
 
     @Test
