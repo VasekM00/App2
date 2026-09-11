@@ -7,8 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "imported_bank_transactions",
     indices = [
-        Index(value = ["yearMonth"]),
-        Index(value = ["bankName"]),
+        Index(value = ["yearMonth", "bankName"]),
         Index(value = ["date"])
     ]
 )

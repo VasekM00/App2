@@ -27,8 +27,7 @@ data class LedgerEntryEntity(
 }
 
 @Entity(
-    tableName = "action_states",
-    indices = [Index(value = ["year"])]
+    tableName = "action_states"
 )
 data class ActionStateEntity(
     @PrimaryKey val actionKey: String, // e.g. "2026_ac1"

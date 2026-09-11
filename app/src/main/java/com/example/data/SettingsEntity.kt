@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.domain.DEFAULT_CUSTOM_LIFE_GOALS
 import com.example.domain.serializeCustomLifeGoals
-import java.util.Calendar
 
 const val VACLAV_BIRTH_YEAR: Int = 2000
 const val ELEONORA_BIRTH_YEAR: Int = 2000
@@ -117,7 +116,8 @@ data class SettingsEntity(
 ) {
     companion object {
         fun freshDefaults(): SettingsEntity {
-            val yr = Calendar.getInstance().get(Calendar.YEAR)
+            // Always use the Czech calendar year, regardless of the device time zone.
+            val yr = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
             return SettingsEntity(
                 baseYear = yr,
                 primaryAge = yr - VACLAV_BIRTH_YEAR,

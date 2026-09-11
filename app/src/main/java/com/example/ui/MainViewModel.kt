@@ -635,7 +635,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAction(year: Int, actionId: String, currentIsDone: Boolean) {
         viewModelScope.launch {
-            repository.toggleActionState(year, actionId)
+            // Persist an explicit target state (instead of a blind DB toggle) so the UI's
+            // notion of "done" always matches what is stored.
+            repository.setActionState(year, actionId, !currentIsDone)
         }
     }
 

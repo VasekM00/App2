@@ -23,6 +23,9 @@ object PdfTextExtractor {
         }
     }
 
+    /** Upper bound for a single inflated PDF stream, to defend against decompression bombs. */
+    private const val MAX_INFLATED_BYTES = 40 * 1024 * 1024
+
     private data class PdfStream(
         val dictionary: String,
         val data: ByteArray
@@ -190,46 +193,35 @@ object PdfTextExtractor {
             return stream.data
         }
 
-        // 1. Try standard RFC 1950 zlib Inflater
-        try {
-            val inflater = Inflater(false)
-            inflater.setInput(stream.data)
-            val bos = ByteArrayOutputStream()
-            val buffer = ByteArray(4096)
-            while (!inflater.finished()) {
-                val count = inflater.inflate(buffer)
-                if (count == 0) {
-                    if (inflater.needsInput() || inflater.needsDictionary()) break
+        fun inflate(nowrap: Boolean): ByteArray? {
+            return try {
+                val inflater = Inflater(nowrap)
+                inflater.setInput(stream.data)
+                val bos = ByteArrayOutputStream()
+                val buffer = ByteArray(4096)
+                while (!inflater.finished()) {
+                    val count = inflater.inflate(buffer)
+                    if (count == 0) {
+                        if (inflater.needsInput() || inflater.needsDictionary()) break
+                        continue
+                    }
+                    if (bos.size() + count > MAX_INFLATED_BYTES) {
+                        // Decompression bomb guard: abandon and let the caller use raw data.
+                        inflater.end()
+                        return null
+                    }
+                    bos.write(buffer, 0, count)
                 }
-                bos.write(buffer, 0, count)
+                inflater.end()
+                bos.toByteArray().takeIf { it.isNotEmpty() }
+            } catch (_: Exception) {
+                null
             }
-            inflater.end()
-            val decomp = bos.toByteArray()
-            if (decomp.isNotEmpty()) return decomp
-        } catch (_: Exception) {
-            // Fallback to raw deflate below
         }
 
-        // 2. Try raw RFC 1951 deflate (nowrap = true)
-        try {
-            val inflater = Inflater(true)
-            inflater.setInput(stream.data)
-            val bos = ByteArrayOutputStream()
-            val buffer = ByteArray(4096)
-            while (!inflater.finished()) {
-                val count = inflater.inflate(buffer)
-                if (count == 0) {
-                    if (inflater.needsInput() || inflater.needsDictionary()) break
-                }
-                bos.write(buffer, 0, count)
-            }
-            inflater.end()
-            val decomp = bos.toByteArray()
-            if (decomp.isNotEmpty()) return decomp
-        } catch (_: Exception) {
-            // Return raw data as fallback
-        }
-
+        // 1. Standard RFC 1950 zlib, then 2. raw RFC 1951 deflate.
+        inflate(false)?.let { return it }
+        inflate(true)?.let { return it }
         return stream.data
     }
 

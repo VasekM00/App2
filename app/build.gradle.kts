@@ -8,7 +8,7 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) }
 
   defaultConfig {
     applicationId = "com.aistudio.martinufinancials.fire2"
@@ -50,8 +50,10 @@ android {
       signingConfig = if (releaseKeystore.exists()) {
         signingConfigs.getByName("release")
       } else if (debugKeystore.exists()) {
+        logger.warn("WARNING: no release keystore found - the release build will be signed with the debug keystore. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_PASSWORD for a production release.")
         signingConfigs.getByName("debugConfig")
       } else {
+        logger.warn("WARNING: no release keystore found - the release build will be signed with the default debug keystore. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_PASSWORD for a production release.")
         signingConfigs.getByName("debug")
       }
     }

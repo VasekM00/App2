@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.SettingsEntity
+import com.example.domain.CzechRegulatoryData
 import com.example.domain.RegulatoryConstants
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -80,4 +81,30 @@ class ManifestEngineConsistencyTest {
         assertEquals("DPS youth age limit", RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_AGE_LIMIT, manifest.getInt("dpsYouthAgeLimit"))
         assertEquals("DPS statutory fee cap", RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT, manifest.getDouble("dpsStatutoryFeeCapPct"), 0.001)
     }
+
+    @Test
+    fun czechRegulatoryDataDefaultsMatchEngineConstants() {
+        // The offline "live sync" defaults are a third copy of the statutory parameters;
+        // they must not drift from SettingsEntity / RegulatoryConstants.
+        val live = CzechRegulatoryData()
+
+        assertEquals(settings().taxSecondBracketThresholdAnnual, live.progressive23ThresholdAnnual, 1.0)
+        assertEquals(48_967.0, live.csuNationalAverageWageMonthly, 1.0)
+        assertEquals(settings().taxRatePct, live.baseTaxRatePct, 0.001)
+        assertEquals(settings().taxRateSecondPct, live.progressiveTaxRatePct, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026, live.taxpayerCreditAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_SPOUSE_CREDIT_ANNUAL_2026, live.spouseTaxCreditAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_SPOUSE_INCOME_LIMIT_ANNUAL_2026, live.spouseIncomeLimitAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_CHILD_1_BONUS_ANNUAL_2026, live.child1TaxBonusAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_CHILD_2_BONUS_ANNUAL_2026, live.child2TaxBonusAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_CHILD_3_PLUS_BONUS_ANNUAL_2026, live.child3PlusTaxBonusAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026, live.dipDpsCombinedCeilingAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL, live.employerRetirementExemptionAnnual, 0.001)
+        assertEquals(RegulatoryConstants.STATUTORY_MIN_WAGE_MONTHLY_2026, live.minWageMonthly, 0.001)
+        assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY, live.dpsStandardSubsidyMaxMonthly, 0.001)
+        assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY, live.dpsYouthSubsidyMaxMonthly, 0.001)
+        assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_AGE_LIMIT, live.dpsYouthAgeLimit)
+    }
+
+    private fun settings() = SettingsEntity()
 }

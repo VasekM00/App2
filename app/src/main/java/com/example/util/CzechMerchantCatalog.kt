@@ -55,6 +55,8 @@ object CzechMerchantCatalog {
         "eshop", "shop", "cr", "czk", "mist", "misto", "terminal", "republika"
     )
 
+    private const val MIN_OVERRIDE_PATTERN_LENGTH = 3
+
     /**
      * Matches a transaction description against user custom overrides first,
      * then against the built-in merchant intelligence catalog.
@@ -71,12 +73,14 @@ object CzechMerchantCatalog {
         val simpleNorm = normalizeSimple(rawDescription)
         if (norm.isBlank() && simpleNorm.isBlank()) return null
 
-        // 1. Check user custom overrides first
+        // 1. Check user custom overrides first (ignore trivially short patterns that would
+        //    otherwise over-match almost every merchant).
         for ((pattern, category) in userOverrides) {
             val normPattern = normalize(pattern)
             val simplePattern = normalizeSimple(pattern)
-            if ((normPattern.isNotBlank() && norm.contains(normPattern)) ||
-                (simplePattern.isNotBlank() && simpleNorm.contains(simplePattern))) {
+            val normMatch = normPattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && norm.contains(normPattern)
+            val simpleMatch = simplePattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && simpleNorm.contains(simplePattern)
+            if (normMatch || simpleMatch) {
                 return category
             }
         }

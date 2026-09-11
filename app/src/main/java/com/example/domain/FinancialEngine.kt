@@ -1459,12 +1459,9 @@ object FinancialEngine {
             "ac4" to (settings.emergencyReserveCurrent * 0.04),
             "ac5" to max(0.0, dip.taxSavedYear),
             "ac6" to (if (!settings.isSingleHousehold) settings.eStartingSalary * 12.0 * (settings.eReinvestedPct / 100.0) else 0.0),
-            "ac7" to 0.0,
             "ac8" to (settings.subscriptionsMonthly * 12.0),
             "ac9" to max(0.0, settings.emergencyReserveCurrent - settings.emergencyReserveTarget),
-            "ac10" to ((settings.dpsBalanceCurrent + eDps) * 0.005),
-            "ac11" to 0.0,
-            "ac12" to 0.0
+            "ac10" to ((settings.dpsBalanceCurrent + eDps) * 0.005)
         )
 
         val investableNetWorth = settings.liquidPortfolioCurrent + eLiquid +

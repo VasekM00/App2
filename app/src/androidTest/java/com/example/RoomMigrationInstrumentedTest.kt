@@ -37,20 +37,21 @@ class RoomMigrationInstrumentedTest {
         AppDatabase.MIGRATION_22_23,
         AppDatabase.MIGRATION_23_24,
         AppDatabase.MIGRATION_24_25,
-        AppDatabase.MIGRATION_25_26
+        AppDatabase.MIGRATION_25_26,
+        AppDatabase.MIGRATION_26_27
     )
 
     @Test
     fun migrateFromEverySupportedVersionToLatest() {
-        for (start in 16..25) {
+        for (start in 16..26) {
             val applicable = migrationsInOrder.filter { it.startVersion >= start }
             helper.createDatabase(TEST_DB, start).close()
-            helper.runMigrationsAndValidate(TEST_DB, 26, true, *applicable.toTypedArray()).close()
+            helper.runMigrationsAndValidate(TEST_DB, 27, true, *applicable.toTypedArray()).close()
         }
     }
 
     @Test
-    fun migrateFullChain16To26PreservesLedgerDataAndAddsSnapshotColumns() {
+    fun migrateFullChain16To27PreservesLedgerDataAndAddsSnapshotColumns() {
         val db16 = helper.createDatabase(TEST_DB, 16)
         db16.execSQL(
             "INSERT INTO ledger_entries " +
@@ -59,7 +60,7 @@ class RoomMigrationInstrumentedTest {
         )
         db16.close()
 
-        val db25 = helper.runMigrationsAndValidate(TEST_DB, 26, true, *migrationsInOrder.toTypedArray())
+        val db25 = helper.runMigrationsAndValidate(TEST_DB, 27, true, *migrationsInOrder.toTypedArray())
         db25.query(
             "SELECT incVaclav, notes, portfolioBalanceAtMonthEnd, pensionBalanceAtMonthEnd, " +
                 "emergencyReserveAtMonthEnd FROM ledger_entries WHERE id = 1"
@@ -79,6 +80,30 @@ class RoomMigrationInstrumentedTest {
         assertTrue(
             "app_settings must gain retirementHorizonYears in schema 25, found: $settingsColumns",
             settingsColumns.contains("retirementHorizonYears")
+        )
+
+        val importIndexes = mutableListOf<String>()
+        db25.query("PRAGMA index_list(imported_bank_transactions)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) importIndexes.add(cursor.getString(nameIndex))
+        }
+        assertTrue(
+            "Composite (yearMonth, bankName) index must exist in schema 27, found: $importIndexes",
+            importIndexes.any { it.contains("yearMonth_bankName") }
+        )
+        assertTrue(
+            "Redundant single-column yearMonth index must be gone, found: $importIndexes",
+            importIndexes.none { it == "index_imported_bank_transactions_yearMonth" }
+        )
+
+        val actionIndexes = mutableListOf<String>()
+        db25.query("PRAGMA index_list(action_states)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) actionIndexes.add(cursor.getString(nameIndex))
+        }
+        assertTrue(
+            "Unused action_states.year index must be gone, found: $actionIndexes",
+            actionIndexes.none { it.contains("year") }
         )
         db25.close()
     }

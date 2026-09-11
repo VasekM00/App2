@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -451,6 +451,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Composite index for the hot (yearMonth + bankName) import query; drop the
+                // now-redundant single-column indices and the unused action_states.year index.
+                db.execSQL("DROP INDEX IF EXISTS index_imported_bank_transactions_yearMonth")
+                db.execSQL("DROP INDEX IF EXISTS index_imported_bank_transactions_bankName")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_yearMonth_bankName ON imported_bank_transactions(yearMonth, bankName)")
+                db.execSQL("DROP INDEX IF EXISTS index_action_states_year")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -463,7 +474,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
-                        MIGRATION_24_25, MIGRATION_25_26
+                        MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27
                     )
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()
