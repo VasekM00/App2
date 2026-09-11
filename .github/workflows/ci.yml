@@ -28,6 +28,9 @@ jobs:
       - name: Unit tests + lint
         run: ./gradlew testDebugUnitTest lintDebug --console=plain
 
+      - name: Screenshot regression (Roborazzi verify)
+        run: ./gradlew testDebugUnitTest --tests "com.example.ScreenshotAuditTest" -Proborazzi.test.verify=true --rerun --console=plain
+
       - name: Assemble release (R8)
         run: ./gradlew assembleRelease --console=plain
 
@@ -39,3 +42,4 @@ jobs:
           path: |
             app/build/reports/**
             app/build/test-results/**
+            app/build/roborazzi/**

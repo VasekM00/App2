@@ -1,0 +1,20 @@
+# Cross-platform line endings
+* text=auto
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+*.bat text eol=crlf
+*.sh text eol=lf
+
+# Binary assets (never normalize)
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.jar binary
+*.pdf binary
+*.jks binary
+*.keystore binary
+*.p12 binary
+*.ttf binary
+*.otf binary

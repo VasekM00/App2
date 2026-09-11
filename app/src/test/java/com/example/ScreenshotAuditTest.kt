@@ -39,7 +39,7 @@ class ScreenshotAuditTest {
     fun captureOverviewTab() {
         composeTestRule.setContent { MartinuFinancialsTheme { OverviewTab(state = state) } }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/overview.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/overview.png")
     }
 
     @Test
@@ -47,7 +47,7 @@ class ScreenshotAuditTest {
     fun captureOverviewTabTall() {
         composeTestRule.setContent { MartinuFinancialsTheme { OverviewTab(state = state) } }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/overview_tall.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/overview_tall.png")
     }
 
     @Test
@@ -65,14 +65,14 @@ class ScreenshotAuditTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/cashflow.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/cashflow.png")
     }
 
     @Test
     fun captureProjectionsTab() {
         composeTestRule.setContent { MartinuFinancialsTheme { ProjectionsTab(state = state) } }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/projections.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/projections.png")
     }
 
     @Test
@@ -81,7 +81,7 @@ class ScreenshotAuditTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("projections_subtab_2").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/projections_montecarlo.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/projections_montecarlo.png")
     }
 
     @Test
@@ -97,7 +97,7 @@ class ScreenshotAuditTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/plan.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/plan.png")
     }
 
     @Test
@@ -116,6 +116,6 @@ class ScreenshotAuditTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onRoot().captureRoboImage("build/roborazzi/settings.png")
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/settings.png")
     }
 }
