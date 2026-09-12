@@ -109,6 +109,7 @@ fun MainScreen(
     val activeAuditReport by viewModel.activeAuditReport.collectAsState()
     val importedBankSourcesByMonth by viewModel.importedBankSourcesByMonth.collectAsState()
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
+    val allImportedTransactions by viewModel.allImportedTransactions.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -370,6 +371,7 @@ fun MainScreen(
                                 onDismissAuditReport = { viewModel.clearAuditReport() },
                                 importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 lastImportTimestamp = lastImportTimestamp,
+                                allImportedTransactions = allImportedTransactions,
                                 initialSubTab = targetCashFlowSubTab
                             )
                             2 -> ProjectionsTab(

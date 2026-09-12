@@ -78,6 +78,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyMap()
         )
 
+    val allImportedTransactions: StateFlow<List<com.example.data.ImportedBankTransactionEntity>> = repository.getAllImportedTransactions()
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Sensitivity slider override states
     val sensitivityReturnOverride = MutableStateFlow<Double?>(null)
     val sensitivityCpiOverride = MutableStateFlow<Double?>(null)
@@ -238,7 +246,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 1. Try bank statement parser first (Moneta, CSOB, mBank) - supports PDF and CSV
                 try {
-                    val overrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication())
+                    val settingsRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson)
+                    val prefOverrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication())
+                    val overrides = prefOverrides + settingsRules
                     val bankSummary = com.example.util.BankStatementImporter.parseStatement(
                         bytes.inputStream(),
                         userOverrides = overrides
@@ -590,6 +600,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val query = com.example.util.CzechMerchantCatalog.suggestMerchantSearchQuery(merchantName)
             if (query.isNotBlank()) {
                 com.example.util.MerchantCategoryManager.saveOverride(getApplication(), query, newCategory)
+                val currentRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson).toMutableMap()
+                currentRules[query.trim().lowercase()] = newCategory
+                updateSettings(settingsState.value.copy(merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson(currentRules)))
+
                 val normQuery = com.example.util.CzechMerchantCatalog.normalize(query)
                 for (i in updatedTransactions.indices) {
                     val otherTx = updatedTransactions[i]

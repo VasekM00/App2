@@ -159,9 +159,9 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
-    fun test6_databaseVersion_matchesTarget27() {
+    fun test6_databaseVersion_matchesTarget29() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(27, version)
+        assertEquals(29, version)
     }
 
     @Test
@@ -176,6 +176,32 @@ class RoomMigrationAndStateResilienceTest {
         val cursor = db.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='index' AND name='index_imported_bank_transactions_date'")
         assertTrue("index_imported_bank_transactions_date must exist in schema v24", cursor.moveToFirst())
         cursor.close()
+    }
+
+    @Test
+    fun test7c_schema_v28_settingsColumnsExist() {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+        assertTrue("dividendYieldPct must exist in app_settings", columns.contains("dividendYieldPct"))
+        assertTrue("dividendTaxRatePct must exist in app_settings", columns.contains("dividendTaxRatePct"))
+        assertTrue("useHistoricalBootstrap must exist in app_settings", columns.contains("useHistoricalBootstrap"))
+        assertTrue("guardrailsEnabled must exist in app_settings", columns.contains("guardrailsEnabled"))
+    }
+
+    @Test
+    fun test7d_schema_v29_settingsColumnsExist() {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+        assertTrue("currentChildCostsInBaseline must exist in app_settings", columns.contains("currentChildCostsInBaseline"))
+        assertTrue("merchantRulesJson must exist in app_settings", columns.contains("merchantRulesJson"))
     }
 
     @Test

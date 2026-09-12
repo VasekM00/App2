@@ -14,10 +14,8 @@ object MerchantCategoryManager {
     private const val PREFS_NAME = "merchant_category_overrides"
     private const val KEY_OVERRIDES_JSON = "overrides_json"
 
-    fun getOverrides(context: Context): Map<String, BankTransactionType> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val jsonStr = prefs.getString(KEY_OVERRIDES_JSON, null) ?: return emptyMap()
-
+    fun parseRulesFromJson(jsonStr: String): Map<String, BankTransactionType> {
+        if (jsonStr.isBlank()) return emptyMap()
         val map = mutableMapOf<String, BankTransactionType>()
         try {
             val json = JSONObject(jsonStr)
@@ -36,6 +34,20 @@ object MerchantCategoryManager {
             // Safe fallback on corrupted JSON
         }
         return map
+    }
+
+    fun serializeRulesToJson(rules: Map<String, BankTransactionType>): String {
+        val json = JSONObject()
+        for ((k, v) in rules) {
+            json.put(k, v.name)
+        }
+        return json.toString()
+    }
+
+    fun getOverrides(context: Context): Map<String, BankTransactionType> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString(KEY_OVERRIDES_JSON, null) ?: return emptyMap()
+        return parseRulesFromJson(jsonStr)
     }
 
     fun saveOverride(context: Context, merchantPattern: String, category: BankTransactionType) {

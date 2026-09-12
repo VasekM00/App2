@@ -94,10 +94,14 @@ class FinancialEngineExhaustiveAuditTest {
         val baseCost = FinancialEngine.totalLivingCostMonthly(defaultSettings, 2026)
         // Rent (21770) + Groceries (4800) + Cafes (2250) + Therapy (2000) + Charity (2000) +
         // Entertainment (1200) + Transport (650) + Subscriptions (584) + Other (1500)
-        // Child 1 (born 2024, age 2 in 2026 -> Toddler = 4800)
+        // With currentChildCostsInBaseline = true, Child 1 (born 2024, toddler in 2026) is already embedded in baseline groceries/rent (0 addition in base year).
         // Child 2 (born 2027, age -1 in 2026 -> not born = 0)
-        val expectedBase = 21770.0 + 4800.0 + 2250.0 + 2000.0 + 2000.0 + 1200.0 + 650.0 + 584.0 + 1500.0 + 4800.0
+        val expectedBase = 21770.0 + 4800.0 + 2250.0 + 2000.0 + 2000.0 + 1200.0 + 650.0 + 584.0 + 1500.0
         assertEquals(expectedBase, baseCost, 0.001)
+
+        // When currentChildCostsInBaseline = false (legacy mode), toddler cost is added on top
+        val legacyCost = FinancialEngine.totalLivingCostMonthly(defaultSettings.copy(currentChildCostsInBaseline = false), 2026)
+        assertEquals(expectedBase + 4800.0, legacyCost, 0.001)
 
         // Test Child 1 through all age stages:
         // Age 0-2 Toddler (2026), Age 3-5 Preschool (2027-2029), Age 6-14 School (2030-2038), Age 15-18 Teen (2039-2042), Age 19-25 Uni (2043-2049)
@@ -142,9 +146,13 @@ class FinancialEngineExhaustiveAuditTest {
 
         val newTotalLiving = FinancialEngine.totalLivingCostMonthly(modifiedSettings, 2026)
         // 25000 (rent) + 6000 (groceries) + 2250 (cafes) + 0 (therapy deleted) + 0 (charity deleted) +
-        // 1200 (entertainment) + 650 (transport) + 584 (subscriptions) + 1500 (other) + 2300 (custom) + 4800 (child 1)
-        val expectedNewTotal = 25000.0 + 6000.0 + 2250.0 + 1200.0 + 650.0 + 584.0 + 1500.0 + 2300.0 + 4800.0
+        // 1200 (entertainment) + 650 (transport) + 584 (subscriptions) + 1500 (other) + 2300 (custom)
+        // Child 1 is toddler in base year 2026 (embedded in baseline when currentChildCostsInBaseline = true -> 0.0)
+        val expectedNewTotal = 25000.0 + 6000.0 + 2250.0 + 1200.0 + 650.0 + 584.0 + 1500.0 + 2300.0
         assertEquals(expectedNewTotal, newTotalLiving, 0.001)
+
+        val legacyTotalLiving = FinancialEngine.totalLivingCostMonthly(modifiedSettings.copy(currentChildCostsInBaseline = false), 2026)
+        assertEquals(expectedNewTotal + 4800.0, legacyTotalLiving, 0.001)
     }
 
     @Test

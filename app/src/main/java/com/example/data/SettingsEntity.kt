@@ -92,6 +92,7 @@ data class SettingsEntity(
     val dpsSubsidyRateYouthPct: Double = 40.0,
     // Child expenses & Multi-child settings (ZDP § 35c)
     val childExpensesEnabled: Boolean = true,
+    val currentChildCostsInBaseline: Boolean = true,
     val child1Enabled: Boolean = true,
     val child1BirthYear: Int = 2024,
     val child2Enabled: Boolean = true,
@@ -109,10 +110,15 @@ data class SettingsEntity(
     val monteCarloVolatilityPct: Double = 15.0,
     val monteCarloSeed: Long = 42L,
     val retirementHorizonYears: Int = 35,
+    val dividendYieldPct: Double = 1.8,
+    val dividendTaxRatePct: Double = 15.0,
+    val useHistoricalBootstrap: Boolean = false,
+    val guardrailsEnabled: Boolean = false,
     val customExpensesJson: String = "[]",
     val customGoalsJson: String = "[]",
     val customLumpSumsJson: String = "[]",
-    val deletedCategoriesJson: String = "[]"
+    val deletedCategoriesJson: String = "[]",
+    val merchantRulesJson: String = "{}"
 ) {
     companion object {
         fun freshDefaults(): SettingsEntity {

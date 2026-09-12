@@ -174,6 +174,7 @@ fun CashFlowTab(
     onDismissAuditReport: () -> Unit = {},
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     lastImportTimestamp: Long? = null,
+    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -227,6 +228,7 @@ fun CashFlowTab(
                 0 -> BudgetAndIncomesSubTab(
                     state = state,
                     ledgerEntries = ledgerEntries,
+                    allImportedTransactions = allImportedTransactions,
                     onShowInfo = { infoState.show(it) }
                 )
                 1 -> LedgerSubTab(
@@ -2713,6 +2715,7 @@ fun LedgerChart(
 private fun BudgetAndIncomesSubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>,
+    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details
@@ -2760,7 +2763,12 @@ private fun BudgetAndIncomesSubTab(
         }
 
         when (selectedSection) {
-            0 -> SummarySubTab(state = state, ledgerEntries = ledgerEntries, onShowInfo = onShowInfo)
+            0 -> SummarySubTab(
+                state = state,
+                ledgerEntries = ledgerEntries,
+                allImportedTransactions = allImportedTransactions,
+                onShowInfo = onShowInfo
+            )
             1 -> IncomeSubTab(state = state, onShowInfo = onShowInfo)
             2 -> SpendingSubTab(state = state, onShowInfo = onShowInfo)
         }
@@ -2771,6 +2779,7 @@ private fun BudgetAndIncomesSubTab(
 private fun SummarySubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>,
+    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
@@ -2859,6 +2868,25 @@ private fun SummarySubTab(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 2. Freedom Days Metric Banner
+        val liquidPortfolio = state.settings.liquidPortfolioCurrent +
+            (if (!state.settings.isSingleHousehold) state.settings.eLiquidPortfolioCurrent else 0.0)
+        com.example.ui.components.FreedomDaysBanner(
+            monthlySavings = state.investMonthlyTotal,
+            monthlyLivingCost = state.totalLivingCostMonthly,
+            portfolioBalance = liquidPortfolio
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 3. Subscription & Fixed Debit Auditor Card
+        com.example.ui.components.SubscriptionAuditorCard(
+            transactions = allImportedTransactions,
+            swrPct = state.settings.safeWithdrawalRatePct
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 

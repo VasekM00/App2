@@ -84,6 +84,7 @@ object BackupManager {
 
         // Children & Family
         json.put("childExpensesEnabled", s.childExpensesEnabled)
+        json.put("currentChildCostsInBaseline", s.currentChildCostsInBaseline)
         json.put("child1Enabled", s.child1Enabled)
         json.put("child1BirthYear", s.child1BirthYear)
         json.put("child1TaxBonusAnnual", s.child1TaxBonusAnnual)
@@ -125,6 +126,11 @@ object BackupManager {
         json.put("monteCarloVolatilityPct", s.monteCarloVolatilityPct)
         json.put("monteCarloSeed", s.monteCarloSeed)
         json.put("retirementHorizonYears", s.retirementHorizonYears)
+        json.put("dividendYieldPct", s.dividendYieldPct)
+        json.put("dividendTaxRatePct", s.dividendTaxRatePct)
+        json.put("useHistoricalBootstrap", s.useHistoricalBootstrap)
+        json.put("guardrailsEnabled", s.guardrailsEnabled)
+        json.put("merchantRulesJson", s.merchantRulesJson)
 
         return json.toString()
     }
@@ -202,6 +208,7 @@ object BackupManager {
                 deletedCategoriesJson = json.optString("deletedCategoriesJson", fallback.deletedCategoriesJson),
 
                 childExpensesEnabled = json.optBoolean("childExpensesEnabled", fallback.childExpensesEnabled),
+                currentChildCostsInBaseline = json.optBoolean("currentChildCostsInBaseline", fallback.currentChildCostsInBaseline),
                 child1Enabled = json.optBoolean("child1Enabled", fallback.child1Enabled),
                 child1BirthYear = json.optInt("child1BirthYear", fallback.child1BirthYear),
                 child1TaxBonusAnnual = json.optDouble("child1TaxBonusAnnual", fallback.child1TaxBonusAnnual),
@@ -242,7 +249,12 @@ object BackupManager {
                 monteCarloN = json.optInt("monteCarloN", fallback.monteCarloN),
                 monteCarloVolatilityPct = json.optDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
                 monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed),
-                retirementHorizonYears = json.optInt("retirementHorizonYears", fallback.retirementHorizonYears)
+                retirementHorizonYears = json.optInt("retirementHorizonYears", fallback.retirementHorizonYears),
+                dividendYieldPct = json.optDouble("dividendYieldPct", fallback.dividendYieldPct),
+                dividendTaxRatePct = json.optDouble("dividendTaxRatePct", fallback.dividendTaxRatePct),
+                useHistoricalBootstrap = json.optBoolean("useHistoricalBootstrap", fallback.useHistoricalBootstrap),
+                guardrailsEnabled = json.optBoolean("guardrailsEnabled", fallback.guardrailsEnabled),
+                merchantRulesJson = json.optString("merchantRulesJson", fallback.merchantRulesJson)
             )
             sanitizeRestored(restored, fallback)
         } catch (_: Exception) {
@@ -251,6 +263,12 @@ object BackupManager {
     }
 
     private fun sanitizeRestored(s: SettingsEntity, f: SettingsEntity): SettingsEntity {
+        val cleanMerchantRules = try {
+            JSONObject(s.merchantRulesJson)
+            s.merchantRulesJson
+        } catch (_: Exception) {
+            f.merchantRulesJson
+        }
         fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
@@ -337,7 +355,10 @@ object BackupManager {
             childSchoolMonthly = money(s.childSchoolMonthly, f.childSchoolMonthly),
             childTeenMonthly = money(s.childTeenMonthly, f.childTeenMonthly),
             childUniMonthly = money(s.childUniMonthly, f.childUniMonthly),
-            monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct)
+            monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct),
+            dividendYieldPct = pct(s.dividendYieldPct, f.dividendYieldPct),
+            dividendTaxRatePct = pct(s.dividendTaxRatePct, f.dividendTaxRatePct),
+            merchantRulesJson = cleanMerchantRules
         )
     }
 }

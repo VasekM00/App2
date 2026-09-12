@@ -301,7 +301,9 @@ data class RetirementSurvivalResult(
     val medianEndBalanceToday: Double,
     val p5EndBalanceToday: Double,
     val medianDepletionAge: Int?,
-    val sampleSize: Int
+    val sampleSize: Int,
+    val guardrailsActive: Boolean = false,
+    val guardrailTriggeredPct: Double = 0.0
 )
 
 data class StressScenarioResult(
@@ -357,6 +359,7 @@ data class FullCalculationState(
     val dip: DipProjection,
     val taxReturnHelper: TaxReturnHelperData,
     val monteCarlo: MonteCarloResult,
+    val historicalMonteCarlo: MonteCarloResult,
     val retirementSurvival: RetirementSurvivalResult,
     val stressScenarios: List<StressScenarioResult>,
     val fireMilestones: FireMilestonesSummary,
@@ -670,14 +673,52 @@ object FinancialEngine {
         base += customItems.sumOf { it.amount }
 
         if (settings.childExpensesEnabled) {
-            if (settings.child1Enabled) {
-                base += childMonthlyExpense(settings.child1BirthYear, year, settings)
+            fun computeChildAddition(enabled: Boolean, birthYear: Int): Double {
+                if (!enabled) return 0.0
+                return if (settings.currentChildCostsInBaseline) {
+                    if (birthYear <= settings.baseYear) {
+                        // Existing child already alive in baseYear: current stage expense is already embedded
+                        // in manual living costs (groceries, rent, baby items).
+                        // In base year, addition is 0.0. In future years, only the incremental delta is added.
+                        if (year <= settings.baseYear) {
+                            0.0
+                        } else {
+                            val baseYearStageCost = childMonthlyExpense(birthYear, settings.baseYear, settings)
+                            val currentYearStageCost = childMonthlyExpense(birthYear, year, settings)
+                            currentYearStageCost - baseYearStageCost
+                        }
+                    } else {
+                        // Future child born after baseYear: not present in base-year budget, full stage cost added.
+                        if (year < birthYear) 0.0 else childMonthlyExpense(birthYear, year, settings)
+                    }
+                } else {
+                    childMonthlyExpense(birthYear, year, settings)
+                }
             }
-            if (settings.child2Enabled) {
-                base += childMonthlyExpense(settings.child2BirthYear, year, settings)
-            }
+
+            base += computeChildAddition(settings.child1Enabled, settings.child1BirthYear)
+            base += computeChildAddition(settings.child2Enabled, settings.child2BirthYear)
         }
-        return base
+        return max(0.0, base)
+    }
+
+    /**
+     * Calculates the number of days of permanent financial freedom purchased
+     * by a given monthly savings amount, based on the household's current daily living burn.
+     */
+    fun freedomDaysBoughtMonthly(monthlySavings: Double, monthlyLivingCost: Double): Double {
+        if (monthlySavings <= 0.0 || monthlyLivingCost <= 0.0) return 0.0
+        val dailyBurn = monthlyLivingCost / 30.42
+        return if (dailyBurn > 0.0) monthlySavings / dailyBurn else 0.0
+    }
+
+    /**
+     * Calculates the total number of days of financial freedom stored in a given portfolio balance.
+     */
+    fun freedomDaysCoveredByPortfolio(portfolioBalance: Double, monthlyLivingCost: Double): Double {
+        if (portfolioBalance <= 0.0 || monthlyLivingCost <= 0.0) return 0.0
+        val dailyBurn = monthlyLivingCost / 30.42
+        return if (dailyBurn > 0.0) portfolioBalance / dailyBurn else 0.0
     }
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
@@ -694,7 +735,7 @@ object FinancialEngine {
         val list = mutableListOf<PortfolioYearPoint>()
         val sy = settings.baseYear
         val age0 = settings.primaryAge
-        val ret = settings.portfolioNominalReturnPct / 100.0
+        val ret = netTaxableNominalReturnPct(settings) / 100.0
         val includeSpouse = dualIncome && !settings.isSingleHousehold
         val eLiquid = if (includeSpouse) settings.eLiquidPortfolioCurrent else 0.0
         var bal = settings.liquidPortfolioCurrent + eLiquid
@@ -984,6 +1025,79 @@ object FinancialEngine {
         return mag * cos(theta)
     }
 
+    /**
+     * Historical annual total returns of global equities (S&P 500 / MSCI World total return
+     * with dividends reinvested) from 1970 to 2025 (56 years).
+     * Used for empirical block-bootstrap resampling to preserve real-world fat tails,
+     * sequence-of-returns drawdowns (e.g. 1973-74, 2000-02, 2008), and multi-year autocorrelation.
+     */
+    val HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT = doubleArrayOf(
+         3.9,  // 1970
+        14.3,  // 1971
+        19.0,  // 1972
+       -14.7,  // 1973 (Stagflation shock)
+       -26.5,  // 1974 (Stagflation shock)
+        37.2,  // 1975 (Rebound)
+        23.8,  // 1976
+        -7.2,  // 1977
+         6.6,  // 1978
+        18.4,  // 1979
+        32.4,  // 1980
+        -4.9,  // 1981
+        21.6,  // 1982
+        22.6,  // 1983
+         6.3,  // 1984
+        31.7,  // 1985
+        18.7,  // 1986
+         5.3,  // 1987 (Black Monday)
+        16.6,  // 1988
+        31.7,  // 1989
+        -3.1,  // 1990
+        30.5,  // 1991
+         7.6,  // 1992
+        10.1,  // 1993
+         1.3,  // 1994
+        37.6,  // 1995
+        23.0,  // 1996
+        33.4,  // 1997
+        28.6,  // 1998
+        21.0,  // 1999 (Dot-com peak)
+        -9.1,  // 2000 (Dot-com bust)
+       -11.9,  // 2001 (Dot-com bust)
+       -22.1,  // 2002 (Dot-com bust)
+        28.7,  // 2003
+        10.9,  // 2004
+         4.9,  // 2005
+        15.8,  // 2006
+         5.5,  // 2007
+       -37.0,  // 2008 (Global Financial Crisis)
+        26.5,  // 2009 (Recovery)
+        15.1,  // 2010
+         2.1,  // 2011
+        16.0,  // 2012
+        32.4,  // 2013
+        13.7,  // 2014
+         1.4,  // 2015
+        12.0,  // 2016
+        21.8,  // 2017
+        -4.4,  // 2018
+        31.5,  // 2019
+        18.4,  // 2020 (COVID shock)
+        28.7,  // 2021
+       -18.1,  // 2022 (Inflation / rate hikes)
+        26.3,  // 2023
+        25.0,  // 2024
+        12.5   // 2025
+    )
+
+    fun dividendTaxDragPct(settings: SettingsEntity): Double {
+        return (settings.dividendYieldPct * settings.dividendTaxRatePct / 100.0).coerceAtLeast(0.0)
+    }
+
+    fun netTaxableNominalReturnPct(settings: SettingsEntity): Double {
+        val drag = dividendTaxDragPct(settings)
+        return max(0.0, settings.portfolioNominalReturnPct - drag)
+    }
 
     private data class MonteCarloKey(
         val settings: SettingsEntity,
@@ -1010,7 +1124,7 @@ object FinancialEngine {
         }
 
         val sims = settings.monteCarloN.coerceIn(100, 400)
-        val meanReturn = settings.portfolioNominalReturnPct / 100.0
+        val meanReturn = netTaxableNominalReturnPct(settings) / 100.0
         val sigma = settings.monteCarloVolatilityPct / 100.0
         val random = Random(settings.monteCarloSeed)
 
@@ -1097,6 +1211,145 @@ object FinancialEngine {
         return result
     }
 
+    private data class HistoricalMonteCarloKey(
+        val settings: SettingsEntity,
+        val horizonYears: Int,
+        val initialCrashPct: Double = 0.0,
+        val blockSize: Int = 3
+    )
+
+    @Volatile
+    private var cachedHistMcKey: HistoricalMonteCarloKey? = null
+    @Volatile
+    private var cachedHistMcResult: MonteCarloResult? = null
+
+    /**
+     * Empirical Block-Bootstrap Monte Carlo simulation resampling from 1970–2025 equity history.
+     * Preserves fat tails and multi-year sequence-of-returns drawdowns, while accounting for dividend tax drag.
+     */
+    fun runHistoricalMonteCarlo(
+        settings: SettingsEntity,
+        horizonYears: Int = 35,
+        initialCrashPct: Double = 0.0,
+        blockSize: Int = 3
+    ): MonteCarloResult {
+        val currentKey = HistoricalMonteCarloKey(
+            settings = settings,
+            horizonYears = horizonYears,
+            initialCrashPct = initialCrashPct,
+            blockSize = blockSize
+        )
+
+        cachedHistMcResult?.let { result ->
+            if (currentKey == cachedHistMcKey) {
+                return result
+            }
+        }
+
+        val sims = settings.monteCarloN.coerceIn(100, 400)
+        val taxDrag = dividendTaxDragPct(settings)
+        val random = Random(settings.monteCarloSeed + 101L)
+
+        val baseYear = settings.baseYear
+        val baseAge = settings.primaryAge
+        val initialTarget = fireTargetYear(baseYear, settings, baseAge)
+
+        val additions = Array(horizonYears) { y ->
+            val sy = baseYear + y
+            val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
+            val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(y) else 1.0
+            val baseDca = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
+            val eleonoraSal = if (!settings.isSingleHousehold && sy >= settings.eReturnYear) {
+                eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
+            } else 0.0
+            val lump = lumpSumForYear(sy, settings)
+            val target = fireTargetYear(sy + 1, settings, baseAge + y + 1)
+            Triple(baseDca + eleonoraSal + lump, target, baseAge + y + 1)
+        }
+
+        val yearlyBalances = Array(horizonYears + 1) { DoubleArray(sims) }
+        val hitAges = mutableListOf<Int>()
+
+        val nHistory = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.size
+        val effectiveBlockSize = blockSize.coerceIn(1, 5)
+
+        for (i in 0 until sims) {
+            val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+            var bal = max(0.0, (settings.liquidPortfolioCurrent + eLiquid) * max(0.0, 1.0 - initialCrashPct))
+            yearlyBalances[0][i] = bal
+            var hitAge: Int? = null
+
+            val pathReturns = DoubleArray(horizonYears)
+            var yOffset = 0
+            while (yOffset < horizonYears) {
+                val startIdx = random.nextInt(nHistory)
+                for (b in 0 until effectiveBlockSize) {
+                    if (yOffset + b < horizonYears) {
+                        val histIdx = (startIdx + b) % nHistory
+                        val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
+                        val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0)
+                        pathReturns[yOffset + b] = netReturn
+                    }
+                }
+                yOffset += effectiveBlockSize
+            }
+
+            for (y in 0 until horizonYears) {
+                val (add, target, age) = additions[y]
+                val ret = pathReturns[y]
+                bal = max(0.0, (bal + add) * max(0.0, 1.0 + ret))
+                yearlyBalances[y + 1][i] = bal
+
+                if (hitAge == null && bal >= target) {
+                    hitAge = age
+                }
+            }
+            if (hitAge != null) {
+                hitAges.add(hitAge)
+            }
+        }
+
+        hitAges.sort()
+        val successRatePct = (hitAges.size.toDouble() / sims) * 100.0
+
+        val fanPoints = mutableListOf<MonteCarloPoint>()
+        for (y in 0..horizonYears) {
+            val arr = yearlyBalances[y].copyOf().apply { sort() }
+            val year = baseYear + y
+            val age = baseAge + y
+            val target = if (y == 0) initialTarget else additions[y - 1].second
+
+            val p5 = arr[(sims * 0.05).toInt().coerceIn(0, sims - 1)]
+            val p50 = arr[(sims * 0.50).toInt().coerceIn(0, sims - 1)]
+            val p95 = arr[(sims * 0.95).toInt().coerceIn(0, sims - 1)]
+
+            fanPoints.add(MonteCarloPoint(year, age, p5, p50, p95, target))
+        }
+
+        val ageCheckpoints = listOf(baseAge + 10, baseAge + 12, baseAge + 15, baseAge + 18, baseAge + 20)
+        val probTable = ageCheckpoints.map { targetAge ->
+            val countHit = hitAges.count { it <= targetAge }
+            MonteCarloAgeProbability(targetAge, (countHit.toDouble() / sims) * 100.0)
+        }
+
+        val medianFireAge = if (hitAges.isNotEmpty()) hitAges[hitAges.size / 2] else null
+        val bestCaseAge = if (hitAges.isNotEmpty()) hitAges[(hitAges.size * 0.05).toInt().coerceIn(0, hitAges.size - 1)] else null
+        val worstCaseAge = if (hitAges.isNotEmpty()) hitAges[(hitAges.size * 0.95).toInt().coerceIn(0, hitAges.size - 1)] else null
+
+        val result = MonteCarloResult(
+            successRatePct = successRatePct,
+            medianFireAge = medianFireAge,
+            bestCaseAge = bestCaseAge,
+            worstCaseAge = worstCaseAge,
+            fanPoints = fanPoints,
+            probabilityTable = probTable
+        )
+
+        cachedHistMcKey = currentKey
+        cachedHistMcResult = result
+        return result
+    }
+
     @Volatile
     private var cachedSurvivalKey: SettingsEntity? = null
     @Volatile
@@ -1105,6 +1358,7 @@ object FinancialEngine {
     /**
      * Simulates accumulation to FIRE and then a full withdrawal phase to the configured
      * retirement horizon. Success = the portfolio never depletes among paths that reach FIRE.
+     * Incorporates dividend tax drag and Guyton-Klinger dynamic spending guardrails.
      */
     fun runRetirementSurvival(settings: SettingsEntity): RetirementSurvivalResult {
         cachedSurvivalResult?.let { result ->
@@ -1112,7 +1366,7 @@ object FinancialEngine {
         }
 
         val sims = settings.monteCarloN.coerceIn(100, 400)
-        val meanReturn = settings.portfolioNominalReturnPct / 100.0
+        val meanReturn = netTaxableNominalReturnPct(settings) / 100.0
         val sigma = settings.monteCarloVolatilityPct / 100.0
         val random = Random(settings.monteCarloSeed + 1L)
 
@@ -1148,12 +1402,14 @@ object FinancialEngine {
             } else 0.0
             baseDca + eleonoraSal + lumpSumForYear(sy, settings)
         }
+
         val targets = DoubleArray(maxAccumYears) { y ->
             fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1)
         }
 
         var fireReached = 0
         var survived = 0
+        var pathsWithGuardrailsTriggered = 0
         val endBalancesToday = ArrayList<Double>(sims)
         val depletionAges = ArrayList<Int>()
 
@@ -1172,6 +1428,7 @@ object FinancialEngine {
             fireReached++
 
             var depletedAge: Int? = null
+            var guardrailTriggeredInPath = false
             for (k in 0 until horizon) {
                 val year = fireYear + k
                 val age = baseAge + (year - baseYear)
@@ -1182,7 +1439,23 @@ object FinancialEngine {
                 if (!settings.isSingleHousehold && age >= settings.eStatePensionAge) {
                     pensionAnnual += ePensionToday * 12.0 * indexation
                 }
-                val need = max(0.0, lifestyleAnnual - pensionAnnual)
+                var need = max(0.0, lifestyleAnnual - pensionAnnual)
+
+                if (settings.guardrailsEnabled && bal > 0.0) {
+                    val currentWithdrawalRate = need / bal
+                    val targetSwr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
+                    if (currentWithdrawalRate > targetSwr * 1.20) {
+                        // Upper Guardrail (Capital Preservation Rule):
+                        // Reduce discretionary spending by 10%, protected by a 70% essential floor
+                        val essentialFloor = lifestyleAnnual * 0.70 - pensionAnnual
+                        need = max(max(0.0, essentialFloor), need * 0.90)
+                        guardrailTriggeredInPath = true
+                    } else if (currentWithdrawalRate < targetSwr * 0.80) {
+                        // Lower Guardrail (Prosperity Rule): boost spending by 10%
+                        need = need * 1.10
+                    }
+                }
+
                 bal -= need
                 if (bal <= 0.0) {
                     bal = 0.0
@@ -1198,12 +1471,18 @@ object FinancialEngine {
             } else {
                 depletionAges.add(depletedAge)
             }
+            if (guardrailTriggeredInPath) {
+                pathsWithGuardrailsTriggered++
+            }
             val deflator = (1.0 + cpi).pow(horizon)
             endBalancesToday.add(if (deflator.isFinite() && deflator > 0.0) bal / deflator else bal)
         }
 
         val successRate = if (fireReached > 0) survived.toDouble() / fireReached * 100.0 else 0.0
         val fireProbability = (fireReached.toDouble() / sims) * 100.0
+        val guardrailTriggeredPct = if (fireReached > 0 && settings.guardrailsEnabled) {
+            (pathsWithGuardrailsTriggered.toDouble() / fireReached) * 100.0
+        } else 0.0
 
         endBalancesToday.sort()
         val p5 = if (endBalancesToday.isNotEmpty()) {
@@ -1221,7 +1500,9 @@ object FinancialEngine {
             medianEndBalanceToday = if (p50.isFinite()) max(0.0, p50) else 0.0,
             p5EndBalanceToday = if (p5.isFinite()) max(0.0, p5) else 0.0,
             medianDepletionAge = medianDepletionAge,
-            sampleSize = sims
+            sampleSize = sims,
+            guardrailsActive = settings.guardrailsEnabled,
+            guardrailTriggeredPct = guardrailTriggeredPct
         )
         cachedSurvivalKey = settings
         cachedSurvivalResult = result
@@ -1314,7 +1595,7 @@ object FinancialEngine {
         val list = mutableListOf<PortfolioYearPoint>()
         val sy = settings.baseYear
         val age0 = settings.primaryAge
-        val ret = settings.portfolioNominalReturnPct / 100.0
+        val ret = netTaxableNominalReturnPct(settings) / 100.0
         // B3 fix: respect isSingleHousehold for opening balance
         val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
         var bal = (settings.liquidPortfolioCurrent + eLiquid) * (1.0 - crashPct)
@@ -1432,10 +1713,21 @@ object FinancialEngine {
         )
 
         val monteCarlo = if (runMonteCarlo) runMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
+        val historicalMonteCarlo = if (runMonteCarlo) runHistoricalMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
         val retirementSurvival = if (runMonteCarlo) {
             runRetirementSurvival(settings)
         } else {
-            RetirementSurvivalResult(0.0, 0.0, settings.retirementHorizonYears.coerceIn(10, 60), 0.0, 0.0, null, 0)
+            RetirementSurvivalResult(
+                successRatePct = 0.0,
+                fireProbabilityPct = 0.0,
+                horizonYears = settings.retirementHorizonYears.coerceIn(10, 60),
+                medianEndBalanceToday = 0.0,
+                p5EndBalanceToday = 0.0,
+                medianDepletionAge = null,
+                sampleSize = 0,
+                guardrailsActive = settings.guardrailsEnabled,
+                guardrailTriggeredPct = 0.0
+            )
         }
         val stressScenarios = calculateStressScenarios(settings, runMonteCarlo = runMonteCarlo)
 
@@ -1586,6 +1878,7 @@ object FinancialEngine {
             dip = dip,
             taxReturnHelper = taxHelper,
             monteCarlo = monteCarlo,
+            historicalMonteCarlo = historicalMonteCarlo,
             retirementSurvival = retirementSurvival,
             stressScenarios = stressScenarios,
             fireMilestones = fireMilestones,

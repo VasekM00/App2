@@ -278,10 +278,16 @@ class FullSettingsReactivityAuditTest {
 
     @Test
     fun `assert reactivity of Children Life Stages, Birth Years, Toggles, and Tax Bonuses`() {
-        // childExpensesEnabled toggle
-        val withChildExpenses = FinancialEngine.totalLivingCostMonthly(base.copy(childExpensesEnabled = true), 2026)
-        val withoutChildExpenses = FinancialEngine.totalLivingCostMonthly(base.copy(childExpensesEnabled = false), 2026)
-        assertEquals(withChildExpenses - base.childToddlerMonthly, withoutChildExpenses, 0.001)
+        // childExpensesEnabled toggle (tested with legacy anchor off to assert toddler monthly additivity)
+        val legacyBase = base.copy(currentChildCostsInBaseline = false)
+        val withChildExpenses = FinancialEngine.totalLivingCostMonthly(legacyBase.copy(childExpensesEnabled = true), 2026)
+        val withoutChildExpenses = FinancialEngine.totalLivingCostMonthly(legacyBase.copy(childExpensesEnabled = false), 2026)
+        assertEquals(withChildExpenses - legacyBase.childToddlerMonthly, withoutChildExpenses, 0.001)
+
+        // When currentChildCostsInBaseline = true, base year living cost anchors toddler cost in baseline
+        val anchoredWithChild = FinancialEngine.totalLivingCostMonthly(base.copy(childExpensesEnabled = true, currentChildCostsInBaseline = true), 2026)
+        val anchoredWithoutChild = FinancialEngine.totalLivingCostMonthly(base.copy(childExpensesEnabled = false, currentChildCostsInBaseline = true), 2026)
+        assertEquals(anchoredWithoutChild, anchoredWithChild, 0.001)
 
         // child1Enabled & child2Enabled toggles
         val stateBothChildren = FinancialEngine.calculate(base.copy(child1Enabled = true, child2Enabled = true, child2BirthYear = base.baseYear))

@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
 import com.example.domain.CustomLumpSumItem
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.domain.parseCustomExpenses
 import com.example.domain.parseCustomLumpSums
@@ -541,6 +542,25 @@ fun SettingsTab(
                             onShowInfo = { infoState.show(it) }
                         ) {
                             BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
+                            if (s.childExpensesEnabled) {
+                                BooleanSettingField(
+                                    label = "Current Child Costs in Monthly Budget",
+                                    checked = s.currentChildCostsInBaseline,
+                                    onCheckedChange = { onUpdateSettings(s.copy(currentChildCostsInBaseline = it)) }
+                                )
+                                Text(
+                                    text = if (s.currentChildCostsInBaseline) {
+                                        "Active: Manual budget (groceries, rent) is treated as already covering current toddler costs (0 Kč added today). Projections only add the incremental delta as child grows older (+${(s.childPreschoolMonthly - s.childToddlerMonthly).toInt().coerceAtLeast(0)} Kč at preschool, +${(s.childSchoolMonthly - s.childToddlerMonthly).toInt().coerceAtLeast(0)} Kč at school), eliminating double counting."
+                                    } else {
+                                        "Off: Full child stage expense is added on top of your manual budget every year."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp
+                                    ),
+                                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                                )
+                            }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -728,8 +748,18 @@ fun SettingsTab(
                             )
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.0, maxValue = 10.0, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
-                            NumberSettingField(label = "Safety Buffer (%)", value = s.safetyBufferPct, onValueChange = { onUpdateSettings(s.copy(safetyBufferPct = it)) })
                             NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
+                            NumberSettingField(label = "Dividend Yield (%)", value = s.dividendYieldPct, minValue = 0.0, maxValue = 15.0, onValueChange = { onUpdateSettings(s.copy(dividendYieldPct = it)) })
+                            NumberSettingField(label = "Dividend Tax Rate (%)", value = s.dividendTaxRatePct, minValue = 0.0, maxValue = 35.0, onValueChange = { onUpdateSettings(s.copy(dividendTaxRatePct = it)) })
+                            val taxDrag = FinancialEngine.dividendTaxDragPct(s)
+                            Text(
+                                text = "Net taxable return: ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(s))} (${String.format(java.util.Locale.getDefault(), "%.2f%%", taxDrag)}/yr dividend drag). Capital gains 0% after 3-year time test.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp
+                                ),
+                                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                            )
                             NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) })
                             NumberSettingField(label = "DPS Annual Management Fee (%, cap 0.5%)", value = s.dpsAnnualFeePct, minValue = 0.0, maxValue = 5.0, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
                             NumberSettingField(label = "Manual FIRE Target Override (0 = auto)", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
@@ -830,6 +860,8 @@ fun SettingsTab(
                             NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
                             NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 100.0, maxValue = 400.0, onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
                             NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 10.0, maxValue = 60.0, onValueChange = { onUpdateSettings(s.copy(retirementHorizonYears = it.toInt())) })
+                            BooleanSettingField(label = "Use Historical 1970–2025 Bootstrap", checked = s.useHistoricalBootstrap, onCheckedChange = { onUpdateSettings(s.copy(useHistoricalBootstrap = it)) })
+                            BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { onUpdateSettings(s.copy(guardrailsEnabled = it)) })
                         }
                     }
                 }
@@ -969,7 +1001,17 @@ fun SettingsTab(
                         }
                     }
 
-                    // 3. Danger Zone / Reset Defaults
+                    // 3. Learned Merchant Rules
+                    item {
+                        com.example.ui.components.LearnedMerchantRulesCard(
+                            rulesJson = s.merchantRulesJson,
+                            onUpdateRulesJson = { newJson ->
+                                onUpdateSettings(s.copy(merchantRulesJson = newJson))
+                            }
+                        )
+                    }
+
+                    // 4. Danger Zone / Reset Defaults
                     item {
                         SettingsGroupCard(
                             title = "Reset & Danger Zone",

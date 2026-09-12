@@ -23,6 +23,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -863,14 +864,42 @@ private fun MonteCarloAndStressSubTab(
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val mc = state.monteCarlo
+    var isHistoricalMode by rememberSaveable { mutableStateOf(state.settings.useHistoricalBootstrap) }
+    val mc = if (isHistoricalMode) state.historicalMonteCarlo else state.monteCarlo
     val survival = state.retirementSurvival
+
+    val simulationEngineInfo = MetricInfo(
+        title = "Simulation Engine Methodology",
+        category = "Stochastic Methodology",
+        formulaOrRule = "Parametric: Geometric Brownian Motion (mu = Return, sigma = Volatility) | Historical: 3-Year Block-Bootstrap from 1970-2025 empirical returns",
+        explanation = "Parametric simulation assumes normal annual return distributions, which underestimates fat-tail risk (e.g. 1973-1974 stagflation, 2000-2002 dot-com bust, 2008 GFC). Block-bootstrap resamples contiguous 3-year historical blocks from 1970-2025, preserving real multi-year sequence-of-returns drawdowns.",
+        practicalImplication = "Historical resampling shows real-world sequence resilience without synthetic distribution assumptions.",
+        accentColor = BrandTeal
+    )
+
+    val guardrailInfo = MetricInfo(
+        title = "Guyton-Klinger Spending Guardrails",
+        category = "Retirement Withdrawal Rules",
+        formulaOrRule = "Capital Preservation: 10% spending cut if withdrawal rate > 1.2x initial SWR (floored at essential spending). Prosperity Rule: 10% spending increase if withdrawal rate < 0.8x initial SWR.",
+        explanation = "In rigid withdrawal models, retirees blindly increase spending by inflation even during prolonged crashes. Guyton-Klinger dynamic rules reduce discretionary spending during market drawdowns while preserving essential living costs, dramatically increasing retirement survival rates.",
+        practicalImplication = "Adding flexibility to discretionary expenses provides massive insurance against early retirement sequence-of-returns risk.",
+        accentColor = BrandGold
+    )
+
+    val taxDragInfo = MetricInfo(
+        title = "Czech Dividend Tax Drag",
+        category = "Tax Drag Modeling",
+        formulaOrRule = "Drag = Dividend Yield (${state.settings.dividendYieldPct}%) x Dividend Tax Rate (${state.settings.dividendTaxRatePct}%) = ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))} p.a.",
+        explanation = "In the Czech Republic, capital gains on securities held for more than 3 years are fully exempt from income tax under Section 4(1)(u) ZDP. However, dividends (and fund-internal withholding taxes in accumulating UCITS ETFs) incur tax drag under Section 8 ZDP. This drag is modeled on taxable brokerage assets (Portu) reducing net nominal return to ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(state.settings))}%, while tax-sheltered DIP and DPS accounts compound gross.",
+        practicalImplication = "Even a modest 0.27% annual tax drag compounds significantly over 30+ years, making tax-advantaged accounts like DIP crucial.",
+        accentColor = BrandBlue
+    )
 
     val successRateInfo = MetricInfo(
         title = "Monte Carlo Success Probability",
         category = "Stochastic Risk Modeling",
         formulaOrRule = "Success = % of simulated paths where portfolio >= 0 across full horizon",
-        explanation = "Runs ${state.settings.monteCarloN} log-normal randomized market paths incorporating historical volatility, sequence-of-returns risk, and prolonged market crashes. A success rate above 90% is widely regarded in quantitative financial planning as bulletproof.",
+        explanation = "Runs ${state.settings.monteCarloN} randomized market paths incorporating volatility, sequence-of-returns risk, and prolonged market crashes. A success rate above 90% is widely regarded in quantitative financial planning as bulletproof.",
         practicalImplication = "Exposing the portfolio to random sequence shocks prevents the fallacy of assuming smooth average returns.",
         accentColor = BrandTeal
     )
@@ -908,13 +937,40 @@ private fun MonteCarloAndStressSubTab(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = "Monte Carlo Simulation (${state.settings.monteCarloN} Runs)",
-                    subtitle = "Confidence distribution across market sequences (Tap for insight)",
+                    title = if (isHistoricalMode) "Historical Simulation (1970-2025)" else "Monte Carlo Simulation (${state.settings.monteCarloN} Runs)",
+                    subtitle = if (isHistoricalMode) "Block-bootstrap sequence resampling (Tap for insight)" else "Parametric log-normal distribution (Tap for insight)",
                     badgeText = "${mc.successRatePct.toInt()}% PROBABILITY",
                     accentColor = BrandTeal
                 )
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !isHistoricalMode,
+                        onClick = { isHistoricalMode = false },
+                        label = { Text("Parametric (Normal)", fontSize = 12.sp) }
+                    )
+                    FilterChip(
+                        selected = isHistoricalMode,
+                        onClick = { isHistoricalMode = true },
+                        label = { Text("Historical (1970-2025)", fontSize = 12.sp) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ProjectionMetricRow(
+                    label = "Simulation Engine",
+                    value = if (isHistoricalMode) "Historical Bootstrap" else "Parametric (Normal)",
+                    isBold = true,
+                    highlightColor = BrandTeal,
+                    info = simulationEngineInfo,
+                    onShowInfo = onShowInfo
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
                     label = "Overall Success Rate",
                     value = fmtPct(mc.successRatePct),
@@ -951,6 +1007,22 @@ private fun MonteCarloAndStressSubTab(
                     isBold = true,
                     highlightColor = BrandGold,
                     info = survivalInfo,
+                    onShowInfo = onShowInfo
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                ProjectionMetricRow(
+                    label = "Dynamic Spending Guardrails",
+                    value = if (survival.guardrailsActive) "Active (${survival.guardrailTriggeredPct.roundToInt()}% cuts)" else "Disabled (Fixed SWR)",
+                    isBold = survival.guardrailsActive,
+                    highlightColor = if (survival.guardrailsActive) BrandGold else null,
+                    info = guardrailInfo,
+                    onShowInfo = onShowInfo
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                ProjectionMetricRow(
+                    label = "Dividend Tax Drag (Taxable)",
+                    value = "${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))} p.a.",
+                    info = taxDragInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
