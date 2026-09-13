@@ -118,7 +118,8 @@ data class SettingsEntity(
     val customGoalsJson: String = "[]",
     val customLumpSumsJson: String = "[]",
     val deletedCategoriesJson: String = "[]",
-    val merchantRulesJson: String = "{}"
+    val merchantRulesJson: String = "{}",
+    val emergencyReserveMode: String = "6M"
 ) {
     companion object {
         fun freshDefaults(): SettingsEntity {

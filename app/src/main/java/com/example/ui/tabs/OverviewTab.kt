@@ -58,6 +58,7 @@ import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.infoTapHold
 import com.example.ui.components.rememberMetricInfoState
 import com.example.data.LedgerEntryEntity
+import com.example.data.SettingsEntity
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -69,6 +70,7 @@ fun OverviewTab(
     onNavigateToIncome: (() -> Unit)? = null,
     onNavigateToProjections: (() -> Unit)? = null,
     onNavigateToPlan: (() -> Unit)? = null,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -191,7 +193,8 @@ fun OverviewTab(
         // Emergency Reserve & Runway Goal Tracker Widget
         EmergencyReserveWidget(
             state = state,
-            onShowInfo = { infoState.show(it) }
+            onShowInfo = { infoState.show(it) },
+            onUpdateSettings = onUpdateSettings
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -284,6 +287,41 @@ fun OverviewTab(
                     ),
                     onShowInfo = { infoState.show(it) }
                 )
+                val baristaMilestone = state.fireMilestones.baristaFire
+                if (baristaMilestone != null) {
+                    SummaryRow(
+                        label = if (baristaMilestone.isAchieved) "Barista FIRE achieved" else "Barista FIRE progress",
+                        value = if (baristaMilestone.isAchieved) {
+                            "Age ${baristaMilestone.estimatedAge ?: "—"}"
+                        } else {
+                            fmtPct(baristaMilestone.progressPct, 0)
+                        },
+                        valueColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold,
+                        info = MetricInfo(
+                            title = "Barista FIRE",
+                            category = "Financial Independence Milestones",
+                            formulaOrRule = "Barista FIRE Target = 50% of Full FIRE Target",
+                            explanation = "Barista FIRE means your portfolio covers 50% of your household expenses indefinitely. You only need part-time, freelance, or low-stress work to cover the other half.",
+                            practicalImplication = if (baristaMilestone.isAchieved) {
+                                "You have reached Barista FIRE. Your invested capital covers 50% of baseline living expenses."
+                            } else {
+                                "You are ${fmtPct(baristaMilestone.progressPct, 0)} of the way to Barista FIRE (target: ${fmtCompact(baristaMilestone.targetAmountToday)})."
+                            },
+                            accentColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold
+                        ),
+                        onShowInfo = { infoState.show(it) }
+                    )
+                }
+                if (state.dip.taxSavedYear > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SummaryRow(
+                        label = "DIP / DPS tax savings",
+                        value = "${fmtCZK(state.dip.taxSavedYear)}/yr",
+                        valueColor = GoodGreen,
+                        info = dipSavingInfo,
+                        onShowInfo = { infoState.show(it) }
+                    )
+                }
             }
         }
 

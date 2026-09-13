@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.School
@@ -136,6 +137,15 @@ private object PlanMetricInfos {
         formulaOrRule = "Target / (1 + Real CAGR)^Years_to_Pension",
         explanation = "The amount of invested capital needed today such that, with zero additional contributions, it will compound into your full retirement nest egg by statutory state pension age.",
         practicalImplication = "Reaching Coast FIRE eliminates survival employment pressure; you only need to earn enough to cover current living burn.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val baristaFire = MetricInfo(
+        title = "Barista FIRE Milestone",
+        category = "Partial Independence",
+        formulaOrRule = "(50% Baseline Living Costs) / SWR",
+        explanation = "Financial milestone where private portfolio passive returns cover 50% of current household living expenses, with the remaining 50% covered by part-time, low-stress, freelance, or passion work.",
+        practicalImplication = "Allows stepping down from high-stress corporate careers significantly earlier while portfolio capital continues compounding toward full FIRE.",
         accentColor = Color(0xFF0F766E)
     )
 
@@ -1682,46 +1692,68 @@ private fun FireMilestonesComparisonCard(
             state.settings.dpsBalanceCurrent + (if (!isSingleHh) state.settings.eDpsBalanceCurrent else 0.0) +
             state.settings.dipBalanceCurrent + (if (!isSingleHh) state.settings.eDipBalanceCurrent else 0.0)
 
-    val items = listOf(
-        MilestoneConfig(
-            milestone = milestones.coastFire,
-            accentColor = BrandTeal,
-            icon = Icons.Default.Spa,
-            shortLabel = "Coast",
-            levelIndex = 1,
-            metricInfo = PlanMetricInfos.coastFire
-        ),
-        MilestoneConfig(
-            milestone = milestones.leanFire,
-            accentColor = BrandBlue,
-            icon = Icons.Default.Home,
-            shortLabel = "Lean",
-            levelIndex = 2,
-            metricInfo = PlanMetricInfos.leanFire
-        ),
-        MilestoneConfig(
-            milestone = milestones.standardFire,
-            accentColor = GoodGreen,
-            icon = Icons.Default.Shield,
-            shortLabel = "Standard",
-            levelIndex = 3,
-            metricInfo = PlanMetricInfos.standardFire
-        ),
-        MilestoneConfig(
-            milestone = milestones.fatFire,
-            accentColor = BrandGold,
-            icon = Icons.Default.Diamond,
-            shortLabel = "Fat",
-            levelIndex = 4,
-            metricInfo = PlanMetricInfos.fatFire
+    val baristaMilestone = milestones.baristaFire
+    val items = buildList {
+        add(
+            MilestoneConfig(
+                milestone = milestones.coastFire,
+                accentColor = BrandTeal,
+                icon = Icons.Default.Spa,
+                shortLabel = "Coast",
+                levelIndex = 1,
+                metricInfo = PlanMetricInfos.coastFire
+            )
         )
-    )
+        if (baristaMilestone != null) {
+            add(
+                MilestoneConfig(
+                    milestone = baristaMilestone,
+                    accentColor = Color(0xFF0F766E),
+                    icon = Icons.Default.LocalCafe,
+                    shortLabel = "Barista",
+                    levelIndex = 2,
+                    metricInfo = PlanMetricInfos.baristaFire
+                )
+            )
+        }
+        add(
+            MilestoneConfig(
+                milestone = milestones.leanFire,
+                accentColor = BrandBlue,
+                icon = Icons.Default.Home,
+                shortLabel = "Lean",
+                levelIndex = if (baristaMilestone != null) 3 else 2,
+                metricInfo = PlanMetricInfos.leanFire
+            )
+        )
+        add(
+            MilestoneConfig(
+                milestone = milestones.standardFire,
+                accentColor = GoodGreen,
+                icon = Icons.Default.Shield,
+                shortLabel = "Standard",
+                levelIndex = if (baristaMilestone != null) 4 else 3,
+                metricInfo = PlanMetricInfos.standardFire
+            )
+        )
+        add(
+            MilestoneConfig(
+                milestone = milestones.fatFire,
+                accentColor = BrandGold,
+                icon = Icons.Default.Diamond,
+                shortLabel = "Fat",
+                levelIndex = if (baristaMilestone != null) 5 else 4,
+                metricInfo = PlanMetricInfos.fatFire
+            )
+        )
+    }
 
     // Current unlocked level determination
     val currentLevel = when {
-        milestones.fatFire.isAchieved -> "Level 4: Fat FIRE"
-        milestones.standardFire.isAchieved -> "Level 3: Standard FIRE"
-        milestones.leanFire.isAchieved -> "Level 2: Lean FIRE"
+        milestones.fatFire.isAchieved -> "Level ${items.size}: Fat FIRE"
+        milestones.standardFire.isAchieved -> "Level ${if (baristaMilestone != null) 4 else 3}: Standard FIRE"
+        milestones.leanFire.isAchieved -> "Level ${if (baristaMilestone != null) 3 else 2}: Lean FIRE"
+        baristaMilestone?.isAchieved == true -> "Level 2: Barista FIRE"
         milestones.coastFire.isAchieved -> "Level 1: Coast FIRE"
         else -> "Level 0: Accumulation"
     }
@@ -1742,7 +1774,7 @@ private fun FireMilestonesComparisonCard(
             CardHeaderPill(
                 title = "FIRE Milestone Matrix",
                 subtitle = "Capital requirements & passive cash flow comparison",
-                badgeText = "4 TIERS",
+                badgeText = "${items.size} TIERS",
                 badgeColor = BrandGold,
                 icon = Icons.Default.Flag,
                 accentColor = BrandGold

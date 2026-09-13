@@ -4,10 +4,13 @@ import com.example.data.ImportedBankTransactionEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.util.BankTransactionType
+import com.example.util.BackupManager
+import com.example.util.CzechMerchantCatalog
 import com.example.util.MerchantCategoryManager
 import com.example.util.SubscriptionAuditor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -267,5 +270,202 @@ class ChildCostAndStatementIntelligenceTest {
         // Corrupted JSON returns empty map safely
         val emptyResult = MerchantCategoryManager.parseRulesFromJson("invalid_json")
         assertTrue(emptyResult.isEmpty())
+    }
+
+    @Test
+    fun testSubscriptionAuditor_groceriesAndDiningExcluded() {
+        val txs = listOf(
+            ImportedBankTransactionEntity(
+                id = 101L,
+                yearMonth = "2026-06",
+                bankName = "CSOB",
+                date = "2026-06-05",
+                amount = -1500.0,
+                counterpartyName = "LIDL CESKA REPUBLIKA",
+                category = "GROCERIES"
+            ),
+            ImportedBankTransactionEntity(
+                id = 102L,
+                yearMonth = "2026-07",
+                bankName = "CSOB",
+                date = "2026-07-05",
+                amount = -1500.0,
+                counterpartyName = "LIDL CESKA REPUBLIKA",
+                category = "GROCERIES"
+            ),
+            ImportedBankTransactionEntity(
+                id = 103L,
+                yearMonth = "2026-08",
+                bankName = "CSOB",
+                date = "2026-08-05",
+                amount = -1500.0,
+                counterpartyName = "LIDL CESKA REPUBLIKA",
+                category = "GROCERIES"
+            ),
+            ImportedBankTransactionEntity(
+                id = 104L,
+                yearMonth = "2026-07",
+                bankName = "MONETA",
+                date = "2026-07-10",
+                amount = -650.0,
+                counterpartyName = "RESTAURACE KOLYBA",
+                category = "RESTAURANTS_DINING"
+            ),
+            ImportedBankTransactionEntity(
+                id = 105L,
+                yearMonth = "2026-08",
+                bankName = "MONETA",
+                date = "2026-08-10",
+                amount = -650.0,
+                counterpartyName = "RESTAURACE KOLYBA",
+                category = "RESTAURANTS_DINING"
+            )
+        )
+
+        val summary = SubscriptionAuditor.auditSubscriptions(txs, swrPct = 4.0)
+        assertTrue("Groceries and dining must never be audited as recurring subscriptions", summary.items.isEmpty())
+        assertEquals(0.0, summary.totalMonthlyBurn, 0.001)
+    }
+
+    @Test
+    fun testCzechMerchantCatalog_twoLetterExactTokenMatching() {
+        val overrides = mapOf("o2" to BankTransactionType.SERVICES_UTILITIES)
+
+        // Whole word "o2" token matches
+        val matchTelecom = CzechMerchantCatalog.matchCategory("PLATBA KANCL O2 CZ PRAHA", overrides)
+        assertEquals(BankTransactionType.SERVICES_UTILITIES, matchTelecom)
+
+        // Embedded substring in unrelated word does not match 2-letter override
+        val matchPhoto = CzechMerchantCatalog.matchCategory("FOTO24 NAKUP", overrides)
+        assertNull(matchPhoto)
+    }
+
+    @Test
+    fun testFinancialEngine_dualEarnerSection35cChildTaxBonus() {
+        // Václav has 0 earned income (e.g. sabbatical), but Eleonora earns 40 000 CZK/mo (> 6x min wage)
+        val settingsDual = SettingsEntity(
+            baseYear = 2026,
+            isSingleHousehold = false,
+            vSalary = 0.0,
+            eStartingSalary = 40000.0,
+            eReturnYear = 2026,
+            eReturnMonth = 1,
+            childExpensesEnabled = true,
+            child1Enabled = true,
+            child1BirthYear = 2024,
+            child1TaxBonusAnnual = 15204.0,
+            minWageMonthly = 20800.0
+        )
+
+        val state = FinancialEngine.calculate(settingsDual, runMonteCarlo = false)
+        assertTrue(
+            "Dual-earner household qualifies for Section 35c child tax bonus if either parent satisfies 6x min wage",
+            state.taxReturnHelper.childBonus > 0.0
+        )
+        assertEquals(15204.0, state.taxReturnHelper.childBonus, 0.001)
+
+        // When both parents have 0 earned income, child bonus is 0
+        val settingsNoIncome = settingsDual.copy(eStartingSalary = 0.0)
+        val stateNoIncome = FinancialEngine.calculate(settingsNoIncome, runMonteCarlo = false)
+        assertEquals(0.0, stateNoIncome.taxReturnHelper.childBonus, 0.001)
+    }
+
+    @Test
+    fun testFinancialEngine_progressive23TaxGrossInversion() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            taxSecondBracketThresholdAnnual = 1762812.0,
+            taxpayerCreditAnnual = 30840.0
+        )
+
+        val thresholdAnnual = settings.taxSecondBracketThresholdAnnual
+        val thresholdMonthly = thresholdAnnual / 12.0
+        val creditMonthly = settings.taxpayerCreditAnnual / 12.0
+        val netAtThresholdMonthly = thresholdMonthly * 0.734 + creditMonthly
+
+        val invertedAtThreshold = FinancialEngine.netToGrossAnnual(
+            netMonthly = netAtThresholdMonthly,
+            taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+            highBracketThresholdAnnual = thresholdAnnual
+        )
+        assertEquals(thresholdAnnual, invertedAtThreshold, 1.0)
+
+        // Above threshold: higher gross
+        val netHighMonthly = netAtThresholdMonthly + 50000.0
+        val invertedHigh = FinancialEngine.netToGrossAnnual(
+            netMonthly = netHighMonthly,
+            taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+            highBracketThresholdAnnual = thresholdAnnual
+        )
+        assertTrue(invertedHigh > thresholdAnnual)
+    }
+
+    @Test
+    fun testFinancialEngine_baristaFireMilestone() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            vSalary = 65000.0,
+            rentMonthly = 20000.0,
+            groceriesMonthly = 15000.0,
+            safeWithdrawalRatePct = 3.5
+        )
+
+        val state = FinancialEngine.calculate(settings, runMonteCarlo = false)
+        val barista = state.fireMilestones.baristaFire
+        assertNotNull("Barista FIRE milestone must be computed", barista)
+        val expectedBaristaTarget = kotlin.math.round((state.fireBaseTargetToday * 0.50) / 10_000.0) * 10_000.0
+        assertEquals(expectedBaristaTarget, barista!!.targetAmountToday, 0.001)
+        assertEquals("Barista FIRE", barista.name)
+        assertEquals("Semi-Retired", barista.badgeLabel)
+    }
+
+    @Test
+    fun testSettingsEntity_emergencyReserveMode_and_backupManager_roundTrip() {
+        val initial = SettingsEntity(
+            emergencyReserveMode = "9M"
+        )
+        val json = BackupManager.serializeSettingsToJson(initial)
+        val fallback = SettingsEntity()
+        val restored = BackupManager.deserializeSettingsFromJson(json, fallback)
+        assertNotNull(restored)
+        assertEquals("9M", restored!!.emergencyReserveMode)
+
+        // Invalid mode fallback sanitization
+        val invalidJson = json.replace("\"emergencyReserveMode\":\"9M\"", "\"emergencyReserveMode\":\"INVALID\"")
+        val sanitized = BackupManager.deserializeSettingsFromJson(invalidJson, fallback)
+        assertNotNull(sanitized)
+        assertEquals("6M", sanitized!!.emergencyReserveMode)
+    }
+
+    @Test
+    fun testSingleHouseholdNetWorthParity() {
+        val dualSettings = SettingsEntity(
+            isSingleHousehold = false,
+            liquidPortfolioCurrent = 500_000.0,
+            eLiquidPortfolioCurrent = 200_000.0,
+            dipBalanceCurrent = 50_000.0,
+            eDipBalanceCurrent = 30_000.0,
+            dpsBalanceCurrent = 40_000.0,
+            eDpsBalanceCurrent = 20_000.0,
+            emergencyReserveCurrent = 100_000.0
+        )
+        val dualState = FinancialEngine.calculate(dualSettings, runMonteCarlo = false)
+        val expectedDualTotal = 500_000.0 + 200_000.0 + 50_000.0 + 30_000.0 + 40_000.0 + 20_000.0 + 100_000.0
+        assertEquals(expectedDualTotal, dualState.netWorthTotal, 0.001)
+
+        val singleSettings = dualSettings.copy(isSingleHousehold = true)
+        val singleState = FinancialEngine.calculate(singleSettings, runMonteCarlo = false)
+        val expectedSingleTotal = 500_000.0 + 50_000.0 + 40_000.0 + 100_000.0
+        assertEquals(expectedSingleTotal, singleState.netWorthTotal, 0.001)
+    }
+
+    @Test
+    fun testFreedomDaysDeficitCalculation() {
+        val deficitSavings = -15_000.0
+        val livingCostMonthly = 45_000.0
+        val daysBurned = FinancialEngine.freedomDaysBoughtMonthly(deficitSavings, livingCostMonthly)
+        assertTrue("Deficit should produce negative freedom days", daysBurned < 0.0)
+        val dailyCost = livingCostMonthly / 30.42
+        assertEquals(deficitSavings / dailyCost, daysBurned, 0.001)
     }
 }

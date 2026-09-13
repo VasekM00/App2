@@ -73,14 +73,19 @@ object CzechMerchantCatalog {
         val simpleNorm = normalizeSimple(rawDescription)
         if (norm.isBlank() && simpleNorm.isBlank()) return null
 
-        // 1. Check user custom overrides first (ignore trivially short patterns that would
-        //    otherwise over-match almost every merchant).
+        val normTokens = norm.split(" ").filter { it.isNotBlank() }
+        val simpleTokens = simpleNorm.split(" ").filter { it.isNotBlank() }
+
+        // 1. Check user custom overrides first (allow 2-letter tokens like "o2", "dm", "cd", "dp"
+        //    when matched as isolated whole words, and 3+ char patterns via substring).
         for ((pattern, category) in userOverrides) {
             val normPattern = normalize(pattern)
             val simplePattern = normalizeSimple(pattern)
-            val normMatch = normPattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && norm.contains(normPattern)
-            val simpleMatch = simplePattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && simpleNorm.contains(simplePattern)
-            if (normMatch || simpleMatch) {
+            val tokenMatch = (normPattern.length >= 2 && normTokens.contains(normPattern)) ||
+                    (simplePattern.length >= 2 && simpleTokens.contains(simplePattern))
+            val normSubstringMatch = normPattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && norm.contains(normPattern)
+            val simpleSubstringMatch = simplePattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && simpleNorm.contains(simplePattern)
+            if (tokenMatch || normSubstringMatch || simpleSubstringMatch) {
                 return category
             }
         }

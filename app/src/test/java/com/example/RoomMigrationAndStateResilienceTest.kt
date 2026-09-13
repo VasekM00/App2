@@ -159,9 +159,9 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
-    fun test6_databaseVersion_matchesTarget29() {
+    fun test6_databaseVersion_matchesTarget30() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(29, version)
+        assertEquals(30, version)
     }
 
     @Test
@@ -202,6 +202,17 @@ class RoomMigrationAndStateResilienceTest {
         cursor.close()
         assertTrue("currentChildCostsInBaseline must exist in app_settings", columns.contains("currentChildCostsInBaseline"))
         assertTrue("merchantRulesJson must exist in app_settings", columns.contains("merchantRulesJson"))
+    }
+
+    @Test
+    fun test7e_schema_v30_settingsColumnsExist() {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+        assertTrue("emergencyReserveMode must exist in app_settings", columns.contains("emergencyReserveMode"))
     }
 
     @Test

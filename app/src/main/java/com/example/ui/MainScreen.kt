@@ -347,6 +347,9 @@ fun MainScreen(
                                 onNavigateToPlan = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 3
+                                },
+                                onUpdateSettings = { newSettings ->
+                                    viewModel.updateSettings(newSettings)
                                 }
                             )
                             1 -> CashFlowTab(

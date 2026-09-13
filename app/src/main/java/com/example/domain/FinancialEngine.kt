@@ -339,6 +339,7 @@ data class FireMilestone(
 
 data class FireMilestonesSummary(
     val coastFire: FireMilestone,
+    val baristaFire: FireMilestone? = null,
     val leanFire: FireMilestone,
     val standardFire: FireMilestone,
     val fatFire: FireMilestone
@@ -361,6 +362,7 @@ data class FullCalculationState(
     val monteCarlo: MonteCarloResult,
     val historicalMonteCarlo: MonteCarloResult,
     val retirementSurvival: RetirementSurvivalResult,
+    val historicalRetirementSurvival: RetirementSurvivalResult = retirementSurvival,
     val stressScenarios: List<StressScenarioResult>,
     val fireMilestones: FireMilestonesSummary,
     val savingsRatePct: Double,
@@ -607,16 +609,24 @@ object FinancialEngine {
         return max(0.0, netTaxBefore - netTaxAfter)
     }
 
-    fun netToGrossAnnual(netMonthly: Double, taxpayerCreditAnnual: Double): Double {
+    fun netToGrossAnnual(
+        netMonthly: Double,
+        taxpayerCreditAnnual: Double,
+        highBracketThresholdAnnual: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026
+    ): Double {
         if (netMonthly <= 0.0) return 0.0
         val creditMonthly = taxpayerCreditAnnual / 12.0
+        val thresholdMonthly = highBracketThresholdAnnual / 12.0
+
         // Employee mandatory social (7.1%) + health (4.5%) = 11.6%
-        // Base income tax: 15% with basic taxpayer credit
-        // Net = Gross * (1 - 0.116 - 0.15) + creditMonthly = Gross * 0.734 + creditMonthly
-        val grossMonthly = if (netMonthly > creditMonthly) {
-            (netMonthly - creditMonthly) / 0.734
-        } else {
-            netMonthly / 0.884
+        // Base income tax: 15% -> net multiplier = 1 - 0.116 - 0.15 = 0.734
+        // High income tax: 23% -> net multiplier = 1 - 0.116 - 0.23 = 0.654
+        val netAtThreshold = thresholdMonthly * 0.734 + creditMonthly
+
+        val grossMonthly = when {
+            netMonthly <= creditMonthly -> netMonthly / 0.884
+            netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / 0.734
+            else -> thresholdMonthly + (netMonthly - netAtThreshold) / 0.654
         }
         return grossMonthly * 12.0
     }
@@ -631,14 +641,14 @@ object FinancialEngine {
         val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDip = settings.dipContributionMonthly * 12.0
         val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
-        val vTaxableBase = netToGrossAnnual(vaclavSalaryMonthly(settings.baseYear, settings), credit)
+        val vTaxableBase = netToGrossAnnual(vaclavSalaryMonthly(settings.baseYear, settings), credit, threshold)
         val vSaving = singleEarnerRetirementTaxSaved(vTaxableBase, vDeduction, threshold, baseRate, highRate, credit)
 
         // Eleonora saving
         val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val eDip = settings.eDipContributionMonthly * 12.0
         val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
-        val eTaxableBase = netToGrossAnnual(eleonoraSalaryMonthly(settings.baseYear, settings), credit)
+        val eTaxableBase = netToGrossAnnual(eleonoraSalaryMonthly(settings.baseYear, settings), credit, threshold)
         val eSaving = singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
 
         return vSaving + eSaving
@@ -707,7 +717,7 @@ object FinancialEngine {
      * by a given monthly savings amount, based on the household's current daily living burn.
      */
     fun freedomDaysBoughtMonthly(monthlySavings: Double, monthlyLivingCost: Double): Double {
-        if (monthlySavings <= 0.0 || monthlyLivingCost <= 0.0) return 0.0
+        if (monthlyLivingCost <= 0.0) return 0.0
         val dailyBurn = monthlyLivingCost / 30.42
         return if (dailyBurn > 0.0) monthlySavings / dailyBurn else 0.0
     }
@@ -1350,31 +1360,44 @@ object FinancialEngine {
         return result
     }
 
+    private data class SurvivalCacheKey(
+        val settings: SettingsEntity,
+        val useHistoricalBootstrap: Boolean
+    )
+
     @Volatile
-    private var cachedSurvivalKey: SettingsEntity? = null
+    private var cachedSurvivalKey: SurvivalCacheKey? = null
     @Volatile
     private var cachedSurvivalResult: RetirementSurvivalResult? = null
 
     /**
      * Simulates accumulation to FIRE and then a full withdrawal phase to the configured
      * retirement horizon. Success = the portfolio never depletes among paths that reach FIRE.
-     * Incorporates dividend tax drag and Guyton-Klinger dynamic spending guardrails.
+     * Incorporates dividend tax drag, Guyton-Klinger dynamic spending guardrails, and
+     * supports both parametric log-normal and historical empirical block-bootstrap resampling.
      */
-    fun runRetirementSurvival(settings: SettingsEntity): RetirementSurvivalResult {
+    fun runRetirementSurvival(
+        settings: SettingsEntity,
+        useHistoricalBootstrap: Boolean = settings.useHistoricalBootstrap
+    ): RetirementSurvivalResult {
+        val currentKey = SurvivalCacheKey(settings, useHistoricalBootstrap)
         cachedSurvivalResult?.let { result ->
-            if (cachedSurvivalKey == settings) return result
+            if (cachedSurvivalKey == currentKey) return result
         }
 
         val sims = settings.monteCarloN.coerceIn(100, 400)
         val meanReturn = netTaxableNominalReturnPct(settings) / 100.0
         val sigma = settings.monteCarloVolatilityPct / 100.0
-        val random = Random(settings.monteCarloSeed + 1L)
+        val random = Random(settings.monteCarloSeed + (if (useHistoricalBootstrap) 202L else 1L))
 
         val baseYear = settings.baseYear
         val baseAge = settings.primaryAge
         val cpi = settings.cpiInflationPct / 100.0
         val maxAccumYears = 35
         val horizon = settings.retirementHorizonYears.coerceIn(10, 60)
+        val nHistory = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.size
+        val taxDrag = dividendTaxDragPct(settings)
+        val blockSize = 3
 
         val lifestyleToday = max(
             0.0,
@@ -1414,10 +1437,29 @@ object FinancialEngine {
         val depletionAges = ArrayList<Int>()
 
         for (i in 0 until sims) {
+            val pathReturns = if (useHistoricalBootstrap) {
+                val totalYearsNeeded = maxAccumYears + horizon
+                val returns = DoubleArray(totalYearsNeeded)
+                var yOffset = 0
+                while (yOffset < totalYearsNeeded) {
+                    val startIdx = random.nextInt(nHistory)
+                    for (b in 0 until blockSize) {
+                        if (yOffset + b < totalYearsNeeded) {
+                            val histIdx = (startIdx + b) % nHistory
+                            val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
+                            val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0)
+                            returns[yOffset + b] = netReturn
+                        }
+                    }
+                    yOffset += blockSize
+                }
+                returns
+            } else null
+
             var bal = initial
             var fireYear = -1
             for (y in 0 until maxAccumYears) {
-                val ret = max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                val ret = pathReturns?.get(y) ?: max(-0.99, meanReturn + nextGaussian(random) * sigma)
                 bal = max(0.0, (bal + additions[y]) * max(0.0, 1.0 + ret))
                 if (bal >= targets[y]) {
                     fireYear = baseYear + y + 1
@@ -1462,7 +1504,7 @@ object FinancialEngine {
                     depletedAge = age
                     break
                 }
-                val ret = max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                val ret = pathReturns?.get(maxAccumYears + k) ?: max(-0.99, meanReturn + nextGaussian(random) * sigma)
                 bal *= max(0.0, 1.0 + ret)
             }
 
@@ -1504,7 +1546,7 @@ object FinancialEngine {
             guardrailsActive = settings.guardrailsEnabled,
             guardrailTriggeredPct = guardrailTriggeredPct
         )
-        cachedSurvivalKey = settings
+        cachedSurvivalKey = currentKey
         cachedSurvivalResult = result
         return result
     }
@@ -1683,9 +1725,11 @@ object FinancialEngine {
                 hasChildUnder3 &&
                 (spouseInc <= settings.spouseIncomeLimitAnnual)
 
-        // D3 fix: use named constant for 6x min wage multiplier (ZDP § 35c)
-        val childBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >=
-                (settings.minWageMonthly * RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER)
+        // Section 35c ZDP: either earner meeting statutory 6x min wage qualifies the household
+        val minEarnedIncome = settings.minWageMonthly * RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER
+        val vChildBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >= minEarnedIncome
+        val eChildBonusOk = !settings.isSingleHousehold && (eleonoraSalaryMonthly(settings.baseYear, settings) * 12.0) >= minEarnedIncome
+        val childBonusOk = vChildBonusOk || eChildBonusOk
 
         val spouseCreditVal = if (spouseEligible) settings.spouseTaxCreditAnnual else 0.0
         val childBonusVal = if (childBonusOk) {
@@ -1729,6 +1773,9 @@ object FinancialEngine {
                 guardrailTriggeredPct = 0.0
             )
         }
+        val historicalRetirementSurvival = if (runMonteCarlo) {
+            runRetirementSurvival(settings, useHistoricalBootstrap = true)
+        } else retirementSurvival
         val stressScenarios = calculateStressScenarios(settings, runMonteCarlo = runMonteCarlo)
 
         val savingsRate = if (currentIncome.totalMonthly > 0) {
@@ -1789,6 +1836,29 @@ object FinancialEngine {
             isAchieved = coastAchieved,
             estimatedAge = if (coastAchieved) settings.primaryAge else coastPoint?.age,
             estimatedYear = if (coastAchieved) settings.baseYear else coastPoint?.year
+        )
+
+        // 1b. Barista FIRE (50% baseline living expenses)
+        val baristaRawTarget = fireBase * 0.50
+        val baristaTarget = kotlin.math.round(baristaRawTarget / 10_000.0) * 10_000.0
+        val baristaProgress = if (baristaTarget > 0) ((investableNetWorth / baristaTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
+        val baristaAchieved = investableNetWorth >= baristaTarget
+        val baristaPoint = if (baristaAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
+            val yDiff = point.year - settings.baseYear
+            val futureTarget = baristaTarget * cpiCompounding.pow(yDiff)
+            point.portfolio >= futureTarget
+        }
+        val baristaMilestone = FireMilestone(
+            id = "barista",
+            name = "Barista FIRE",
+            badgeLabel = "Semi-Retired",
+            description = "Covers 50% of current living expenses from portfolio; remainder covered by part-time, seasonal, or freelance work.",
+            targetAmountToday = baristaTarget,
+            monthlyPassiveIncome = kotlin.math.round(((baristaTarget * swr) / 12.0) / 1_000.0) * 1_000.0,
+            progressPct = baristaProgress,
+            isAchieved = baristaAchieved,
+            estimatedAge = if (baristaAchieved) settings.primaryAge else baristaPoint?.age,
+            estimatedYear = if (baristaAchieved) settings.baseYear else baristaPoint?.year
         )
 
         // 2. Lean FIRE (75% baseline living expenses)
@@ -1858,6 +1928,7 @@ object FinancialEngine {
 
         val fireMilestones = FireMilestonesSummary(
             coastFire = coastMilestone,
+            baristaFire = baristaMilestone,
             leanFire = leanMilestone,
             standardFire = standardMilestone,
             fatFire = fatMilestone
@@ -1880,6 +1951,7 @@ object FinancialEngine {
             monteCarlo = monteCarlo,
             historicalMonteCarlo = historicalMonteCarlo,
             retirementSurvival = retirementSurvival,
+            historicalRetirementSurvival = historicalRetirementSurvival,
             stressScenarios = stressScenarios,
             fireMilestones = fireMilestones,
             savingsRatePct = savingsRate,

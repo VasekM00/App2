@@ -52,18 +52,23 @@ import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.WarnAmber
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import com.example.data.SettingsEntity
 import com.example.util.Formatters.fmtCompact
 
 @Composable
 fun EmergencyReserveWidget(
     state: FullCalculationState,
     modifier: Modifier = Modifier,
-    onShowInfo: ((MetricInfo) -> Unit)? = null
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE) }
-    var selectedTargetMode by remember {
-        mutableStateOf(prefs.getString("emergency_reserve_mode", "6M") ?: "6M")
+    val initialMode = state.settings.emergencyReserveMode.ifBlank {
+        prefs.getString("emergency_reserve_mode", "6M") ?: "6M"
+    }
+    var selectedTargetMode by remember(state.settings.emergencyReserveMode) {
+        mutableStateOf(initialMode)
     }
 
     val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
@@ -259,6 +264,7 @@ fun EmergencyReserveWidget(
                             onClick = {
                                 selectedTargetMode = mode
                                 prefs.edit { putString("emergency_reserve_mode", mode) }
+                                onUpdateSettings?.invoke(state.settings.copy(emergencyReserveMode = mode))
                             },
                             label = {
                                 Text(

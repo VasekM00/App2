@@ -131,6 +131,7 @@ object BackupManager {
         json.put("useHistoricalBootstrap", s.useHistoricalBootstrap)
         json.put("guardrailsEnabled", s.guardrailsEnabled)
         json.put("merchantRulesJson", s.merchantRulesJson)
+        json.put("emergencyReserveMode", s.emergencyReserveMode)
 
         return json.toString()
     }
@@ -254,7 +255,8 @@ object BackupManager {
                 dividendTaxRatePct = json.optDouble("dividendTaxRatePct", fallback.dividendTaxRatePct),
                 useHistoricalBootstrap = json.optBoolean("useHistoricalBootstrap", fallback.useHistoricalBootstrap),
                 guardrailsEnabled = json.optBoolean("guardrailsEnabled", fallback.guardrailsEnabled),
-                merchantRulesJson = json.optString("merchantRulesJson", fallback.merchantRulesJson)
+                merchantRulesJson = json.optString("merchantRulesJson", fallback.merchantRulesJson),
+                emergencyReserveMode = json.optString("emergencyReserveMode", fallback.emergencyReserveMode)
             )
             sanitizeRestored(restored, fallback)
         } catch (_: Exception) {
@@ -358,7 +360,8 @@ object BackupManager {
             monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct),
             dividendYieldPct = pct(s.dividendYieldPct, f.dividendYieldPct),
             dividendTaxRatePct = pct(s.dividendTaxRatePct, f.dividendTaxRatePct),
-            merchantRulesJson = cleanMerchantRules
+            merchantRulesJson = cleanMerchantRules,
+            emergencyReserveMode = if (s.emergencyReserveMode in setOf("3M", "6M", "9M", "12M", "Target")) s.emergencyReserveMode else f.emergencyReserveMode
         )
     }
 }

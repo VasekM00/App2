@@ -836,7 +836,7 @@ private fun bankBadgeColor(bankName: String): Color = when {
     bankName.contains("Komercni", ignoreCase = true) -> Color(0xFFB0231E)
     bankName.contains("Fio", ignoreCase = true) -> Color(0xFF1E5AA8)
     bankName.contains("Raiffeisen", ignoreCase = true) -> Color(0xFFFFC400)
-    bankName.contains("Air Bank", ignoreCase = true) -> Color(0xFF00A0E3)
+    bankName.contains("Air Bank", ignoreCase = true) -> Color(0xFF73B827)
     bankName.contains("UniCredit", ignoreCase = true) -> Color(0xFFE4002B)
     bankName.contains("Creditas", ignoreCase = true) -> Color(0xFF00695C)
     bankName.contains("Revolut", ignoreCase = true) -> Color(0xFF7B1FA2)
@@ -2874,8 +2874,10 @@ private fun SummarySubTab(
         // 2. Freedom Days Metric Banner
         val liquidPortfolio = state.settings.liquidPortfolioCurrent +
             (if (!state.settings.isSingleHousehold) state.settings.eLiquidPortfolioCurrent else 0.0)
+        val netFlow = totalInc - totalExp
+        val effectiveSavings = if (netFlow < 0.0) netFlow else state.investMonthlyTotal
         com.example.ui.components.FreedomDaysBanner(
-            monthlySavings = state.investMonthlyTotal,
+            monthlySavings = effectiveSavings,
             monthlyLivingCost = state.totalLivingCostMonthly,
             portfolioBalance = liquidPortfolio
         )

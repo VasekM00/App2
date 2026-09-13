@@ -31,10 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FinancialEngine
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.util.Formatters.fmtCZK
 import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 fun FreedomDaysBanner(
@@ -43,6 +45,8 @@ fun FreedomDaysBanner(
     portfolioBalance: Double,
     modifier: Modifier = Modifier
 ) {
+    val isDeficit = monthlySavings < 0.0
+    val accentColor = if (isDeficit) BadRed else BrandTeal
     val daysBought = FinancialEngine.freedomDaysBoughtMonthly(monthlySavings, monthlyLivingCost)
     val daysCovered = FinancialEngine.freedomDaysCoveredByPortfolio(portfolioBalance, monthlyLivingCost)
     val yearsCovered = daysCovered / 365.25
@@ -54,7 +58,7 @@ fun FreedomDaysBanner(
             .testTag("freedom_days_banner"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.35f))
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -68,14 +72,14 @@ fun FreedomDaysBanner(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = BrandTeal.copy(alpha = 0.12f),
+                        color = accentColor.copy(alpha = 0.12f),
                         modifier = Modifier.size(32.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.HourglassBottom,
                                 contentDescription = null,
-                                tint = BrandTeal,
+                                tint = accentColor,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -86,7 +90,7 @@ fun FreedomDaysBanner(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "Time purchased with monthly capital surplus",
+                            text = if (isDeficit) "Runway consumed by monthly deficit" else "Time purchased with monthly capital surplus",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -95,7 +99,7 @@ fun FreedomDaysBanner(
 
                 ColorPill(
                     text = "${String.format(Locale.ROOT, "%.1f", daysBought)} DAYS/MO",
-                    color = BrandTeal
+                    color = accentColor
                 )
             }
 
@@ -114,21 +118,29 @@ fun FreedomDaysBanner(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Monthly Savings Bought:",
+                            text = if (isDeficit) "Monthly Deficit Burn:" else "Monthly Savings Bought:",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "+${String.format(Locale.ROOT, "%.1f", daysBought)} days of freedom",
+                            text = if (isDeficit) {
+                                "${String.format(Locale.ROOT, "%.1f", daysBought)} days of freedom"
+                            } else {
+                                "+${String.format(Locale.ROOT, "%.1f", daysBought)} days of freedom"
+                            },
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = BrandTeal
+                            color = accentColor
                         )
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "This month's ${fmtCZK(monthlySavings)} savings permanently purchased ${String.format(Locale.ROOT, "%.1f", daysBought)} days of freedom at your current burn rate (${fmtCZK(dailyBurn)}/day).",
+                        text = if (isDeficit) {
+                            "This month's ${fmtCZK(monthlySavings)} deficit consumed ${String.format(Locale.ROOT, "%.1f", abs(daysBought))} days of freedom from your portfolio at your current burn rate (${fmtCZK(dailyBurn)}/day)."
+                        } else {
+                            "This month's ${fmtCZK(monthlySavings)} savings permanently purchased ${String.format(Locale.ROOT, "%.1f", daysBought)} days of freedom at your current burn rate (${fmtCZK(dailyBurn)}/day)."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )

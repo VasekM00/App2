@@ -732,11 +732,6 @@ private fun PortfolioAccountsView(
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val s = state.settings
-    val vaclavTotalBal by remember(s) { derivedStateOf { s.liquidPortfolioCurrent + s.dipBalanceCurrent + s.dpsBalanceCurrent } }
-    val vaclavTotalDca by remember(s) { derivedStateOf { s.portuDcaMonthly + s.dipContributionMonthly + s.dpsOwnContributionMonthly } }
-    val eTotalBal by remember(s) { derivedStateOf { s.eLiquidPortfolioCurrent + s.eDipBalanceCurrent + s.eDpsBalanceCurrent } }
-    val eTotalDca by remember(s) { derivedStateOf { s.ePortuDcaMonthly + s.eDipContributionMonthly + s.eDpsOwnContributionMonthly } }
-    val empMonthly by remember(s) { derivedStateOf { s.employerRetirementMonthly + s.eEmployerRetirementMonthly } }
 
     val feeCapInfo = MetricInfo(
         title = "Statutory DPS Fee Cap (0.50% TER)",
@@ -799,11 +794,16 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow("Brokerage / ETF Portfolio", fmtCZK(s.liquidPortfolioCurrent + s.eLiquidPortfolioCurrent))
+                val isSingle = s.isSingleHousehold
+                val liquidTotal = s.liquidPortfolioCurrent + if (!isSingle) s.eLiquidPortfolioCurrent else 0.0
+                val dipTotalBal = s.dipBalanceCurrent + if (!isSingle) s.eDipBalanceCurrent else 0.0
+                val dpsTotalBal = s.dpsBalanceCurrent + if (!isSingle) s.eDpsBalanceCurrent else 0.0
+
+                ProjectionMetricRow("Brokerage / ETF Portfolio", fmtCZK(liquidTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(s.dipBalanceCurrent + s.eDipBalanceCurrent))
+                ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(dipTotalBal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(s.dpsBalanceCurrent + s.eDpsBalanceCurrent))
+                ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(dpsTotalBal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(s.emergencyReserveCurrent))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -866,7 +866,7 @@ private fun MonteCarloAndStressSubTab(
     val scrollState = rememberScrollState()
     var isHistoricalMode by rememberSaveable { mutableStateOf(state.settings.useHistoricalBootstrap) }
     val mc = if (isHistoricalMode) state.historicalMonteCarlo else state.monteCarlo
-    val survival = state.retirementSurvival
+    val survival = if (isHistoricalMode) state.historicalRetirementSurvival else state.retirementSurvival
 
     val simulationEngineInfo = MetricInfo(
         title = "Simulation Engine Methodology",
