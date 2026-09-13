@@ -47,8 +47,12 @@ object MerchantLookupService {
             norm.contains("restaur") || norm.contains("hospod") || norm.contains("bistro") ||
             norm.contains("pizz") || norm.contains("kav") || norm.contains("cafe") ||
             norm.contains("kafe") || norm.contains("kebab") || norm.contains("burger") ||
-            norm.contains("cukrar") || norm.contains("pek") || norm.contains("reznict") ->
+            norm.contains("cukrar") ->
                 BankTransactionType.DINING_RESTAURANT
+
+            norm.contains("potravin") || norm.contains("vecerk") || norm.contains("lahudk") ||
+            norm.contains("pek") || norm.contains("reznict") || norm.contains("supermarket") ->
+                BankTransactionType.GROCERIES
 
             norm.contains("lekarn") || norm.contains("droger") || norm.contains("optik") ||
             norm.contains("dental") || norm.contains("dr max") || norm.contains("benu") ->

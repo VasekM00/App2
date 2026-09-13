@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -42,10 +41,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -112,10 +107,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import java.util.Locale
 import androidx.activity.result.contract.ActivityResultContracts
-import com.example.ui.components.CashFlowProjectionChart
-import com.example.ui.components.DcaTrajectoryBarChart
 import com.example.ui.components.DcaAllocationBreakdownBar
-import kotlin.math.abs
 import kotlin.math.min
 
 fun nextYearMonth(ym: String): String {
@@ -2874,7 +2866,6 @@ private fun SummarySubTab(
         // 2. Freedom Days Metric Banner
         val liquidPortfolio = state.settings.liquidPortfolioCurrent +
             (if (!state.settings.isSingleHousehold) state.settings.eLiquidPortfolioCurrent else 0.0)
-        val netFlow = totalInc - totalExp
         val effectiveSavings = if (netFlow < 0.0) netFlow else state.investMonthlyTotal
         com.example.ui.components.FreedomDaysBanner(
             monthlySavings = effectiveSavings,

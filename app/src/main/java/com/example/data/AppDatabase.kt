@@ -273,7 +273,7 @@ abstract class AppDatabase : RoomDatabase() {
                         ${colOr("otherDiscretionaryMonthly", "1500.0")},
                         ${colOr("taxRatePct", "15.0")},
                         ${colOr("taxRateSecondPct", "23.0")},
-                        ${colOr("taxSecondBracketThresholdAnnual", "1582812.0")},
+                        ${colOr("taxSecondBracketThresholdAnnual", "1762812.0")},
                         ${colOr("taxpayerCreditAnnual", "30840.0")},
                         ${colOr("taxDeductionCeilingAnnual", "48000.0")},
                         ${colOr("spouseTaxCreditAnnual", "24840.0")},

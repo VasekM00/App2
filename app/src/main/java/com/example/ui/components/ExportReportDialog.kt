@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.util.Formatters.fmtCZK
-import com.example.util.Formatters.fmtCompact
 
 @Composable
 fun ExportReportDialog(
@@ -186,8 +185,10 @@ fun ExportReportDialog(
                         if (exportFormat == "Summary") "Personal Finance Report" else "FIRE Projections CSV",
                         activeText
                     )
-                    clip.description.extras = android.os.PersistableBundle().apply {
-                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        clip.description.extras = android.os.PersistableBundle().apply {
+                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
                     }
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "${if (exportFormat == "Summary") "Report" else "CSV"} copied to clipboard!", Toast.LENGTH_SHORT).show()

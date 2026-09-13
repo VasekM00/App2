@@ -33,7 +33,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,7 +85,6 @@ fun EmergencyReserveWidget(
 
     val progress = (currentLiquidCash / targetAmount.coerceAtLeast(1.0)).coerceIn(0.0, 1.0).toFloat()
     val monthsCovered = currentLiquidCash / monthlyExpense
-    val targetMonthsEquivalent = targetAmount / monthlyExpense
 
     val cGreen = GoodGreen
     val cAmber = WarnAmber

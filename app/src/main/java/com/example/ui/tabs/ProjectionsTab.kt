@@ -33,9 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1216,40 +1214,3 @@ private fun ProjectionMetricRow(
     }
 }
 
-@Composable
-private fun AccountBreakdownItem(
-    label: String,
-    value: String,
-    isBold: Boolean = false,
-    color: Color = MaterialTheme.colorScheme.onSurface
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 11.sp,
-                color = if (isBold) color else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
-            ),
-            maxLines = 1,
-            softWrap = false
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = if (isBold) FontWeight.Bold else FontWeight.SemiBold,
-                color = color
-            ),
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-}

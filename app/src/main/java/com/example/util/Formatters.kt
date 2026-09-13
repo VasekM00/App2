@@ -87,7 +87,7 @@ object Formatters {
         val formatted = if (digits != null) {
             String.format(czkLocale, "%.${digits.coerceAtLeast(0)}f%%", value)
         } else {
-            val isWhole = (value % 1.0) == 0.0
+            val isWhole = abs(value - kotlin.math.round(value)) < 1e-6
             if (isWhole) {
                 String.format(czkLocale, "%.0f%%", value)
             } else {

@@ -30,17 +30,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.domain.RegulatoryConstants
-import com.example.ui.theme.BadRed
-import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
-import com.example.util.Formatters.fmtPct
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min

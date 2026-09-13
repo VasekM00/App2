@@ -1,10 +1,7 @@
 package com.example.ui.tabs
 
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,25 +28,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,7 +50,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SecondaryTabRow
@@ -71,7 +60,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -120,15 +108,6 @@ import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import com.example.util.Formatters.roundTo10k
 import com.example.util.Formatters.roundTo1k
-
-data class LifeGoalItem(
-    val id: String,
-    val name: String,
-    val icon: ImageVector,
-    val targetYear: Int,
-    val targetAmountCzk: Double,
-    val currentSavedCzk: Double
-)
 
 private object PlanMetricInfos {
     val coastFire = MetricInfo(
@@ -577,112 +556,6 @@ private fun FireRoadmapSubTab(
 }
 
 
-
-@Composable
-private fun TimelineStepItem(
-    phaseNum: String,
-    title: String,
-    timeframe: String,
-    badgeColor: Color,
-    isCurrent: Boolean,
-    isLast: Boolean,
-    keyPoints: List<String>
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // Left timeline column with dot and connector line
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(36.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(if (isCurrent) badgeColor else badgeColor.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = phaseNum,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = if (isCurrent) Color.White else badgeColor,
-                        fontSize = 12.sp
-                    )
-                )
-            }
-
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(90.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        // Right content block
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = if (isLast) 0.dp else 16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.weight(1f)
-                )
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (isCurrent) badgeColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Text(
-                        text = timeframe,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (isCurrent) badgeColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 10.sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            keyPoints.forEach { point ->
-                Row(
-                    modifier = Modifier.padding(vertical = 1.5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(4.dp)
-                            .clip(CircleShape)
-                            .background(badgeColor)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = point,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun ActionChecklistCard(

@@ -52,8 +52,7 @@ object SubscriptionAuditor {
 
     private val EXPLICIT_RECURRING_CATEGORIES = setOf(
         BankTransactionType.SUBSCRIPTIONS_MEDIA,
-        BankTransactionType.SERVICES_UTILITIES,
-        BankTransactionType.HOUSING_RENT
+        BankTransactionType.SERVICES_UTILITIES
     )
 
     fun auditSubscriptions(

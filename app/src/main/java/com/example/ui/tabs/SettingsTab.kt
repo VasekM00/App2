@@ -101,7 +101,6 @@ import com.example.ui.components.LiveSyncDialog
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
-import com.example.ui.components.infoTapHold
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.graphics.Color
 import com.example.ui.theme.BadRed
@@ -974,8 +973,10 @@ fun SettingsTab(
                                         val json = BackupManager.serializeSettingsToJson(s)
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         val clip = ClipData.newPlainText("FIRE Settings JSON", json)
-                                        clip.description.extras = android.os.PersistableBundle().apply {
-                                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                            clip.description.extras = android.os.PersistableBundle().apply {
+                                                putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                            }
                                         }
                                         clipboard.setPrimaryClip(clip)
                                         Toast.makeText(context, "Settings JSON copied to clipboard", Toast.LENGTH_SHORT).show()
@@ -1019,8 +1020,10 @@ fun SettingsTab(
                                     }
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     val clip = ClipData.newPlainText("Financial Summary", summary)
-                                    clip.description.extras = android.os.PersistableBundle().apply {
-                                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        clip.description.extras = android.os.PersistableBundle().apply {
+                                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                        }
                                     }
                                     clipboard.setPrimaryClip(clip)
                                     Toast.makeText(context, "Summary copied to clipboard", Toast.LENGTH_SHORT).show()

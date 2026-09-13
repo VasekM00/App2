@@ -911,7 +911,11 @@ object FinancialEngine {
             } else {
                 min(dpsDeductionBase, remainingTaxHeadroom)
             }
-            val vTaxableGross = netToGrossAnnual(vaclavSalaryMonthly(settings.baseYear, settings), settings.taxpayerCreditAnnual)
+            val vTaxableGross = netToGrossAnnual(
+                vaclavSalaryMonthly(settings.baseYear, settings),
+                settings.taxpayerCreditAnnual,
+                settings.taxSecondBracketThresholdAnnual
+            )
             val taxSavedAnnual = singleEarnerRetirementTaxSaved(
                 taxableGrossAnnual = vTaxableGross,
                 deductionAnnual = effectiveDpsDeduction,

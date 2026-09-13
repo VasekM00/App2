@@ -67,10 +67,8 @@ import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.ui.theme.WarnAmber
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtCZK
-import com.example.util.Formatters.fmtPct
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -1721,11 +1719,12 @@ fun DcaTrajectoryBarChart(
             val paddingLeft = 75f
             val paddingRight = 24f
             val paddingBottom = 45f
+            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
 
-            val textPaint = remember(textColor) {
+            val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
-                    textSize = 20f
+                    textSize = textPx
                     isAntiAlias = true
                 }
             }
