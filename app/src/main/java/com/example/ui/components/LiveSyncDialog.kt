@@ -49,6 +49,7 @@ import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.CzechEconomicSyncService
+import com.example.util.Formatters.fmtRelativeTime
 
 @Composable
 fun LiveSyncDialog(
@@ -56,7 +57,8 @@ fun LiveSyncDialog(
     liveData: CzechRegulatoryData?,
     isLoading: Boolean,
     onDismiss: () -> Unit,
-    onApplySettings: (SettingsEntity) -> Unit
+    onApplySettings: (SettingsEntity) -> Unit,
+    lastSyncTimestamp: Long? = null
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -83,8 +85,13 @@ fun LiveSyncDialog(
                         text = "Live Czech Economic Sync",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                    val subtitleText = if (lastSyncTimestamp != null) {
+                        "${liveData?.sourceName ?: "Official registers"} · Checked ${fmtRelativeTime(lastSyncTimestamp)}"
+                    } else {
+                        liveData?.sourceName ?: "Querying official registers..."
+                    }
                     Text(
-                        text = liveData?.sourceName ?: "Querying official registers...",
+                        text = subtitleText,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

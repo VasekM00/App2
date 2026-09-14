@@ -110,6 +110,7 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
+import com.example.util.Formatters.fmtRelativeTime
 import kotlinx.coroutines.delay
 import java.util.UUID
 
@@ -193,6 +194,7 @@ fun SettingsTab(
     liveRegulatoryData: com.example.domain.CzechRegulatoryData? = null,
     isSyncing: Boolean = false,
     onSyncLiveCzechData: () -> Unit = {},
+    lastSyncTimestamp: Long? = null,
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -826,41 +828,64 @@ fun SettingsTab(
                             info = SettingsMetricInfos.spouseCredit,
                             onShowInfo = { infoState.show(it) }
                         ) {
-                            Text(
-                                text = "Live Tax Shield Summary",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            TaxSummaryRow(
-                                label = "Eleonora Income",
-                                status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
-                                isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
-                            )
-                            TaxSummaryRow(
-                                label = "Eleonora Tax Credit Eligible",
-                                status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
-                                isGood = state.taxReturnHelper.spouseEligible
-                            )
-                            TaxSummaryRow(
-                                label = "Child 1 Tax Bonus",
-                                status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
-                                isGood = s.child1Enabled
-                            )
-                            TaxSummaryRow(
-                                label = "Child 2 Tax Bonus",
-                                status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
-                                isGood = s.child2Enabled
-                            )
-                            TaxSummaryRow(
-                                label = "Total Child Tax Bonus",
-                                status = "+${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
-                                isGood = true
-                            )
-                            TaxSummaryRow(
-                                label = "DIP Annual Tax Saving",
-                                status = fmtCZK(state.taxReturnHelper.dipSaving),
-                                isGood = true
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Live Tax Shield Summary",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        ColorPill(
+                                            text = "LIVE SUMMARY",
+                                            color = GoodGreen,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    if (!s.isSingleHousehold) {
+                                        TaxSummaryRow(
+                                            label = "Eleonora Income",
+                                            status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
+                                            isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
+                                        )
+                                        TaxSummaryRow(
+                                            label = "Eleonora Tax Credit Eligible",
+                                            status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
+                                            isGood = state.taxReturnHelper.spouseEligible
+                                        )
+                                    }
+                                    TaxSummaryRow(
+                                        label = "Child 1 Tax Bonus",
+                                        status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                        isGood = s.child1Enabled
+                                    )
+                                    TaxSummaryRow(
+                                        label = "Child 2 Tax Bonus",
+                                        status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                        isGood = s.child2Enabled
+                                    )
+                                    TaxSummaryRow(
+                                        label = "Total Child Tax Bonus",
+                                        status = "+${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
+                                        isGood = true
+                                    )
+                                    TaxSummaryRow(
+                                        label = "DIP Annual Tax Saving",
+                                        status = "+${fmtCZK(state.taxReturnHelper.dipSaving)}/yr",
+                                        isGood = true
+                                    )
+                                }
+                            }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(text = "Tax Rates & Brackets", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
@@ -919,14 +944,30 @@ fun SettingsTab(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            Text(
-                                text = liveDataSubtitle(liveRegulatoryData),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = liveDataSubtitle(liveRegulatoryData),
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    ),
+                                    modifier = Modifier.weight(1f)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                ColorPill(
+                                    text = fmtRelativeTime(lastSyncTimestamp),
+                                    color = if (lastSyncTimestamp != null) GoodGreen else BrandGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -1103,7 +1144,8 @@ fun SettingsTab(
                 onUpdateSettings(updated)
                 showSyncDialog = false
                 Toast.makeText(context, "Official Czech benchmarks applied", Toast.LENGTH_SHORT).show()
-            }
+            },
+            lastSyncTimestamp = lastSyncTimestamp
         )
     }
 
@@ -1330,25 +1372,35 @@ fun SettingsTab(
 }
 
 @Composable
-private fun TaxSummaryRow(label: String, status: String, isGood: Boolean) {
+private fun TaxSummaryRow(
+    label: String,
+    status: String,
+    isGood: Boolean,
+    pillColor: Color? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             modifier = Modifier.weight(1f)
         )
-        Text(
+        Spacer(modifier = Modifier.width(8.dp))
+        ColorPill(
             text = status,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Bold,
-                color = if (isGood) GoodGreen else BadRed
-            )
+            color = pillColor ?: if (isGood) GoodGreen else BadRed,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            horizontalPadding = 7.dp,
+            verticalPadding = 2.5.dp
         )
     }
 }

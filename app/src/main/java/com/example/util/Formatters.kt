@@ -133,5 +133,28 @@ object Formatters {
 
         return result
     }
+
+    fun fmtRelativeTime(timestamp: Long?, now: Long = System.currentTimeMillis()): String {
+        if (timestamp == null || timestamp <= 0L) return "Never checked"
+        val diff = now - timestamp
+        if (diff < 0) return "Just now"
+        val seconds = diff / 1000
+        val minutes = seconds / 60
+        val hours = minutes / 60
+        val days = hours / 24
+        val months = days / 30
+
+        return when {
+            minutes < 1 -> "Just now"
+            minutes < 60 -> if (minutes == 1L) "1 minute ago" else "$minutes minutes ago"
+            hours < 24 -> if (hours == 1L) "1 hour ago" else "$hours hours ago"
+            days < 30 -> if (days == 1L) "Yesterday" else "$days days ago"
+            months < 12 -> if (months == 1L) "1 month ago" else "$months months ago"
+            else -> {
+                val years = months / 12
+                if (years == 1L) "1 year ago" else "$years years ago"
+            }
+        }
+    }
 }
 

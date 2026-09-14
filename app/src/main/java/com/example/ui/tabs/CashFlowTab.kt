@@ -80,10 +80,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -2567,22 +2578,41 @@ fun LedgerChart(
     modifier: Modifier = Modifier
 ) {
     if (entries.isEmpty()) return
-    val sorted = entries.sortedBy { it.yearMonth }.takeLast(6)
-    val maxVal = sorted.maxOf { maxOf(it.incVaclav + it.incEleonora + it.incUnforeseen, it.expRent + it.expGroceries + it.expOther) }.coerceAtLeast(100.0)
+    val sorted = remember(entries) { entries.sortedBy { it.yearMonth }.takeLast(6) }
+    if (sorted.isEmpty()) return
 
-    val incColor = GoodGreen
-    val expColor = BadRed
+    val maxVal = remember(sorted) {
+        sorted.maxOf { maxOf(it.incVaclav + it.incEleonora + it.incUnforeseen, it.expRent + it.expGroceries + it.expOther) }.coerceAtLeast(100.0) * 1.15
+    }
+
     val haptic = LocalHapticFeedback.current
+    val cTeal = BrandTeal
+    val cGreen = GoodGreen
+    val cRed = BadRed
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+    val textPaintColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+    val textPx = with(LocalDensity.current) { 10.sp.toPx() }
+    val textPaint = remember(textPaintColor, textPx) {
+        android.graphics.Paint().apply {
+            color = textPaintColor
+            textSize = textPx
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+
+    val selectedEntry = remember(sorted, selectedYm) {
+        sorted.find { it.yearMonth == selectedYm } ?: sorted.lastOrNull()
+    }
 
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(180.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            // Header Row with Title & Legend
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2595,7 +2625,7 @@ fun LedgerChart(
                     )
                     ColorPill(
                         text = "FLOW",
-                        color = BrandTeal,
+                        color = cTeal,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         horizontalPadding = 5.dp,
@@ -2609,93 +2639,201 @@ fun LedgerChart(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(8.dp).background(GoodGreen, CircleShape))
+                        Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
                         Text("Incomes", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(8.dp).background(BadRed, CircleShape))
+                        Box(modifier = Modifier.size(8.dp).background(cRed, CircleShape))
                         Text("Expenses", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
+            // Chart Canvas
+            val paddingHorizontal = 36f
+            val paddingTop = 12f
+            val paddingBottom = 38f
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom
+                    .height(130.dp)
             ) {
-                sorted.forEach { entry ->
-                    val isSelected = entry.yearMonth == selectedYm
-                    val inc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
-                    val exp = entry.expRent + entry.expGroceries + entry.expOther
-                    val incRatio = (inc / maxVal).toFloat().coerceIn(0.05f, 1f)
-                    val expRatio = (exp / maxVal).toFloat().coerceIn(0.05f, 1f)
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isSelected) BrandTeal.copy(alpha = 0.12f) else Color.Transparent
-                            )
-                            .clickable {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(sorted) {
+                            detectTapGestures { offset ->
+                                val plotW = size.width - (paddingHorizontal * 2)
+                                val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else plotW
+                                val clickX = (offset.x - paddingHorizontal).coerceAtLeast(0f)
+                                val tappedIdx = if (sorted.size > 1) {
+                                    (clickX / stepX + 0.5f).toInt().coerceIn(0, sorted.size - 1)
+                                } else 0
+                                val target = sorted[tappedIdx]
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSelectMonth(entry.yearMonth)
-                            }
-                            .padding(vertical = 4.dp, horizontal = 2.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(10.dp)
-                                    .fillMaxHeight(incRatio)
-                                    .background(
-                                        incColor.copy(alpha = if (isSelected || selectedYm.isEmpty()) 1f else 0.45f),
-                                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Box(
-                                modifier = Modifier
-                                    .width(10.dp)
-                                    .fillMaxHeight(expRatio)
-                                    .background(
-                                        expColor.copy(alpha = if (isSelected || selectedYm.isEmpty()) 1f else 0.45f),
-                                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                                    )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        val monthLabel = remember(entry.yearMonth) {
-                            val parts = entry.yearMonth.split("-")
-                            if (parts.size == 2) {
-                                val monthNum = parts[1].toIntOrNull() ?: 1
-                                val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-                                if (monthNum in 1..12) "${months[monthNum - 1]} '${parts[0].takeLast(2)}" else parts[1]
-                            } else {
-                                entry.yearMonth.takeLast(2)
+                                onSelectMonth(target.yearMonth)
                             }
                         }
-                        Text(
-                            text = monthLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            maxLines = 1
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val plotW = w - (paddingHorizontal * 2)
+                    val plotH = h - paddingTop - paddingBottom
+
+                    fun yPix(value: Double): Float =
+                        paddingTop + (plotH - plotH * (value / maxVal).coerceIn(0.0, 1.0)).toFloat()
+
+                    // Horizontal Grid lines (0%, 50%, 100%)
+                    for (i in 0..2) {
+                        val y = paddingTop + (plotH * i / 2f)
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(paddingHorizontal, y),
+                            end = Offset(w - paddingHorizontal, y),
+                            strokeWidth = 1f
                         )
+                    }
+
+                    val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else plotW
+
+                    // Paths for Income and Expenses
+                    val incPath = Path()
+                    val expPath = Path()
+
+                    val incPoints = mutableListOf<Offset>()
+                    val expPoints = mutableListOf<Offset>()
+
+                    sorted.forEachIndexed { i, entry ->
+                        val x = paddingHorizontal + (i * stepX)
+                        val inc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
+                        val exp = entry.expRent + entry.expGroceries + entry.expOther
+
+                        val yInc = yPix(inc)
+                        val yExp = yPix(exp)
+
+                        incPoints.add(Offset(x, yInc))
+                        expPoints.add(Offset(x, yExp))
+
+                        if (i == 0) {
+                            incPath.moveTo(x, yInc)
+                            expPath.moveTo(x, yExp)
+                        } else {
+                            incPath.lineTo(x, yInc)
+                            expPath.lineTo(x, yExp)
+                        }
+                    }
+
+                    // Draw Selected Month vertical guideline
+                    val selectedIdx = sorted.indexOfFirst { it.yearMonth == selectedYm }
+                    if (selectedIdx >= 0) {
+                        val sx = paddingHorizontal + (selectedIdx * stepX)
+                        drawLine(
+                            color = cTeal.copy(alpha = 0.5f),
+                            start = Offset(sx, paddingTop),
+                            end = Offset(sx, paddingTop + plotH),
+                            strokeWidth = 2f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                        )
+                    }
+
+                    // Draw Income line
+                    drawPath(
+                        path = incPath,
+                        color = cGreen,
+                        style = Stroke(width = 4.5f, cap = StrokeCap.Round)
+                    )
+
+                    // Draw Expense line
+                    drawPath(
+                        path = expPath,
+                        color = cRed,
+                        style = Stroke(width = 4.5f, cap = StrokeCap.Round)
+                    )
+
+                    // Draw points and month labels
+                    sorted.forEachIndexed { i, entry ->
+                        val ptInc = incPoints[i]
+                        val ptExp = expPoints[i]
+                        val isSel = entry.yearMonth == selectedYm
+
+                        // Income dot
+                        drawCircle(color = cGreen, radius = if (isSel) 6f else 4f, center = ptInc)
+                        drawCircle(color = Color.White, radius = if (isSel) 3f else 2f, center = ptInc)
+
+                        // Expense dot
+                        drawCircle(color = cRed, radius = if (isSel) 6f else 4f, center = ptExp)
+                        drawCircle(color = Color.White, radius = if (isSel) 3f else 2f, center = ptExp)
+
+                        // X-axis Month label
+                        val parts = entry.yearMonth.split("-")
+                        val monthLabel = if (parts.size == 2) {
+                            val mNum = parts[1].toIntOrNull() ?: 1
+                            val mNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                            if (mNum in 1..12) "${mNames[mNum - 1]} '${parts[0].takeLast(2)}" else parts[1]
+                        } else entry.yearMonth.takeLast(2)
+
+                        drawContext.canvas.nativeCanvas.drawText(
+                            monthLabel,
+                            ptInc.x,
+                            paddingTop + plotH + 24f,
+                            textPaint
+                        )
+                    }
+                }
+            }
+
+            // Interactive Month Snapshot bar
+            if (selectedEntry != null) {
+                val inc = selectedEntry.incVaclav + selectedEntry.incEleonora + selectedEntry.incUnforeseen
+                val exp = selectedEntry.expRent + selectedEntry.expGroceries + selectedEntry.expOther
+                val net = inc - exp
+                val isPositive = net >= 0
+
+                val parts = selectedEntry.yearMonth.split("-")
+                val mLabel = if (parts.size == 2) {
+                    val mNum = parts[1].toIntOrNull() ?: 1
+                    val mNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                    if (mNum in 1..12) "${mNames[mNum - 1]} ${parts[0]}" else selectedEntry.yearMonth
+                } else selectedEntry.yearMonth
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = mLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "In: +${fmtCompact(inc)}",
+                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen, fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = "Out: -${fmtCompact(exp)}",
+                                style = MaterialTheme.typography.labelSmall.copy(color = BadRed, fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = "Net: ${if (isPositive) "+" else ""}${fmtCompact(net)}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (isPositive) GoodGreen else BadRed,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
                     }
                 }
             }

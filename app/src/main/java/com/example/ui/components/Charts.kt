@@ -84,6 +84,8 @@ fun NetWorthChart(
     data: List<PortfolioYearPoint>,
     cpiInflationPct: Double = 2.8,
     ledgerEntries: List<com.example.data.LedgerEntryEntity> = emptyList(),
+    isRealPurchasingPower: Boolean = false,
+    onRealPurchasingPowerChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (data.isEmpty()) return
@@ -96,7 +98,12 @@ fun NetWorthChart(
 
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
-    var isRealPurchasingPower by remember { mutableStateOf(false) }
+    var internalIsReal by remember { mutableStateOf(isRealPurchasingPower) }
+    val effectiveIsReal = if (onRealPurchasingPowerChange != null) isRealPurchasingPower else internalIsReal
+    val updateReal: (Boolean) -> Unit = { newVal ->
+        internalIsReal = newVal
+        onRealPurchasingPowerChange?.invoke(newVal)
+    }
 
     val actualPoints = remember(ledgerEntries) {
         ledgerEntries
@@ -104,8 +111,8 @@ fun NetWorthChart(
             .sortedBy { it.yearMonth }
     }
 
-    val displayData = remember(data, isRealPurchasingPower, cpiInflationPct) {
-        if (!isRealPurchasingPower) {
+    val displayData = remember(data, effectiveIsReal, cpiInflationPct) {
+        if (!effectiveIsReal) {
             data
         } else {
             data.mapIndexed { idx, pt ->
@@ -142,7 +149,7 @@ fun NetWorthChart(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     ColorPill(
-                        text = if (isRealPurchasingPower) "TODAY'S PURCHASING POWER" else "GROWTH TRAJECTORY",
+                        text = if (effectiveIsReal) "TODAY'S PURCHASING POWER" else "GROWTH TRAJECTORY",
                         color = cTeal,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
@@ -156,7 +163,7 @@ fun NetWorthChart(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = if (isRealPurchasingPower) "Discounted at ${String.format(java.util.Locale.getDefault(), "%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal growth over 35-year investment horizon",
+                        text = if (effectiveIsReal) "Discounted at ${String.format(java.util.Locale.getDefault(), "%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal growth over 35-year investment horizon",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
@@ -205,16 +212,16 @@ fun NetWorthChart(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     Row(modifier = Modifier.padding(2.dp)) {
-                        val nominalBg = if (!isRealPurchasingPower) BrandTeal else Color.Transparent
-                        val nominalFg = if (!isRealPurchasingPower) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                        val realBg = if (isRealPurchasingPower) BrandTeal else Color.Transparent
-                        val realFg = if (isRealPurchasingPower) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        val nominalBg = if (!effectiveIsReal) BrandTeal else Color.Transparent
+                        val nominalFg = if (!effectiveIsReal) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        val realBg = if (effectiveIsReal) BrandTeal else Color.Transparent
+                        val realFg = if (effectiveIsReal) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
 
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(nominalBg)
-                                .clickable { isRealPurchasingPower = false }
+                                .clickable { updateReal(false) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text("Nominal", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = nominalFg)
@@ -223,7 +230,7 @@ fun NetWorthChart(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(realBg)
-                                .clickable { isRealPurchasingPower = true }
+                                .clickable { updateReal(true) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text("Real", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = realFg)
@@ -436,7 +443,7 @@ fun NetWorthChart(
                             val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
                             val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
                             val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
-                            val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                            val discount = if (effectiveIsReal) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
                             // Compare like-for-like with the model: investable assets only (liquid + pension),
                             // the emergency reserve is a separate safety buffer and not part of the trajectory.
                             val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
@@ -458,7 +465,7 @@ fun NetWorthChart(
                             val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
                             val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
                             val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
-                            val discount = if (isRealPurchasingPower) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                            val discount = if (effectiveIsReal) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
                             val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
                             val discountedNw = investable / discount
                             val ax = paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)

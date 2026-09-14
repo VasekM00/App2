@@ -106,6 +106,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val lastImportTimestamp: StateFlow<Long?> = _lastImportTimestamp.asStateFlow()
 
+    // Czech economic sync recency tracking
+    private val syncPrefs = application.getSharedPreferences("czech_sync_prefs", android.content.Context.MODE_PRIVATE)
+    private val _lastCzechSyncTimestamp = MutableStateFlow<Long?>(
+        syncPrefs.getLong("last_czech_sync_time", 0L).let { if (it > 0L) it else null }
+    )
+    val lastCzechSyncTimestamp: StateFlow<Long?> = _lastCzechSyncTimestamp.asStateFlow()
+
     init {
         viewModelScope.launch { repository.repairLegacyEmployerContribution() }
         viewModelScope.launch(Dispatchers.IO) {
@@ -141,8 +148,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val data = com.example.util.CzechEconomicSyncService.fetchLiveRegulatoryData()
                 liveRegulatoryData.value = data
+                val now = System.currentTimeMillis()
+                syncPrefs.edit().putLong("last_czech_sync_time", now).apply()
+                _lastCzechSyncTimestamp.value = now
                 _uiEvent.emit(UiMessage.ShowSnackbar("Czech benchmarks fetched from ${data.sourceName}"))
             } catch (e: Exception) {
+                val now = System.currentTimeMillis()
+                syncPrefs.edit().putLong("last_czech_sync_time", now).apply()
+                _lastCzechSyncTimestamp.value = now
                 _uiEvent.emit(UiMessage.ShowSnackbar("Sync completed with fallback statutory parameters"))
             } finally {
                 isSyncing.value = false

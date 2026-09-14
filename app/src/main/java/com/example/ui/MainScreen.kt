@@ -105,6 +105,7 @@ fun MainScreen(
     val activeAuditReport by viewModel.activeAuditReport.collectAsState()
     val importedBankSourcesByMonth by viewModel.importedBankSourcesByMonth.collectAsState()
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
+    val lastCzechSyncTimestamp by viewModel.lastCzechSyncTimestamp.collectAsState()
     val allImportedTransactions by viewModel.allImportedTransactions.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -396,6 +397,7 @@ fun MainScreen(
                                 liveRegulatoryData = liveRegulatoryData,
                                 isSyncing = isSyncing,
                                 onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
+                                lastSyncTimestamp = lastCzechSyncTimestamp,
                                 initialSubTab = targetSettingsSubTab
                             )
                         }

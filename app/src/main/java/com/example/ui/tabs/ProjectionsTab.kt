@@ -1,6 +1,7 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,6 +78,13 @@ import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import com.example.data.LedgerEntryEntity
+import com.example.domain.PortfolioYearPoint
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.TextButton
+import kotlin.math.pow
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,6 +187,7 @@ private fun TrajectorySubTab(
     )
 
     var selectedTrajectoryChart by rememberSaveable { mutableIntStateOf(0) }
+    var isRealPurchasingPower by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -218,7 +227,9 @@ private fun TrajectorySubTab(
             NetWorthChart(
                 data = state.dualTrajectory,
                 cpiInflationPct = state.settings.cpiInflationPct,
-                ledgerEntries = ledgerEntries
+                ledgerEntries = ledgerEntries,
+                isRealPurchasingPower = isRealPurchasingPower,
+                onRealPurchasingPowerChange = { isRealPurchasingPower = it }
             )
         } else {
             // 35-Year DCA Bar Chart & Growth
@@ -227,6 +238,16 @@ private fun TrajectorySubTab(
                 settings = state.settings
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 35-Year Trajectory Milestones Table
+        TrajectoryMilestonesTable(
+            trajectory = state.dualTrajectory,
+            isRealPurchasingPower = isRealPurchasingPower,
+            cpiInflationPct = state.settings.cpiInflationPct,
+            firePoint = state.fireDualPoint
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -241,7 +262,7 @@ private fun TrajectorySubTab(
                 CardHeaderPill(
                     title = "FIRE Trajectory Assumptions",
                     subtitle = "Withdrawal rates, inflation & pension targets (Tap for deep insight)",
-                    badgeText = "MILESTONES",
+                    badgeText = if (isRealPurchasingPower) "REAL MODE" else "NOMINAL MODE",
                     accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(14.dp))
@@ -277,16 +298,16 @@ private fun TrajectorySubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = "Today's FIRE Target (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)",
-                    value = fmtCZK(state.fireBaseTargetToday),
+                    label = if (isRealPurchasingPower) "Today's FIRE Target (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)" else "Target at FIRE (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)",
+                    value = if (isRealPurchasingPower) fmtCZK(state.fireBaseTargetToday) else (state.fireDualPoint?.let { "${fmtCZK(it.target)} (${it.year})" } ?: fmtCZK(state.fireBaseTargetToday)),
                     info = swrInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = "Expected Portfolio Nominal Return",
-                    value = fmtPct(state.settings.portfolioNominalReturnPct),
+                    label = if (isRealPurchasingPower) "Real Portfolio Compound Return" else "Expected Portfolio Nominal Return",
+                    value = if (isRealPurchasingPower) "${fmtPct(state.realReturnPct, 1)} (Real CAGR)" else "${fmtPct(state.settings.portfolioNominalReturnPct)} (Nominal)",
                     info = returnInflationInfo,
                     onShowInfo = onShowInfo
                 )
@@ -1211,6 +1232,181 @@ private fun ProjectionMetricRow(
                 color = highlightColor ?: MaterialTheme.colorScheme.onSurface
             ) else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
         )
+    }
+}
+
+@Composable
+private fun TrajectoryMilestonesTable(
+    trajectory: List<PortfolioYearPoint>,
+    isRealPurchasingPower: Boolean,
+    cpiInflationPct: Double,
+    firePoint: PortfolioYearPoint? = null
+) {
+    if (trajectory.isEmpty()) return
+    var showAllYears by rememberSaveable { mutableStateOf(false) }
+
+    val displayPoints = remember(trajectory, isRealPurchasingPower, cpiInflationPct) {
+        if (!isRealPurchasingPower) {
+            trajectory
+        } else {
+            trajectory.mapIndexed { idx, pt ->
+                val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                pt.copy(
+                    portfolio = pt.portfolio / discount,
+                    target = pt.target / discount,
+                    pensionPortfolio = pt.pensionPortfolio / discount
+                )
+            }
+        }
+    }
+
+    val fireYear = firePoint?.year
+    val rowsToShow = remember(displayPoints, showAllYears, fireYear) {
+        if (showAllYears) {
+            displayPoints
+        } else {
+            val keyYears = mutableSetOf<Int>()
+            displayPoints.forEachIndexed { idx, pt ->
+                if (idx == 0 || idx == displayPoints.size - 1 || pt.year % 5 == 0 || pt.year == fireYear) {
+                    keyYears.add(pt.year)
+                }
+            }
+            displayPoints.filter { it.year in keyYears }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().testTag("trajectory_milestones_table_card"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "35-Year Trajectory Table",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = if (isRealPurchasingPower) "Discounted at ${String.format(Locale.ROOT, "%.1f", cpiInflationPct)}% inflation (Today's CZK)" else "Nominal projected compound growth",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+                ColorPill(
+                    text = if (isRealPurchasingPower) "TODAY'S CZK" else "NOMINAL",
+                    color = BrandTeal,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    horizontalPadding = 6.dp,
+                    verticalPadding = 2.5.dp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Table Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Year (Age)", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                Text("Liquid", modifier = Modifier.weight(1.0f), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.End))
+                Text("Pension", modifier = Modifier.weight(1.0f), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.End))
+                Text("Total Net Worth", modifier = Modifier.weight(1.4f), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.End))
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            rowsToShow.forEach { pt ->
+                val isFire = pt.year == fireYear
+                val rowBg = if (isFire) BrandGold.copy(alpha = 0.12f) else Color.Transparent
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(rowBg, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(modifier = Modifier.weight(1.2f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${pt.year}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = if (isFire) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isFire) BrandGold else MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Text(
+                            text = " (${pt.age})",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                        )
+                        if (isFire) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            ColorPill(text = "FIRE", color = BrandGold, fontSize = 7.5.sp, horizontalPadding = 3.dp, verticalPadding = 1.dp)
+                        }
+                    }
+                    Text(
+                        text = fmtCompact(pt.portfolio),
+                        modifier = Modifier.weight(1.0f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = BrandTeal,
+                            textAlign = TextAlign.End,
+                            fontWeight = if (isFire) FontWeight.Bold else FontWeight.Normal
+                        )
+                    )
+                    Text(
+                        text = fmtCompact(pt.pensionPortfolio),
+                        modifier = Modifier.weight(1.0f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFF6366F1),
+                            textAlign = TextAlign.End,
+                            fontWeight = if (isFire) FontWeight.Bold else FontWeight.Normal
+                        )
+                    )
+                    Text(
+                        text = fmtCompact(pt.totalPortfolio),
+                        modifier = Modifier.weight(1.4f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = if (isFire) GoodGreen else MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.End
+                        )
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Expand / Collapse button
+            TextButton(
+                onClick = { showAllYears = !showAllYears },
+                modifier = Modifier.fillMaxWidth().testTag("toggle_all_years_button")
+            ) {
+                Icon(
+                    imageVector = if (showAllYears) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (showAllYears) "Collapse to Key Milestones" else "Show All 35 Years",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        }
     }
 }
 

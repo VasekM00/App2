@@ -65,6 +65,7 @@ fun FreedomDaysBanner(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -82,7 +83,7 @@ fun FreedomDaysBanner(
                             )
                         }
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Freedom Days Metric",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
@@ -94,6 +95,8 @@ fun FreedomDaysBanner(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 ColorPill(
                     text = "${String.format(Locale.ROOT, "%.1f", daysBought)} DAYS/MO",
