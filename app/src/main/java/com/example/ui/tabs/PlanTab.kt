@@ -158,14 +158,14 @@ private object PlanMetricInfos {
     val dipDeduction = MetricInfo(
         title = "DIP (Dlouhodobý investiční produkt)",
         category = "Retirement Tax Shield",
-        formulaOrRule = "§ 15a ZDP · Up to 48,000 CZK/yr personal tax deduction",
-        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48,000 CZK combined with DPS saves 7,200 CZK (15% bracket) or 11,040 CZK (23% bracket) per person annually.\n\n" +
+        formulaOrRule = "§ 15a ZDP · Up to 48 000 CZK annual personal tax deduction",
+        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48 000 CZK combined with DPS saves 7 200 CZK (15% bracket) or 11 040 CZK (23% bracket) per person annually.\n\n" +
                 "Statutory Deduction Matrix:\n" +
-                "• 1,000 CZK/mo (12k/yr) → Saves 1,800 CZK/yr (15%)\n" +
-                "• 2,000 CZK/mo (24k/yr) → Saves 3,600 CZK/yr (15%)\n" +
-                "• 3,000 CZK/mo (36k/yr) → Saves 5,400 CZK/yr (15%)\n" +
-                "• 4,000 CZK/mo (48k/yr) → Max 7,200 CZK/yr (15%) / 11,040 CZK/yr (23%)\n\n" +
-                "In two-income households, both partners can independently claim up to 48k CZK each (saving up to 14,400 CZK/yr combined).",
+                "• 1 000 CZK/mo (12 000 CZK) → Saves 1 800 CZK (15%)\n" +
+                "• 2 000 CZK/mo (24 000 CZK) → Saves 3 600 CZK (15%)\n" +
+                "• 3 000 CZK/mo (36 000 CZK) → Saves 5 400 CZK (15%)\n" +
+                "• 4 000 CZK/mo (48 000 CZK) → Max 7 200 CZK (15%) / 11 040 CZK (23%)\n\n" +
+                "In two-income households, both partners can independently claim up to 48 000 CZK each (saving up to 14 400 CZK combined annually). Note: Deductions require personal taxable income (§ 15 ZDP) and cannot be transferred between spouses.",
         statutoryReference = "§ 15a Act No. 586/1992 Coll. (Income Tax Act)",
         practicalImplication = "Requires maintaining the contract for at least 120 months (10 years) and withdrawing only after age 60 for tax-free maturity without clawbacks.",
         accentColor = Color(0xFF16A34A)
@@ -1192,6 +1192,31 @@ private fun PensionSubTab(
     val vHeadroom = max(0.0, s.taxDeductionCeilingAnnual - (vDipMonthly + vDpsAbove) * 12.0)
     val eHeadroom = max(0.0, s.taxDeductionCeilingAnnual - (eDipMonthly + eDpsAbove) * 12.0)
 
+    val vHasIncome = FinancialEngine.vaclavSalaryMonthly(s.baseYear, s) > 0.0
+    val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
+
+    val vSubsidyMaxAnnual = if (vAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) {
+        RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY * 12.0
+    } else {
+        RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY * 12.0
+    }
+    val eSubsidyMaxAnnual = if (!s.isSingleHousehold) {
+        if (eAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) {
+            RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY * 12.0
+        } else {
+            RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY * 12.0
+        }
+    } else 0.0
+
+    val vOptimalDepositAnnual = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 * 12.0 + (if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0)
+    val eOptimalDepositAnnual = if (!s.isSingleHousehold) {
+        RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 * 12.0 + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)
+    } else 0.0
+    val totalOptimalDepositAnnual = vOptimalDepositAnnual + eOptimalDepositAnnual
+
+    val maxCombinedBenefit = (vSubsidyMaxAnnual + eSubsidyMaxAnnual) +
+        ((if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0) + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)) * (s.taxRatePct / 100.0)
+
     val yearlyTaxSaved = state.taxReturnHelper.dipSaving
     val totalSubsidyAnnual = (vSubsidy + eSubsidy) * 12.0
     val totalGovBenefitAnnual = totalSubsidyAnnual + yearlyTaxSaved
@@ -1278,7 +1303,7 @@ private fun PensionSubTab(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "Retirement Optimization (DIP & DPS)",
-                    subtitle = "Two-stage subsidy (1 700 Kč/mo) and tax shield (48 000 Kč/yr)",
+                    subtitle = "Two-stage optimization: state cash match & personal tax shield",
                     badgeText = "OPTIMIZATION",
                     accentColor = GoodGreen,
                     trailingContent = {
@@ -1343,7 +1368,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
                             )
                             Text(
-                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% refund / yr",
+                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% tax relief",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }
@@ -1366,7 +1391,7 @@ private fun PensionSubTab(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
                             )
                             Text(
-                                text = "Combined / yr",
+                                text = "Annual net benefit",
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
                             )
                         }
@@ -1383,7 +1408,9 @@ private fun PensionSubTab(
                     subsidyMonthly = vSubsidy,
                     subsidyCapMonthly = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
                     taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
-                    taxRatePct = s.taxRatePct
+                    taxRatePct = s.taxRatePct,
+                    hasTaxableIncome = vHasIncome,
+                    maxSubsidyAnnual = vSubsidyMaxAnnual
                 )
 
                 // Two-Stage Optimization Bar: Spouse (Eleonora) — visible in dual-income mode
@@ -1396,7 +1423,9 @@ private fun PensionSubTab(
                         subsidyMonthly = eSubsidy,
                         subsidyCapMonthly = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
                         taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
-                        taxRatePct = s.taxRatePct
+                        taxRatePct = s.taxRatePct,
+                        hasTaxableIncome = eHasIncome,
+                        maxSubsidyAnnual = eSubsidyMaxAnnual
                     )
                 }
 
@@ -1414,15 +1443,28 @@ private fun PensionSubTab(
                     )
                     Text(
                         text = if (s.isSingleHousehold) {
-                            "Statutory annual capacity: 68 400 Kč (20 400 Kč subsidy + 48 000 Kč deduction)"
+                            "Optimal annual deposit: ${fmtCZK(vOptimalDepositAnnual)} (20 400 Kč DPS + 48 000 Kč DIP) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
+                        } else if (!eHasIncome) {
+                            "Household optimal deposit: ${fmtCZK(totalOptimalDepositAnnual)} (40 800 Kč DPS + 48 000 Kč DIP for ${if (s.primaryName.isNotBlank()) s.primaryName else "Václav"}) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
                         } else {
-                            "Combined household capacity: 136 800 Kč/yr (40 800 Kč subsidy + 96 000 Kč deduction)"
+                            "Dual-earner optimal deposit: ${fmtCZK(totalOptimalDepositAnnual)} (40 800 Kč DPS + 96 000 Kč DIP) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
+                    )
+                }
+                if (!s.isSingleHousehold && !eHasIncome) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax deduction is inactive during parental leave (§ 15 ZDP non-transferable); DPS subsidies apply to both.",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            fontSize = 10.sp
+                        ),
+                        modifier = Modifier.padding(start = 20.dp)
                     )
                 }
             }
@@ -1447,9 +1489,12 @@ private fun PensionOptimizationBar(
     subsidyCapMonthly: Double = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
     taxShieldCapAnnual: Double = 48000.0,
     taxRatePct: Double = 15.0,
+    hasTaxableIncome: Boolean = true,
+    maxSubsidyAnnual: Double = 4080.0,
     modifier: Modifier = Modifier
 ) {
-    val taxShieldCapMonthly = taxShieldCapAnnual / 12.0
+    val effectiveTaxShieldCapAnnual = if (hasTaxableIncome) taxShieldCapAnnual else 0.0
+    val taxShieldCapMonthly = effectiveTaxShieldCapAnnual / 12.0
     val totalTargetMonthly = subsidyCapMonthly + taxShieldCapMonthly
 
     val subsidyDeposit = min(dpsMonthly, subsidyCapMonthly)
@@ -1457,16 +1502,19 @@ private fun PensionOptimizationBar(
 
     val dpsAbove = max(0.0, dpsMonthly - subsidyCapMonthly)
     val taxShieldMonthly = dipMonthly + dpsAbove
-    val taxShieldDeposit = min(taxShieldMonthly, taxShieldCapMonthly)
-    val taxShieldRatio = (taxShieldDeposit / taxShieldCapMonthly).toFloat().coerceIn(0f, 1f)
+    val taxShieldDeposit = if (hasTaxableIncome) min(taxShieldMonthly, taxShieldCapMonthly) else 0.0
+    val taxShieldRatio = if (hasTaxableIncome && taxShieldCapMonthly > 0.0) {
+        (taxShieldDeposit / taxShieldCapMonthly).toFloat().coerceIn(0f, 1f)
+    } else 0f
 
     val totalOptimizedMonthly = subsidyDeposit + taxShieldDeposit
     val isMaxed = totalOptimizedMonthly >= (totalTargetMonthly - 0.5)
-    val isActive = dpsMonthly > 0.0 || dipMonthly > 0.0
+    val isActive = dpsMonthly > 0.0 || (hasTaxableIncome && dipMonthly > 0.0)
 
     val annualSubsidy = subsidyMonthly * 12.0
-    val annualTaxSaved = taxShieldDeposit * 12.0 * (taxRatePct / 100.0)
+    val annualTaxSaved = if (hasTaxableIncome) taxShieldDeposit * 12.0 * (taxRatePct / 100.0) else 0.0
     val totalAnnualBenefit = annualSubsidy + annualTaxSaved
+    val maxPotentialBenefit = maxSubsidyAnnual + (if (hasTaxableIncome) taxShieldCapAnnual * (taxRatePct / 100.0) else 0.0)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -1535,7 +1583,10 @@ private fun PensionOptimizationBar(
                     .weight(40f)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 5.dp, bottomEnd = 5.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .background(
+                        if (hasTaxableIncome) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                    )
             ) {
                 if (taxShieldRatio > 0f) {
                     Box(
@@ -1582,10 +1633,14 @@ private fun PensionOptimizationBar(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(GoodGreen)
+                        .background(if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.outlineVariant)
                 )
                 Text(
-                    text = "Deduction: ${fmtCZK(taxShieldDeposit)} / 4 000",
+                    text = if (hasTaxableIncome) {
+                        "Deduction: ${fmtCZK(taxShieldDeposit)} / 4 000"
+                    } else {
+                        "Deduction: Inactive (no tax base)"
+                    },
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 10.sp
@@ -1602,7 +1657,7 @@ private fun PensionOptimizationBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isActive) "Gov benefit: +${fmtCZK(totalAnnualBenefit)}/yr" else "Uncaptured benefit: up to +11 280 Kč/yr",
+                text = if (isActive) "Annual benefit: +${fmtCZK(totalAnnualBenefit)}" else "Max benefit: +${fmtCZK(maxPotentialBenefit)}",
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = if (isActive) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.SemiBold,

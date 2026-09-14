@@ -54,7 +54,7 @@ private object WaterfallMetricInfos {
     val employerMatch = MetricInfo(
         title = "Step 2: Employer Pension Exemption",
         category = "Statutory Benefit",
-        formulaOrRule = "Up to 50,000 CZK/yr per employee · 100% tax and levy exempt",
+        formulaOrRule = "Up to 50 000 CZK annually per employee · 100% tax and levy exempt",
         explanation = "Employer contributions to retirement products (DPS, DIP, životní pojištění). Fully exempt from income tax, health insurance (9%), and social security (24.8%) for the employer, and 100% net for the employee.",
         statutoryReference = "§ 6 odst. 9 písm. m) Act No. 586/1992 Coll. (ZDP)",
         practicalImplication = "Instant 100% immediate return on employer capital with zero tax drag.",
@@ -74,10 +74,10 @@ private object WaterfallMetricInfos {
     val dipTaxShield = MetricInfo(
         title = "Step 4: Long-Term Investment Product (DIP)",
         category = "Retirement Tax Shield",
-        formulaOrRule = "Up to 48,000 CZK/yr personal income tax deduction per earner",
-        explanation = "Pre-tax investment into broad-market index ETFs (VWCE, S&P 500) through regulated brokers. Saves 7,200 CZK/yr (15% tax bracket) or 11,040 CZK/yr (23% progressive bracket) per person.",
+        formulaOrRule = "Up to 48 000 CZK annual tax deduction per earner",
+        explanation = "Pre-tax investment into broad-market index ETFs (VWCE, S&P 500) through regulated brokers. Saves 7 200 CZK (15% tax bracket) or 11 040 CZK (23% progressive bracket) annually per person.",
         statutoryReference = "§ 15a Act No. 586/1992 Coll. (ZDP)",
-        practicalImplication = "Preferred vehicle over DPS for savings beyond 1,700 CZK/mo: captures the exact same tax shield (up to 48k CZK/yr) but in low-cost global ETFs (TER ~0.2%) vs DPS fund fees.",
+        practicalImplication = "Preferred vehicle over DPS for savings beyond 1 700 CZK/mo: captures the exact same tax shield (up to 48 000 CZK annually) but in low-cost global ETFs (TER ~0.2%) vs DPS fund fees.",
         accentColor = Color(0xFF16A34A)
     )
 
@@ -177,7 +177,7 @@ fun FundsAllocatorCard(
                 currentAlloc = "${fmtCZK(totalEmpMonthly)} / month",
                 statusText = if (totalEmpMonthly > 0) "ACTIVE MATCH" else "NOT CLAIMED",
                 statusColor = if (totalEmpMonthly > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                recommendation = "Capture 100% employer match up to 50k Kč/yr per person. Tax-free and social levy-free.",
+                recommendation = "Capture 100% employer match up to 50 000 Kč annually per person. 100% tax and levy exempt.",
                 info = WaterfallMetricInfos.employerMatch,
                 onShowInfo = onShowInfo
             )
@@ -207,9 +207,9 @@ fun FundsAllocatorCard(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
                 currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + eRetirementDeductionMonthly)} / month",
-                statusText = if (isDipMaxed) "MAX SHIELD (48k)" else "REFUND: ${fmtCompact(state.taxReturnHelper.dipSaving)}/yr",
+                statusText = if (isDipMaxed) "MAX SHIELD (48k)" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
-                recommendation = "Deduct up to 48k Kč/yr per person into global ETFs. Captures +7.2k to 11k refund with lower fees than DPS above 1.7k.",
+                recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč/mo.",
                 info = WaterfallMetricInfos.dipTaxShield,
                 onShowInfo = onShowInfo
             )

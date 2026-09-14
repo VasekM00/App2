@@ -457,8 +457,8 @@ private object CashFlowMetricInfos {
     val dipDeduction = MetricInfo(
         title = "DIP (Dlouhodobý investiční produkt)",
         category = "Retirement Tax Shield",
-        formulaOrRule = "§ 15a ZDP · Up to 48,000 CZK/yr tax deduction",
-        explanation = "Czech long-term investment product enabling investments into index ETFs with pre-tax income. Combined 48k CZK annual ceiling with DPS provides 7,200 CZK (at 15% rate) or 11,040 CZK (at 23% rate) in direct annual tax savings.",
+        formulaOrRule = "§ 15a ZDP · Up to 48 000 CZK annual tax deduction",
+        explanation = "Czech long-term investment product enabling investments into index ETFs with pre-tax income. Combined 48 000 CZK annual ceiling with DPS provides 7 200 CZK (at 15% rate) or 11 040 CZK (at 23% rate) in direct annual tax savings.",
         statutoryReference = "§ 15a Act No. 586/1992 Coll.",
         practicalImplication = "Reinvesting tax savings into your ETF portfolio creates a compound tax alpha on your retirement nest egg.",
         accentColor = Color(0xFF16A34A)
