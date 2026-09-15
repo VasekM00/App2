@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.domain.RegulatoryConstants
 import com.example.ui.theme.BrandGold
@@ -130,8 +131,9 @@ fun FundsAllocatorCard(
     val eDipDpsAbove = max(0.0, eDps - s.dpsDeductionThresholdMonthly)
     val vRetirementDeductionMonthly = vDip + vDipDpsAbove
     val eRetirementDeductionMonthly = eDip + eDipDpsAbove
+    val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
     val statutoryCeilingMonthly = RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026 / 12.0 // 4,000 CZK/mo
-    val isDipMaxed = vRetirementDeductionMonthly >= statutoryCeilingMonthly && (s.isSingleHousehold || eRetirementDeductionMonthly >= statutoryCeilingMonthly)
+    val isDipMaxed = vRetirementDeductionMonthly >= statutoryCeilingMonthly && (s.isSingleHousehold || !eHasIncome || eRetirementDeductionMonthly >= statutoryCeilingMonthly)
 
     // Liquid Brokerage ETF DCA
     val vPortu = s.portuDcaMonthly
@@ -206,8 +208,8 @@ fun FundsAllocatorCard(
             WaterfallStepRow(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
-                currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + eRetirementDeductionMonthly)} / month",
-                statusText = if (isDipMaxed) "MAX SHIELD (48k)" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
+                currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
+                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
                 recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč/mo.",
                 info = WaterfallMetricInfos.dipTaxShield,

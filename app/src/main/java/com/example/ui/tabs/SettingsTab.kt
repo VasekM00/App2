@@ -135,7 +135,7 @@ private object SettingsMetricInfos {
     )
 
     val spouseCredit = MetricInfo(
-        title = "Spouse Tax Credit (§ 35ba)",
+        title = "Spouse Tax Credit",
         category = "Czech Tax Code",
         formulaOrRule = "24,840 CZK/yr deduction if spouse's own income < 68,000 CZK",
         explanation = "Annual tax credit claimed by one spouse when the other has own annual gross income not exceeding 68,000 CZK and takes care of a child under 3 years old. Crucially, state parental allowance (rodičovský příspěvek) is legally excluded from this income ceiling.",
@@ -145,7 +145,7 @@ private object SettingsMetricInfos {
     )
 
     val childBonus = MetricInfo(
-        title = "Child Tax Credit & Bonus (§ 35c)",
+        title = "Child Tax Credit & Bonus",
         category = "Czech Tax Code",
         formulaOrRule = "1st child: 15,204 CZK/yr · 2nd child: 22,320 CZK/yr · 3rd+: 27,840 CZK/yr",
         explanation = "Progressive tax allowance per dependent child. If your tax liability reaches zero, the unused portion is paid out by the state directly to you as a cash tax bonus (daňový bonus).",
@@ -938,7 +938,7 @@ fun SettingsTab(
                             badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold
                         ) {
                             Text(
-                                text = "Benchmark live macroeconomic parameters directly against official feeds from Český statistický úřad (ČSÚ), Česká národní banka (ČNB), and Czech tax/pension legislation (ZDP).",
+                                text = "Benchmark live macroeconomic parameters directly against official feeds from Český statistický úřad (ČSÚ), Česká národní banka (ČNB), and Czech tax/pension legislation.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

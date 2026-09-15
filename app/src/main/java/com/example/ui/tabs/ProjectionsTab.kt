@@ -1251,10 +1251,13 @@ private fun TrajectoryMilestonesTable(
         } else {
             trajectory.mapIndexed { idx, pt ->
                 val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                val discPort = pt.portfolio / discount
+                val discPension = pt.pensionPortfolio / discount
                 pt.copy(
-                    portfolio = pt.portfolio / discount,
+                    portfolio = discPort,
                     target = pt.target / discount,
-                    pensionPortfolio = pt.pensionPortfolio / discount
+                    pensionPortfolio = discPension,
+                    totalPortfolio = discPort + discPension
                 )
             }
         }

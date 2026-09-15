@@ -117,10 +117,13 @@ fun NetWorthChart(
         } else {
             data.mapIndexed { idx, pt ->
                 val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                val discPort = pt.portfolio / discount
+                val discPension = pt.pensionPortfolio / discount
                 pt.copy(
-                    portfolio = pt.portfolio / discount,
+                    portfolio = discPort,
                     target = pt.target / discount,
-                    pensionPortfolio = pt.pensionPortfolio / discount
+                    pensionPortfolio = discPension,
+                    totalPortfolio = discPort + discPension
                 )
             }
         }
@@ -275,7 +278,15 @@ fun NetWorthChart(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val maxActual = actualPoints.maxOfOrNull { it.totalNetWorthAtMonthEnd } ?: 0.0
+            val baseYear = displayData.firstOrNull()?.year ?: 2026
+            val maxActual = actualPoints.maxOfOrNull { entry ->
+                val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
+                val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
+                val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
+                val discount = if (effectiveIsReal) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
+                investable / discount
+            } ?: 0.0
             val maxVal = (maxOf(
                 displayData.maxOfOrNull { it.totalPortfolio } ?: 0.0,
                 displayData.maxOfOrNull { it.portfolio } ?: 0.0,

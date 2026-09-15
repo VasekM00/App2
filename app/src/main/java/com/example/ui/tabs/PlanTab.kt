@@ -1459,7 +1459,7 @@ private fun PensionSubTab(
                 if (!s.isSingleHousehold && !eHasIncome) {
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax deduction is inactive during parental leave (§ 15 ZDP non-transferable); DPS subsidies apply to both.",
+                        text = "${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax deduction is inactive during parental leave (deductions are personal and non-transferable); DPS subsidies apply to both.",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                             fontSize = 10.sp
