@@ -562,7 +562,7 @@ fun MonteCarloFanChart(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "P95 Upper Bound, P50 Median, and P5 Lower Bound Confidence Band",
+                text = "P95 Upper Bound, P50 Median, and P5 Lower Bound — all values nominal CZK (pre-inflation)",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
@@ -776,7 +776,7 @@ fun MonteCarloFanChart(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)}",
+                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)} nominal",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = BadRed,
@@ -784,7 +784,7 @@ fun MonteCarloFanChart(
                                 )
                             )
                             Text(
-                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)}",
+                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)} nominal",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = GoodGreen,
@@ -792,6 +792,14 @@ fun MonteCarloFanChart(
                                 )
                             )
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Historical bootstrap uses actual MSCI 1970-2025 returns (avg ~12% nominal vs parametric ${"\u2248"}7%). All figures are nominal CZK — divide by ~2.8 for today's buying power at 3% CPI over 35 years.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            )
+                        )
                     }
                 }
             }
