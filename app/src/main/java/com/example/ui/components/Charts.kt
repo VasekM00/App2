@@ -523,9 +523,23 @@ fun NetWorthChart(
 @Composable
 fun MonteCarloFanChart(
     points: List<MonteCarloPoint>,
+    cpiPct: Double = 2.8,
     modifier: Modifier = Modifier
 ) {
     if (points.isEmpty()) return
+
+    val baseYear = points.first().year
+    val cpiRate = (cpiPct / 100.0).coerceAtLeast(0.0)
+    // Deflate every point back to base-year purchasing power
+    val realPoints = points.map { pt ->
+        val deflator = Math.pow(1.0 + cpiRate, (pt.year - baseYear).toDouble()).coerceAtLeast(1.0)
+        pt.copy(
+            p5     = pt.p5     / deflator,
+            p50    = pt.p50    / deflator,
+            p95    = pt.p95    / deflator,
+            target = pt.target / deflator
+        )
+    }
 
     val cTeal = BrandTeal
     val cGreen = GoodGreen
@@ -540,7 +554,7 @@ fun MonteCarloFanChart(
             .testTag("monte_carlo_chart_card")
             .semantics {
                 contentDescription =
-                    "Monte Carlo simulation fan chart showing the 5th, 50th and 95th percentile portfolio outcomes and the FIRE target over ${points.size} years."
+                    "Monte Carlo simulation fan chart showing the 5th, 50th and 95th percentile portfolio outcomes and the FIRE target over ${realPoints.size} years, inflation-adjusted to today's purchasing power."
             },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -562,13 +576,13 @@ fun MonteCarloFanChart(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "P95 Upper Bound, P50 Median, and P5 Lower Bound — all values nominal CZK (pre-inflation)",
+                text = "P95 Upper Bound, P50 Median, P5 Lower Bound — real CZK (${String.format("%.1f", cpiPct)}% CPI-deflated to today's buying power)",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val maxVal = ((points.maxOfOrNull { maxOf(it.p95, it.target) } ?: 0.0) * 1.1).coerceAtLeast(100.0)
+            val maxVal = ((realPoints.maxOfOrNull { maxOf(it.p95, it.target) } ?: 0.0) * 1.1).coerceAtLeast(100.0)
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
@@ -594,12 +608,12 @@ fun MonteCarloFanChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(points) {
+                        .pointerInput(realPoints) {
                             detectTapGestures { offset ->
                                 val plotW = size.width - paddingLeft - paddingRight
-                                val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
+                                val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
                                 val relativeX = offset.x - paddingLeft
-                                val clickedIdx = if (points.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, points.size - 1) else 0
+                                val clickedIdx = if (realPoints.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1) else 0
                                 selectedIndex = clickedIdx
                             }
                         }
@@ -608,7 +622,7 @@ fun MonteCarloFanChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    val stepX = if (points.size > 1) plotW / (points.size - 1).toFloat() else plotW
+                    val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
 
                     // Draw Y-Axis lines and numeric labels
                     val ySteps = 4
@@ -634,8 +648,8 @@ fun MonteCarloFanChart(
 
                     // Draw X-Axis Year Labels
                     val xStepCount = 5
-                    for (i in 0 until points.size step max(1, points.size / xStepCount)) {
-                        val pt = points[i]
+                    for (i in 0 until realPoints.size step max(1, realPoints.size / xStepCount)) {
+                        val pt = realPoints[i]
                         val x = paddingLeft + (i * stepX)
                         drawLine(
                             color = if (i == 0) cTeal else gridColor,
@@ -659,13 +673,13 @@ fun MonteCarloFanChart(
 
                     // P95 -> P5 Area Shade
                     val fillPath = Path()
-                    points.forEachIndexed { i, pt ->
+                    realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
                         val yP95 = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
                         if (i == 0) fillPath.moveTo(x, yP95) else fillPath.lineTo(x, yP95)
                     }
-                    points.reversed().forEachIndexed { i, pt ->
-                        val origIdx = points.size - 1 - i
+                    realPoints.reversed().forEachIndexed { i, pt ->
+                        val origIdx = realPoints.size - 1 - i
                         val x = paddingLeft + (origIdx * stepX)
                         val yP5 = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
                         fillPath.lineTo(x, yP5)
@@ -679,7 +693,7 @@ fun MonteCarloFanChart(
 
                     // P95 Line (Green)
                     val p95Path = Path()
-                    points.forEachIndexed { i, pt ->
+                    realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
                         val yP95 = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
                         if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
@@ -688,7 +702,7 @@ fun MonteCarloFanChart(
 
                     // P5 Line (Red)
                     val p5Path = Path()
-                    points.forEachIndexed { i, pt ->
+                    realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
                         val yP5 = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
                         if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
@@ -697,7 +711,7 @@ fun MonteCarloFanChart(
 
                     // P50 Median Line (Teal Thick)
                     val p50Path = Path()
-                    points.forEachIndexed { i, pt ->
+                    realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
                         val yP50 = plotH - (plotH * (pt.p50 / maxVal)).toFloat()
                         if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
@@ -705,9 +719,9 @@ fun MonteCarloFanChart(
                     drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
 
                     // Draw Current Position (Now / Start Year) Indicator Dot
-                    if (points.isNotEmpty()) {
+                    if (realPoints.isNotEmpty()) {
                         val curX = paddingLeft + (0 * stepX)
-                        val curY = plotH - (plotH * (points[0].p50 / maxVal)).toFloat()
+                        val curY = plotH - (plotH * (realPoints[0].p50 / maxVal)).toFloat()
                         drawLine(
                             color = cTeal.copy(alpha = 0.35f),
                             start = Offset(curX, curY),
@@ -723,7 +737,7 @@ fun MonteCarloFanChart(
                     // Highlight selected point marker
                     selectedIndex?.let { idx ->
                         val sx = paddingLeft + (idx * stepX)
-                        val sy = plotH - (plotH * (points[idx].p50 / maxVal)).toFloat()
+                        val sy = plotH - (plotH * (realPoints[idx].p50 / maxVal)).toFloat()
                         drawLine(
                             color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
@@ -739,7 +753,7 @@ fun MonteCarloFanChart(
             }
 
             // Interactive Detail Tooltip Box
-            val activePoint = selectedIndex?.let { points.getOrNull(it) } ?: points.lastOrNull()
+            val activePoint = selectedIndex?.let { realPoints.getOrNull(it) } ?: realPoints.lastOrNull()
             activePoint?.let { pt ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
@@ -758,7 +772,7 @@ fun MonteCarloFanChart(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = "Year ${pt.year} (Age ${pt.age}) Monte Carlo Range:",
+                                text = "Year ${pt.year} (Age ${pt.age}) — real CZK range:",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
@@ -776,7 +790,7 @@ fun MonteCarloFanChart(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)} nominal",
+                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)}",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = BadRed,
@@ -784,7 +798,7 @@ fun MonteCarloFanChart(
                                 )
                             )
                             Text(
-                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)} nominal",
+                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)}",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = GoodGreen,
@@ -794,7 +808,7 @@ fun MonteCarloFanChart(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Historical bootstrap uses actual MSCI 1970-2025 returns (avg ~12% nominal vs parametric ${"\u2248"}7%). All figures are nominal CZK — divide by ~2.8 for today's buying power at 3% CPI over 35 years.",
+                            text = "Historical bootstrap uses actual MSCI 1970-2025 returns (avg ~12% nominal). Values shown in today's purchasing power (${String.format("%.1f", cpiPct)}% CPI deflated).",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic

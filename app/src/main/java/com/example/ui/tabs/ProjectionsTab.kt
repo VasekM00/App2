@@ -1069,7 +1069,7 @@ private fun MonteCarloAndStressSubTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Monte Carlo Fan Chart
-        MonteCarloFanChart(points = mc.fanPoints)
+        MonteCarloFanChart(points = mc.fanPoints, cpiPct = state.settings.cpiInflationPct)
 
         Spacer(modifier = Modifier.height(20.dp))
 
