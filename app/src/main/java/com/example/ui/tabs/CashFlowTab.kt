@@ -104,6 +104,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
+import com.example.data.SettingsEntity
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.domain.RegulatoryConstants
 import com.example.ui.components.CardHeaderPill
@@ -179,6 +181,7 @@ fun CashFlowTab(
     lastImportTimestamp: Long? = null,
     allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     initialSubTab: Int = 0,
+    onUpdateSettings: (SettingsEntity) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val csvLauncher = rememberLauncherForActivityResult(
@@ -232,7 +235,8 @@ fun CashFlowTab(
                     state = state,
                     ledgerEntries = ledgerEntries,
                     allImportedTransactions = allImportedTransactions,
-                    onShowInfo = { infoState.show(it) }
+                    onShowInfo = { infoState.show(it) },
+                    onUpdateSettings = onUpdateSettings
                 )
                 1 -> LedgerSubTab(
                     state = state,
@@ -550,10 +554,65 @@ private object CashFlowMetricInfos {
 @Composable
 private fun IncomeSubTab(
     state: FullCalculationState,
-    onShowInfo: ((MetricInfo) -> Unit)? = null
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
     val inc = state.currentIncome
+    val s = state.settings
+
+    var showEditSalaryDialog by remember { mutableStateOf(false) }
+    var editedSalaryText by remember { mutableStateOf(s.vSalary.toInt().toString()) }
+
+    val now = remember { java.util.Calendar.getInstance() }
+    val currentYear = now.get(java.util.Calendar.YEAR)
+    val currentMonth = now.get(java.util.Calendar.MONTH) + 1
+    val scheduledLumpSums = remember(s.customLumpSumsJson) {
+        FinancialEngine.lumpSumsForMonth(currentYear, currentMonth, s)
+    }
+
+    if (showEditSalaryDialog && onUpdateSettings != null) {
+        AlertDialog(
+            onDismissRequest = { showEditSalaryDialog = false },
+            title = { Text("Edit Václav's Net Salary", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Update baseline monthly net take-home salary. This recalculates projections, savings rate, and cash flows across the app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = editedSalaryText,
+                        onValueChange = { editedSalaryText = it },
+                        label = { Text("Monthly Net Salary (CZK)") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val sanitized = editedSalaryText.replace(',', '.').trim()
+                        val amt = sanitized.toDoubleOrNull() ?: s.vSalary
+                        if (amt >= 0.0) {
+                            onUpdateSettings(s.copy(vSalary = amt))
+                        }
+                        showEditSalaryDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditSalaryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -575,7 +634,59 @@ private fun IncomeSubTab(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                IncomeRow(label = "Václav's Net Salary", value = fmtCZK(state.settings.vSalary), info = CashFlowMetricInfos.vaclavSalary, onShowInfo = onShowInfo)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .then(
+                                if (onShowInfo != null) Modifier.infoTapHold(CashFlowMetricInfos.vaclavSalary, onShowInfo)
+                                else Modifier
+                            )
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Václav's Net Salary",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Info on Václav's Net Salary",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = fmtCZK(s.vSalary),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                        )
+                        if (onUpdateSettings != null) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = {
+                                    editedSalaryText = s.vSalary.toInt().toString()
+                                    showEditSalaryDialog = true
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Václav's Salary",
+                                    tint = BrandTeal,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 if (inc.eleonoraSalary > 0.0) {
                     IncomeRow(label = "Eleonora's Net Salary", value = fmtCZK(inc.eleonoraSalary), info = CashFlowMetricInfos.eleonoraSalary, onShowInfo = onShowInfo)
@@ -592,13 +703,25 @@ private fun IncomeSubTab(
                 IncomeRow(label = "Meal Vouchers (Václav)", value = fmtCZK(inc.vouchers), info = CashFlowMetricInfos.mealVouchers, onShowInfo = onShowInfo)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 IncomeRow(label = "Family Support Gift", value = fmtCZK(inc.gift), info = CashFlowMetricInfos.familyGift, onShowInfo = onShowInfo)
-                if (state.settings.vOtherInflowsMonthly > 0.0) {
+                if (s.vOtherInflowsMonthly > 0.0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(state.settings.vOtherInflowsMonthly))
+                    IncomeRow(label = "Václav's Other Inflows", value = fmtCZK(s.vOtherInflowsMonthly))
                 }
-                if (state.settings.eOtherInflowsMonthly > 0.0) {
+                if (s.eOtherInflowsMonthly > 0.0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(state.settings.eOtherInflowsMonthly))
+                    IncomeRow(label = "Eleonora's Other Inflows", value = fmtCZK(s.eOtherInflowsMonthly))
+                }
+
+                if (scheduledLumpSums.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    for (item in scheduledLumpSums) {
+                        IncomeRow(
+                            label = "${item.name} (${currentMonth}/$currentYear Bonus)",
+                            value = fmtCZK(item.amount),
+                            isBold = false
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    }
                 }
 
                 HorizontalDivider(
@@ -2846,7 +2969,8 @@ private fun BudgetAndIncomesSubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity>,
     allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
-    onShowInfo: (MetricInfo) -> Unit = {}
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onUpdateSettings: (SettingsEntity) -> Unit = {}
 ) {
     var selectedSection by remember { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details
     val sections = listOf("Overview", "Incomes", "Expenses")
@@ -2899,7 +3023,7 @@ private fun BudgetAndIncomesSubTab(
                 allImportedTransactions = allImportedTransactions,
                 onShowInfo = onShowInfo
             )
-            1 -> IncomeSubTab(state = state, onShowInfo = onShowInfo)
+            1 -> IncomeSubTab(state = state, onShowInfo = onShowInfo, onUpdateSettings = onUpdateSettings)
             2 -> SpendingSubTab(state = state, onShowInfo = onShowInfo)
         }
     }

@@ -101,6 +101,7 @@ import com.example.ui.components.LiveSyncDialog
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
+import com.example.ui.components.infoTapHold
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.graphics.Color
 import com.example.ui.theme.BadRed
@@ -182,6 +183,24 @@ private object SettingsMetricInfos {
         practicalImplication = "Earlier personal retirement requires a larger private bridge fund to cover living costs before state pensions kick in.",
         accentColor = Color(0xFF0F766E)
     )
+
+    val historicalBootstrap = MetricInfo(
+        title = "Historical 1970–2025 Bootstrap",
+        category = "Statistical Simulation",
+        formulaOrRule = "Empirical Resampling · 56-Year Real Market Returns",
+        explanation = "Samples real annual total return blocks from 1970 to 2025 (MSCI World / S&P 500 with dividends reinvested). Unlike synthetic Gaussian curves, historical bootstrapping preserves real-world fat tails, severe multi-year drawdowns (1973–74 stagflation, 2000–02 dot-com bust, 2008 GFC), and return autocorrelation.",
+        practicalImplication = "Provides a stress-tested reality check against real market history instead of idealized theoretical distributions.",
+        accentColor = Color(0xFF0F766E)
+    )
+
+    val prolongChildSupport = MetricInfo(
+        title = "Prolong Child Support in FIRE",
+        category = "Family Budgeting",
+        formulaOrRule = "Preserve child expenses in post-FIRE lifestyle target",
+        explanation = "When enabled, your target financial nest egg accounts for ongoing child allowances, education costs, and university support instead of assuming child expenses drop to zero immediately upon early retirement.",
+        practicalImplication = "Essential if you plan to achieve FIRE while your children are teenagers or attending university.",
+        accentColor = Color(0xFFD97706)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -215,6 +234,7 @@ fun SettingsTab(
     var showAddLumpSumDialog by remember { mutableStateOf(false) }
     var newLumpSumName by remember { mutableStateOf("") }
     var newLumpSumYear by remember { mutableStateOf("") }
+    var newLumpSumMonth by remember { mutableStateOf<Int?>(null) }
     var newLumpSumAmount by remember { mutableStateOf("") }
     val infoState = rememberMetricInfoState()
 
@@ -290,6 +310,7 @@ fun SettingsTab(
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
                             NumberSettingField(label = "Net Salary", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
+                            NumberSettingField(label = "Annual Salary Growth (%)", value = s.vSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(vSalaryGrowthPct = it)) })
                             NumberSettingField(label = "Meal Vouchers Monthly", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
                             NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.vOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(vOtherInflowsMonthly = it)) })
 
@@ -384,8 +405,12 @@ fun SettingsTab(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Column(modifier = Modifier.weight(1f)) {
+                                                    val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                                                    val dateLabel = item.month?.let { m ->
+                                                        "${monthNames.getOrElse(m - 1) { "M$m" }} ${item.year}"
+                                                    } ?: "${item.year}"
                                                     Text(
-                                                        text = "${item.name} (${item.year})",
+                                                        text = "${item.name} ($dateLabel)",
                                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                                                     )
                                                     Text(
@@ -430,6 +455,7 @@ fun SettingsTab(
                                 onClick = {
                                     newLumpSumName = ""
                                     newLumpSumYear = "${s.baseYear + 5}"
+                                    newLumpSumMonth = null
                                     newLumpSumAmount = ""
                                     showAddLumpSumDialog = true
                                 },
@@ -589,6 +615,27 @@ fun SettingsTab(
                                 NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
                                 NumberSettingField(label = "Child 2 Tax Bonus Annual", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
                             }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            BooleanSettingField(
+                                label = "Prolong Child Support into FIRE Target",
+                                checked = s.prolongChildSupportInFire,
+                                onCheckedChange = { onUpdateSettings(s.copy(prolongChildSupportInFire = it)) },
+                                info = SettingsMetricInfos.prolongChildSupport,
+                                onShowInfo = { infoState.show(it) }
+                            )
+                            Text(
+                                text = if (s.prolongChildSupportInFire) {
+                                    "Active: FIRE target budget includes ongoing child and family support (rather than dropping to 0 Kč at early retirement)."
+                                } else {
+                                    "Off: Child expenses are phased out in the baseline early-retirement nest egg."
+                                },
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp
+                                ),
+                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                            )
                         }
                     }
                 }
@@ -918,7 +965,13 @@ fun SettingsTab(
                             NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
                             NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 100.0, maxValue = 400.0, onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
                             NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 10.0, maxValue = 60.0, onValueChange = { onUpdateSettings(s.copy(retirementHorizonYears = it.toInt())) })
-                            BooleanSettingField(label = "Use Historical 1970–2025 Bootstrap", checked = s.useHistoricalBootstrap, onCheckedChange = { onUpdateSettings(s.copy(useHistoricalBootstrap = it)) })
+                            BooleanSettingField(
+                                label = "Use Historical 1970–2025 Bootstrap",
+                                checked = s.useHistoricalBootstrap,
+                                onCheckedChange = { onUpdateSettings(s.copy(useHistoricalBootstrap = it)) },
+                                info = SettingsMetricInfos.historicalBootstrap,
+                                onShowInfo = { infoState.show(it) }
+                            )
                             BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { onUpdateSettings(s.copy(guardrailsEnabled = it)) })
                         }
                     }
@@ -1303,6 +1356,12 @@ fun SettingsTab(
     }
 
     if (showAddLumpSumDialog) {
+        val monthOptions = listOf(
+            null to "Full Year",
+            1 to "Jan", 2 to "Feb", 3 to "Mar", 4 to "Apr",
+            5 to "May", 6 to "Jun", 7 to "Jul", 8 to "Aug",
+            9 to "Sep", 10 to "Oct", 11 to "Nov", 12 to "Dec"
+        )
         AlertDialog(
             onDismissRequest = { showAddLumpSumDialog = false },
             title = { Text("Add Planned Lump Sum", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
@@ -1311,22 +1370,54 @@ fun SettingsTab(
                     OutlinedTextField(
                         value = newLumpSumName,
                         onValueChange = { newLumpSumName = it },
-                        label = { Text("Description (e.g. Inheritance / Property / Gift)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text("Description (e.g. Work Bonus / Inheritance / Gift)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newLumpSumYear,
                         onValueChange = { newLumpSumYear = it },
-                        label = { Text("Planned Year (e.g. 2032)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text("Planned Year (e.g. 2026)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Column {
+                        Text(
+                            text = "Timing: ${if (newLumpSumMonth == null) "Full Year (Evenly spread)" else "Month $newLumpSumMonth"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            monthOptions.forEach { (mVal, mLabel) ->
+                                FilterChip(
+                                    selected = newLumpSumMonth == mVal,
+                                    onClick = { newLumpSumMonth = mVal },
+                                    label = {
+                                        Text(
+                                            text = mLabel,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (newLumpSumMonth == mVal) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BrandTeal,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = newLumpSumAmount,
                         onValueChange = { newLumpSumAmount = it },
-                        label = { Text("Amount") },
+                        label = { Text("Amount (CZK)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1346,6 +1437,7 @@ fun SettingsTab(
                                 id = UUID.randomUUID().toString(),
                                 name = name,
                                 year = yr,
+                                month = newLumpSumMonth,
                                 amount = amt,
                                 enabled = true
                             )
@@ -1738,7 +1830,9 @@ private fun YearMonthSettingField(
 private fun BooleanSettingField(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    info: MetricInfo? = null,
+    onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     Row(
@@ -1748,11 +1842,31 @@ private fun BooleanSettingField(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (info != null && onShowInfo != null) {
+                        Modifier.infoTapHold(info, onShowInfo)
+                    } else Modifier
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (info != null && onShowInfo != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Info",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = {

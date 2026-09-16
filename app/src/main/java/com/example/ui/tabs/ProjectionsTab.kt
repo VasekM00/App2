@@ -959,7 +959,10 @@ private fun MonteCarloAndStressSubTab(
                     title = if (isHistoricalMode) "Historical Simulation (1970-2025)" else "Monte Carlo Simulation (${state.settings.monteCarloN} Runs)",
                     subtitle = if (isHistoricalMode) "Block-bootstrap sequence resampling (Tap for insight)" else "Parametric log-normal distribution (Tap for insight)",
                     badgeText = "${mc.successRatePct.toInt()}% PROBABILITY",
-                    accentColor = BrandTeal
+                    accentColor = BrandTeal,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .infoTapHold(simulationEngineInfo, onShowInfo)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 

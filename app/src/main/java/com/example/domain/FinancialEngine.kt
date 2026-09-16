@@ -144,6 +144,7 @@ data class CustomLumpSumItem(
     val id: String,
     val name: String,
     val year: Int,
+    val month: Int? = null,
     val amount: Double,
     val enabled: Boolean = true
 )
@@ -155,11 +156,16 @@ fun parseCustomLumpSums(jsonStr: String): List<CustomLumpSumItem> {
         val list = mutableListOf<CustomLumpSumItem>()
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
+            val monthVal = if (obj.has("month") && !obj.isNull("month")) {
+                val m = obj.optInt("month", 0)
+                if (m in 1..12) m else null
+            } else null
             list.add(
                 CustomLumpSumItem(
                     id = obj.optString("id", i.toString()),
                     name = obj.optString("name", "Lump Sum"),
                     year = obj.optInt("year", 2030),
+                    month = monthVal,
                     amount = obj.optDouble("amount", 0.0),
                     enabled = obj.optBoolean("enabled", true)
                 )
@@ -178,6 +184,9 @@ fun serializeCustomLumpSums(items: List<CustomLumpSumItem>): String {
         obj.put("id", item.id)
         obj.put("name", item.name)
         obj.put("year", item.year)
+        if (item.month != null) {
+            obj.put("month", item.month)
+        }
         obj.put("amount", item.amount)
         obj.put("enabled", item.enabled)
         array.put(obj)
@@ -197,6 +206,11 @@ fun lumpSumForYear(year: Int, settings: SettingsEntity): Double {
         }
     }
     return total
+}
+
+fun lumpSumsForMonth(year: Int, month: Int, settings: SettingsEntity): List<CustomLumpSumItem> {
+    val additional = parseCustomLumpSums(settings.customLumpSumsJson)
+    return additional.filter { it.enabled && it.year == year && (it.month == null || it.month == month) }
 }
 
 data class PortfolioYearPoint(
@@ -373,6 +387,11 @@ data class FullCalculationState(
 
 object FinancialEngine {
 
+    fun lumpSumsForMonth(year: Int, month: Int, settings: SettingsEntity): List<CustomLumpSumItem> {
+        val additional = parseCustomLumpSums(settings.customLumpSumsJson)
+        return additional.filter { it.enabled && it.year == year && (it.month == null || it.month == month) }
+    }
+
     fun annuityFactor(rate: Double, years: Int): Double {
         if (years <= 0) return 0.0
         if (abs(rate) < 1e-9) return years.toDouble()
@@ -395,7 +414,8 @@ object FinancialEngine {
         val lifestyleMonthly = if (settings.lifestyleCostAtFireMonthly > 0.0) {
             settings.lifestyleCostAtFireMonthly
         } else {
-            totalLivingCostMonthly(settings.copy(childExpensesEnabled = false), settings.baseYear)
+            val effSettings = if (settings.prolongChildSupportInFire) settings else settings.copy(childExpensesEnabled = false)
+            totalLivingCostMonthly(effSettings, settings.baseYear)
         }
         val annualLifestyle = max(0.0, lifestyleMonthly * 12.0)
         
@@ -449,7 +469,10 @@ object FinancialEngine {
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         val sy = settings.baseYear
         if (year < sy) return 0.0
-        return settings.vSalary + settings.vOtherInflowsMonthly
+        val growthFactor = if (settings.vSalaryGrowthPct > 0.0) {
+            (1.0 + settings.vSalaryGrowthPct / 100.0).pow(year - sy)
+        } else 1.0
+        return (settings.vSalary * growthFactor) + settings.vOtherInflowsMonthly
     }
 
     fun eleonoraSalaryMonthly(year: Int, settings: SettingsEntity): Double {

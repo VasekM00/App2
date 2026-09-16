@@ -18,6 +18,7 @@ object BackupManager {
         
         // Income & Work
         json.put("vSalary", s.vSalary)
+        json.put("vSalaryGrowthPct", s.vSalaryGrowthPct)
         json.put("vMealVouchersMonthly", s.vMealVouchersMonthly)
         json.put("vOtherInflowsMonthly", s.vOtherInflowsMonthly)
         json.put("eReturnYear", s.eReturnYear)
@@ -97,6 +98,8 @@ object BackupManager {
         json.put("childSchoolMonthly", s.childSchoolMonthly)
         json.put("childTeenMonthly", s.childTeenMonthly)
         json.put("childUniMonthly", s.childUniMonthly)
+        json.put("prolongChildSupportInFire", s.prolongChildSupportInFire)
+        json.put("childSupportUntilAge", s.childSupportUntilAge)
 
         // Statutory & Tax parameters (Czech Tax Act No. 586/1992 Coll.)
         json.put("taxRatePct", s.taxRatePct)
@@ -148,6 +151,7 @@ object BackupManager {
                 dcaAnnualGrowthPct = json.optDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
                 vSalary = json.optDouble("vSalary", fallback.vSalary),
+                vSalaryGrowthPct = json.optDouble("vSalaryGrowthPct", fallback.vSalaryGrowthPct),
                 vMealVouchersMonthly = json.optDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
                 vOtherInflowsMonthly = json.optDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),
                 eReturnYear = json.optInt("eReturnYear", fallback.eReturnYear),
@@ -222,6 +226,8 @@ object BackupManager {
                 childSchoolMonthly = json.optDouble("childSchoolMonthly", fallback.childSchoolMonthly),
                 childTeenMonthly = json.optDouble("childTeenMonthly", fallback.childTeenMonthly),
                 childUniMonthly = json.optDouble("childUniMonthly", fallback.childUniMonthly),
+                prolongChildSupportInFire = json.optBoolean("prolongChildSupportInFire", fallback.prolongChildSupportInFire),
+                childSupportUntilAge = json.optInt("childSupportUntilAge", fallback.childSupportUntilAge),
 
                 // Statutory & Tax parameters
                 taxRatePct = json.optDouble("taxRatePct", fallback.taxRatePct),
@@ -284,10 +290,13 @@ object BackupManager {
             eStatePensionAge = if (s.eStatePensionAge in 55..75) s.eStatePensionAge else f.eStatePensionAge,
             child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
+            childSupportUntilAge = if (s.childSupportUntilAge in 18..35) s.childSupportUntilAge else f.childSupportUntilAge,
+            prolongChildSupportInFire = s.prolongChildSupportInFire,
             dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
             monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
             retirementHorizonYears = if (s.retirementHorizonYears in 10..60) s.retirementHorizonYears else f.retirementHorizonYears,
             vSalary = money(s.vSalary, f.vSalary),
+            vSalaryGrowthPct = pct(s.vSalaryGrowthPct, f.vSalaryGrowthPct),
             vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
             vOtherInflowsMonthly = money(s.vOtherInflowsMonthly, f.vOtherInflowsMonthly),
             eStartingSalary = money(s.eStartingSalary, f.eStartingSalary),

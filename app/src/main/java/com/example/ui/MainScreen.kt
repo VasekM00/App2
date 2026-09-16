@@ -372,7 +372,8 @@ fun MainScreen(
                                 importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 lastImportTimestamp = lastImportTimestamp,
                                 allImportedTransactions = allImportedTransactions,
-                                initialSubTab = targetCashFlowSubTab
+                                initialSubTab = targetCashFlowSubTab,
+                                onUpdateSettings = { viewModel.updateSettings(it) }
                             )
                             2 -> ProjectionsTab(
                                 state = state,
