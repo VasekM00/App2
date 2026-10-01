@@ -66,7 +66,21 @@ class FinancialRepository(
     }
 
     suspend fun deleteLedgerEntry(id: Long) = withContext(Dispatchers.IO) {
-        ledgerDao.deleteEntry(id)
+        database.withTransaction {
+            val entry = ledgerDao.getEntryById(id)
+            ledgerDao.deleteEntry(id)
+            if (entry != null) {
+                importedTransactionDao.deleteTransactionsForMonth(entry.yearMonth)
+            }
+        }
+    }
+
+    suspend fun deleteImportedTransactionsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
+        importedTransactionDao.deleteTransactionsForMonth(yearMonth)
+    }
+
+    suspend fun cleanupOrphanedImportedTransactions(): Int = withContext(Dispatchers.IO) {
+        importedTransactionDao.deleteOrphanedTransactions()
     }
 
     suspend fun setActionState(year: Int, actionId: String, isDone: Boolean) = withContext(Dispatchers.IO) {

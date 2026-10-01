@@ -30,6 +30,8 @@ data class SettingsEntity(
     val eLecturingMonthly: Double = 6900.0,
     val eIncludeLecturing: Boolean = true,
     val eOtherInflowsMonthly: Double = 0.0,
+    val vGiftsMonthly: Double = 16000.0,
+    val eGiftsMonthly: Double = 0.0,
     val familyGiftMonthly: Double = 16000.0,
     val lumpSumYear: Int = 2030,
     val lumpSumAmount: Double = 500000.0,

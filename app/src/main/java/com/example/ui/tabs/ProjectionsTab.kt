@@ -884,15 +884,18 @@ private fun MonteCarloAndStressSubTab(
 ) {
     val scrollState = rememberScrollState()
     var isHistoricalMode by rememberSaveable { mutableStateOf(state.settings.useHistoricalBootstrap) }
+    androidx.compose.runtime.LaunchedEffect(state.settings.useHistoricalBootstrap) {
+        isHistoricalMode = state.settings.useHistoricalBootstrap
+    }
     val mc = if (isHistoricalMode) state.historicalMonteCarlo else state.monteCarlo
     val survival = if (isHistoricalMode) state.historicalRetirementSurvival else state.retirementSurvival
 
     val simulationEngineInfo = MetricInfo(
         title = "Simulation Engine Methodology",
         category = "Stochastic Methodology",
-        formulaOrRule = "Parametric: Geometric Brownian Motion (mu = Return, sigma = Volatility) | Historical: 3-Year Block-Bootstrap from 1970-2025 empirical returns",
-        explanation = "Parametric simulation assumes normal annual return distributions, which underestimates fat-tail risk (e.g. 1973-1974 stagflation, 2000-2002 dot-com bust, 2008 GFC). Block-bootstrap resamples contiguous 3-year historical blocks from 1970-2025, preserving real multi-year sequence-of-returns drawdowns.",
-        practicalImplication = "Historical resampling shows real-world sequence resilience without synthetic distribution assumptions.",
+        formulaOrRule = "Parametric: Log-normal distribution (mean = Return, sigma = Volatility) | Historical: 3-Year Block-Bootstrap from 1970-2025 empirical returns calibrated to your expected return",
+        explanation = "Parametric simulation assumes normal annual return distributions, which underestimates fat-tail risk (e.g. 1973-1974 stagflation, 2000-2002 dot-com bust, 2008 GFC). Block-bootstrap resamples contiguous 3-year historical blocks from 1970-2025 calibrated to your expected return, preserving real multi-year sequence-of-returns drawdowns.",
+        practicalImplication = "Historical resampling shows real-world sequence resilience without synthetic distribution assumptions, while remaining directly comparable to your configured return baseline.",
         accentColor = BrandTeal
     )
 

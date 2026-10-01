@@ -46,7 +46,9 @@ class FullSettingsReactivityAuditTest {
 
         // vOtherInflowsMonthly
         val otherInflowState = FinancialEngine.calculate(base.copy(vOtherInflowsMonthly = 8000.0))
-        assertEquals(base.vSalary + 8000.0, otherInflowState.currentIncome.vaclavNet, 0.001)
+        assertEquals(base.vSalary, otherInflowState.currentIncome.vaclavNet, 0.001)
+        assertEquals(8000.0, otherInflowState.currentIncome.vaclavOther, 0.001)
+        assertEquals(baseState.currentIncome.totalMonthly + 8000.0, otherInflowState.currentIncome.totalMonthly, 0.001)
 
         // vMealVouchersMonthly
         val voucherState = FinancialEngine.calculate(base.copy(vMealVouchersMonthly = 4500.0))

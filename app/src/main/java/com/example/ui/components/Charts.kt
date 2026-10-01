@@ -77,6 +77,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.round
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -613,7 +614,7 @@ fun MonteCarloFanChart(
                                 val plotW = size.width - paddingLeft - paddingRight
                                 val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
                                 val relativeX = offset.x - paddingLeft
-                                val clickedIdx = if (realPoints.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1) else 0
+                                val clickedIdx = if (realPoints.size > 1 && stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1) else 0
                                 selectedIndex = clickedIdx
                             }
                         }
@@ -942,7 +943,7 @@ fun CashFlowProjectionChart(
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
                                 val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
-                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
+                                val clickedIdx = if (data.size > 1 && stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
                                 selectedIndex = clickedIdx
                             }
                         }
@@ -1219,7 +1220,8 @@ fun StressComparisonChart(
                     }
 
                     // X-Axis
-                    val stepX = if (firstTraj.size > 1) plotW / (firstTraj.size - 1).toFloat() else plotW
+                    val maxTrajSize = scenarios.maxOfOrNull { it.trajectory.size } ?: firstTraj.size
+                    val stepX = if (maxTrajSize > 1) plotW / (maxTrajSize - 1).toFloat() else plotW
                     val xStepCount = 5
                     for (i in 0 until firstTraj.size step max(1, firstTraj.size / xStepCount)) {
                         val pt = firstTraj[i]
@@ -1790,7 +1792,7 @@ fun DcaTrajectoryBarChart(
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
                                 val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else chartWidth
-                                val clickedIdx = if (data.size > 1 && stepX > 0f) (relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
+                                val clickedIdx = if (data.size > 1 && stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
                                 selectedIndex = clickedIdx
                             }
                         }

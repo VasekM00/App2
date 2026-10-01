@@ -256,8 +256,8 @@ class DataLayerIntegrityTest {
     @Test
     fun test2_13_customLumpSumItemRoundTrip() {
         val originalList = listOf(
-            CustomLumpSumItem("l1", "Inheritance", 2032, 500000.0, true),
-            CustomLumpSumItem("l2", "Property Sale", 2035, 1200000.0, false)
+            CustomLumpSumItem(id = "l1", name = "Inheritance", year = 2032, month = 6, amount = 500000.0, enabled = true),
+            CustomLumpSumItem(id = "l2", name = "Property Sale", year = 2035, month = null, amount = 1200000.0, enabled = false)
         )
         val serialized = serializeCustomLumpSums(originalList)
         val parsed = parseCustomLumpSums(serialized)

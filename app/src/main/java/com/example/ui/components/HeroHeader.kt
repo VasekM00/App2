@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.ui.theme.BrandGoldDarkTheme
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtPct
 
 @Composable
 fun HeroHeader(
@@ -167,7 +168,7 @@ fun HeroHeader(
                     )
                     MiniStatChip(
                         label = "Savings Rate",
-                        value = if (state.savingsRatePct.isFinite()) String.format(java.util.Locale.US, "%.1f%%", state.savingsRatePct) else "0.0%",
+                        value = fmtPct(state.savingsRatePct, 1),
                         onClick = onNavigateToSavingsRate,
                         modifier = Modifier.weight(1f).testTag("hero_stat_savings_rate")
                     )

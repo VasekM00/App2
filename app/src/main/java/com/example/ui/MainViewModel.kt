@@ -113,8 +113,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val lastCzechSyncTimestamp: StateFlow<Long?> = _lastCzechSyncTimestamp.asStateFlow()
 
+    // Dismissed recurring subscriptions tracking
+    private val subscriptionPrefs = application.getSharedPreferences("subscription_auditor_prefs", android.content.Context.MODE_PRIVATE)
+    private val _dismissedSubscriptionMerchants = MutableStateFlow<Set<String>>(
+        subscriptionPrefs.getStringSet("dismissed_merchants", emptySet()) ?: emptySet()
+    )
+    val dismissedSubscriptionMerchants: StateFlow<Set<String>> = _dismissedSubscriptionMerchants.asStateFlow()
+
     init {
         viewModelScope.launch { repository.repairLegacyEmployerContribution() }
+        viewModelScope.launch(Dispatchers.IO) { repository.cleanupOrphanedImportedTransactions() }
         viewModelScope.launch(Dispatchers.IO) {
             val entries = repository.getAllLedgerEntriesDirect()
             if (entries.isNotEmpty()) {
@@ -166,16 +174,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val calculationState: StateFlow<FullCalculationState> = combine(
         settingsState,
         actionStates,
+        ledgerEntries,
         sensitivityReturnOverride,
         sensitivityCpiOverride,
         sensitivitySwrOverride
-    ) { settings, actions, retOver, cpiOver, swrOver ->
+    ) { args: Array<Any?> ->
+        val settings = args[0] as SettingsEntity
+        @Suppress("UNCHECKED_CAST")
+        val actions = args[1] as Map<String, Boolean>
+        @Suppress("UNCHECKED_CAST")
+        val ledger = args[2] as List<LedgerEntryEntity>
+        val retOver = args[3] as Double?
+        val cpiOver = args[4] as Double?
+        val swrOver = args[5] as Double?
+
         var effectiveSettings = settings
         if (retOver != null) effectiveSettings = effectiveSettings.copy(portfolioNominalReturnPct = retOver)
         if (cpiOver != null) effectiveSettings = effectiveSettings.copy(cpiInflationPct = cpiOver)
         if (swrOver != null) effectiveSettings = effectiveSettings.copy(safeWithdrawalRatePct = swrOver)
 
-        FinancialEngine.calculate(effectiveSettings, actions)
+        val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
+        val currentYm = now.toString()
+        val currentMonth = now.monthValue
+        val activeEntry = ledger.find { it.yearMonth == currentYm } ?: ledger.maxByOrNull { it.yearMonth }
+
+        FinancialEngine.calculate(
+            settings = effectiveSettings,
+            actionStates = actions,
+            runMonteCarlo = true,
+            activeLedgerEntry = activeEntry,
+            activeMonth = currentMonth
+        )
     }.flowOn(Dispatchers.Default).conflate().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -185,8 +214,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSettings(newSettings: SettingsEntity, showSnackbar: Boolean = false) {
         viewModelScope.launch {
             repository.saveSettings(newSettings)
+            val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
+            val currentEntry = repository.getLedgerEntryByYearMonth(now)
+            if (currentEntry != null) {
+                val updatedEleonora = if (newSettings.baseYear < newSettings.eReturnYear) {
+                    newSettings.eParentalAllowanceMonthly
+                } else {
+                    newSettings.eStartingSalary
+                }
+                val updatedLiquid = newSettings.liquidPortfolioCurrent + if (!newSettings.isSingleHousehold) newSettings.eLiquidPortfolioCurrent else 0.0
+                val updatedPension = newSettings.dpsBalanceCurrent + newSettings.dipBalanceCurrent + if (!newSettings.isSingleHousehold) (newSettings.eDpsBalanceCurrent + newSettings.eDipBalanceCurrent) else 0.0
+                repository.updateLedgerEntry(
+                    currentEntry.copy(
+                        incVaclav = newSettings.vSalary,
+                        incEleonora = if (updatedEleonora > 0.0) updatedEleonora else currentEntry.incEleonora,
+                        expRent = if (newSettings.rentMonthly > 0.0) newSettings.rentMonthly else currentEntry.expRent,
+                        portfolioBalanceAtMonthEnd = if (updatedLiquid > 0.0) updatedLiquid else currentEntry.portfolioBalanceAtMonthEnd,
+                        pensionBalanceAtMonthEnd = if (updatedPension > 0.0) updatedPension else currentEntry.pensionBalanceAtMonthEnd,
+                        emergencyReserveAtMonthEnd = if (newSettings.emergencyReserveCurrent > 0.0) newSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
+                    )
+                )
+            }
             if (showSnackbar) {
                 _uiEvent.emit(UiMessage.ShowSnackbar("Settings saved successfully"))
+            }
+        }
+    }
+
+    private suspend fun syncLedgerToSettingsIfCurrentMonth(
+        yearMonth: String,
+        incVaclav: Double,
+        incEleonora: Double,
+        expRent: Double,
+        portfolioBalance: Double,
+        pensionBalance: Double,
+        emergencyReserve: Double
+    ) {
+        val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
+        if (yearMonth == now) {
+            val cur = repository.settingsFlow.first()
+            var updated = cur
+            if (incVaclav > 0.0 && cur.vSalary != incVaclav) {
+                updated = updated.copy(vSalary = incVaclav)
+            }
+            if (incEleonora > 0.0) {
+                if (cur.baseYear < cur.eReturnYear) {
+                    if (cur.eParentalAllowanceMonthly != incEleonora) {
+                        updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
+                    }
+                } else {
+                    if (cur.eStartingSalary != incEleonora) {
+                        updated = updated.copy(eStartingSalary = incEleonora)
+                    }
+                }
+            }
+            if (expRent > 0.0 && cur.rentMonthly != expRent) {
+                updated = updated.copy(rentMonthly = expRent)
+            }
+            if (portfolioBalance > 0.0 && cur.liquidPortfolioCurrent != portfolioBalance) {
+                updated = updated.copy(liquidPortfolioCurrent = portfolioBalance)
+            }
+            if (pensionBalance > 0.0 && (cur.dpsBalanceCurrent + cur.dipBalanceCurrent) != pensionBalance) {
+                updated = updated.copy(dpsBalanceCurrent = pensionBalance, dipBalanceCurrent = 0.0)
+            }
+            if (emergencyReserve > 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
+                updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
+            }
+            if (updated != cur) {
+                repository.saveSettings(updated)
             }
         }
     }
@@ -225,12 +320,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.addLedgerEntry(entry)
                 _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry added for $yearMonth"))
             }
+
+            syncLedgerToSettingsIfCurrentMonth(
+                yearMonth = yearMonth,
+                incVaclav = incVaclav,
+                incEleonora = incEleonora,
+                expRent = expRent,
+                portfolioBalance = portfolioBalance,
+                pensionBalance = pensionBalance,
+                emergencyReserve = emergencyReserve
+            )
         }
     }
 
     fun updateLedgerEntry(entry: LedgerEntryEntity) {
         viewModelScope.launch {
             repository.updateLedgerEntry(entry)
+            syncLedgerToSettingsIfCurrentMonth(
+                yearMonth = entry.yearMonth,
+                incVaclav = entry.incVaclav,
+                incEleonora = entry.incEleonora,
+                expRent = entry.expRent,
+                portfolioBalance = entry.portfolioBalanceAtMonthEnd,
+                pensionBalance = entry.pensionBalanceAtMonthEnd,
+                emergencyReserve = entry.emergencyReserveAtMonthEnd
+            )
             _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry updated for ${entry.yearMonth}"))
         }
     }
@@ -238,7 +352,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteLedgerEntry(id: Long) {
         viewModelScope.launch {
             repository.deleteLedgerEntry(id)
-            _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry deleted"))
+            _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry and associated bank transactions deleted"))
+        }
+    }
+
+    fun dismissSubscription(merchantKey: String) {
+        val updated = _dismissedSubscriptionMerchants.value + merchantKey
+        _dismissedSubscriptionMerchants.value = updated
+        subscriptionPrefs.edit().putStringSet("dismissed_merchants", updated).apply()
+        viewModelScope.launch {
+            _uiEvent.emit(UiMessage.ShowSnackbar("Subscription dismissed: $merchantKey"))
+        }
+    }
+
+    fun restoreSubscription(merchantKey: String) {
+        val updated = _dismissedSubscriptionMerchants.value - merchantKey
+        _dismissedSubscriptionMerchants.value = updated
+        subscriptionPrefs.edit().putStringSet("dismissed_merchants", updated).apply()
+        viewModelScope.launch {
+            _uiEvent.emit(UiMessage.ShowSnackbar("Subscription restored: $merchantKey"))
+        }
+    }
+
+    fun clearAllDismissedSubscriptions() {
+        _dismissedSubscriptionMerchants.value = emptySet()
+        subscriptionPrefs.edit().remove("dismissed_merchants").apply()
+        viewModelScope.launch {
+            _uiEvent.emit(UiMessage.ShowSnackbar("All dismissed subscriptions restored"))
+        }
+    }
+
+    fun deleteImportedStatement(yearMonth: String, bankName: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bankName != null && bankName.isNotBlank()) {
+                repository.deleteImportedTransactionsForBankAndMonth(yearMonth, bankName)
+                importPrefs.edit().remove("bank_bal_${yearMonth}_$bankName").apply()
+                _uiEvent.emit(UiMessage.ShowSnackbar("Deleted $bankName statement for $yearMonth"))
+            } else {
+                repository.deleteImportedTransactionsForMonth(yearMonth)
+                val editor = importPrefs.edit()
+                val prefix = "bank_bal_${yearMonth}_"
+                importPrefs.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
+                editor.apply()
+                _uiEvent.emit(UiMessage.ShowSnackbar("Deleted imported statement data for $yearMonth"))
+            }
+            val remainingTxs = repository.getImportedTransactionsDirect(yearMonth)
+            val existingEntry = repository.getLedgerEntryByYearMonth(yearMonth)
+            if (existingEntry != null) {
+                if (remainingTxs.isEmpty()) {
+                    repository.updateLedgerEntry(existingEntry.copy(notes = ""))
+                } else {
+                    val remainingBanks = remainingTxs.map { it.bankName }.filter { it.isNotBlank() }.distinct().joinToString(" + ")
+                    repository.updateLedgerEntry(existingEntry.copy(notes = "Imported from $remainingBanks (${remainingTxs.size} txs)"))
+                }
+            }
         }
     }
 
@@ -333,6 +500,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Active Cross-Statement Audit Report for transparency
     val activeAuditReport = MutableStateFlow<com.example.util.CrossStatementAuditReport?>(null)
 
+    private fun getStoredBankBalancesForMonth(yearMonth: String): Map<String, Double> {
+        val prefix = "bank_bal_${yearMonth}_"
+        val map = mutableMapOf<String, Double>()
+        importPrefs.all.forEach { (key, value) ->
+            if (key.startsWith(prefix) && value is Number) {
+                val bankName = key.removePrefix(prefix)
+                map[bankName] = value.toDouble()
+            }
+        }
+        return map
+    }
+
     fun loadAuditReportForMonth(yearMonth: String) {
         viewModelScope.launch {
             val transactions = repository.getImportedTransactionsDirect(yearMonth)
@@ -362,7 +541,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (txsToUse.isNotEmpty()) {
-                val (_, report) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(txsToUse, yearMonth)
+                val storedBalances = getStoredBankBalancesForMonth(yearMonth)
+                val (_, report) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(
+                    transactions = txsToUse,
+                    yearMonth = yearMonth,
+                    bankBalances = storedBalances
+                )
                 activeAuditReport.value = report
             } else {
                 activeAuditReport.value = null
@@ -475,12 +659,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     (prevTxs + nextTxs).filter { !it.isNetted }
                 } else emptyList()
 
+                if (summary.monthEndBalance != null && targetYm == latestMonth) {
+                    importPrefs.edit().putFloat("bank_bal_${targetYm}_${summary.detectedBank.name}", summary.monthEndBalance.toFloat()).apply()
+                }
+                val storedBalances = getStoredBankBalancesForMonth(targetYm)
+
                 // 3. Reconcile across all banks for targetYm including cross-month boundaries
                 val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
                 val reconcileResult = com.example.util.CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
                     transactions = allMonthTxs,
                     yearMonth = targetYm,
-                    boundaryTransactions = boundaryTxs
+                    boundaryTransactions = boundaryTxs,
+                    bankBalances = storedBalances
                 )
                 val reconciledTxs = reconcileResult.currentMonthTxs
                 val auditReport = reconcileResult.auditReport
@@ -575,6 +765,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     repository.addLedgerEntry(newEntry)
                 }
+
+                syncLedgerToSettingsIfCurrentMonth(
+                    yearMonth = targetYm,
+                    incVaclav = incVaclav,
+                    incEleonora = incEleonora,
+                    expRent = expRent,
+                    portfolioBalance = 0.0,
+                    pensionBalance = 0.0,
+                    emergencyReserve = 0.0
+                )
             }
 
             val now = System.currentTimeMillis()

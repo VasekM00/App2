@@ -225,6 +225,30 @@ class BankStatementImporterTest {
         assertEquals(3500.0, summary.expGroceries, 0.01)
         assertEquals(1500.0, summary.expOther, 0.01)
         assertEquals(5000.0, summary.totalExpenses, 0.01)
+        assertEquals(81600.50, summary.monthEndBalance!!, 0.01)
+    }
+
+    @Test
+    fun testMbankPdfStatementParsingShortDates() {
+        val pdfLines = listOf(
+            "mBank S.A. organizační složka - výpis z účtu mKonto",
+            "Číslo účtu: 123456789/6210  Majitel: Václav Martinů a Eleonora Martinů",
+            "Za období: 01.11.2026 - 30.11.2026",
+            "05.11. Platba kartou Lidl -1 200,00 CZK 85 400,50 CZK",
+            "10.11. Platba kartou Rohlik.cz -2 300,00 CZK 83 100,50 CZK",
+            "15.11. Restaurace U Cerneho Vola -1 500,00 CZK 81 600,50 CZK",
+            "Konečný zůstatek na účtu: 81 600,50 CZK"
+        )
+
+        val pdfBytes = createSyntheticPdf(pdfLines)
+        val summary = BankStatementImporter.parseStatement(pdfBytes.inputStream())
+
+        assertEquals(BankType.MBANK, summary.detectedBank)
+        assertEquals("2026-11", summary.yearMonth)
+        assertEquals(3, summary.transactions.size)
+        assertTrue(summary.transactions.all { it.date.startsWith("2026-11-") })
+        assertEquals(3500.0, summary.expGroceries, 0.01)
+        assertEquals(1500.0, summary.expOther, 0.01)
         assertNotNull(summary.monthEndBalance)
         assertEquals(81600.50, summary.monthEndBalance!!, 0.01)
     }

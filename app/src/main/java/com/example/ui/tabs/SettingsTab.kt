@@ -313,6 +313,7 @@ fun SettingsTab(
                             NumberSettingField(label = "Annual Salary Growth (%)", value = s.vSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(vSalaryGrowthPct = it)) })
                             NumberSettingField(label = "Meal Vouchers Monthly", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
                             NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.vOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(vOtherInflowsMonthly = it)) })
+                            NumberSettingField(label = "Tax-Exempt Gifts Monthly (§ 10 ZDP)", value = s.vGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) })
 
                             if (!s.isSingleHousehold) {
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
@@ -330,6 +331,7 @@ fun SettingsTab(
                                     )
                                     NumberSettingField(label = "Net Salary", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
                                     NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(eOtherInflowsMonthly = it)) })
+                                    NumberSettingField(label = "Tax-Exempt Gifts Monthly (§ 10 ZDP)", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
                                     NumberSettingField(label = "Annual Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
                                     NumberSettingField(label = "Reinvested Share of Salary (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
 
@@ -348,6 +350,7 @@ fun SettingsTab(
                                     NumberSettingField(label = "Parental Allowance Monthly", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
                                     NumberSettingField(label = "Lecturing Monthly", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
                                     NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(eOtherInflowsMonthly = it)) })
+                                    NumberSettingField(label = "Tax-Exempt Gifts Monthly (§ 10 ZDP)", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
 
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                                     Text(
@@ -371,7 +374,10 @@ fun SettingsTab(
                                 text = "Gifts & Lump Sum Inflows",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
-                            NumberSettingField(label = "Family Support Gift Monthly", value = s.familyGiftMonthly, onValueChange = { onUpdateSettings(s.copy(familyGiftMonthly = it)) })
+                            NumberSettingField(label = "Václav's Gifts Monthly (§ 10 ZDP)", value = s.vGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) })
+                            if (!s.isSingleHousehold) {
+                                NumberSettingField(label = "Eleonora's Gifts Monthly (§ 10 ZDP)", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
+                            }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             Text(

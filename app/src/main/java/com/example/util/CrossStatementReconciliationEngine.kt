@@ -22,7 +22,8 @@ data class CrossStatementAuditReport(
     val reconciledInflows: Double,
     val reconciledExpenses: Double,
     val reconciledNetCashFlow: Double,
-    val combinedEmergencyReserve: Double? = null
+    val combinedEmergencyReserve: Double? = null,
+    val bankBalances: Map<String, Double> = emptyMap()
 )
 
 data class ReconcileResult(
@@ -95,10 +96,25 @@ object CrossStatementReconciliationEngine {
         }
 
         // Self and spouse name occurrences:
-        // On a debit (outgoing money from Václav's account), the account holder's name (Václav Martinů) on the statement
-        // simply reflects the ordering party (plátce/příkazce). It is NOT an internal transfer.
-        if (!isDebit && (text.contains("vaclav martinu") || text.contains("václav martinů") || text.contains("martinu vaclav") || text.contains("martinů václav"))) return true
-        if (text.contains("eleonora martinu") || text.contains("eleonora martinů") || text.contains("martinu eleonora") || text.contains("martinů eleonora")) return true
+        // On an incoming credit (!isDebit), receiving money from either spouse or family is an internal household transfer.
+        // On an outgoing debit (isDebit), the account holder's name on the statement simply reflects the ordering party (plátce/příkazce).
+        // Therefore, on a debit, a transaction is an internal transfer ONLY if:
+        //  - The destination counterparty is explicitly the spouse/family (e.g. cpLower contains spouse/family name)
+        //  - Or the message explicitly indicates a transfer to the other spouse (e.g. "pro Václava", "pro Eleonoru", "převod Eleonoře")
+        // But if the name only appears as ordering party/plátce in the message while paying an external merchant, it is NOT an internal transfer.
+        val cpLower = counterpartyName.lowercase(Locale.ROOT)
+        val msgLower = message.lowercase(Locale.ROOT)
+
+        if (!isDebit) {
+            if (text.contains("vaclav martinu") || text.contains("václav martinů") || text.contains("martinu vaclav") || text.contains("martinů václav")) return true
+            if (text.contains("eleonora martinu") || text.contains("eleonora martinů") || text.contains("martinu eleonora") || text.contains("martinů eleonora")) return true
+        } else {
+            val mentionsVaclav = cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav") ||
+                    msgLower.contains("pro vaclava") || msgLower.contains("pro václava") || msgLower.contains("prevod vaclavovi") || msgLower.contains("převod václavovi")
+            val mentionsEleonora = cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora") ||
+                    msgLower.contains("pro eleonoru") || msgLower.contains("prevod eleonore") || msgLower.contains("převod eleonoře")
+            if (mentionsVaclav || mentionsEleonora) return true
+        }
 
         // Explicit self-transfer keywords
         if (text.contains("vlastní převod") || text.contains("vlastni prevod") || text.contains("převod mezi účty") || text.contains("prevod mezi ucty")) return true
@@ -151,9 +167,10 @@ object CrossStatementReconciliationEngine {
         transactions: List<ImportedBankTransactionEntity>,
         yearMonth: String,
         knownFamilyAccounts: Set<String> = emptySet(),
-        boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList()
+        boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+        bankBalances: Map<String, Double> = emptyMap()
     ): Pair<List<ImportedBankTransactionEntity>, CrossStatementAuditReport> {
-        val result = reconcileTransactionsWithBoundaries(transactions, yearMonth, knownFamilyAccounts, boundaryTransactions)
+        val result = reconcileTransactionsWithBoundaries(transactions, yearMonth, knownFamilyAccounts, boundaryTransactions, bankBalances)
         return Pair(result.currentMonthTxs, result.auditReport)
     }
 
@@ -161,7 +178,8 @@ object CrossStatementReconciliationEngine {
         transactions: List<ImportedBankTransactionEntity>,
         yearMonth: String,
         knownFamilyAccounts: Set<String> = emptySet(),
-        boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList()
+        boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+        bankBalances: Map<String, Double> = emptyMap()
     ): ReconcileResult {
         val workingList = transactions.distinctBy {
             "${it.bankName}|${it.date}|${it.amount}|${it.counterpartyAccount}|${it.counterpartyName}|${it.message}|${it.variableSymbol}"
@@ -430,7 +448,8 @@ object CrossStatementReconciliationEngine {
             reconciledInflows = incVaclav + incEleonora + incOther,
             reconciledExpenses = expRent + expGroceries + expOther,
             reconciledNetCashFlow = (incVaclav + incEleonora + incOther) - (expRent + expGroceries + expOther),
-            combinedEmergencyReserve = null
+            combinedEmergencyReserve = if (bankBalances.isNotEmpty()) bankBalances.values.sum() else null,
+            bankBalances = bankBalances
         )
 
         val updatedBoundaryTxs = workingBoundary.filter { it.isNetted }

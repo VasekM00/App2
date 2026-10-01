@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 31,
+    version = 32,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -55,6 +55,8 @@ abstract class AppDatabase : RoomDatabase() {
                         eLecturingMonthly REAL NOT NULL,
                         eIncludeLecturing INTEGER NOT NULL,
                         eOtherInflowsMonthly REAL NOT NULL,
+                        vGiftsMonthly REAL NOT NULL,
+                        eGiftsMonthly REAL NOT NULL,
                         familyGiftMonthly REAL NOT NULL,
                         lumpSumYear INTEGER NOT NULL,
                         lumpSumAmount REAL NOT NULL,
@@ -230,6 +232,8 @@ abstract class AppDatabase : RoomDatabase() {
                         ${colOr("eLecturingMonthly", "6900.0")},
                         ${colOr("eIncludeLecturing", "1")},
                         ${colOr("eOtherInflowsMonthly", "0.0")},
+                        ${colOr("vGiftsMonthly", "16000.0")},
+                        ${colOr("eGiftsMonthly", "0.0")},
                         ${colOr("familyGiftMonthly", "16000.0")},
                         ${colOr("lumpSumYear", "2030")},
                         ${colOr("lumpSumAmount", "500000.0")},
@@ -492,6 +496,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN vGiftsMonthly REAL NOT NULL DEFAULT 16000.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN eGiftsMonthly REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -505,7 +516,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
                         MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28,
-                        MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31
+                        MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32
                     )
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()

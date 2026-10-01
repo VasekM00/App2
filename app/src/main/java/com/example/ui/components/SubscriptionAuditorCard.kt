@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,9 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -24,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +44,8 @@ import com.example.data.ImportedBankTransactionEntity
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
-import com.example.ui.theme.WarnAmber
+import com.example.ui.theme.GoodGreen
+import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import com.example.util.SubscriptionAuditor
@@ -52,13 +55,18 @@ import java.util.Locale
 fun SubscriptionAuditorCard(
     transactions: List<ImportedBankTransactionEntity>,
     swrPct: Double,
+    dismissedMerchantKeys: Set<String> = emptySet(),
+    onDismissMerchant: ((String) -> Unit)? = null,
+    onRestoreMerchant: ((String) -> Unit)? = null,
+    onClearAllDismissed: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     initiallyExpanded: Boolean = false
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    var showDismissedSection by remember { mutableStateOf(false) }
 
-    val audit = remember(transactions, swrPct) {
-        SubscriptionAuditor.auditSubscriptions(transactions, swrPct)
+    val audit = remember(transactions, swrPct, dismissedMerchantKeys) {
+        SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys)
     }
 
     Card(
@@ -139,12 +147,29 @@ fun SubscriptionAuditorCard(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "No recurring monthly debits detected yet. Import your bank statements to automatically identify recurring media, telecom, utility, and insurance debits.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(12.dp)
-                        )
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "No recurring monthly debits detected. Import multi-month bank statements to automatically identify recurring media, telecom, utility, and insurance debits.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (dismissedMerchantKeys.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "${dismissedMerchantKeys.size} item${if (dismissedMerchantKeys.size > 1) "s" else ""} currently dismissed.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BrandGold
+                                )
+                                if (onClearAllDismissed != null) {
+                                    TextButton(
+                                        onClick = onClearAllDismissed,
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("Restore all dismissed items", color = BrandTeal, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else {
                     // Summary KPIs
@@ -218,7 +243,8 @@ fun SubscriptionAuditorCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         audit.items.forEach { item ->
-                            val itemFireCapital = item.latestMonthlyAmount * 12.0 / (swrPct / 100.0).coerceAtLeast(0.001)
+                            val itemAnnualBurn = item.normalizedMonthlyAmount * 12.0
+                            val itemFireCapital = itemAnnualBurn / (swrPct / 100.0).coerceAtLeast(0.001)
 
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
@@ -236,33 +262,94 @@ fun SubscriptionAuditorCard(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                             Text(
                                                 text = item.displayName,
                                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(
-                                                text = formatCategoryLabel(item.category),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = BrandTeal
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = formatCategoryLabel(item.category),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = BrandTeal
+                                                )
+                                                when (item.billingCadence) {
+                                                    "ANNUAL" -> ColorPill(
+                                                        text = "ANNUAL",
+                                                        color = BrandGold,
+                                                        fontSize = 8.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        horizontalPadding = 4.dp,
+                                                        verticalPadding = 1.dp
+                                                    )
+                                                    "QUARTERLY" -> ColorPill(
+                                                        text = "QUARTERLY",
+                                                        color = BrandTeal,
+                                                        fontSize = 8.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        horizontalPadding = 4.dp,
+                                                        verticalPadding = 1.dp
+                                                    )
+                                                    "SEMI_ANNUAL" -> ColorPill(
+                                                        text = "SEMI-ANNUAL",
+                                                        color = BrandTeal,
+                                                        fontSize = 8.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        horizontalPadding = 4.dp,
+                                                        verticalPadding = 1.dp
+                                                    )
+                                                }
+                                            }
                                         }
 
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = fmtCZK(item.latestMonthlyAmount),
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontFamily = FontFamily.Monospace
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                val isNonMonthly = item.billingCadence != "MONTHLY"
+                                                Text(
+                                                    text = if (isNonMonthly) {
+                                                        "${fmtCZK(item.normalizedMonthlyAmount)}/mo"
+                                                    } else {
+                                                        "${fmtCZK(item.latestMonthlyAmount)}/mo"
+                                                    },
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = FontFamily.Monospace
+                                                    )
                                                 )
-                                            )
-                                            Text(
-                                                text = "FIRE: ${fmtCZK(itemFireCapital)}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                                val cadenceSubtitle = when (item.billingCadence) {
+                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/yr · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)}/qtr · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/half-yr · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    else -> "FIRE: ${fmtCZK(itemFireCapital)}"
+                                                }
+                                                Text(
+                                                    text = cadenceSubtitle,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            if (onDismissMerchant != null) {
+                                                IconButton(
+                                                    onClick = { onDismissMerchant(item.merchantKey) },
+                                                    modifier = Modifier.size(28.dp).testTag("dismiss_subscription_${item.merchantKey}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = "Dismiss Subscription",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
@@ -300,6 +387,85 @@ fun SubscriptionAuditorCard(
                                                         text = "was ${fmtCZK(item.previousMonthlyAmount)}",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (dismissedMerchantKeys.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${dismissedMerchantKeys.size} dismissed item${if (dismissedMerchantKeys.size > 1) "s" else ""}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(
+                                    onClick = { showDismissedSection = !showDismissedSection },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (showDismissedSection) "Hide Dismissed" else "View Dismissed",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BrandTeal
+                                    )
+                                }
+                                if (onClearAllDismissed != null) {
+                                    TextButton(
+                                        onClick = onClearAllDismissed,
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Restore All",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = BrandGold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (showDismissedSection) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            ) {
+                                dismissedMerchantKeys.sorted().forEach { key ->
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = key.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (onRestoreMerchant != null) {
+                                                TextButton(
+                                                    onClick = { onRestoreMerchant(key) },
+                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Restore",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = GoodGreen
                                                     )
                                                 }
                                             }

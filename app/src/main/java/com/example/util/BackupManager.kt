@@ -30,6 +30,8 @@ object BackupManager {
         json.put("eLecturingMonthly", s.eLecturingMonthly)
         json.put("eIncludeLecturing", s.eIncludeLecturing)
         json.put("eOtherInflowsMonthly", s.eOtherInflowsMonthly)
+        json.put("vGiftsMonthly", s.vGiftsMonthly)
+        json.put("eGiftsMonthly", s.eGiftsMonthly)
         json.put("familyGiftMonthly", s.familyGiftMonthly)
         json.put("lumpSumYear", s.lumpSumYear)
         json.put("lumpSumAmount", s.lumpSumAmount)
@@ -163,6 +165,8 @@ object BackupManager {
                 eLecturingMonthly = json.optDouble("eLecturingMonthly", fallback.eLecturingMonthly),
                 eIncludeLecturing = json.optBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
                 eOtherInflowsMonthly = json.optDouble("eOtherInflowsMonthly", fallback.eOtherInflowsMonthly),
+                vGiftsMonthly = json.optDouble("vGiftsMonthly", fallback.vGiftsMonthly),
+                eGiftsMonthly = json.optDouble("eGiftsMonthly", fallback.eGiftsMonthly),
                 familyGiftMonthly = json.optDouble("familyGiftMonthly", fallback.familyGiftMonthly),
                 lumpSumYear = json.optInt("lumpSumYear", fallback.lumpSumYear),
                 lumpSumAmount = json.optDouble("lumpSumAmount", fallback.lumpSumAmount),
@@ -305,6 +309,8 @@ object BackupManager {
             eParentalAllowanceMonthly = money(s.eParentalAllowanceMonthly, f.eParentalAllowanceMonthly),
             eLecturingMonthly = money(s.eLecturingMonthly, f.eLecturingMonthly),
             eOtherInflowsMonthly = money(s.eOtherInflowsMonthly, f.eOtherInflowsMonthly),
+            vGiftsMonthly = money(s.vGiftsMonthly, f.vGiftsMonthly),
+            eGiftsMonthly = money(s.eGiftsMonthly, f.eGiftsMonthly),
             familyGiftMonthly = money(s.familyGiftMonthly, f.familyGiftMonthly),
             lumpSumAmount = money(s.lumpSumAmount, f.lumpSumAmount),
             liquidPortfolioCurrent = money(s.liquidPortfolioCurrent, f.liquidPortfolioCurrent),

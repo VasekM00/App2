@@ -371,6 +371,7 @@ object CzechMerchantCatalog {
                 "cao fat boys", "fat boys", "pho eden", "pho bo", "bun bo nam bo",
                 "koishi", "koishi fish", "sushi clock", "manna",
                 "padagali", "annapurna", "namaskar",
+                "aarav", "aarav brno", "aarav brnostredcern", "indicka restaurace aarav", "taj mahal",
                 "restaurace gopal", "gopal", "dhaba beas", "loving hut",
                 "doner kebab", "kebab point", "gashi",
                 // Czech Pub Chains & Breweries
@@ -426,6 +427,7 @@ object CzechMerchantCatalog {
                 "letmo", "oc letmo", "palac omega",
                 // Brno Local Boutiques, Concept Stores & Design
                 "place store", "restart shop", "ty identity", "pokojovky", "kytky od pepy",
+                "kvetinarstvi", "kvetiny", "kvetiny huszarova", "florist", "kytky",
                 // Books & Stationery (including Brno's Barvič a Novotný and Ševčík)
                 "barvic a novotny", "barvic", "sevcik knihy", "papirnictvi sevcik",
                 "knihy dobrovsky", "dobrovsky", "neoluxor", "luxor", "kosmas", "megaknihy", "martinus", "palmknihy",
@@ -484,7 +486,7 @@ object CzechMerchantCatalog {
                 "poplatek za vedeni", "vedeni uctu", "bankovni poplatek", "poplatek za kartu",
                 // Personal Care, Hair, Laundry & Trades
                 "salon", "salon galapa", "kadernictvi", "barber", "cistirna", "pradelna",
-                "kvetinarstvi", "kvetiny", "zamecnik", "hodinovy manzel",
+                "zamecnik", "hodinovy manzel",
                 // Postal & Courier Services
                 "posta", "ceska posta", "balikovna", "zasilkovna", "packeta", "dpd", "ppl", "gls", "dhl", "fedex", "ups"
             )

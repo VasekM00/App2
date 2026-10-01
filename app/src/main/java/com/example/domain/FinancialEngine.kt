@@ -1,5 +1,6 @@
 package com.example.domain
 
+import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import kotlin.math.abs
 import kotlin.math.cos
@@ -23,6 +24,11 @@ data class YearlyIncome(
     val lecturing: Double,
     val vouchers: Double,
     val gift: Double,
+    val vaclavOther: Double = 0.0,
+    val eleonoraOther: Double = 0.0,
+    val vaclavGifts: Double = 0.0,
+    val eleonoraGifts: Double = 0.0,
+    val lumpSumMonthly: Double = 0.0,
     val totalMonthly: Double
 )
 
@@ -210,7 +216,7 @@ fun lumpSumForYear(year: Int, settings: SettingsEntity): Double {
 
 fun lumpSumsForMonth(year: Int, month: Int, settings: SettingsEntity): List<CustomLumpSumItem> {
     val additional = parseCustomLumpSums(settings.customLumpSumsJson)
-    return additional.filter { it.enabled && it.year == year && (it.month == null || it.month == month) }
+    return additional.filter { it.enabled && it.year == year && it.month == month }
 }
 
 data class PortfolioYearPoint(
@@ -388,8 +394,7 @@ data class FullCalculationState(
 object FinancialEngine {
 
     fun lumpSumsForMonth(year: Int, month: Int, settings: SettingsEntity): List<CustomLumpSumItem> {
-        val additional = parseCustomLumpSums(settings.customLumpSumsJson)
-        return additional.filter { it.enabled && it.year == year && (it.month == null || it.month == month) }
+        return com.example.domain.lumpSumsForMonth(year, month, settings)
     }
 
     fun annuityFactor(rate: Double, years: Int): Double {
@@ -414,8 +419,21 @@ object FinancialEngine {
         val lifestyleMonthly = if (settings.lifestyleCostAtFireMonthly > 0.0) {
             settings.lifestyleCostAtFireMonthly
         } else {
-            val effSettings = if (settings.prolongChildSupportInFire) settings else settings.copy(childExpensesEnabled = false)
-            totalLivingCostMonthly(effSettings, settings.baseYear)
+            val effSettings = if (settings.childExpensesEnabled && settings.prolongChildSupportInFire) settings else settings.copy(childExpensesEnabled = false)
+            var cost = totalLivingCostMonthly(effSettings, settings.baseYear)
+            if (!settings.prolongChildSupportInFire && settings.currentChildCostsInBaseline) {
+                if (settings.child1Enabled && settings.child1BirthYear <= settings.baseYear) {
+                    cost = max(0.0, cost - childMonthlyExpense(settings.child1BirthYear, settings.baseYear, settings))
+                }
+                if (settings.child2Enabled && settings.child2BirthYear <= settings.baseYear) {
+                    cost = max(0.0, cost - childMonthlyExpense(settings.child2BirthYear, settings.baseYear, settings))
+                }
+            } else if (settings.childExpensesEnabled && settings.prolongChildSupportInFire) {
+                if (settings.child2Enabled && settings.child2BirthYear > settings.baseYear) {
+                    cost += settings.childUniMonthly
+                }
+            }
+            cost
         }
         val annualLifestyle = max(0.0, lifestyleMonthly * 12.0)
         
@@ -472,7 +490,7 @@ object FinancialEngine {
         val growthFactor = if (settings.vSalaryGrowthPct > 0.0) {
             (1.0 + settings.vSalaryGrowthPct / 100.0).pow(year - sy)
         } else 1.0
-        return (settings.vSalary * growthFactor) + settings.vOtherInflowsMonthly
+        return settings.vSalary * growthFactor
     }
 
     fun eleonoraSalaryMonthly(year: Int, settings: SettingsEntity): Double {
@@ -529,6 +547,34 @@ object FinancialEngine {
         return actualAnnual / 12.0
     }
 
+    fun eleonoraBenefitForMonth(year: Int, month: Int, settings: SettingsEntity): Double {
+        if (settings.isSingleHousehold || year < settings.baseYear || year > settings.eReturnYear) return 0.0
+        if (year == settings.eReturnYear && month >= settings.eReturnMonth) return 0.0
+        val hasChildren = settings.child1Enabled || settings.child2Enabled
+        if (!hasChildren) return 0.0
+
+        val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear) else 0.0) +
+                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear) else 0.0)
+
+        var cumulativeDrawnBeforeThisYear = 0.0
+        for (y in settings.baseYear until year) {
+            val annualForY = if (y == settings.eReturnYear) {
+                val m = settings.eReturnMonth.coerceIn(1, 12)
+                settings.eParentalAllowanceMonthly * (m - 1)
+            } else {
+                settings.eParentalAllowanceMonthly * 12.0
+            }
+            cumulativeDrawnBeforeThisYear += annualForY
+        }
+
+        val remainingPotAtStartOfYear = max(0.0, totalPot - cumulativeDrawnBeforeThisYear)
+        if (remainingPotAtStartOfYear <= 0.0) return 0.0
+
+        val drawnPriorInThisYear = (month - 1) * settings.eParentalAllowanceMonthly
+        val remainingForThisMonth = max(0.0, remainingPotAtStartOfYear - drawnPriorInThisYear)
+        return min(settings.eParentalAllowanceMonthly, remainingForThisMonth)
+    }
+
     private fun parentalAllowancePot(birthYear: Int): Double {
         return if (birthYear >= RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR) {
             RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF
@@ -557,14 +603,97 @@ object FinancialEngine {
         return (sal + lec + oth) * 12.0
     }
 
-    fun householdIncome(year: Int, settings: SettingsEntity): YearlyIncome {
-        val v = vaclavSalaryMonthly(year, settings)
-        val e = eleonoraSalaryMonthly(year, settings)
-        val b = eleonoraBenefitMonthly(year, settings)
+    fun householdIncome(
+        year: Int,
+        settings: SettingsEntity,
+        activeLedgerEntry: LedgerEntryEntity? = null,
+        month: Int? = null
+    ): YearlyIncome {
+        val baseYear = settings.baseYear
+        val v = if (activeLedgerEntry != null && activeLedgerEntry.incVaclav > 0.0 && year == baseYear) {
+            activeLedgerEntry.incVaclav
+        } else {
+            vaclavSalaryMonthly(year, settings)
+        }
+
+        val isBeforeReturn = year < settings.eReturnYear
+        val isReturnYear = year == settings.eReturnYear
+        val e = when {
+            isBeforeReturn -> 0.0
+            isReturnYear && activeLedgerEntry != null && year == baseYear -> {
+                if (month != null && month < settings.eReturnMonth) 0.0
+                else if (activeLedgerEntry.incEleonora > 0.0) activeLedgerEntry.incEleonora
+                else eleonoraSalaryMonthly(year, settings)
+            }
+            activeLedgerEntry != null && activeLedgerEntry.incEleonora > 0.0 && year == baseYear -> {
+                activeLedgerEntry.incEleonora
+            }
+            else -> eleonoraSalaryMonthly(year, settings)
+        }
+
+        val b = when {
+            isBeforeReturn -> {
+                if (activeLedgerEntry != null && activeLedgerEntry.incEleonora > 0.0 && year == baseYear) {
+                    activeLedgerEntry.incEleonora
+                } else if (month != null) {
+                    eleonoraBenefitForMonth(year, month, settings)
+                } else {
+                    eleonoraBenefitMonthly(year, settings)
+                }
+            }
+            isReturnYear -> {
+                if (activeLedgerEntry != null && year == baseYear) {
+                    if (month != null && month < settings.eReturnMonth && activeLedgerEntry.incEleonora > 0.0) {
+                        activeLedgerEntry.incEleonora
+                    } else if (month != null && month >= settings.eReturnMonth) {
+                        0.0
+                    } else if (month != null) {
+                        eleonoraBenefitForMonth(year, month, settings)
+                    } else {
+                        eleonoraBenefitMonthly(year, settings)
+                    }
+                } else if (month != null) {
+                    eleonoraBenefitForMonth(year, month, settings)
+                } else {
+                    eleonoraBenefitMonthly(year, settings)
+                }
+            }
+            else -> 0.0
+        }
+
         val lec = eleonoraLecturingMonthly(year, settings)
-        val gift = settings.familyGiftMonthly
-        val eOther = settings.eOtherInflowsMonthly
-        val total = v + e + b + lec + gift + settings.vMealVouchersMonthly + eOther
+
+        val vGift = if (settings.familyGiftMonthly != 16000.0 && settings.vGiftsMonthly == 16000.0 && settings.eGiftsMonthly == 0.0) {
+            settings.familyGiftMonthly
+        } else {
+            settings.vGiftsMonthly
+        }
+        val eGift = if (!settings.isSingleHousehold) settings.eGiftsMonthly else 0.0
+        val totalGift = vGift + eGift
+
+        val scheduledLumps = if (month != null) {
+            lumpSumsForMonth(year, month, settings).sumOf { it.amount }
+        } else 0.0
+
+        val (vOther, eOther, lumpTotal) = if (activeLedgerEntry != null && activeLedgerEntry.incUnforeseen > 0.0 && year == baseYear) {
+            val actualOther = activeLedgerEntry.incUnforeseen
+            val budgetedOtherV = settings.vOtherInflowsMonthly
+            val budgetedOtherE = if (!settings.isSingleHousehold) settings.eOtherInflowsMonthly else 0.0
+            val budgetedTotal = budgetedOtherV + budgetedOtherE + scheduledLumps
+
+            if (actualOther >= budgetedTotal) {
+                Triple(budgetedOtherV, budgetedOtherE, scheduledLumps + (actualOther - budgetedTotal))
+            } else {
+                val ratio = if (budgetedTotal > 0.0) actualOther / budgetedTotal else 0.0
+                Triple(budgetedOtherV * ratio, budgetedOtherE * ratio, scheduledLumps * ratio)
+            }
+        } else {
+            val vO = settings.vOtherInflowsMonthly
+            val eO = if (!settings.isSingleHousehold) settings.eOtherInflowsMonthly else 0.0
+            Triple(vO, eO, scheduledLumps)
+        }
+
+        val total = v + e + b + lec + settings.vMealVouchersMonthly + totalGift + vOther + eOther + lumpTotal
 
         return YearlyIncome(
             year = year,
@@ -573,7 +702,12 @@ object FinancialEngine {
             benefit = b,
             lecturing = lec,
             vouchers = settings.vMealVouchersMonthly,
-            gift = gift,
+            gift = totalGift,
+            vaclavOther = vOther,
+            eleonoraOther = eOther,
+            vaclavGifts = vGift,
+            eleonoraGifts = eGift,
+            lumpSumMonthly = lumpTotal,
             totalMonthly = total
         )
     }
@@ -632,6 +766,40 @@ object FinancialEngine {
         return max(0.0, netTaxBefore - netTaxAfter)
     }
 
+    fun annualRetirementTaxSaved(settings: SettingsEntity): Double {
+        val vDeduction = min(
+            settings.dipContributionMonthly * 12.0 + max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0,
+            settings.taxDeductionCeilingAnnual
+        )
+        val vGross = netToGrossAnnual(settings.vSalary, settings.taxpayerCreditAnnual, settings.taxSecondBracketThresholdAnnual)
+        val vSaved = singleEarnerRetirementTaxSaved(
+            taxableGrossAnnual = vGross,
+            deductionAnnual = vDeduction,
+            thresholdHighBracket = settings.taxSecondBracketThresholdAnnual,
+            baseRate = settings.taxRatePct / 100.0,
+            highRate = settings.taxRateSecondPct / 100.0,
+            basicTaxpayerCredit = settings.taxpayerCreditAnnual
+        )
+
+        val eSaved = if (!settings.isSingleHousehold) {
+            val eDeduction = min(
+                settings.eDipContributionMonthly * 12.0 + max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0,
+                settings.taxDeductionCeilingAnnual
+            )
+            val eGross = netToGrossAnnual(settings.eStartingSalary, settings.taxpayerCreditAnnual, settings.taxSecondBracketThresholdAnnual)
+            singleEarnerRetirementTaxSaved(
+                taxableGrossAnnual = eGross,
+                deductionAnnual = eDeduction,
+                thresholdHighBracket = settings.taxSecondBracketThresholdAnnual,
+                baseRate = settings.taxRatePct / 100.0,
+                highRate = settings.taxRateSecondPct / 100.0,
+                basicTaxpayerCredit = settings.taxpayerCreditAnnual
+            )
+        } else 0.0
+
+        return vSaved + eSaved
+    }
+
     fun netToGrossAnnual(
         netMonthly: Double,
         taxpayerCreditAnnual: Double,
@@ -644,10 +812,14 @@ object FinancialEngine {
         // Employee mandatory social (7.1%) + health (4.5%) = 11.6%
         // Base income tax: 15% -> net multiplier = 1 - 0.116 - 0.15 = 0.734
         // High income tax: 23% -> net multiplier = 1 - 0.116 - 0.23 = 0.654
+        // Under ZDP § 35ba, basic taxpayer credit cannot produce a tax refund.
+        // Tax before credit is zero when 0.15 * gross <= creditMonthly.
+        // Therefore, for net <= (creditMonthly / 0.15) * (1 - 0.116), tax is zero.
+        val netZeroTax = (creditMonthly / 0.15) * 0.884
         val netAtThreshold = thresholdMonthly * 0.734 + creditMonthly
 
         val grossMonthly = when {
-            netMonthly <= creditMonthly -> netMonthly / 0.884
+            netMonthly <= netZeroTax -> netMonthly / 0.884
             netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / 0.734
             else -> thresholdMonthly + (netMonthly - netAtThreshold) / 0.654
         }
@@ -667,11 +839,13 @@ object FinancialEngine {
         val vTaxableBase = netToGrossAnnual(vaclavSalaryMonthly(settings.baseYear, settings), credit, threshold)
         val vSaving = singleEarnerRetirementTaxSaved(vTaxableBase, vDeduction, threshold, baseRate, highRate, credit)
 
-        // Eleonora saving
+        // Eleonora saving (including lecturing if enabled)
         val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val eDip = settings.eDipContributionMonthly * 12.0
         val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
-        val eTaxableBase = netToGrossAnnual(eleonoraSalaryMonthly(settings.baseYear, settings), credit, threshold)
+        val eEarnedMonthly = eleonoraSalaryMonthly(settings.baseYear, settings) +
+            (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0)
+        val eTaxableBase = netToGrossAnnual(eEarnedMonthly, credit, threshold)
         val eSaving = singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
 
         return vSaving + eSaving
@@ -679,13 +853,13 @@ object FinancialEngine {
 
     fun childMonthlyExpense(birthYear: Int, currentYear: Int, settings: SettingsEntity): Double {
         val age = currentYear - birthYear
+        if (age < 0 || age >= settings.childSupportUntilAge) return 0.0
         return when (age) {
             in 0..2 -> settings.childToddlerMonthly
             in 3..5 -> settings.childPreschoolMonthly
             in 6..14 -> settings.childSchoolMonthly
             in 15..18 -> settings.childTeenMonthly
-            in 19..25 -> settings.childUniMonthly
-            else -> 0.0
+            else -> settings.childUniMonthly
         }
     }
 
@@ -755,11 +929,12 @@ object FinancialEngine {
     }
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
+        val empCap = RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0
         val vaclavInvest = settings.portuDcaMonthly + settings.dpsOwnContributionMonthly +
-                settings.dipContributionMonthly + settings.employerRetirementMonthly
+                settings.dipContributionMonthly + min(settings.employerRetirementMonthly, empCap)
         val eleonoraInvest = if (!settings.isSingleHousehold) {
             settings.ePortuDcaMonthly + settings.eDpsOwnContributionMonthly +
-                    settings.eDipContributionMonthly + settings.eEmployerRetirementMonthly
+                    settings.eDipContributionMonthly + min(settings.eEmployerRetirementMonthly, empCap)
         } else 0.0
         return vaclavInvest + eleonoraInvest
     }
@@ -806,9 +981,10 @@ object FinancialEngine {
             val reinvestAnnual = if (includeSpouse && year >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(year, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
+            val taxRefundAnnual = annualRetirementTaxSaved(settings)
             val lump = lumpSumForYear(year, settings)
 
-            bal = max(0.0, (bal + baseAnnual + reinvestAnnual + lump) * max(0.0, 1.0 + ret))
+            bal = max(0.0, (bal + baseAnnual + reinvestAnnual + taxRefundAnnual + lump) * max(0.0, 1.0 + ret))
 
             // Pension tier: DPS (own + employer + state match) and DIP (own)
             val eDpsOwn = if (includeSpouse) settings.eDpsOwnContributionMonthly else 0.0
@@ -839,7 +1015,7 @@ object FinancialEngine {
                     age = age,
                     portfolio = bal,
                     target = t,
-                    investedAnnual = baseAnnual,
+                    investedAnnual = baseAnnual + taxRefundAnnual,
                     reinvestAnnual = reinvestAnnual,
                     lumpSum = lump,
                     status = status,
@@ -1172,6 +1348,7 @@ object FinancialEngine {
         // Store year-by-year cash flow additions
         val additions = Array(horizonYears) { y ->
             val sy = baseYear + y
+            val age = baseAge + y
             val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
             val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(y) else 1.0
             val baseDca = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
@@ -1179,16 +1356,27 @@ object FinancialEngine {
                 eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
             val lump = lumpSumForYear(sy, settings)
+            val eDipOwn = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
+            val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
+            val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
+            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, age, settings, sy) * 12.0
+            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, age, settings, sy) * 12.0 else 0.0
+            val pensionInflows = (settings.dipContributionMonthly + eDipOwn + settings.dpsOwnContributionMonthly + eDpsOwn + settings.employerRetirementMonthly + eEmp) * 12.0 + subV + subE
+
             val target = fireTargetYear(sy + 1, settings, baseAge + y + 1)
-            Triple(baseDca + eleonoraSal + lump, target, baseAge + y + 1)
+            Triple(baseDca + eleonoraSal + lump + pensionInflows, target, baseAge + y + 1)
         }
 
         val yearlyBalances = Array(horizonYears + 1) { DoubleArray(sims) }
         val hitAges = mutableListOf<Int>()
 
+        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
+        val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
+        val initialPortfolio = settings.liquidPortfolioCurrent + eLiquid + settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip
+
         for (i in 0 until sims) {
-            val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
-            var bal = max(0.0, (settings.liquidPortfolioCurrent + eLiquid) * max(0.0, 1.0 - initialCrashPct))
+            var bal = max(0.0, initialPortfolio * max(0.0, 1.0 - initialCrashPct))
             yearlyBalances[0][i] = bal
             var hitAge: Int? = null
 
@@ -1285,6 +1473,9 @@ object FinancialEngine {
 
         val sims = settings.monteCarloN.coerceIn(100, 400)
         val taxDrag = dividendTaxDragPct(settings)
+        val meanReturn = netTaxableNominalReturnPct(settings) / 100.0
+        val meanHistoricalRaw = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.average()
+        val returnShift = meanReturn - (meanHistoricalRaw - taxDrag) / 100.0
         val random = Random(settings.monteCarloSeed + 101L)
 
         val baseYear = settings.baseYear
@@ -1293,6 +1484,7 @@ object FinancialEngine {
 
         val additions = Array(horizonYears) { y ->
             val sy = baseYear + y
+            val age = baseAge + y
             val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
             val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(y) else 1.0
             val baseDca = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
@@ -1300,8 +1492,15 @@ object FinancialEngine {
                 eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
             val lump = lumpSumForYear(sy, settings)
+            val eDipOwn = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
+            val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
+            val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
+            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, age, settings, sy) * 12.0
+            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, age, settings, sy) * 12.0 else 0.0
+            val pensionInflows = (settings.dipContributionMonthly + eDipOwn + settings.dpsOwnContributionMonthly + eDpsOwn + settings.employerRetirementMonthly + eEmp) * 12.0 + subV + subE
+
             val target = fireTargetYear(sy + 1, settings, baseAge + y + 1)
-            Triple(baseDca + eleonoraSal + lump, target, baseAge + y + 1)
+            Triple(baseDca + eleonoraSal + lump + pensionInflows, target, baseAge + y + 1)
         }
 
         val yearlyBalances = Array(horizonYears + 1) { DoubleArray(sims) }
@@ -1310,9 +1509,13 @@ object FinancialEngine {
         val nHistory = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.size
         val effectiveBlockSize = blockSize.coerceIn(1, 5)
 
+        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
+        val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
+        val initialPortfolio = settings.liquidPortfolioCurrent + eLiquid + settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip
+
         for (i in 0 until sims) {
-            val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
-            var bal = max(0.0, (settings.liquidPortfolioCurrent + eLiquid) * max(0.0, 1.0 - initialCrashPct))
+            var bal = max(0.0, initialPortfolio * max(0.0, 1.0 - initialCrashPct))
             yearlyBalances[0][i] = bal
             var hitAge: Int? = null
 
@@ -1324,7 +1527,7 @@ object FinancialEngine {
                     if (yOffset + b < horizonYears) {
                         val histIdx = (startIdx + b) % nHistory
                         val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
-                        val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0)
+                        val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0 + returnShift)
                         pathReturns[yOffset + b] = netReturn
                     }
                 }
@@ -1405,7 +1608,7 @@ object FinancialEngine {
      */
     fun runRetirementSurvival(
         settings: SettingsEntity,
-        useHistoricalBootstrap: Boolean = settings.useHistoricalBootstrap
+        useHistoricalBootstrap: Boolean = false
     ): RetirementSurvivalResult {
         val currentKey = SurvivalCacheKey(settings, useHistoricalBootstrap)
         cachedSurvivalResult?.let { result ->
@@ -1424,6 +1627,8 @@ object FinancialEngine {
         val horizon = settings.retirementHorizonYears.coerceIn(10, 60)
         val nHistory = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.size
         val taxDrag = dividendTaxDragPct(settings)
+        val meanHistoricalRaw = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.average()
+        val returnShift = meanReturn - (meanHistoricalRaw - taxDrag) / 100.0
         val blockSize = 3
 
         val lifestyleToday = max(
@@ -1436,21 +1641,33 @@ object FinancialEngine {
         )
         val vPensionToday = max(0.0, settings.vStatePensionMonthly)
         val ePensionToday = if (!settings.isSingleHousehold) max(0.0, settings.eStatePensionMonthly) else 0.0
+        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
+        val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
         val initial = max(
             0.0,
-            settings.liquidPortfolioCurrent +
-                (if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0)
+            settings.liquidPortfolioCurrent + eLiquid +
+                settings.dpsBalanceCurrent + eDps +
+                settings.dipBalanceCurrent + eDip
         )
 
         val additions = DoubleArray(maxAccumYears) { y ->
             val sy = baseYear + y
+            val age = baseAge + y
             val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
             val dcaFactor = if (settings.dcaAnnualGrowthPct > 0.0) (1.0 + settings.dcaAnnualGrowthPct / 100.0).pow(y) else 1.0
             val baseDca = (settings.portuDcaMonthly + ePortu) * 12.0 * dcaFactor
             val eleonoraSal = if (!settings.isSingleHousehold && sy >= settings.eReturnYear) {
                 eleonoraSalaryMonthly(sy, settings) * (settings.eReinvestedPct / 100.0) * 12.0
             } else 0.0
-            baseDca + eleonoraSal + lumpSumForYear(sy, settings)
+            val lump = lumpSumForYear(sy, settings)
+            val eDipOwn = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
+            val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
+            val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
+            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, age, settings, sy) * 12.0
+            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, age, settings, sy) * 12.0 else 0.0
+            val pensionInflows = (settings.dipContributionMonthly + eDipOwn + settings.dpsOwnContributionMonthly + eDpsOwn + settings.employerRetirementMonthly + eEmp) * 12.0 + subV + subE
+            baseDca + eleonoraSal + lump + pensionInflows
         }
 
         val targets = DoubleArray(maxAccumYears) { y ->
@@ -1465,7 +1682,7 @@ object FinancialEngine {
 
         for (i in 0 until sims) {
             val pathReturns = if (useHistoricalBootstrap) {
-                val totalYearsNeeded = maxAccumYears + horizon
+                val totalYearsNeeded = maxAccumYears + horizon + 5
                 val returns = DoubleArray(totalYearsNeeded)
                 var yOffset = 0
                 while (yOffset < totalYearsNeeded) {
@@ -1474,7 +1691,7 @@ object FinancialEngine {
                         if (yOffset + b < totalYearsNeeded) {
                             val histIdx = (startIdx + b) % nHistory
                             val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
-                            val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0)
+                            val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0 + returnShift)
                             returns[yOffset + b] = netReturn
                         }
                     }
@@ -1531,7 +1748,8 @@ object FinancialEngine {
                     depletedAge = age
                     break
                 }
-                val ret = pathReturns?.get(maxAccumYears + k) ?: max(-0.99, meanReturn + nextGaussian(random) * sigma)
+                val returnIdx = (fireYear - baseYear) + k
+                val ret = pathReturns?.getOrNull(returnIdx) ?: max(-0.99, meanReturn + nextGaussian(random) * sigma)
                 bal *= max(0.0, 1.0 + ret)
             }
 
@@ -1543,7 +1761,8 @@ object FinancialEngine {
             if (guardrailTriggeredInPath) {
                 pathsWithGuardrailsTriggered++
             }
-            val deflator = (1.0 + cpi).pow(horizon)
+            val totalYearsFromBase = (fireYear - baseYear) + horizon
+            val deflator = (1.0 + cpi).pow(totalYearsFromBase)
             endBalancesToday.add(if (deflator.isFinite() && deflator > 0.0) bal / deflator else bal)
         }
 
@@ -1724,16 +1943,18 @@ object FinancialEngine {
     fun calculate(
         settings: SettingsEntity,
         actionStates: Map<String, Boolean> = emptyMap(),
-        runMonteCarlo: Boolean = true
+        runMonteCarlo: Boolean = true,
+        activeLedgerEntry: LedgerEntryEntity? = null,
+        activeMonth: Int? = null
     ): FullCalculationState {
         val fireBase = fireTargetBase(settings)
         val dual = buildLiquidPortfolio(settings, true)
         val single = buildLiquidPortfolio(settings, false)
 
-        val fireDualPoint = dual.firstOrNull { it.portfolio >= it.target }
-        val fireSinglePoint = single.firstOrNull { it.portfolio >= it.target }
+        val fireDualPoint = dual.firstOrNull { it.totalPortfolio >= it.target }
+        val fireSinglePoint = single.firstOrNull { it.totalPortfolio >= it.target }
 
-        val currentIncome = householdIncome(settings.baseYear, settings)
+        val currentIncome = householdIncome(settings.baseYear, settings, activeLedgerEntry, activeMonth)
         val investMonthly = baseInvestMonthly(settings)
         val livingCostTotal = totalLivingCostMonthly(settings)
         val emergencyMonths = if (livingCostTotal > 0) max(0.0, settings.emergencyReserveCurrent / livingCostTotal) else 0.0
@@ -1786,7 +2007,7 @@ object FinancialEngine {
         val monteCarlo = if (runMonteCarlo) runMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
         val historicalMonteCarlo = if (runMonteCarlo) runHistoricalMonteCarlo(settings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
         val retirementSurvival = if (runMonteCarlo) {
-            runRetirementSurvival(settings)
+            runRetirementSurvival(settings, useHistoricalBootstrap = false)
         } else {
             RetirementSurvivalResult(
                 successRatePct = 0.0,
@@ -1813,26 +2034,40 @@ object FinancialEngine {
         val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
         val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
 
-        val netWorth = settings.liquidPortfolioCurrent + eLiquid +
-                settings.emergencyReserveCurrent + settings.dpsBalanceCurrent + eDps +
-                settings.dipBalanceCurrent + eDip
+        val snapLiquid = if (activeLedgerEntry != null && activeLedgerEntry.portfolioBalanceAtMonthEnd > 0.0) {
+            activeLedgerEntry.portfolioBalanceAtMonthEnd
+        } else {
+            settings.liquidPortfolioCurrent + eLiquid
+        }
+
+        val snapPension = if (activeLedgerEntry != null && activeLedgerEntry.pensionBalanceAtMonthEnd > 0.0) {
+            activeLedgerEntry.pensionBalanceAtMonthEnd
+        } else {
+            settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip
+        }
+
+        val snapReserve = if (activeLedgerEntry != null && activeLedgerEntry.emergencyReserveAtMonthEnd > 0.0) {
+            activeLedgerEntry.emergencyReserveAtMonthEnd
+        } else {
+            settings.emergencyReserveCurrent
+        }
+
+        val netWorth = snapLiquid + snapReserve + snapPension
 
         val actionsImpacts = mapOf(
             // B1 fix: ac1 respects eIncludeLecturing toggle
             "ac1" to (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly * 12.0 else 0.0),
             "ac2" to taxHelper.totalIncrementalValue,
-            "ac3" to ((settings.liquidPortfolioCurrent + eLiquid) * 0.01),
-            "ac4" to (settings.emergencyReserveCurrent * 0.04),
+            "ac3" to (snapLiquid * 0.01),
+            "ac4" to (snapReserve * 0.04),
             "ac5" to max(0.0, dip.taxSavedYear),
             "ac6" to (if (!settings.isSingleHousehold) settings.eStartingSalary * 12.0 * (settings.eReinvestedPct / 100.0) else 0.0),
             "ac8" to (settings.subscriptionsMonthly * 12.0),
-            "ac9" to max(0.0, settings.emergencyReserveCurrent - settings.emergencyReserveTarget),
-            "ac10" to ((settings.dpsBalanceCurrent + eDps) * 0.005)
+            "ac9" to max(0.0, snapReserve - settings.emergencyReserveTarget),
+            "ac10" to (snapPension * 0.005)
         )
 
-        val investableNetWorth = settings.liquidPortfolioCurrent + eLiquid +
-                settings.dpsBalanceCurrent + eDps +
-                settings.dipBalanceCurrent + eDip
+        val investableNetWorth = snapLiquid + snapPension
 
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.01)
         val nominalFactor = 1.0 + settings.portfolioNominalReturnPct / 100.0

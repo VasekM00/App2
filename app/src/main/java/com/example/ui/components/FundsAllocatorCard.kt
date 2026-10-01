@@ -209,7 +209,7 @@ fun FundsAllocatorCard(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
                 currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
-                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
+                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}/yr",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
                 recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč/mo.",
                 info = WaterfallMetricInfos.dipTaxShield,

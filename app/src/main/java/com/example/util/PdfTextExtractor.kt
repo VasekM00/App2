@@ -47,7 +47,7 @@ object PdfTextExtractor {
         // 1. First pass: Find and parse /ToUnicode CMaps across all streams
         for (stream in streams) {
             val decompressed = decompressStream(stream) ?: continue
-            val textSample = String(decompressed.take(500).toByteArray(), Charsets.US_ASCII)
+            val textSample = String(decompressed.take(4096).toByteArray(), Charsets.US_ASCII)
             if (stream.dictionary.contains("/ToUnicode") || textSample.contains("beginbfchar") || textSample.contains("beginbfrange")) {
                 parseCMap(decompressed, cMap)
             }
@@ -231,6 +231,8 @@ object PdfTextExtractor {
 
         var inBfChar = false
         var inBfRange = false
+        var inRangeArray = false
+        var rangeArrayCode = 0
 
         for (line in lines) {
             val trimmed = line.trim()
@@ -248,6 +250,7 @@ object PdfTextExtractor {
             }
             if (trimmed.contains("endbfrange")) {
                 inBfRange = false
+                inRangeArray = false
                 continue
             }
 
@@ -261,15 +264,38 @@ object PdfTextExtractor {
                     cMap[src] = dstStr
                 }
             } else if (inBfRange) {
-                // Format: <startHex> <endHex> <dstStartHex>
-                val rangeMatch = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>""").find(trimmed)
-                if (rangeMatch != null) {
-                    val start = rangeMatch.groupValues[1].toIntOrNull(16) ?: continue
-                    val end = rangeMatch.groupValues[2].toIntOrNull(16) ?: continue
-                    var dst = rangeMatch.groupValues[3].toIntOrNull(16) ?: continue
-                    for (code in start..end) {
-                        cMap[code] = String(Character.toChars(dst))
-                        dst++
+                val arrStartMatch = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[""").find(trimmed)
+                if (arrStartMatch != null) {
+                    rangeArrayCode = arrStartMatch.groupValues[1].toIntOrNull(16) ?: 0
+                    inRangeArray = true
+                    val afterBracket = trimmed.substring(trimmed.indexOf('[') + 1)
+                    val hexes = Regex("""<([0-9A-Fa-f]+)>""").findAll(afterBracket)
+                    for (h in hexes) {
+                        cMap[rangeArrayCode++] = hexToUnicodeString(h.groupValues[1])
+                    }
+                    if (afterBracket.contains(']')) {
+                        inRangeArray = false
+                    }
+                } else if (inRangeArray) {
+                    val beforeBracket = if (trimmed.contains(']')) {
+                        inRangeArray = false
+                        trimmed.substring(0, trimmed.indexOf(']'))
+                    } else trimmed
+                    val hexes = Regex("""<([0-9A-Fa-f]+)>""").findAll(beforeBracket)
+                    for (h in hexes) {
+                        cMap[rangeArrayCode++] = hexToUnicodeString(h.groupValues[1])
+                    }
+                } else {
+                    // Format: <startHex> <endHex> <dstStartHex>
+                    val rangeMatch = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>""").find(trimmed)
+                    if (rangeMatch != null) {
+                        val start = rangeMatch.groupValues[1].toIntOrNull(16) ?: continue
+                        val end = rangeMatch.groupValues[2].toIntOrNull(16) ?: continue
+                        var dst = rangeMatch.groupValues[3].toIntOrNull(16) ?: continue
+                        for (code in start..end) {
+                            cMap[code] = String(Character.toChars(dst))
+                            dst++
+                        }
                     }
                 }
             }
@@ -653,6 +679,33 @@ object PdfTextExtractor {
         if (cMap.isNotEmpty()) {
             val mappedSb = StringBuilder()
             var usedCmap = false
+
+            // Check if 2-byte font encoding (e.g. Identity-H / CIDFont)
+            if (bytes.size >= 2 && bytes.size % 2 == 0) {
+                var matchCount = 0
+                for (k in 0 until bytes.size step 2) {
+                    val code16 = ((bytes[k].toInt() and 0xFF) shl 8) or (bytes[k + 1].toInt() and 0xFF)
+                    if (cMap.containsKey(code16)) {
+                        matchCount++
+                    }
+                }
+                if (matchCount > 0 && matchCount >= (bytes.size / 2) / 3) {
+                    for (k in 0 until bytes.size step 2) {
+                        val code16 = ((bytes[k].toInt() and 0xFF) shl 8) or (bytes[k + 1].toInt() and 0xFF)
+                        val mapped = cMap[code16]
+                        if (mapped != null) {
+                            mappedSb.append(mapped)
+                            usedCmap = true
+                        } else if (code16 != 0) {
+                            mappedSb.append(code16.toChar())
+                        }
+                    }
+                    if (usedCmap) return mappedSb.toString()
+                }
+            }
+
+            // Single-byte font lookup fallback
+            mappedSb.setLength(0)
             for (byteVal in bytes) {
                 val unsignedCode = byteVal.toInt() and 0xFF
                 val mapped = cMap[unsignedCode]
@@ -688,6 +741,14 @@ object PdfTextExtractor {
                     val code = paddedHex.substring(k, k + 4).toIntOrNull(16) ?: 0
                     sb.append(cMap[code] ?: hexToUnicodeString(paddedHex.substring(k, k + 4)))
                     k += 4
+                }
+                return sb.toString()
+            } else if (paddedHex.length % 2 == 0) {
+                var k = 0
+                while (k + 2 <= paddedHex.length) {
+                    val code = paddedHex.substring(k, k + 2).toIntOrNull(16) ?: 0
+                    sb.append(cMap[code] ?: hexToUnicodeString(paddedHex.substring(k, k + 2)))
+                    k += 2
                 }
                 return sb.toString()
             }

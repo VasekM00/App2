@@ -67,21 +67,23 @@ class FinancialEngineExhaustiveAuditTest {
 
         // Year 2026 (before Eleonora returns, with no lecturing)
         val inc2026Mod = FinancialEngine.householdIncome(2026, modifiedSettings)
-        assertEquals(50000.0, inc2026Mod.vaclavNet, 0.001) // 45000 + 5000 other inflows
+        assertEquals(45000.0, inc2026Mod.vaclavNet, 0.001) // 45000 net salary
+        assertEquals(5000.0, inc2026Mod.vaclavOther, 0.001) // 5000 other inflows
         assertEquals(0.0, inc2026Mod.eleonoraSalary, 0.001)
         assertEquals(15000.0, inc2026Mod.benefit, 0.001) // Direct monthly parental allowance at 15k
         assertEquals(0.0, inc2026Mod.lecturing, 0.001)
         assertEquals(3000.0, inc2026Mod.vouchers, 0.001)
         assertEquals(20000.0, inc2026Mod.gift, 0.001)
-        assertEquals(90000.0, inc2026Mod.totalMonthly, 0.001) // 50k + 15k + 0 + 3k + 20k + 2k (eOther)
+        assertEquals(90000.0, inc2026Mod.totalMonthly, 0.001) // 45k + 5k (vOther) + 15k + 0 + 3k + 20k + 2k (eOther)
 
         // Year 2028 (Eleonora returns)
         val inc2028Mod = FinancialEngine.householdIncome(2028, modifiedSettings)
-        assertEquals(50000.0, inc2028Mod.vaclavNet, 0.001) // 45000 + 5000 other inflows
+        assertEquals(45000.0, inc2028Mod.vaclavNet, 0.001) // 45000 net salary
+        assertEquals(5000.0, inc2028Mod.vaclavOther, 0.001) // 5000 other inflows
         assertEquals(30000.0, inc2028Mod.eleonoraSalary, 0.001)
         assertEquals(0.0, inc2028Mod.benefit, 0.001) // Parental benefit ends on return
         assertEquals(0.0, inc2028Mod.lecturing, 0.001)
-        assertEquals(105000.0, inc2028Mod.totalMonthly, 0.001) // 50k + 30k + 0 + 3k + 20k + 2k (eOther)
+        assertEquals(105000.0, inc2028Mod.totalMonthly, 0.001) // 45k + 5k (vOther) + 30k + 0 + 3k + 20k + 2k (eOther)
 
         // Year 2029 (Eleonora with 5% salary growth)
         val inc2029Mod = FinancialEngine.householdIncome(2029, modifiedSettings)

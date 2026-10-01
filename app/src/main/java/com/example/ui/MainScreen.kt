@@ -107,6 +107,7 @@ fun MainScreen(
     val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
     val lastCzechSyncTimestamp by viewModel.lastCzechSyncTimestamp.collectAsState()
     val allImportedTransactions by viewModel.allImportedTransactions.collectAsState()
+    val dismissedSubscriptionMerchants by viewModel.dismissedSubscriptionMerchants.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -372,6 +373,11 @@ fun MainScreen(
                                 importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 lastImportTimestamp = lastImportTimestamp,
                                 allImportedTransactions = allImportedTransactions,
+                                dismissedSubscriptionMerchants = dismissedSubscriptionMerchants,
+                                onDismissSubscription = { viewModel.dismissSubscription(it) },
+                                onRestoreSubscription = { viewModel.restoreSubscription(it) },
+                                onClearAllDismissedSubscriptions = { viewModel.clearAllDismissedSubscriptions() },
+                                onDeleteImportedStatement = { ym, bank -> viewModel.deleteImportedStatement(ym, bank) },
                                 initialSubTab = targetCashFlowSubTab,
                                 onUpdateSettings = { viewModel.updateSettings(it) }
                             )

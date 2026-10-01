@@ -48,6 +48,9 @@ interface LedgerDao {
     @Query("DELETE FROM ledger_entries WHERE id = :id")
     suspend fun deleteEntry(id: Long)
 
+    @Query("SELECT * FROM ledger_entries WHERE id = :id LIMIT 1")
+    suspend fun getEntryById(id: Long): LedgerEntryEntity?
+
     @Query("DELETE FROM ledger_entries")
     suspend fun deleteAllEntries()
 }
@@ -95,6 +98,9 @@ interface ImportedTransactionDao {
 
     @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth")
     suspend fun deleteTransactionsForMonth(yearMonth: String)
+
+    @Query("DELETE FROM imported_bank_transactions WHERE yearMonth NOT IN (SELECT yearMonth FROM ledger_entries)")
+    suspend fun deleteOrphanedTransactions(): Int
 
     @Query("DELETE FROM imported_bank_transactions")
     suspend fun deleteAllTransactions()

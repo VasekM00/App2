@@ -73,7 +73,33 @@ fun ExportReportDialog(
         appendLine()
         appendLine("MONTHLY CASH FLOW")
         appendLine("• Václav Net Income: ${fmtCZK(state.currentIncome.vaclavNet)}")
-        appendLine("• Eleonora Salary: ${fmtCZK(state.currentIncome.eleonoraSalary)}")
+        if (state.currentIncome.vaclavOther > 0.0) {
+            appendLine("• Václav Other Inflows: ${fmtCZK(state.currentIncome.vaclavOther)}")
+        }
+        if (state.currentIncome.vaclavGifts > 0.0) {
+            appendLine("• Václav Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.vaclavGifts)}")
+        }
+        if (!state.settings.isSingleHousehold) {
+            if (state.currentIncome.eleonoraSalary > 0.0) {
+                appendLine("• Eleonora Net Salary: ${fmtCZK(state.currentIncome.eleonoraSalary)}")
+            }
+            if (state.currentIncome.benefit > 0.0) {
+                appendLine("• Eleonora Parental Allowance: ${fmtCZK(state.currentIncome.benefit)}")
+            }
+            if (state.currentIncome.lecturing > 0.0) {
+                appendLine("• Eleonora Lecturing: ${fmtCZK(state.currentIncome.lecturing)}")
+            }
+            if (state.currentIncome.eleonoraOther > 0.0) {
+                appendLine("• Eleonora Other Inflows: ${fmtCZK(state.currentIncome.eleonoraOther)}")
+            }
+            if (state.currentIncome.eleonoraGifts > 0.0) {
+                appendLine("• Eleonora Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.eleonoraGifts)}")
+            }
+        }
+        appendLine("• Meal Vouchers (Václav): ${fmtCZK(state.currentIncome.vouchers)}")
+        if (state.currentIncome.lumpSumMonthly > 0.0) {
+            appendLine("• Lump Sums / Bonuses: ${fmtCZK(state.currentIncome.lumpSumMonthly)}")
+        }
         appendLine("• Total Family Net/mo: ${fmtCZK(state.currentIncome.totalMonthly)}")
         appendLine("• Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
         appendLine()
