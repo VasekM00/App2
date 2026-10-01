@@ -142,4 +142,60 @@ class TwoBucketLiquidityTest {
         assertTrue(bridgePoint!!.totalPortfolio >= bridgePoint.target)
         assertTrue(bridgePoint.isLiquidBridgeFunded)
     }
+
+    @Test
+    fun testSingleHouseholdBridgePointUsesSingleTrajectory() {
+        val settings = SettingsEntity(
+            primaryAge = 35,
+            rentMonthly = 15000.0,
+            groceriesMonthly = 10000.0,
+            vSalary = 80000.0,
+            isSingleHousehold = true,
+            child1Enabled = false,
+            child2Enabled = false,
+            portfolioNominalReturnPct = 8.0,
+            cpiInflationPct = 3.0,
+            safeWithdrawalRatePct = 3.5,
+            liquidPortfolioCurrent = 500000.0,
+            dpsBalanceCurrent = 200000.0,
+            dipBalanceCurrent = 200000.0
+        )
+
+        val fullState = FinancialEngine.calculate(settings)
+        val bridgePoint = fullState.fireLiquidBridgePoint
+        val singlePoint = fullState.fireSinglePoint
+        assertNotNull(bridgePoint)
+        assertNotNull(singlePoint)
+        assertTrue(bridgePoint!!.year >= singlePoint!!.year)
+        // Verify bridgePoint matches a point from singleTrajectory
+        assertTrue(fullState.singleTrajectory.any { it.year == bridgePoint.year && it.age == bridgePoint.age })
+    }
+
+    @Test
+    fun testActiveLedgerSnapshotFlowsIntoBridgeBalances() {
+        val settings = SettingsEntity(
+            primaryAge = 40,
+            rentMonthly = 20000.0,
+            groceriesMonthly = 15000.0,
+            child1Enabled = false,
+            child2Enabled = false,
+            portfolioNominalReturnPct = 8.0,
+            cpiInflationPct = 3.0,
+            isSingleHousehold = true,
+            liquidPortfolioCurrent = 1000000.0,
+            dpsBalanceCurrent = 500000.0,
+            dipBalanceCurrent = 500000.0
+        )
+
+        val activeLedger = com.example.data.LedgerEntryEntity(
+            yearMonth = "2026-09",
+            portfolioBalanceAtMonthEnd = 3000000.0,
+            pensionBalanceAtMonthEnd = 1500000.0
+        )
+
+        val fullState = FinancialEngine.calculate(settings, activeLedgerEntry = activeLedger)
+        assertEquals(3000000.0, fullState.currentLiquidPortfolio, 0.01)
+        assertEquals(1500000.0, fullState.currentPensionPortfolio, 0.01)
+    }
 }
+

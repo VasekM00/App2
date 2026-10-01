@@ -399,7 +399,9 @@ data class FullCalculationState(
     val fireLiquidBridgePoint: PortfolioYearPoint? = null,
     val liquidBridgeTo60RequiredToday: Double = 0.0,
     val isLiquidBridgeFundedToday: Boolean = true,
-    val liquidBridgeDeficitToday: Double = 0.0
+    val liquidBridgeDeficitToday: Double = 0.0,
+    val currentLiquidPortfolio: Double = 0.0,
+    val currentPensionPortfolio: Double = 0.0
 )
 
 object FinancialEngine {
@@ -1693,7 +1695,32 @@ object FinancialEngine {
 
         val fireDualPoint = dual.firstOrNull { it.totalPortfolio >= it.target }
         val fireSinglePoint = single.firstOrNull { it.totalPortfolio >= it.target }
-        val fireLiquidBridgePoint = dual.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded }
+        val activeTrajectory = if (settings.isSingleHousehold) single else dual
+        val fireLiquidBridgePoint = activeTrajectory.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded }
+
+        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
+        val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
+
+        val snapLiquid = if (activeLedgerEntry != null && activeLedgerEntry.portfolioBalanceAtMonthEnd > 0.0) {
+            activeLedgerEntry.portfolioBalanceAtMonthEnd
+        } else {
+            settings.liquidPortfolioCurrent + eLiquid
+        }
+
+        val snapPension = if (activeLedgerEntry != null && activeLedgerEntry.pensionBalanceAtMonthEnd > 0.0) {
+            activeLedgerEntry.pensionBalanceAtMonthEnd
+        } else {
+            settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip
+        }
+
+        val snapReserve = if (activeLedgerEntry != null && activeLedgerEntry.emergencyReserveAtMonthEnd > 0.0) {
+            activeLedgerEntry.emergencyReserveAtMonthEnd
+        } else {
+            settings.emergencyReserveCurrent
+        }
+
+        val netWorth = snapLiquid + snapReserve + snapPension
 
         val rReal = ((settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0)
         val annualLiving = totalLivingCostMonthly(settings) * 12.0
@@ -1703,7 +1730,7 @@ object FinancialEngine {
         } else {
             annualLiving * yearsTo60Today
         }
-        val currentLiquidBal = settings.liquidPortfolioCurrent + if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val currentLiquidBal = snapLiquid
         val bridgeFundedToday = if (yearsTo60Today == 0) true else currentLiquidBal >= bridgeReqToday
         val bridgeDeficitToday = max(0.0, bridgeReqToday - currentLiquidBal)
 
@@ -1782,30 +1809,6 @@ object FinancialEngine {
         val savingsRate = if (currentIncome.totalMonthly > 0) {
             (investMonthly / currentIncome.totalMonthly) * 100.0
         } else 0.0
-
-        val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
-        val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
-        val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
-
-        val snapLiquid = if (activeLedgerEntry != null && activeLedgerEntry.portfolioBalanceAtMonthEnd > 0.0) {
-            activeLedgerEntry.portfolioBalanceAtMonthEnd
-        } else {
-            settings.liquidPortfolioCurrent + eLiquid
-        }
-
-        val snapPension = if (activeLedgerEntry != null && activeLedgerEntry.pensionBalanceAtMonthEnd > 0.0) {
-            activeLedgerEntry.pensionBalanceAtMonthEnd
-        } else {
-            settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip
-        }
-
-        val snapReserve = if (activeLedgerEntry != null && activeLedgerEntry.emergencyReserveAtMonthEnd > 0.0) {
-            activeLedgerEntry.emergencyReserveAtMonthEnd
-        } else {
-            settings.emergencyReserveCurrent
-        }
-
-        val netWorth = snapLiquid + snapReserve + snapPension
 
         val actionsImpacts = mapOf(
             // B1 fix: ac1 respects eIncludeLecturing toggle
@@ -1991,7 +1994,9 @@ object FinancialEngine {
             fireLiquidBridgePoint = fireLiquidBridgePoint,
             liquidBridgeTo60RequiredToday = bridgeReqToday,
             isLiquidBridgeFundedToday = bridgeFundedToday,
-            liquidBridgeDeficitToday = bridgeDeficitToday
+            liquidBridgeDeficitToday = bridgeDeficitToday,
+            currentLiquidPortfolio = snapLiquid,
+            currentPensionPortfolio = snapPension
         )
     }
 }

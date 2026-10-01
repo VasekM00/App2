@@ -51,10 +51,12 @@ fun TwoBucketLiquidityBridgeCard(
 ) {
     val s = state.settings
     val isSingleHh = s.isSingleHousehold
-    val liquidBal = s.liquidPortfolioCurrent + if (!isSingleHh) s.eLiquidPortfolioCurrent else 0.0
-    val dpsBal = s.dpsBalanceCurrent + if (!isSingleHh) s.eDpsBalanceCurrent else 0.0
-    val dipBal = s.dipBalanceCurrent + if (!isSingleHh) s.eDipBalanceCurrent else 0.0
-    val pensionBal = dpsBal + dipBal
+    val liquidBal = if (state.currentLiquidPortfolio > 0.0) state.currentLiquidPortfolio else (s.liquidPortfolioCurrent + if (!isSingleHh) s.eLiquidPortfolioCurrent else 0.0)
+    val pensionBal = if (state.currentPensionPortfolio > 0.0) state.currentPensionPortfolio else {
+        val dpsBal = s.dpsBalanceCurrent + if (!isSingleHh) s.eDpsBalanceCurrent else 0.0
+        val dipBal = s.dipBalanceCurrent + if (!isSingleHh) s.eDipBalanceCurrent else 0.0
+        dpsBal + dipBal
+    }
     val totalInvestable = liquidBal + pensionBal
 
     val yearsTo60 = max(0, 60 - s.primaryAge)
@@ -269,7 +271,7 @@ fun TwoBucketLiquidityBridgeCard(
 
             // Milestone projection note if available
             val bridgePoint = state.fireLiquidBridgePoint
-            val dualPoint = state.fireDualPoint
+            val targetPoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
             if (bridgePoint != null) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
@@ -301,10 +303,10 @@ fun TwoBucketLiquidityBridgeCard(
                             )
                         }
 
-                        if (dualPoint != null && dualPoint.year < bridgePoint.year) {
+                        if (targetPoint != null && targetPoint.year < bridgePoint.year) {
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "Gross capital milestone reached in Year ${dualPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - dualPoint.year} yrs) for the liquid bridge to fully fund burn to age 60.",
+                                text = "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} yrs) for the liquid bridge to fully fund burn to age 60.",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
