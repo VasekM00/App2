@@ -128,4 +128,24 @@ class FormatterEdgeCaseTest {
         assertTrue(formatted.contains("[k\u00A0domu]"))
         assertTrue(formatted.contains("\"o\u00A0vikendu\""))
     }
+
+    @Test
+    fun test5_18_fmtLeverageReduction_typicalValues() {
+        val r1 = Formatters.fmtLeverageReduction(18860.0)
+        assertEquals("19k\u00A0CZK", r1)
+
+        val r2 = Formatters.fmtLeverageReduction(33000.0)
+        assertEquals("33k\u00A0CZK", r2)
+
+        val r3 = Formatters.fmtLeverageReduction(37714.0)
+        assertEquals("38k\u00A0CZK", r3)
+    }
+
+    @Test
+    fun test5_19_fmtLeverageReduction_edgeCases() {
+        assertEquals("--", Formatters.fmtLeverageReduction(Double.NaN))
+        assertEquals("--", Formatters.fmtLeverageReduction(Double.POSITIVE_INFINITY))
+        assertTrue(Formatters.fmtLeverageReduction(500.0).contains("CZK"))
+        assertEquals("1.2M\u00A0CZK", Formatters.fmtLeverageReduction(1_200_000.0))
+    }
 }

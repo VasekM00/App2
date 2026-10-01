@@ -55,6 +55,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtLeverageReduction
 import com.example.util.Formatters.fmtPct
 
 @Composable
@@ -303,17 +304,37 @@ fun PerpetualFireMultiplierPill(
                     modifier = Modifier.size(16.dp)
                 )
                 Column {
-                    Text(
-                        text = "PERPETUAL FIRE LEVERAGE",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.5.sp,
-                            color = Color.White.copy(alpha = 0.7f)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "PERPETUAL FIRE LEVERAGE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
                         )
-                    )
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = BrandTeal.copy(alpha = 0.22f),
+                            contentColor = BrandTeal
+                        ) {
+                            Text(
+                                text = "${String.format(java.util.Locale.ROOT, "%.0fx", multiplier)} LEVERAGE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 7.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.3.sp
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     Text(
-                        text = "100 CZK/mo saved = -${fmtCompact(reductionFor100)} nest egg (${String.format(java.util.Locale.ROOT, "%.0fx", multiplier)})",
+                        text = "100 CZK/mo saved cuts FIRE target by ${fmtLeverageReduction(reductionFor100)}",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -399,7 +420,7 @@ fun PerpetualFireMultiplierDialog(
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                text = "-${fmtCZK(savedCapital)} nest egg",
+                                text = "-${fmtCZK(savedCapital)} target",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
@@ -411,7 +432,7 @@ fun PerpetualFireMultiplierDialog(
                 }
 
                 Text(
-                    text = "Tip: Trimming a recurring 1,000 CZK subscription saves ${fmtCompact(1000.0 * mult)} in total lifetime portfolio capital needed before you can retire.",
+                    text = "Tip: Trimming a recurring 1,000 CZK subscription cuts ${fmtLeverageReduction(1000.0 * mult)} from your required FIRE target.",
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

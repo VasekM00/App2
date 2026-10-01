@@ -82,6 +82,37 @@ object Formatters {
         return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
     }
 
+    fun fmtLeverageReduction(amount: Double): String {
+        if (amount.isNaN() || amount.isInfinite()) return "--"
+        val absVal = abs(amount)
+        val numStr = when {
+            absVal >= 999_950_000 -> {
+                val b = amount / 1_000_000_000.0
+                if (abs(b - b.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fB", b)
+                else String.format(Locale.ROOT, "%.1fB", b)
+            }
+            absVal >= 999_500 -> {
+                val mil = amount / 1_000_000.0
+                if (abs(mil - mil.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fM", mil)
+                else String.format(Locale.ROOT, "%.1fM", mil)
+            }
+            absVal >= 10_000 -> {
+                val k = kotlin.math.round(amount / 1_000.0).roundToLong()
+                "${k}k"
+            }
+            absVal >= 1_000 -> {
+                val k = amount / 1_000.0
+                if (abs(k - k.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fk", k)
+                else String.format(Locale.ROOT, "%.1fk", k)
+            }
+            else -> {
+                val displayVal = roundToDisplay(amount)
+                getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
+            }
+        }
+        return "$numStr\u00A0CZK"
+    }
+
     fun fmtPct(value: Double, digits: Int? = null): String {
         if (value.isNaN() || value.isInfinite()) return "--%"
         val formatted = if (digits != null) {
