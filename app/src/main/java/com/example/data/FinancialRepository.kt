@@ -25,6 +25,82 @@ class FinancialRepository(
         settingsDao.saveSettings(settings)
     }
 
+    suspend fun updateSettingsAndSyncLedger(
+        newSettings: SettingsEntity,
+        currentYearMonth: String
+    ) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            settingsDao.saveSettings(newSettings)
+            val currentEntry = ledgerDao.getEntryByYearMonth(currentYearMonth)
+            if (currentEntry != null) {
+                val updatedEleonora = if (newSettings.baseYear < newSettings.eReturnYear) {
+                    newSettings.eParentalAllowanceMonthly
+                } else {
+                    newSettings.eStartingSalary
+                }
+                val updatedLiquid = newSettings.liquidPortfolioCurrent + if (!newSettings.isSingleHousehold) newSettings.eLiquidPortfolioCurrent else 0.0
+                val updatedPension = newSettings.dpsBalanceCurrent + newSettings.dipBalanceCurrent + if (!newSettings.isSingleHousehold) (newSettings.eDpsBalanceCurrent + newSettings.eDipBalanceCurrent) else 0.0
+                ledgerDao.updateEntry(
+                    currentEntry.copy(
+                        incVaclav = newSettings.vSalary,
+                        incEleonora = if (updatedEleonora > 0.0) updatedEleonora else currentEntry.incEleonora,
+                        expRent = if (newSettings.rentMonthly > 0.0) newSettings.rentMonthly else currentEntry.expRent,
+                        portfolioBalanceAtMonthEnd = if (updatedLiquid > 0.0) updatedLiquid else currentEntry.portfolioBalanceAtMonthEnd,
+                        pensionBalanceAtMonthEnd = if (updatedPension > 0.0) updatedPension else currentEntry.pensionBalanceAtMonthEnd,
+                        emergencyReserveAtMonthEnd = if (newSettings.emergencyReserveCurrent > 0.0) newSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
+                    )
+                )
+            }
+        }
+    }
+
+    suspend fun syncLedgerToSettingsTransaction(
+        yearMonth: String,
+        currentYearMonth: String,
+        incVaclav: Double,
+        incEleonora: Double,
+        expRent: Double,
+        portfolioBalance: Double,
+        pensionBalance: Double,
+        emergencyReserve: Double
+    ) = withContext(Dispatchers.IO) {
+        if (yearMonth == currentYearMonth) {
+            database.withTransaction {
+                val cur = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
+                var updated = cur
+                if (incVaclav > 0.0 && cur.vSalary != incVaclav) {
+                    updated = updated.copy(vSalary = incVaclav)
+                }
+                if (incEleonora > 0.0) {
+                    if (cur.baseYear < cur.eReturnYear) {
+                        if (cur.eParentalAllowanceMonthly != incEleonora) {
+                            updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
+                        }
+                    } else {
+                        if (cur.eStartingSalary != incEleonora) {
+                            updated = updated.copy(eStartingSalary = incEleonora)
+                        }
+                    }
+                }
+                if (expRent > 0.0 && cur.rentMonthly != expRent) {
+                    updated = updated.copy(rentMonthly = expRent)
+                }
+                if (portfolioBalance > 0.0 && cur.liquidPortfolioCurrent != portfolioBalance) {
+                    updated = updated.copy(liquidPortfolioCurrent = portfolioBalance)
+                }
+                if (pensionBalance > 0.0 && (cur.dpsBalanceCurrent + cur.dipBalanceCurrent) != pensionBalance) {
+                    updated = updated.copy(dpsBalanceCurrent = pensionBalance, dipBalanceCurrent = 0.0)
+                }
+                if (emergencyReserve > 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
+                    updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
+                }
+                if (updated != cur) {
+                    settingsDao.saveSettings(updated)
+                }
+            }
+        }
+    }
+
     /**
      * One-time repair for databases written by older app versions that stored the employer
      * retirement contribution as 2800 (monthly) instead of the correct 233 CZK/month

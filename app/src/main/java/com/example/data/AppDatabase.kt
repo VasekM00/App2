@@ -319,10 +319,10 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE app_settings")
                 db.execSQL("ALTER TABLE app_settings_new RENAME TO app_settings")
             } catch (e: Exception) {
-                e.printStackTrace()
                 try {
                     db.execSQL("DROP TABLE IF EXISTS app_settings_new")
                 } catch (_: Exception) {}
+                throw e
             }
         }
 
@@ -530,6 +530,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
                         MIGRATION_32_33
                     )
+                    .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()
                 INSTANCE = instance

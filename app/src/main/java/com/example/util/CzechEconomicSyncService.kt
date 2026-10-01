@@ -6,6 +6,7 @@ import com.example.domain.SyncDifferenceItem
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -45,7 +46,7 @@ object CzechEconomicSyncService {
 
         // 2. Fetch remote statutory manifest if available
         try {
-            val remoteJson = fetchUrlContent(STATUTORY_MANIFEST_URL, timeoutMs = 2500)
+            val remoteJson = fetchUrlContentWithRetry(STATUTORY_MANIFEST_URL, timeoutMs = 2500, maxRetries = 2)
             if (!remoteJson.isNullOrBlank()) {
                 val json = JSONObject(remoteJson)
                 parsed = parseManifestSanitized(json, parsed)
@@ -324,6 +325,19 @@ object CzechEconomicSyncService {
             } catch (ignored: Exception) {}
         }
         return Triple(eur, usd, rateDate)
+    }
+
+    private suspend fun fetchUrlContentWithRetry(urlString: String, timeoutMs: Int = 3000, maxRetries: Int = 2): String? {
+        var currentDelay = 250L
+        for (attempt in 0..maxRetries) {
+            val res = fetchUrlContent(urlString, timeoutMs)
+            if (res != null) return res
+            if (attempt < maxRetries) {
+                delay(currentDelay)
+                currentDelay *= 2
+            }
+        }
+        return null
     }
 
     private fun fetchUrlContent(urlString: String, timeoutMs: Int = 3000): String? {

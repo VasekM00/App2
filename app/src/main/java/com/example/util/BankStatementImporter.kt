@@ -103,6 +103,17 @@ data class StatementParseSummary(
     }
 }
 
+/**
+ * Bank statement parsing and transaction categorization engine.
+ *
+ * Architectural Design Notes:
+ * - Currency Representation (F-005): Uses 64-bit IEEE 754 Double. Suitable for personal finance
+ *   and FIRE forecasting where rounding errors are sub-cent and formatted to whole or standard CZK.
+ * - Format Primacy & Resilience (F-009): CSV engines auto-detect delimiters and dynamic headers.
+ *   PDF imports use structural regex extractors with fallbacks.
+ * - Categorization (F-010): Leverages CzechMerchantCatalog combined with user custom overrides
+ *   and MerchantLookupService heuristic inference.
+ */
 object BankStatementImporter {
 
     /** Hard upper bound for statement imports to avoid OOM on pathological files. */

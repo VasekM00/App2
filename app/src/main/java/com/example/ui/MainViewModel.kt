@@ -33,6 +33,8 @@ sealed interface UiMessage {
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
+    // Architectural Note (F-018): Lightweight manual dependency injection.
+    // Avoids annotation processor and code-gen overhead of Hilt/Dagger while maintaining clear separation.
     private val db = AppDatabase.getDatabase(application)
     private val repository = FinancialRepository(
         database = db,
@@ -171,27 +173,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private data class SensitivityOverrides(
+        val retOver: Double?,
+        val cpiOver: Double?,
+        val swrOver: Double?
+    )
+
+    private val sensitivityOverrides = combine(
+        sensitivityReturnOverride,
+        sensitivityCpiOverride,
+        sensitivitySwrOverride
+    ) { ret, cpi, swr -> SensitivityOverrides(ret, cpi, swr) }
+
     val calculationState: StateFlow<FullCalculationState> = combine(
         settingsState,
         actionStates,
         ledgerEntries,
-        sensitivityReturnOverride,
-        sensitivityCpiOverride,
-        sensitivitySwrOverride
-    ) { args: Array<Any?> ->
-        val settings = args[0] as SettingsEntity
-        @Suppress("UNCHECKED_CAST")
-        val actions = args[1] as Map<String, Boolean>
-        @Suppress("UNCHECKED_CAST")
-        val ledger = args[2] as List<LedgerEntryEntity>
-        val retOver = args[3] as Double?
-        val cpiOver = args[4] as Double?
-        val swrOver = args[5] as Double?
-
+        sensitivityOverrides
+    ) { settings, actions, ledger, overrides ->
         var effectiveSettings = settings
-        if (retOver != null) effectiveSettings = effectiveSettings.copy(portfolioNominalReturnPct = retOver)
-        if (cpiOver != null) effectiveSettings = effectiveSettings.copy(cpiInflationPct = cpiOver)
-        if (swrOver != null) effectiveSettings = effectiveSettings.copy(safeWithdrawalRatePct = swrOver)
+        if (overrides.retOver != null) effectiveSettings = effectiveSettings.copy(portfolioNominalReturnPct = overrides.retOver)
+        if (overrides.cpiOver != null) effectiveSettings = effectiveSettings.copy(cpiInflationPct = overrides.cpiOver)
+        if (overrides.swrOver != null) effectiveSettings = effectiveSettings.copy(safeWithdrawalRatePct = overrides.swrOver)
 
         val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
         val currentYm = now.toString()
@@ -213,28 +216,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(newSettings: SettingsEntity, showSnackbar: Boolean = false) {
         viewModelScope.launch {
-            repository.saveSettings(newSettings)
             val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
-            val currentEntry = repository.getLedgerEntryByYearMonth(now)
-            if (currentEntry != null) {
-                val updatedEleonora = if (newSettings.baseYear < newSettings.eReturnYear) {
-                    newSettings.eParentalAllowanceMonthly
-                } else {
-                    newSettings.eStartingSalary
-                }
-                val updatedLiquid = newSettings.liquidPortfolioCurrent + if (!newSettings.isSingleHousehold) newSettings.eLiquidPortfolioCurrent else 0.0
-                val updatedPension = newSettings.dpsBalanceCurrent + newSettings.dipBalanceCurrent + if (!newSettings.isSingleHousehold) (newSettings.eDpsBalanceCurrent + newSettings.eDipBalanceCurrent) else 0.0
-                repository.updateLedgerEntry(
-                    currentEntry.copy(
-                        incVaclav = newSettings.vSalary,
-                        incEleonora = if (updatedEleonora > 0.0) updatedEleonora else currentEntry.incEleonora,
-                        expRent = if (newSettings.rentMonthly > 0.0) newSettings.rentMonthly else currentEntry.expRent,
-                        portfolioBalanceAtMonthEnd = if (updatedLiquid > 0.0) updatedLiquid else currentEntry.portfolioBalanceAtMonthEnd,
-                        pensionBalanceAtMonthEnd = if (updatedPension > 0.0) updatedPension else currentEntry.pensionBalanceAtMonthEnd,
-                        emergencyReserveAtMonthEnd = if (newSettings.emergencyReserveCurrent > 0.0) newSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
-                    )
-                )
-            }
+            repository.updateSettingsAndSyncLedger(newSettings, now)
             if (showSnackbar) {
                 _uiEvent.emit(UiMessage.ShowSnackbar("Settings saved successfully"))
             }
@@ -251,39 +234,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         emergencyReserve: Double
     ) {
         val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
-        if (yearMonth == now) {
-            val cur = repository.settingsFlow.first()
-            var updated = cur
-            if (incVaclav > 0.0 && cur.vSalary != incVaclav) {
-                updated = updated.copy(vSalary = incVaclav)
-            }
-            if (incEleonora > 0.0) {
-                if (cur.baseYear < cur.eReturnYear) {
-                    if (cur.eParentalAllowanceMonthly != incEleonora) {
-                        updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
-                    }
-                } else {
-                    if (cur.eStartingSalary != incEleonora) {
-                        updated = updated.copy(eStartingSalary = incEleonora)
-                    }
-                }
-            }
-            if (expRent > 0.0 && cur.rentMonthly != expRent) {
-                updated = updated.copy(rentMonthly = expRent)
-            }
-            if (portfolioBalance > 0.0 && cur.liquidPortfolioCurrent != portfolioBalance) {
-                updated = updated.copy(liquidPortfolioCurrent = portfolioBalance)
-            }
-            if (pensionBalance > 0.0 && (cur.dpsBalanceCurrent + cur.dipBalanceCurrent) != pensionBalance) {
-                updated = updated.copy(dpsBalanceCurrent = pensionBalance, dipBalanceCurrent = 0.0)
-            }
-            if (emergencyReserve > 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
-                updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
-            }
-            if (updated != cur) {
-                repository.saveSettings(updated)
-            }
-        }
+        repository.syncLedgerToSettingsTransaction(
+            yearMonth = yearMonth,
+            currentYearMonth = now,
+            incVaclav = incVaclav,
+            incEleonora = incEleonora,
+            expRent = expRent,
+            portfolioBalance = portfolioBalance,
+            pensionBalance = pensionBalance,
+            emergencyReserve = emergencyReserve
+        )
     }
 
     fun addLedgerEntry(
@@ -412,14 +372,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importCsvData(uri: android.net.Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val inputStream = getApplication<Application>().contentResolver.openInputStream(uri)
+                val contentResolver = getApplication<Application>().contentResolver
+                val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
+                val reportedSize = pfd?.use { it.statSize } ?: -1L
+                if (reportedSize > com.example.util.BankStatementImporter.MAX_STATEMENT_BYTES) {
+                    _uiEvent.emit(UiMessage.ShowSnackbar("Statement file is too large (max 25 MB)"))
+                    return@launch
+                }
+
+                val inputStream = contentResolver.openInputStream(uri)
                 if (inputStream == null) {
                     _uiEvent.emit(UiMessage.ShowSnackbar("Error: Unable to open statement file"))
                     return@launch
                 }
-                val bytes = inputStream.use { it.readBytes() }
+                val maxAllowed = com.example.util.BankStatementImporter.MAX_STATEMENT_BYTES
+                val bytes = inputStream.use { stream ->
+                    val buffer = java.io.ByteArrayOutputStream()
+                    val chunk = ByteArray(16384)
+                    var total = 0
+                    while (true) {
+                        val count = stream.read(chunk)
+                        if (count <= 0) break
+                        total += count
+                        if (total > maxAllowed) return@use null
+                        buffer.write(chunk, 0, count)
+                    }
+                    buffer.toByteArray()
+                }
 
-                if (!com.example.util.BankStatementImporter.isWithinSizeLimit(bytes.size)) {
+                if (bytes == null || !com.example.util.BankStatementImporter.isWithinSizeLimit(bytes.size)) {
                     _uiEvent.emit(UiMessage.ShowSnackbar("Statement file is too large (max 25 MB)"))
                     return@launch
                 }
