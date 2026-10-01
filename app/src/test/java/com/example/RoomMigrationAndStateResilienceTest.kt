@@ -161,7 +161,7 @@ class RoomMigrationAndStateResilienceTest {
     @Test
     fun test6_databaseVersion_matchesTarget30() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(32, version)
+        assertEquals(33, version)
     }
 
     @Test
@@ -216,6 +216,22 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
+    fun test7f_schema_v33_settingsColumnsExist() {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+        assertTrue("dpsStatutoryFeeCapPct must exist in app_settings", columns.contains("dpsStatutoryFeeCapPct"))
+        assertTrue("employerRetirementExemptionAnnual must exist in app_settings", columns.contains("employerRetirementExemptionAnnual"))
+        assertTrue("childBonusMinWageMultiplier must exist in app_settings", columns.contains("childBonusMinWageMultiplier"))
+        assertTrue("parentalAllowanceTotalBeforeCutoff must exist in app_settings", columns.contains("parentalAllowanceTotalBeforeCutoff"))
+        assertTrue("parentalAllowanceTotalFromCutoff must exist in app_settings", columns.contains("parentalAllowanceTotalFromCutoff"))
+        assertTrue("parentalAllowanceCutoffYear must exist in app_settings", columns.contains("parentalAllowanceCutoffYear"))
+    }
+
+    @Test
     fun test8_stateRestoration_savedStateHandle_simulatedProcessRecreation() {
         val originalHandle = SavedStateHandle()
         originalHandle["selected_tab_index"] = 2
@@ -239,6 +255,12 @@ class RoomMigrationAndStateResilienceTest {
         assertEquals(settings.vSalary, deserialized.vSalary, 0.001)
         assertEquals(settings.isSingleHousehold, deserialized.isSingleHousehold)
         assertEquals(settings.rentMonthly, deserialized.rentMonthly, 0.001)
+        assertEquals(settings.dpsStatutoryFeeCapPct, deserialized.dpsStatutoryFeeCapPct, 0.001)
+        assertEquals(settings.employerRetirementExemptionAnnual, deserialized.employerRetirementExemptionAnnual, 0.001)
+        assertEquals(settings.childBonusMinWageMultiplier, deserialized.childBonusMinWageMultiplier, 0.001)
+        assertEquals(settings.parentalAllowanceTotalBeforeCutoff, deserialized.parentalAllowanceTotalBeforeCutoff, 0.001)
+        assertEquals(settings.parentalAllowanceTotalFromCutoff, deserialized.parentalAllowanceTotalFromCutoff, 0.001)
+        assertEquals(settings.parentalAllowanceCutoffYear, deserialized.parentalAllowanceCutoffYear)
     }
 
     @Test

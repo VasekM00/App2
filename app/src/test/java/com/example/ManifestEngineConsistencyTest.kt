@@ -80,6 +80,10 @@ class ManifestEngineConsistencyTest {
         assertEquals("DPS youth subsidy cap", RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY, manifest.getDouble("dpsYouthSubsidyMaxMonthly"), 0.001)
         assertEquals("DPS youth age limit", RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_AGE_LIMIT, manifest.getInt("dpsYouthAgeLimit"))
         assertEquals("DPS statutory fee cap", RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT, manifest.getDouble("dpsStatutoryFeeCapPct"), 0.001)
+        assertEquals("child bonus min wage multiplier", RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER, manifest.getDouble("childBonusMinWageMultiplier"), 0.001)
+        assertEquals("parental allowance pre-cutoff", RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF, manifest.getDouble("parentalAllowanceTotalBeforeCutoff"), 0.001)
+        assertEquals("parental allowance post-cutoff", RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF, manifest.getDouble("parentalAllowanceTotalFromCutoff"), 0.001)
+        assertEquals("parental allowance cutoff year", RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR, manifest.getInt("parentalAllowanceCutoffYear"))
     }
 
     @Test
@@ -104,6 +108,10 @@ class ManifestEngineConsistencyTest {
         assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY, live.dpsStandardSubsidyMaxMonthly, 0.001)
         assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY, live.dpsYouthSubsidyMaxMonthly, 0.001)
         assertEquals(RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_AGE_LIMIT, live.dpsYouthAgeLimit)
+        assertEquals(RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER, live.childBonusMinWageMultiplier, 0.001)
+        assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF, live.parentalAllowanceTotalBeforeCutoff, 0.001)
+        assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF, live.parentalAllowanceTotalFromCutoff, 0.001)
+        assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR, live.parentalAllowanceCutoffYear)
     }
 
     private fun settings() = SettingsEntity()

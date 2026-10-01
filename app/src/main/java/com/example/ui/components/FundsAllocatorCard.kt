@@ -114,14 +114,14 @@ fun FundsAllocatorCard(
     val isReserveFilled = reserveCurrent >= reserveTarget && reserveTarget > 0
 
     // Employer match
-    val vEmp = min(s.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
-    val eEmp = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) else 0.0
+    val vEmp = min(s.employerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0)
+    val eEmp = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0) else 0.0
     val totalEmpMonthly = vEmp + eEmp
 
     // DPS deposits & subsidy status
     val vDps = s.dpsOwnContributionMonthly
     val eDps = if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0
-    val dpsSubsidyOptimalTier = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026
+    val dpsSubsidyOptimalTier = s.dpsDeductionThresholdMonthly
     val isDpsMaxed = vDps >= dpsSubsidyOptimalTier && (s.isSingleHousehold || eDps >= dpsSubsidyOptimalTier)
 
     // DIP deposits & tax shield status
@@ -132,7 +132,7 @@ fun FundsAllocatorCard(
     val vRetirementDeductionMonthly = vDip + vDipDpsAbove
     val eRetirementDeductionMonthly = eDip + eDipDpsAbove
     val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
-    val statutoryCeilingMonthly = RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026 / 12.0 // 4,000 CZK/mo
+    val statutoryCeilingMonthly = s.taxDeductionCeilingAnnual / 12.0
     val isDipMaxed = vRetirementDeductionMonthly >= statutoryCeilingMonthly && (s.isSingleHousehold || !eHasIncome || eRetirementDeductionMonthly >= statutoryCeilingMonthly)
 
     // Liquid Brokerage ETF DCA

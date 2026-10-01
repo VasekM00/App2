@@ -851,7 +851,7 @@ private fun PortfolioAccountsView(
                 val portuTotal = s.portuDcaMonthly + if (!isSingle) s.ePortuDcaMonthly else 0.0
                 val dipTotal = s.dipContributionMonthly + if (!isSingle) s.eDipContributionMonthly else 0.0
                 val dpsTotal = s.dpsOwnContributionMonthly + if (!isSingle) s.eDpsOwnContributionMonthly else 0.0
-                val empCap = RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0
+                val empCap = s.employerRetirementExemptionAnnual / 12.0
                 val empV = min(s.employerRetirementMonthly, empCap)
                 val empE = if (!isSingle) min(s.eEmployerRetirementMonthly, empCap) else 0.0
                 val empTotal = empV + empE

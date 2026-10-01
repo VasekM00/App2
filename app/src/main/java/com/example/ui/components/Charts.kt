@@ -1307,8 +1307,8 @@ fun DcaAllocationBreakdownBar(
     val dipE = if (!isSingle) settings.eDipContributionMonthly else 0.0
     val dpsV = settings.dpsOwnContributionMonthly
     val dpsE = if (!isSingle) settings.eDpsOwnContributionMonthly else 0.0
-    val empV = min(settings.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
-    val empE = if (!isSingle) min(settings.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) else 0.0
+    val empV = min(settings.employerRetirementMonthly, settings.employerRetirementExemptionAnnual / 12.0)
+    val empE = if (!isSingle) min(settings.eEmployerRetirementMonthly, settings.employerRetirementExemptionAnnual / 12.0) else 0.0
 
     val cPortuV = BrandTeal
     val cPortuE = BrandGold

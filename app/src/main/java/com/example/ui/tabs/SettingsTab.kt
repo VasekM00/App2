@@ -965,6 +965,12 @@ fun SettingsTab(
                             NumberSettingField(label = "DPS Youth Age Limit (Years)", value = s.dpsYouthAgeLimit.toDouble(), onValueChange = { onUpdateSettings(s.copy(dpsYouthAgeLimit = it.toInt())) })
                             NumberSettingField(label = "DPS Max Youth Subsidy (CZK/mo)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsYouthSubsidyMaxMonthly = it)) })
                             NumberSettingField(label = "DPS Youth Subsidy Rate (%)", value = s.dpsSubsidyRateYouthPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateYouthPct = it)) })
+                            NumberSettingField(label = "DPS Statutory Fee Cap (%)", value = s.dpsStatutoryFeeCapPct, onValueChange = { onUpdateSettings(s.copy(dpsStatutoryFeeCapPct = it)) })
+                            NumberSettingField(label = "Employer Retirement Exemption Cap (CZK/yr)", value = s.employerRetirementExemptionAnnual, onValueChange = { onUpdateSettings(s.copy(employerRetirementExemptionAnnual = it)) })
+                            NumberSettingField(label = "Child Bonus Min Wage Multiplier", value = s.childBonusMinWageMultiplier, onValueChange = { onUpdateSettings(s.copy(childBonusMinWageMultiplier = it)) })
+                            NumberSettingField(label = "Parental Allowance Pot (Pre-Cutoff CZK)", value = s.parentalAllowanceTotalBeforeCutoff, onValueChange = { onUpdateSettings(s.copy(parentalAllowanceTotalBeforeCutoff = it)) })
+                            NumberSettingField(label = "Parental Allowance Pot (Post-Cutoff CZK)", value = s.parentalAllowanceTotalFromCutoff, onValueChange = { onUpdateSettings(s.copy(parentalAllowanceTotalFromCutoff = it)) })
+                            NumberSettingField(label = "Parental Allowance Cutoff Year", value = s.parentalAllowanceCutoffYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(parentalAllowanceCutoffYear = it.toInt())) })
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(text = "Monte Carlo Stochastic Risk Engine", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))

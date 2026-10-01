@@ -388,10 +388,18 @@ data class FullCalculationState(
     val savingsRatePct: Double,
     val totalLivingCostMonthly: Double,
     val netWorthTotal: Double,
-    val actionsImpacts: Map<String, Double>
+    val actionsImpacts: Map<String, Double>,
+    val perpetualFireMultiplier: Double = 330.0,
+    val fireReductionPer100CzkMonthly: Double = 33000.0
 )
 
 object FinancialEngine {
+
+    fun perpetualFireLeverageMultiplier(settings: SettingsEntity): Double {
+        val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
+        val buffer = (1.0 + settings.safetyBufferPct / 100.0).coerceAtLeast(0.0)
+        return (12.0 / swr) * buffer
+    }
 
     fun lumpSumsForMonth(year: Int, month: Int, settings: SettingsEntity): List<CustomLumpSumItem> {
         return com.example.domain.lumpSumsForMonth(year, month, settings)
@@ -515,8 +523,8 @@ object FinancialEngine {
         val hasChildren = settings.child1Enabled || settings.child2Enabled
         if (!hasChildren) return 0.0
 
-        val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear) else 0.0) +
-                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear) else 0.0)
+        val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear, settings) else 0.0) +
+                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
 
         // Calculate cumulative benefits drawn in prior years
         var cumulativeDrawn = 0.0
@@ -553,8 +561,8 @@ object FinancialEngine {
         val hasChildren = settings.child1Enabled || settings.child2Enabled
         if (!hasChildren) return 0.0
 
-        val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear) else 0.0) +
-                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear) else 0.0)
+        val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear, settings) else 0.0) +
+                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
 
         var cumulativeDrawnBeforeThisYear = 0.0
         for (y in settings.baseYear until year) {
@@ -575,11 +583,11 @@ object FinancialEngine {
         return min(settings.eParentalAllowanceMonthly, remainingForThisMonth)
     }
 
-    private fun parentalAllowancePot(birthYear: Int): Double {
-        return if (birthYear >= RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR) {
-            RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF
+    fun parentalAllowancePot(birthYear: Int, settings: SettingsEntity): Double {
+        return if (birthYear >= settings.parentalAllowanceCutoffYear) {
+            settings.parentalAllowanceTotalFromCutoff
         } else {
-            RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF
+            settings.parentalAllowanceTotalBeforeCutoff
         }
     }
 
@@ -929,7 +937,7 @@ object FinancialEngine {
     }
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
-        val empCap = RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0
+        val empCap = settings.employerRetirementExemptionAnnual / 12.0
         val vaclavInvest = settings.portuDcaMonthly + settings.dpsOwnContributionMonthly +
                 settings.dipContributionMonthly + min(settings.employerRetirementMonthly, empCap)
         val eleonoraInvest = if (!settings.isSingleHousehold) {
@@ -970,7 +978,7 @@ object FinancialEngine {
             )
         )
 
-        val dpsFee = min(settings.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT)
+        val dpsFee = min(settings.dpsAnnualFeePct, settings.dpsStatutoryFeeCapPct)
         val dpsRet = max(-0.99, (settings.dpsGrossReturnPct - dpsFee) / 100.0)
 
         for (year in sy until (sy + 35)) {
@@ -1030,7 +1038,7 @@ object FinancialEngine {
     // Lepší penzijko Reform Projection: Capped 0.5% TER & One-Third Partial Withdrawal at Age 36
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val fee = min(settings.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT) // Statutory 0.5% cap
+        val fee = min(settings.dpsAnnualFeePct, settings.dpsStatutoryFeeCapPct) // Statutory fee cap
         val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
         val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
 
@@ -1973,8 +1981,8 @@ object FinancialEngine {
                 hasChildUnder3 &&
                 (spouseInc <= settings.spouseIncomeLimitAnnual)
 
-        // Section 35c ZDP: either earner meeting statutory 6x min wage qualifies the household
-        val minEarnedIncome = settings.minWageMonthly * RegulatoryConstants.STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER
+        // Section 35c ZDP: either earner meeting statutory min wage multiplier qualifies the household
+        val minEarnedIncome = settings.minWageMonthly * settings.childBonusMinWageMultiplier
         val vChildBonusOk = (vaclavSalaryMonthly(settings.baseYear, settings) * 12.0) >= minEarnedIncome
         val eChildBonusOk = !settings.isSingleHousehold && (eleonoraSalaryMonthly(settings.baseYear, settings) * 12.0) >= minEarnedIncome
         val childBonusOk = vChildBonusOk || eChildBonusOk
@@ -2196,6 +2204,9 @@ object FinancialEngine {
             fatFire = fatMilestone
         )
 
+        val perpetualMultiplier = perpetualFireLeverageMultiplier(settings)
+        val fireReductionFor100 = 100.0 * perpetualMultiplier
+
         return FullCalculationState(
             settings = settings,
             fireBaseTargetToday = fireBase,
@@ -2219,7 +2230,9 @@ object FinancialEngine {
             savingsRatePct = savingsRate,
             totalLivingCostMonthly = livingCostTotal,
             netWorthTotal = netWorth,
-            actionsImpacts = actionsImpacts
+            actionsImpacts = actionsImpacts,
+            perpetualFireMultiplier = perpetualMultiplier,
+            fireReductionPer100CzkMonthly = fireReductionFor100
         )
     }
 }

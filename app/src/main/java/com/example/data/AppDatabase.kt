@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 32,
+    version = 33,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -503,6 +503,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN dpsStatutoryFeeCapPct REAL NOT NULL DEFAULT 0.5")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN employerRetirementExemptionAnnual REAL NOT NULL DEFAULT 50000.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN childBonusMinWageMultiplier REAL NOT NULL DEFAULT 6.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN parentalAllowanceTotalBeforeCutoff REAL NOT NULL DEFAULT 350000.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN parentalAllowanceTotalFromCutoff REAL NOT NULL DEFAULT 400000.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN parentalAllowanceCutoffYear INTEGER NOT NULL DEFAULT 2027")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -516,7 +527,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_19_21, MIGRATION_18_21, MIGRATION_17_21, MIGRATION_16_21,
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
                         MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28,
-                        MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32
+                        MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
+                        MIGRATION_32_33
                     )
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()

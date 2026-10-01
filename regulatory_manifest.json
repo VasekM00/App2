@@ -22,5 +22,9 @@
   "dpsYouthSubsidyMaxMonthly": 680.0,
   "dpsYouthAgeLimit": 30,
   "dpsStatutoryFeeCapPct": 0.5,
-  "minWageMonthly": 22400.0
+  "minWageMonthly": 22400.0,
+  "childBonusMinWageMultiplier": 6.0,
+  "parentalAllowanceTotalBeforeCutoff": 350000.0,
+  "parentalAllowanceTotalFromCutoff": 400000.0,
+  "parentalAllowanceCutoffYear": 2027
 }

@@ -322,13 +322,13 @@ private fun SummarySubTab(
                     IncomeRow(label = "DPS Pension (${s.spouseName})", value = fmtCZK(s.eDpsOwnContributionMonthly))
                     isFirstRow = false
                 }
-                val vEmpMonthly = min(s.employerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0)
+                val vEmpMonthly = min(s.employerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0)
                 if (vEmpMonthly > 0) {
                     if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Employer Pension Match (${s.primaryName})", value = fmtCZK(vEmpMonthly))
                     isFirstRow = false
                 }
-                val eEmpMonthly = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL / 12.0) else 0.0
+                val eEmpMonthly = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0) else 0.0
                 if (eEmpMonthly > 0) {
                     if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(label = "Employer Pension Match (${s.spouseName})", value = fmtCZK(eEmpMonthly))

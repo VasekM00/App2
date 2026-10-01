@@ -38,10 +38,22 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
+import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandGoldDarkTheme
+import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.GoodGreen
+import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 
@@ -57,6 +69,9 @@ fun HeroHeader(
     onNavigateToSavingsRate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+    var showMultiplierDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -173,8 +188,27 @@ fun HeroHeader(
                         modifier = Modifier.weight(1f).testTag("hero_stat_savings_rate")
                     )
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                PerpetualFireMultiplierPill(
+                    multiplier = state.perpetualFireMultiplier,
+                    reductionFor100 = state.fireReductionPer100CzkMonthly,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showMultiplierDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("hero_perpetual_multiplier_pill")
+                )
             }
         }
+    }
+
+    if (showMultiplierDialog) {
+        PerpetualFireMultiplierDialog(
+            state = state,
+            onDismiss = { showMultiplierDialog = false }
+        )
     }
 }
 
@@ -232,4 +266,163 @@ fun MiniStatChip(
             )
         }
     }
+}
+
+@Composable
+fun PerpetualFireMultiplierPill(
+    multiplier: Double,
+    reductionFor100: Double,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White.copy(alpha = 0.08f),
+        contentColor = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                    contentDescription = null,
+                    tint = BrandTeal,
+                    modifier = Modifier.size(16.dp)
+                )
+                Column {
+                    Text(
+                        text = "PERPETUAL FIRE LEVERAGE",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.5.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    )
+                    Text(
+                        text = "100 CZK/mo saved = -${fmtCompact(reductionFor100)} nest egg (${String.format(java.util.Locale.ROOT, "%.0fx", multiplier)})",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Leverage details",
+                tint = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.size(15.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun PerpetualFireMultiplierDialog(
+    state: FullCalculationState,
+    onDismiss: () -> Unit
+) {
+    val s = state.settings
+    val mult = state.perpetualFireMultiplier
+    val swr = s.safeWithdrawalRatePct
+    val buffer = s.safetyBufferPct
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = BrandTeal)
+                Text("Perpetual FIRE Multiplier", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Every crown saved in permanent monthly living expenses reduces your required FIRE portfolio by a massive multiple due to the Safe Withdrawal Rate rule.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Current Live Formula:",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
+                        )
+                        Text(
+                            text = "(12 months / ${fmtPct(swr)}) * (1 + ${fmtPct(buffer)} buffer) = ${String.format(java.util.Locale.ROOT, "%.1fx", mult)}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Permanent Capital Reduction:",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                )
+
+                val examples = listOf(100.0, 500.0, 1000.0, 2500.0, 5000.0)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    examples.forEach { amount ->
+                        val savedCapital = amount * mult
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${fmtCZK(amount)} / month",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = "-${fmtCZK(savedCapital)} nest egg",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = GoodGreen
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Tip: Trimming a recurring 1,000 CZK subscription saves ${fmtCompact(1000.0 * mult)} in total lifetime portfolio capital needed before you can retire.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Got It")
+            }
+        }
+    )
 }

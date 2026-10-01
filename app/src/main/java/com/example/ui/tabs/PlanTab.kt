@@ -1196,21 +1196,21 @@ private fun PensionSubTab(
     val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
 
     val vSubsidyMaxAnnual = if (vAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) {
-        RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY * 12.0
+        s.dpsYouthSubsidyMaxMonthly * 12.0
     } else {
-        RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY * 12.0
+        s.dpsStandardSubsidyMaxMonthly * 12.0
     }
     val eSubsidyMaxAnnual = if (!s.isSingleHousehold) {
         if (eAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) {
-            RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY * 12.0
+            s.dpsYouthSubsidyMaxMonthly * 12.0
         } else {
-            RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY * 12.0
+            s.dpsStandardSubsidyMaxMonthly * 12.0
         }
     } else 0.0
 
-    val vOptimalDepositAnnual = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 * 12.0 + (if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0)
+    val vOptimalDepositAnnual = s.dpsDeductionThresholdMonthly * 12.0 + (if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0)
     val eOptimalDepositAnnual = if (!s.isSingleHousehold) {
-        RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 * 12.0 + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)
+        s.dpsDeductionThresholdMonthly * 12.0 + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)
     } else 0.0
     val totalOptimalDepositAnnual = vOptimalDepositAnnual + eOptimalDepositAnnual
 
@@ -1277,7 +1277,7 @@ private fun PensionSubTab(
                 info = PlanMetricInfos.dpsLepsiPenzijko,
                 onShowInfo = onShowInfo
             )
-            val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT))
+            val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
             KpiCard(
                 title = "DIP + DPS at Age 60",
                 value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
@@ -1406,7 +1406,7 @@ private fun PensionSubTab(
                     dpsMonthly = s.dpsOwnContributionMonthly,
                     dipMonthly = vDipMonthly,
                     subsidyMonthly = vSubsidy,
-                    subsidyCapMonthly = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
+                    subsidyCapMonthly = s.dpsDeductionThresholdMonthly,
                     taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
                     taxRatePct = s.taxRatePct,
                     hasTaxableIncome = vHasIncome,
@@ -1421,7 +1421,7 @@ private fun PensionSubTab(
                         dpsMonthly = s.eDpsOwnContributionMonthly,
                         dipMonthly = eDipMonthly,
                         subsidyMonthly = eSubsidy,
-                        subsidyCapMonthly = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
+                        subsidyCapMonthly = s.dpsDeductionThresholdMonthly,
                         taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
                         taxRatePct = s.taxRatePct,
                         hasTaxableIncome = eHasIncome,
@@ -1486,7 +1486,7 @@ private fun PensionOptimizationBar(
     dpsMonthly: Double,
     dipMonthly: Double,
     subsidyMonthly: Double,
-    subsidyCapMonthly: Double = RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026,
+    subsidyCapMonthly: Double = 1700.0,
     taxShieldCapAnnual: Double = 48000.0,
     taxRatePct: Double = 15.0,
     hasTaxableIncome: Boolean = true,

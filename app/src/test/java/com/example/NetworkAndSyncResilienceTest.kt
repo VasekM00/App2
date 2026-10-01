@@ -129,7 +129,7 @@ class NetworkAndSyncResilienceTest {
         val differences: List<SyncDifferenceItem> =
             CzechEconomicSyncService.computeDifferences(matchingSettings, matchingData)
 
-        assertEquals("Expected 7 regulatory difference items evaluated", 7, differences.size)
+        assertEquals("Expected 9 regulatory difference items evaluated", 9, differences.size)
         for (item in differences) {
             assertFalse("Item '${item.label}' was expected to be aligned but marked different", item.isDifferent)
         }

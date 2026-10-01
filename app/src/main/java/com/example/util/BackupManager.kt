@@ -125,6 +125,12 @@ object BackupManager {
         json.put("dpsYouthAgeLimit", s.dpsYouthAgeLimit)
         json.put("dpsSubsidyRateStandardPct", s.dpsSubsidyRateStandardPct)
         json.put("dpsSubsidyRateYouthPct", s.dpsSubsidyRateYouthPct)
+        json.put("dpsStatutoryFeeCapPct", s.dpsStatutoryFeeCapPct)
+        json.put("employerRetirementExemptionAnnual", s.employerRetirementExemptionAnnual)
+        json.put("childBonusMinWageMultiplier", s.childBonusMinWageMultiplier)
+        json.put("parentalAllowanceTotalBeforeCutoff", s.parentalAllowanceTotalBeforeCutoff)
+        json.put("parentalAllowanceTotalFromCutoff", s.parentalAllowanceTotalFromCutoff)
+        json.put("parentalAllowanceCutoffYear", s.parentalAllowanceCutoffYear)
 
         // Monte Carlo configuration
         json.put("monteCarloN", s.monteCarloN)
@@ -255,6 +261,12 @@ object BackupManager {
                 dpsYouthAgeLimit = json.optInt("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit),
                 dpsSubsidyRateStandardPct = json.optDouble("dpsSubsidyRateStandardPct", fallback.dpsSubsidyRateStandardPct),
                 dpsSubsidyRateYouthPct = json.optDouble("dpsSubsidyRateYouthPct", fallback.dpsSubsidyRateYouthPct),
+                dpsStatutoryFeeCapPct = json.optDouble("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct),
+                employerRetirementExemptionAnnual = json.optDouble("employerRetirementExemptionAnnual", fallback.employerRetirementExemptionAnnual),
+                childBonusMinWageMultiplier = json.optDouble("childBonusMinWageMultiplier", fallback.childBonusMinWageMultiplier),
+                parentalAllowanceTotalBeforeCutoff = json.optDouble("parentalAllowanceTotalBeforeCutoff", fallback.parentalAllowanceTotalBeforeCutoff),
+                parentalAllowanceTotalFromCutoff = json.optDouble("parentalAllowanceTotalFromCutoff", fallback.parentalAllowanceTotalFromCutoff),
+                parentalAllowanceCutoffYear = json.optInt("parentalAllowanceCutoffYear", fallback.parentalAllowanceCutoffYear),
 
                 // Monte Carlo configuration
                 monteCarloN = json.optInt("monteCarloN", fallback.monteCarloN),
@@ -364,6 +376,12 @@ object BackupManager {
             dpsMinDepositForSubsidy = money(s.dpsMinDepositForSubsidy, f.dpsMinDepositForSubsidy),
             dpsSubsidyRateStandardPct = pct(s.dpsSubsidyRateStandardPct, f.dpsSubsidyRateStandardPct),
             dpsSubsidyRateYouthPct = pct(s.dpsSubsidyRateYouthPct, f.dpsSubsidyRateYouthPct),
+            dpsStatutoryFeeCapPct = pct(s.dpsStatutoryFeeCapPct, f.dpsStatutoryFeeCapPct),
+            employerRetirementExemptionAnnual = money(s.employerRetirementExemptionAnnual, f.employerRetirementExemptionAnnual),
+            childBonusMinWageMultiplier = if (s.childBonusMinWageMultiplier.isFinite() && s.childBonusMinWageMultiplier in 1.0..20.0) s.childBonusMinWageMultiplier else f.childBonusMinWageMultiplier,
+            parentalAllowanceTotalBeforeCutoff = money(s.parentalAllowanceTotalBeforeCutoff, f.parentalAllowanceTotalBeforeCutoff),
+            parentalAllowanceTotalFromCutoff = money(s.parentalAllowanceTotalFromCutoff, f.parentalAllowanceTotalFromCutoff),
+            parentalAllowanceCutoffYear = year(s.parentalAllowanceCutoffYear, f.parentalAllowanceCutoffYear),
             child1TaxBonusAnnual = money(s.child1TaxBonusAnnual, f.child1TaxBonusAnnual),
             child2TaxBonusAnnual = money(s.child2TaxBonusAnnual, f.child2TaxBonusAnnual),
             child3PlusTaxBonusAnnual = money(s.child3PlusTaxBonusAnnual, f.child3PlusTaxBonusAnnual),

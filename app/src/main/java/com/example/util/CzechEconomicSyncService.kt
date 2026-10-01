@@ -101,7 +101,11 @@ object CzechEconomicSyncService {
             dpsStandardSubsidyMaxMonthly = d("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly, 0.0, 20000.0),
             dpsYouthSubsidyMaxMonthly = d("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly, 0.0, 20000.0),
             dpsYouthAgeLimit = i("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit, 18, 40),
-            dpsStatutoryFeeCapPct = d("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct, 0.0, 10.0)
+            dpsStatutoryFeeCapPct = d("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct, 0.0, 10.0),
+            childBonusMinWageMultiplier = d("childBonusMinWageMultiplier", fallback.childBonusMinWageMultiplier, 1.0, 20.0),
+            parentalAllowanceTotalBeforeCutoff = d("parentalAllowanceTotalBeforeCutoff", fallback.parentalAllowanceTotalBeforeCutoff, 100000.0, 1000000.0),
+            parentalAllowanceTotalFromCutoff = d("parentalAllowanceTotalFromCutoff", fallback.parentalAllowanceTotalFromCutoff, 100000.0, 1000000.0),
+            parentalAllowanceCutoffYear = i("parentalAllowanceCutoffYear", fallback.parentalAllowanceCutoffYear, 2020, 2040)
         )
     }
 
@@ -202,6 +206,33 @@ object CzechEconomicSyncService {
             )
         )
 
+        // 8. Parental Allowance Reform Pot
+        val isParentalDiff = abs(current.parentalAllowanceTotalFromCutoff - live.parentalAllowanceTotalFromCutoff) > 1.0 ||
+                abs(current.parentalAllowanceTotalBeforeCutoff - live.parentalAllowanceTotalBeforeCutoff) > 1.0
+        list.add(
+            SyncDifferenceItem(
+                category = "Social & Parental Support",
+                label = "Parental Benefit Pot (Post-${live.parentalAllowanceCutoffYear})",
+                currentValueFormatted = fmtCZK(current.parentalAllowanceTotalFromCutoff),
+                liveValueFormatted = fmtCZK(live.parentalAllowanceTotalFromCutoff),
+                isDifferent = isParentalDiff,
+                impactHint = "Statutory total allowance pot under Zákon č. 117/1995 Sb."
+            )
+        )
+
+        // 9. Employer Retirement Exemption
+        val isEmployerDiff = abs(current.employerRetirementExemptionAnnual - live.employerRetirementExemptionAnnual) > 1.0
+        list.add(
+            SyncDifferenceItem(
+                category = "Retirement Tax Shield",
+                label = "Employer Contribution Exemption Cap",
+                currentValueFormatted = "${fmtCZK(current.employerRetirementExemptionAnnual)}/yr",
+                liveValueFormatted = "${fmtCZK(live.employerRetirementExemptionAnnual)}/yr",
+                isDifferent = isEmployerDiff,
+                impactHint = "Tax-exempt employer contribution ceiling under ZDP § 6(9)(m)"
+            )
+        )
+
         return list
     }
 
@@ -233,7 +264,13 @@ object CzechEconomicSyncService {
                 dpsStandardSubsidyMaxMonthly = live.dpsStandardSubsidyMaxMonthly,
                 dpsYouthSubsidyMaxMonthly = live.dpsYouthSubsidyMaxMonthly,
                 dpsYouthAgeLimit = live.dpsYouthAgeLimit,
-                minWageMonthly = live.minWageMonthly
+                minWageMonthly = live.minWageMonthly,
+                dpsStatutoryFeeCapPct = live.dpsStatutoryFeeCapPct,
+                employerRetirementExemptionAnnual = live.employerRetirementExemptionAnnual,
+                childBonusMinWageMultiplier = live.childBonusMinWageMultiplier,
+                parentalAllowanceTotalBeforeCutoff = live.parentalAllowanceTotalBeforeCutoff,
+                parentalAllowanceTotalFromCutoff = live.parentalAllowanceTotalFromCutoff,
+                parentalAllowanceCutoffYear = live.parentalAllowanceCutoffYear
             )
         }
 
