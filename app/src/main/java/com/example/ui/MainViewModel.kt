@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.edit
 import com.example.data.AppDatabase
@@ -31,7 +32,14 @@ sealed interface UiMessage {
     data class ShowSnackbar(val message: String) : UiMessage
 }
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel(
+    application: Application,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
+) : AndroidViewModel(application) {
+
+    companion object {
+        private const val KEY_PENDING_STATEMENT = "pending_statement_import"
+    }
 
     // Architectural Note (F-018): Lightweight manual dependency injection.
     // Avoids annotation processor and code-gen overhead of Hilt/Dagger while maintaining clear separation.
@@ -98,8 +106,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncing = MutableStateFlow(false)
 
     // Pending bank statement import review
-    private val _pendingStatementImport = MutableStateFlow<com.example.util.StatementParseSummary?>(null)
+    private val _pendingStatementImport = MutableStateFlow<com.example.util.StatementParseSummary?>(
+        savedStateHandle.get<com.example.util.StatementParseSummary>(KEY_PENDING_STATEMENT)
+    )
     val pendingStatementImport: StateFlow<com.example.util.StatementParseSummary?> = _pendingStatementImport.asStateFlow()
+
+    private fun setPendingStatementImport(summary: com.example.util.StatementParseSummary?) {
+        _pendingStatementImport.value = summary
+        if (summary != null) {
+            savedStateHandle[KEY_PENDING_STATEMENT] = summary
+        } else {
+            savedStateHandle.remove<com.example.util.StatementParseSummary>(KEY_PENDING_STATEMENT)
+        }
+    }
 
     // Statement import recency tracking
     private val importPrefs = application.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
@@ -415,7 +434,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         userOverrides = overrides
                     )
                     if (bankSummary.detectedBank != com.example.util.BankType.GENERIC && bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
-                        _pendingStatementImport.value = bankSummary
+                        setPendingStatementImport(bankSummary)
                         return@launch
                     }
                 } catch (_: Exception) {
@@ -767,12 +786,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val monthsLabel = affectedMonths.joinToString(", ")
             _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${summary.transactions.size} txs from ${summary.detectedBank.name})"))
-            _pendingStatementImport.value = null
+            setPendingStatementImport(null)
         }
     }
 
     fun dismissStatementImport() {
-        _pendingStatementImport.value = null
+        setPendingStatementImport(null)
     }
 
     fun updatePendingTransactionCategory(
@@ -810,9 +829,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        _pendingStatementImport.value = com.example.util.BankStatementImporter.recomputeSummary(
-            currentSummary,
-            updatedTransactions
+        setPendingStatementImport(
+            com.example.util.BankStatementImporter.recomputeSummary(
+                currentSummary,
+                updatedTransactions
+            )
         )
     }
 

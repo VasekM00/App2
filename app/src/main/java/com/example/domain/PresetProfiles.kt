@@ -105,11 +105,27 @@ object PresetProfiles {
         }
     )
 
+    val FX_DRAG_INFLATION = FireScenarioPreset(
+        id = "fx_drag",
+        title = "FX Drag & CZK Divergence",
+        badge = "MACRO",
+        description = "Global ETF return -1.0pp from CZK currency appreciation, domestic inflation 3.5%, and 3.25% SWR.",
+        transform = { s ->
+            s.copy(
+                portfolioNominalReturnPct = (s.portfolioNominalReturnPct - 1.0).coerceAtLeast(1.0),
+                cpiInflationPct = 3.5,
+                safeWithdrawalRatePct = 3.25,
+                monteCarloVolatilityPct = 17.0
+            )
+        }
+    )
+
     val ALL_PRESETS: List<FireScenarioPreset> = listOf(
         PLAN_BASELINE,
         CONSERVATIVE,
         OPTIMISTIC,
         STAGFLATION,
+        FX_DRAG_INFLATION,
         LOWER_SAVINGS,
         HIGHER_SAVINGS,
         LATER_RETIREMENT

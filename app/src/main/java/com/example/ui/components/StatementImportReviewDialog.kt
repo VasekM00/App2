@@ -211,6 +211,15 @@ fun StatementImportReviewDialog(
                                         verticalPadding = 2.dp
                                     )
                                 }
+                                ColorPill(
+                                    text = if (summary.isPdfSource) "PDF EXTRACTED" else "CSV TABULAR",
+                                    color = if (summary.isPdfSource) Color(0xFFD97706) else GoodGreen,
+                                    fontSize = 9.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 2.dp
+                                )
                             }
                             Text(
                                 text = if (distinctMonths.size > 1) {
@@ -237,6 +246,30 @@ fun StatementImportReviewDialog(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
+                    }
+                }
+
+                if (summary.isPdfSource) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFD97706).copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color(0xFFD97706).copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "PDF statements use heuristic layout parsing. For deterministic precision, download direct CSV/GPC/ABO export from online banking.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 10.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                     }
                 }
 

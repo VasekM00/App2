@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -367,6 +369,7 @@ internal fun LedgerSubTab(
     var selectedYm by remember(sortedEntries) {
         mutableStateOf(sortedEntries.firstOrNull()?.yearMonth ?: "")
     }
+    var showImportGuidanceDialog by remember { mutableStateOf(false) }
 
     val activeEntry = remember(selectedYm, sortedEntries) {
         sortedEntries.find { it.yearMonth == selectedYm } ?: sortedEntries.firstOrNull()
@@ -420,7 +423,7 @@ internal fun LedgerSubTab(
                 OutlinedButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onTriggerImportCsv()
+                        showImportGuidanceDialog = true
                     },
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -570,7 +573,7 @@ internal fun LedgerSubTab(
                         }
 
                         OutlinedButton(
-                            onClick = onTriggerImportCsv,
+                            onClick = { showImportGuidanceDialog = true },
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.5.dp, BrandTeal),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandTeal),
@@ -795,5 +798,130 @@ internal fun LedgerSubTab(
                 Spacer(modifier = Modifier.height(110.dp)) // padding for FAB
             }
         }
+
+        if (showImportGuidanceDialog) {
+            BankStatementImportGuidanceDialog(
+                onDismiss = { showImportGuidanceDialog = false },
+                onSelectFile = {
+                    showImportGuidanceDialog = false
+                    onTriggerImportCsv()
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun BankStatementImportGuidanceDialog(
+    onDismiss: () -> Unit,
+    onSelectFile: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = BrandTeal.copy(alpha = 0.15f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = null,
+                            tint = BrandTeal,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "Import Statement",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = GoodGreen.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "CSV / TSV Tabular (Recommended)",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoodGreen
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Direct export from online banking (Moneta, ČSOB, mBank, Fio, Air Bank, Raiffeisen, etc.). Guarantees 100% deterministic precision without layout wrapping errors.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "PDF E-Statement (Alternative)",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Parses PDF statements via text extraction heuristics. Recommended when digital CSV exports are unavailable.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onSelectFile,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.testTag("btn_guidance_select_file")
+            ) {
+                Text("Select Statement File", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(18.dp)
+    )
 }

@@ -232,7 +232,9 @@ data class PortfolioYearPoint(
     val lumpSum: Double,
     val status: String,
     val pensionPortfolio: Double = 0.0,
-    val totalPortfolio: Double = portfolio + pensionPortfolio
+    val totalPortfolio: Double = portfolio + pensionPortfolio,
+    val liquidBridgeTo60Required: Double = 0.0,
+    val isLiquidBridgeFunded: Boolean = true
 )
 
 data class DpsScenario(
@@ -393,7 +395,11 @@ data class FullCalculationState(
     val netWorthTotal: Double,
     val actionsImpacts: Map<String, Double>,
     val perpetualFireMultiplier: Double = 330.0,
-    val fireReductionPer100CzkMonthly: Double = 33000.0
+    val fireReductionPer100CzkMonthly: Double = 33000.0,
+    val fireLiquidBridgePoint: PortfolioYearPoint? = null,
+    val liquidBridgeTo60RequiredToday: Double = 0.0,
+    val isLiquidBridgeFundedToday: Boolean = true,
+    val liquidBridgeDeficitToday: Double = 0.0
 )
 
 object FinancialEngine {
@@ -606,13 +612,8 @@ object FinancialEngine {
         }
     }
 
-    fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold) return 0.0
-        val sal = eleonoraSalaryMonthly(year, settings)
-        val lec = eleonoraLecturingMonthly(year, settings)
-        val oth = settings.eOtherInflowsMonthly
-        return (sal + lec + oth) * 12.0
-    }
+    fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double =
+        CzechTaxEngine.spouseOwnIncomeAnnual(year, settings)
 
     fun householdIncome(
         year: Int,
@@ -723,152 +724,23 @@ object FinancialEngine {
         )
     }
 
-    // Lepší penzijko Reform: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps
-    // (Standard: 20% max 340 CZK; Youth < 30 y/o: 40% max 680 CZK effective starting from 2027)
-    fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null, year: Int = settings?.baseYear ?: 2026): Double {
-        val minDeposit = settings?.dpsMinDepositForSubsidy ?: 500.0
-        if (monthlyDeposit < minDeposit) return 0.0
-        val youthAge = settings?.dpsYouthAgeLimit ?: 30
-        val stdRate = (settings?.dpsSubsidyRateStandardPct ?: 20.0) / 100.0
-        val youthRate = (settings?.dpsSubsidyRateYouthPct ?: 40.0) / 100.0
-        val isYouthEligible = (age < youthAge) && (year >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
-        val rate = if (isYouthEligible) youthRate else stdRate
-        val youthCap = settings?.dpsYouthSubsidyMaxMonthly ?: 680.0
-        val standardCap = settings?.dpsStandardSubsidyMaxMonthly ?: 340.0
-        val maxSub = if (isYouthEligible) youthCap else standardCap
-        return min(monthlyDeposit * rate, maxSub)
-    }
+    fun dpsSubsidy(monthlyDeposit: Double, age: Int, settings: SettingsEntity? = null, year: Int = settings?.baseYear ?: 2026): Double =
+        CzechTaxEngine.dpsSubsidy(monthlyDeposit, age, settings, year)
 
-    fun annualRetirementDeduction(settings: SettingsEntity): Double {
-        val vDipAnnual = settings.dipContributionMonthly * 12.0
-        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val vDeduction = min(vDipAnnual + vDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
+    fun annualRetirementDeduction(settings: SettingsEntity): Double =
+        CzechTaxEngine.annualRetirementDeduction(settings)
 
-        val eDipAnnual = settings.eDipContributionMonthly * 12.0
-        val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val eDeduction = min(eDipAnnual + eDpsAboveThreshold, settings.taxDeductionCeilingAnnual)
-
-        val eTotal = if (!settings.isSingleHousehold) eDeduction else 0.0
-        return vDeduction + eTotal
-    }
-
-    private fun singleEarnerRetirementTaxSaved(
-        taxableGrossAnnual: Double,
-        deductionAnnual: Double,
-        thresholdHighBracket: Double,
-        baseRate: Double,
-        highRate: Double,
-        basicTaxpayerCredit: Double
-    ): Double {
-        if (taxableGrossAnnual <= 0.0 || deductionAnnual <= 0.0) return 0.0
-
-        val highIncomeBefore = max(0.0, taxableGrossAnnual - thresholdHighBracket)
-        val baseIncomeBefore = taxableGrossAnnual - highIncomeBefore
-        val grossTaxBefore = highIncomeBefore * highRate + baseIncomeBefore * baseRate
-        val netTaxBefore = max(0.0, grossTaxBefore - basicTaxpayerCredit)
-
-        val effectiveDeduction = min(deductionAnnual, taxableGrossAnnual)
-        val taxableGrossAfter = taxableGrossAnnual - effectiveDeduction
-        val highIncomeAfter = max(0.0, taxableGrossAfter - thresholdHighBracket)
-        val baseIncomeAfter = taxableGrossAfter - highIncomeAfter
-        val grossTaxAfter = highIncomeAfter * highRate + baseIncomeAfter * baseRate
-        val netTaxAfter = max(0.0, grossTaxAfter - basicTaxpayerCredit)
-
-        return max(0.0, netTaxBefore - netTaxAfter)
-    }
-
-    fun annualRetirementTaxSaved(settings: SettingsEntity, year: Int = settings.baseYear): Double {
-        val vDeduction = min(
-            settings.dipContributionMonthly * 12.0 + max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0,
-            settings.taxDeductionCeilingAnnual
-        )
-        val vGross = netToGrossAnnual(vaclavSalaryMonthly(year, settings), settings.taxpayerCreditAnnual, settings.taxSecondBracketThresholdAnnual)
-        val vSaved = singleEarnerRetirementTaxSaved(
-            taxableGrossAnnual = vGross,
-            deductionAnnual = vDeduction,
-            thresholdHighBracket = settings.taxSecondBracketThresholdAnnual,
-            baseRate = settings.taxRatePct / 100.0,
-            highRate = settings.taxRateSecondPct / 100.0,
-            basicTaxpayerCredit = settings.taxpayerCreditAnnual
-        )
-
-        val eSaved = if (!settings.isSingleHousehold) {
-            val eDeduction = min(
-                settings.eDipContributionMonthly * 12.0 + max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0,
-                settings.taxDeductionCeilingAnnual
-            )
-            val eGross = netToGrossAnnual(eleonoraSalaryMonthly(year, settings), settings.taxpayerCreditAnnual, settings.taxSecondBracketThresholdAnnual)
-            singleEarnerRetirementTaxSaved(
-                taxableGrossAnnual = eGross,
-                deductionAnnual = eDeduction,
-                thresholdHighBracket = settings.taxSecondBracketThresholdAnnual,
-                baseRate = settings.taxRatePct / 100.0,
-                highRate = settings.taxRateSecondPct / 100.0,
-                basicTaxpayerCredit = settings.taxpayerCreditAnnual
-            )
-        } else 0.0
-
-        return vSaved + eSaved
-    }
+    fun annualRetirementTaxSaved(settings: SettingsEntity, year: Int = settings.baseYear): Double =
+        CzechTaxEngine.annualRetirementTaxSaved(settings, year)
 
     fun netToGrossAnnual(
         netMonthly: Double,
         taxpayerCreditAnnual: Double,
         highBracketThresholdAnnual: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026
-    ): Double {
-        if (netMonthly <= 0.0) return 0.0
-        val creditMonthly = taxpayerCreditAnnual / 12.0
-        val thresholdMonthly = highBracketThresholdAnnual / 12.0
+    ): Double = CzechTaxEngine.netToGrossAnnual(netMonthly, taxpayerCreditAnnual, highBracketThresholdAnnual)
 
-        // Employee mandatory social (7.1%) + health (4.5%) = 11.6%
-        // Base income tax: 15% -> net multiplier = 1 - 0.116 - 0.15 = 0.734
-        // High income tax: 23% -> net multiplier = 1 - 0.116 - 0.23 = 0.654
-        // Statutory social insurance ceiling under Act No. 589/1992 Coll. is 48x national average wage
-        // (i.e. 48/36 = 1.3333x of the second tax bracket threshold).
-        // Above this ceiling, social insurance (7.1%) is 0%, health insurance (4.5%) continues without cap.
-        // Net multiplier above social cap = 1 - 0.045 - 0.23 = 0.725
-        // Under ZDP § 35ba, basic taxpayer credit cannot produce a tax refund.
-        // Tax before credit is zero when 0.15 * gross <= creditMonthly.
-        // Therefore, for net <= (creditMonthly / 0.15) * (1 - 0.116), tax is zero.
-        val netZeroTax = (creditMonthly / 0.15) * 0.884
-        val netAtThreshold = thresholdMonthly * 0.734 + creditMonthly
-
-        val socialCapMonthly = thresholdMonthly * (48.0 / 36.0)
-        val netAtSocialCap = netAtThreshold + (socialCapMonthly - thresholdMonthly) * 0.654
-
-        val grossMonthly = when {
-            netMonthly <= netZeroTax -> netMonthly / 0.884
-            netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / 0.734
-            netMonthly <= netAtSocialCap -> thresholdMonthly + (netMonthly - netAtThreshold) / 0.654
-            else -> socialCapMonthly + (netMonthly - netAtSocialCap) / 0.725
-        }
-        return grossMonthly * 12.0
-    }
-
-    fun dipTaxSavingYear(settings: SettingsEntity): Double {
-        val threshold = settings.taxSecondBracketThresholdAnnual
-        val baseRate = settings.taxRatePct / 100.0
-        val highRate = settings.taxRateSecondPct / 100.0
-        val credit = settings.taxpayerCreditAnnual
-
-        // Václav saving (DIP + DPS qualifying combined)
-        val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val vDip = settings.dipContributionMonthly * 12.0
-        val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
-        val vTaxableBase = netToGrossAnnual(vaclavSalaryMonthly(settings.baseYear, settings), credit, threshold)
-        val vSaving = singleEarnerRetirementTaxSaved(vTaxableBase, vDeduction, threshold, baseRate, highRate, credit)
-
-        // Eleonora saving (including lecturing if enabled)
-        val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val eDip = settings.eDipContributionMonthly * 12.0
-        val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
-        val eEarnedMonthly = eleonoraSalaryMonthly(settings.baseYear, settings) +
-            (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0)
-        val eTaxableBase = netToGrossAnnual(eEarnedMonthly, credit, threshold)
-        val eSaving = singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
-
-        return vSaving + eSaving
-    }
+    fun dipTaxSavingYear(settings: SettingsEntity): Double =
+        CzechTaxEngine.dipTaxSavingYear(settings)
 
     fun childMonthlyExpense(birthYear: Int, currentYear: Int, settings: SettingsEntity): Double {
         val age = currentYear - birthYear
@@ -974,6 +846,23 @@ object FinancialEngine {
         var dipBal = settings.dipBalanceCurrent + eDipBal
         var pensionBal = dpsBal + dipBal
 
+        val rReal = ((settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0)
+        val annualLiving0 = totalLivingCostMonthly(settings) * 12.0
+        val yearsTo60_0 = max(0, 60 - age0)
+        val bridgeReq0 = if (yearsTo60_0 == 0) 0.0 else if (rReal > 0.001) {
+            annualLiving0 * ((1.0 - (1.0 + rReal).pow(-yearsTo60_0)) / rReal)
+        } else {
+            annualLiving0 * yearsTo60_0
+        }
+        val bridgeFunded0 = if (yearsTo60_0 == 0) true else bal >= bridgeReq0
+
+        val initStatus = when {
+            (bal + pensionBal) >= initialTarget -> {
+                if (age0 >= 60 || bridgeFunded0) "FIRE OK" else "Bridge Constrained"
+            }
+            else -> "Growing"
+        }
+
         list.add(
             PortfolioYearPoint(
                 year = sy,
@@ -983,9 +872,11 @@ object FinancialEngine {
                 investedAnnual = 0.0,
                 reinvestAnnual = 0.0,
                 lumpSum = 0.0,
-                status = if ((bal + pensionBal) >= initialTarget) "FIRE OK" else "Growing",
+                status = initStatus,
                 pensionPortfolio = pensionBal,
-                totalPortfolio = bal + pensionBal
+                totalPortfolio = bal + pensionBal,
+                liquidBridgeTo60Required = bridgeReq0,
+                isLiquidBridgeFunded = bridgeFunded0
             )
         )
 
@@ -1023,8 +914,19 @@ object FinancialEngine {
             val totalBal = bal + pensionBal
             val gap = t - totalBal
 
+            val yearsTo60 = max(0, 60 - age)
+            val annualLiving = totalLivingCostMonthly(settings) * 12.0
+            val bridgeReq = if (yearsTo60 == 0) 0.0 else if (rReal > 0.001) {
+                annualLiving * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+            } else {
+                annualLiving * yearsTo60
+            }
+            val bridgeFunded = if (yearsTo60 == 0) true else bal >= bridgeReq
+
             val status = when {
-                totalBal >= t -> "FIRE OK"
+                totalBal >= t -> {
+                    if (age >= 60 || bridgeFunded) "FIRE OK" else "Bridge Constrained"
+                }
                 gap < t * 0.1 -> "Close"
                 else -> "Growing"
             }
@@ -1040,221 +942,20 @@ object FinancialEngine {
                     lumpSum = lump,
                     status = status,
                     pensionPortfolio = pensionBal,
-                    totalPortfolio = totalBal
+                    totalPortfolio = totalBal,
+                    liquidBridgeTo60Required = bridgeReq,
+                    isLiquidBridgeFunded = bridgeFunded
                 )
             )
         }
         return list
     }
 
-    // Lepší penzijko Reform Projection: Capped 0.5% TER & One-Third Partial Withdrawal at Age 36
-    fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
-        val years = max(0, 60 - settings.primaryAge)
-        val fee = min(settings.dpsAnnualFeePct, settings.dpsStatutoryFeeCapPct) // Statutory fee cap
-        val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
-        val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
+    fun buildDpsProjection(settings: SettingsEntity): DpsProjection =
+        DpsDipEngine.buildDpsProjection(settings)
 
-        val annualRateETF = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
-        val monthlyRateETF = (1.0 + annualRateETF).pow(1.0 / 12.0) - 1.0
-
-        val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
-        val eDpsBal = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
-        val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
-
-        val own = settings.dpsOwnContributionMonthly + eDpsOwn
-        val emp = settings.employerRetirementMonthly + eEmp
-
-        var dpsBal = settings.dpsBalanceCurrent + eDpsBal
-        var etfBal = settings.dpsBalanceCurrent + eDpsBal
-        var totalSubsidy = 0.0
-        var totalOwn = 0.0
-        var totalEmp = 0.0
-
-        val totalMonths = years * 12
-        for (m in 0 until totalMonths) {
-            val currentYear = settings.baseYear + (m / 12)
-            val currentAge = settings.primaryAge + (m / 12)
-            val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings, currentYear)
-            val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings, currentYear) else 0.0
-            val sub = subV + subE
-
-            totalSubsidy += sub
-            totalOwn += own
-            totalEmp += emp
-
-            dpsBal = max(0.0, (dpsBal + own + sub + emp) * max(0.0, 1.0 + monthlyRateDPS))
-            etfBal = max(0.0, (etfBal + own + emp) * max(0.0, 1.0 + monthlyRateETF))
-        }
-
-        // Statutory one-third early withdrawal under Lepší penzijko:
-        // Evaluated per individual contract based on individual age and 10-year saving requirement
-        val vAge0 = settings.primaryAge
-        val eAge0 = settings.baseYear - ELEONORA_BIRTH_YEAR
-        val vMonthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - vAge0) * 12)
-        val eMonthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - eAge0) * 12)
-
-        var balAt36 = settings.dpsBalanceCurrent + eDpsBal
-        var vOwnValueTo36 = 0.0
-        var eOwnValueTo36 = 0.0
-
-        val maxMonthsTo36 = max(vMonthsTo36, if (!settings.isSingleHousehold) eMonthsTo36 else 0)
-        if (maxMonthsTo36 in 1..totalMonths) {
-            for (m in 0 until maxMonthsTo36) {
-                val currentYear = settings.baseYear + (m / 12)
-                val vAge = vAge0 + (m / 12)
-                val eAge = eAge0 + (m / 12)
-                val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, vAge, settings, currentYear)
-                val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, eAge, settings, currentYear) else 0.0
-
-                if (m < vMonthsTo36) {
-                    vOwnValueTo36 = max(0.0, (vOwnValueTo36 + settings.dpsOwnContributionMonthly) * max(0.0, 1.0 + monthlyRateDPS))
-                }
-                if (!settings.isSingleHousehold && m < eMonthsTo36) {
-                    eOwnValueTo36 = max(0.0, (eOwnValueTo36 + settings.eDpsOwnContributionMonthly) * max(0.0, 1.0 + monthlyRateDPS))
-                }
-                if (m < vMonthsTo36) {
-                    balAt36 = max(0.0, (balAt36 + own + subV + subE + emp) * max(0.0, 1.0 + monthlyRateDPS))
-                }
-            }
-        }
-
-        val vTenYearMet = vAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10
-        val eTenYearMet = !settings.isSingleHousehold && (eAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10)
-        val vEarlyLimit = if (vTenYearMet) vOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
-        val eEarlyLimit = if (eTenYearMet) eOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
-        val earlyWithdrawalLimitAt36 = vEarlyLimit + eEarlyLimit
-
-        val baseDpsLevels = listOf(0.0, 500.0, 1000.0, 1500.0, 1700.0, 5700.0)
-        val candidateDps = listOf(settings.dpsOwnContributionMonthly, if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0)
-        val dpsLevels = (baseDpsLevels + candidateDps)
-            .filter { it >= 0.0 }
-            .distinct()
-            .sorted()
-
-        val dipUtilizedAnnual = min(settings.dipContributionMonthly * 12.0, settings.taxDeductionCeilingAnnual)
-        val remainingTaxHeadroom = max(0.0, settings.taxDeductionCeilingAnnual - dipUtilizedAnnual)
-
-        val scenarios = dpsLevels.map { monthly: Double ->
-            val subMonthly = dpsSubsidy(monthly, settings.primaryAge, settings, settings.baseYear)
-            val subAnnual = subMonthly * 12.0
-            val dpsAboveThreshold = max(0.0, monthly - settings.dpsDeductionThresholdMonthly)
-            val dpsDeductionBase = dpsAboveThreshold * 12.0
-            val effectiveDpsDeduction = if (abs(monthly - 5700.0) < 1.0) {
-                // Combined maximum tier: 1 700 DPS max subsidy + 4 000 DIP max tax shield
-                settings.taxDeductionCeilingAnnual
-            } else {
-                min(dpsDeductionBase, remainingTaxHeadroom)
-            }
-            val vTaxableGross = netToGrossAnnual(
-                vaclavSalaryMonthly(settings.baseYear, settings),
-                settings.taxpayerCreditAnnual,
-                settings.taxSecondBracketThresholdAnnual
-            )
-            val taxSavedAnnual = singleEarnerRetirementTaxSaved(
-                taxableGrossAnnual = vTaxableGross,
-                deductionAnnual = effectiveDpsDeduction,
-                thresholdHighBracket = settings.taxSecondBracketThresholdAnnual,
-                baseRate = settings.taxRatePct / 100.0,
-                highRate = settings.taxRateSecondPct / 100.0,
-                basicTaxpayerCredit = settings.taxpayerCreditAnnual
-            )
-            val totalBenefit = subAnnual + taxSavedAnnual
-            val badge = when {
-                abs(monthly - 5700.0) < 1.0 -> "DPS + DIP MAX"
-                abs(monthly - 1700.0) < 1.0 -> "MAX SUBSIDY"
-                abs(monthly - 500.0) < 1.0 -> "MIN SUBSIDY"
-                monthly > 1700.0 -> "ABOVE SUBSIDY CAP"
-                else -> null
-            }
-            DpsScenario(
-                monthly = monthly,
-                annual = monthly * 12.0,
-                monthlySubsidy = subMonthly,
-                annualSubsidy = subAnnual,
-                annualTaxSaved = taxSavedAnnual,
-                totalAnnualBenefit = totalBenefit,
-                badgeLabel = badge
-            )
-        }
-
-        return DpsProjection(
-            yearsTo60 = years,
-            ownTotal = totalOwn,
-            subsidyTotal = totalSubsidy,
-            employerTotal = totalEmp,
-            dpsBalance = dpsBal,
-            etfBalance = etfBal,
-            margin = dpsBal - etfBal,
-            balanceAt36 = balAt36,
-            earlyWithdrawalLimitAt36 = earlyWithdrawalLimitAt36,
-            youthSubsidyActive = (settings.primaryAge < settings.dpsYouthAgeLimit) && (settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR),
-            scenarios = scenarios
-        )
-    }
-
-    fun buildDipProjection(settings: SettingsEntity): DipProjection {
-        val years = max(0, 60 - settings.primaryAge)
-        val tsYear = dipTaxSavingYear(settings)
-        val vDipMonthly = settings.dipContributionMonthly
-        val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
-        val totalMonthlyDip = vDipMonthly + eDipMonthly
-        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-
-        val baseDipLevels = listOf(0.0, 1000.0, 2000.0, 3000.0, 4000.0)
-        val candidateDipLevels = if (!settings.isSingleHousehold) {
-            listOf(settings.dipContributionMonthly, settings.eDipContributionMonthly)
-        } else {
-            listOf(settings.dipContributionMonthly)
-        }
-        val dipLevels = (baseDipLevels + candidateDipLevels)
-            .filter { it >= 0.0 }
-            .distinct()
-            .sorted()
-
-        val scenarios = dipLevels.map { monthly: Double ->
-            val scenarioSettings = settings.copy(
-                dipContributionMonthly = monthly,
-                dpsOwnContributionMonthly = 0.0,
-                eDipContributionMonthly = 0.0,
-                eDpsOwnContributionMonthly = 0.0
-            )
-            val asave = dipTaxSavingYear(scenarioSettings)
-            val dipAnnual = monthly * 12.0
-            
-            val risk = when {
-                monthly >= 4000.0 -> "MAX SHIELD"
-                else -> ""
-            }
-            DipScenario(
-                monthly = monthly,
-                annual = monthly * 12.0,
-                annualTaxSaved = asave,
-                netCostMonthly = monthly - asave / 12.0,
-                headroom = max(0.0, settings.taxDeductionCeilingAnnual - (dipAnnual + vDpsAboveThreshold)),
-                riskLevel = risk
-            )
-        }
-
-        val annualRateDIP = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
-        val monthlyRate = (1.0 + annualRateDIP).pow(1.0 / 12.0) - 1.0
-        val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
-        var dipBal = settings.dipBalanceCurrent + eDipBal
-        val totalMonths = years * 12
-        for (m in 0 until totalMonths) {
-            dipBal = max(0.0, (dipBal + totalMonthlyDip) * max(0.0, 1.0 + monthlyRate))
-        }
-
-        val totalCeiling = if (settings.isSingleHousehold) settings.taxDeductionCeilingAnnual else settings.taxDeductionCeilingAnnual * 2.0
-        val totalUtilized = annualRetirementDeduction(settings)
-
-        return DipProjection(
-            taxSavedYear = tsYear,
-            netCostMonthly = totalMonthlyDip - tsYear / 12.0,
-            scenarios = scenarios,
-            headroom = max(0.0, totalCeiling - totalUtilized),
-            dipBalanceAt60 = dipBal
-        )
-    }
+    fun buildDipProjection(settings: SettingsEntity): DipProjection =
+        DpsDipEngine.buildDipProjection(settings)
 
     // --- Gaussian Box-Muller generator ---
     private fun nextGaussian(random: Random): Double {
@@ -1992,6 +1693,19 @@ object FinancialEngine {
 
         val fireDualPoint = dual.firstOrNull { it.totalPortfolio >= it.target }
         val fireSinglePoint = single.firstOrNull { it.totalPortfolio >= it.target }
+        val fireLiquidBridgePoint = dual.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded }
+
+        val rReal = ((settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0)
+        val annualLiving = totalLivingCostMonthly(settings) * 12.0
+        val yearsTo60Today = max(0, 60 - settings.primaryAge)
+        val bridgeReqToday = if (yearsTo60Today == 0) 0.0 else if (rReal > 0.001) {
+            annualLiving * ((1.0 - (1.0 + rReal).pow(-yearsTo60Today)) / rReal)
+        } else {
+            annualLiving * yearsTo60Today
+        }
+        val currentLiquidBal = settings.liquidPortfolioCurrent + if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
+        val bridgeFundedToday = if (yearsTo60Today == 0) true else currentLiquidBal >= bridgeReqToday
+        val bridgeDeficitToday = max(0.0, bridgeReqToday - currentLiquidBal)
 
         val currentIncome = householdIncome(settings.baseYear, settings, activeLedgerEntry, activeMonth)
         val investMonthly = baseInvestMonthly(settings)
@@ -2273,7 +1987,11 @@ object FinancialEngine {
             netWorthTotal = netWorth,
             actionsImpacts = actionsImpacts,
             perpetualFireMultiplier = perpetualMultiplier,
-            fireReductionPer100CzkMonthly = fireReductionFor100
+            fireReductionPer100CzkMonthly = fireReductionFor100,
+            fireLiquidBridgePoint = fireLiquidBridgePoint,
+            liquidBridgeTo60RequiredToday = bridgeReqToday,
+            isLiquidBridgeFundedToday = bridgeFundedToday,
+            liquidBridgeDeficitToday = bridgeDeficitToday
         )
     }
 }

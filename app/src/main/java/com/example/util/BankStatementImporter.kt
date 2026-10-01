@@ -62,7 +62,7 @@ data class ParsedBankTransaction(
     val category: BankTransactionType = BankTransactionType.UNCATEGORIZED,
     val isNetted: Boolean = (category == BankTransactionType.INTERNAL_TRANSFER),
     val nettingReason: String = ""
-)
+) : java.io.Serializable
 
 data class StatementParseSummary(
     val detectedBank: BankType,
@@ -82,8 +82,9 @@ data class StatementParseSummary(
     val internalTransfersCount: Int,
     val totalNettedAmount: Double = 0.0,
     val monthEndBalance: Double? = null,
-    val transactions: List<ParsedBankTransaction>
-) {
+    val transactions: List<ParsedBankTransaction>,
+    val isPdfSource: Boolean = false
+) : java.io.Serializable {
     fun toLedgerEntry(existingNotes: String = ""): LedgerEntryEntity {
         val autoNote = "Imported from ${detectedBank.name}: ${transactions.size} txs"
         val combinedNotes = if (existingNotes.isNotBlank()) "$existingNotes | $autoNote" else autoNote
@@ -194,18 +195,19 @@ object BankStatementImporter {
     ): StatementParseSummary {
         val extractedText = PdfTextExtractor.extractText(pdfBytes)
         if (extractedText.isBlank()) {
-            return emptySummary(BankType.GENERIC)
+            return emptySummary(BankType.GENERIC).copy(isPdfSource = true)
         }
 
         val lines = extractedText.lines().map { it.trim() }.filter { it.isNotBlank() }
         val bankType = detectPdfBankType(extractedText, lines)
 
-        return when (bankType) {
+        val parsed = when (bankType) {
             BankType.MONETA -> parseMonetaPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
             BankType.CSOB -> parseCsobPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
             BankType.MBANK -> parseMbankPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
             else -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, userOverrides, bankType)
         }
+        return parsed.copy(isPdfSource = true)
     }
 
     private fun detectPdfBankType(fullText: String, lines: List<String>): BankType {
