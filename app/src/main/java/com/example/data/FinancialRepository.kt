@@ -85,11 +85,29 @@ class FinancialRepository(
                 if (expRent > 0.0 && cur.rentMonthly != expRent) {
                     updated = updated.copy(rentMonthly = expRent)
                 }
-                if (portfolioBalance > 0.0 && cur.liquidPortfolioCurrent != portfolioBalance) {
-                    updated = updated.copy(liquidPortfolioCurrent = portfolioBalance)
+                // Ledger balances are HOUSEHOLD totals (see updateSettingsAndSyncLedger, which writes
+                // primary + spouse). Primary-only settings fields must receive total minus spouse share.
+                val includeSpouse = !cur.isSingleHousehold
+                val spouseLiquid = if (includeSpouse) cur.eLiquidPortfolioCurrent else 0.0
+                val spousePension = if (includeSpouse) cur.eDpsBalanceCurrent + cur.eDipBalanceCurrent else 0.0
+                if (portfolioBalance > 0.0) {
+                    val primaryLiquid = (portfolioBalance - spouseLiquid).coerceAtLeast(0.0)
+                    if (cur.liquidPortfolioCurrent != primaryLiquid) {
+                        updated = updated.copy(liquidPortfolioCurrent = primaryLiquid)
+                    }
                 }
-                if (pensionBalance > 0.0 && (cur.dpsBalanceCurrent + cur.dipBalanceCurrent) != pensionBalance) {
-                    updated = updated.copy(dpsBalanceCurrent = pensionBalance, dipBalanceCurrent = 0.0)
+                if (pensionBalance > 0.0) {
+                    val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
+                    val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
+                    if (curPrimary != primaryPension) {
+                        // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
+                        val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
+                        val newDps = primaryPension * dpsShare
+                        updated = updated.copy(
+                            dpsBalanceCurrent = newDps,
+                            dipBalanceCurrent = primaryPension - newDps
+                        )
+                    }
                 }
                 if (emergencyReserve > 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
                     updated = updated.copy(emergencyReserveCurrent = emergencyReserve)

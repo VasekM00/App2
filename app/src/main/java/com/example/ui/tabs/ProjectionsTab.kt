@@ -220,12 +220,16 @@ private fun TrajectorySubTab(
             )
         }
 
+        val isSingleHh = state.settings.isSingleHousehold
+        val activeTrajectory = if (isSingleHh) state.singleTrajectory else state.dualTrajectory
+        val activeFirePoint = if (isSingleHh) state.fireSinglePoint else state.fireDualPoint
+
         Spacer(modifier = Modifier.height(10.dp))
 
         if (selectedTrajectoryChart == 0) {
             // Primary 35-Year Trajectory Chart
             NetWorthChart(
-                data = state.dualTrajectory,
+                data = activeTrajectory,
                 cpiInflationPct = state.settings.cpiInflationPct,
                 ledgerEntries = ledgerEntries,
                 isRealPurchasingPower = isRealPurchasingPower,
@@ -234,7 +238,7 @@ private fun TrajectorySubTab(
         } else {
             // 35-Year DCA Bar Chart & Growth
             DcaTrajectoryBarChart(
-                data = state.dualTrajectory,
+                data = activeTrajectory,
                 settings = state.settings
             )
         }
@@ -243,10 +247,10 @@ private fun TrajectorySubTab(
 
         // 35-Year Trajectory Milestones Table
         TrajectoryMilestonesTable(
-            trajectory = state.dualTrajectory,
+            trajectory = activeTrajectory,
             isRealPurchasingPower = isRealPurchasingPower,
             cpiInflationPct = state.settings.cpiInflationPct,
-            firePoint = state.fireDualPoint
+            firePoint = activeFirePoint
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -267,39 +271,56 @@ private fun TrajectorySubTab(
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
-                ProjectionMetricRow(
-                    label = "Projected FIRE Year (Dual Income)",
-                    value = state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y",
-                    isBold = true,
-                    highlightColor = BrandTeal,
-                    info = MetricInfo(
-                        title = "Dual-Income FIRE Date",
-                        category = "Household Horizon",
-                        explanation = "Models both Václav and Eleonora contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
-                        accentColor = BrandTeal
-                    ),
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                if (!isSingleHh) {
+                    ProjectionMetricRow(
+                        label = "Projected FIRE Year (Dual Income)",
+                        value = state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y",
+                        isBold = true,
+                        highlightColor = BrandTeal,
+                        info = MetricInfo(
+                            title = "Dual-Income FIRE Date",
+                            category = "Household Horizon",
+                            explanation = "Models both Václav and Eleonora contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
+                            accentColor = BrandTeal
+                        ),
+                        onShowInfo = onShowInfo
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                ProjectionMetricRow(
-                    label = "Projected FIRE Year (Single Income)",
-                    value = state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y",
-                    isBold = true,
-                    highlightColor = BrandGold,
-                    info = MetricInfo(
-                        title = "Single-Income Resilience Test",
-                        category = "Household Horizon",
-                        explanation = "Calculates the independent FIRE horizon if funded purely by the primary earner's savings capacity, providing a baseline stress test.",
-                        accentColor = BrandGold
-                    ),
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    ProjectionMetricRow(
+                        label = "Projected FIRE Year (Single Income)",
+                        value = state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y",
+                        isBold = true,
+                        highlightColor = BrandGold,
+                        info = MetricInfo(
+                            title = "Single-Income Resilience Test",
+                            category = "Household Horizon",
+                            explanation = "Calculates the independent FIRE horizon if funded purely by the primary earner's savings capacity, providing a baseline stress test.",
+                            accentColor = BrandGold
+                        ),
+                        onShowInfo = onShowInfo
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                } else {
+                    ProjectionMetricRow(
+                        label = "Projected FIRE Year",
+                        value = activeFirePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y",
+                        isBold = true,
+                        highlightColor = BrandTeal,
+                        info = MetricInfo(
+                            title = "Single-Earner FIRE Date",
+                            category = "Household Horizon",
+                            explanation = "Models primary earner contributing via DCA, DIP, and employer matching until aggregate wealth covers the household lifestyle budget.",
+                            accentColor = BrandTeal
+                        ),
+                        onShowInfo = onShowInfo
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
 
                 ProjectionMetricRow(
                     label = if (isRealPurchasingPower) "Today's FIRE Target (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)" else "Target at FIRE (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)",
-                    value = if (isRealPurchasingPower) fmtCZK(state.fireBaseTargetToday) else (state.fireDualPoint?.let { "${fmtCZK(it.target)} (${it.year})" } ?: fmtCZK(state.fireBaseTargetToday)),
+                    value = if (isRealPurchasingPower) fmtCZK(state.fireBaseTargetToday) else (activeFirePoint?.let { "${fmtCZK(it.target)} (${it.year})" } ?: fmtCZK(state.fireBaseTargetToday)),
                     info = swrInfo,
                     onShowInfo = onShowInfo
                 )
@@ -639,10 +660,11 @@ private fun SandboxComparison(
 ) {
     val basePassive = state.fireBaseTargetToday * (state.settings.safeWithdrawalRatePct / 100.0) / 12.0
     val scenarioPassive = sandboxState.fireBaseTargetToday * (sandboxState.settings.safeWithdrawalRatePct / 100.0) / 12.0
-    val baseWealth = state.dualTrajectory.lastOrNull()?.totalPortfolio ?: 0.0
-    val scenarioWealth = sandboxState.dualTrajectory.lastOrNull()?.totalPortfolio ?: 0.0
-    val baseAge = state.fireDualPoint?.age
-    val scenarioAge = sandboxState.fireDualPoint?.age
+    val isSingle = state.settings.isSingleHousehold
+    val baseWealth = (if (isSingle) state.singleTrajectory else state.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
+    val scenarioWealth = (if (isSingle) sandboxState.singleTrajectory else sandboxState.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
+    val baseAge = (if (isSingle) state.fireSinglePoint else state.fireDualPoint)?.age
+    val scenarioAge = (if (isSingle) sandboxState.fireSinglePoint else sandboxState.fireDualPoint)?.age
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SandboxComparisonRow(

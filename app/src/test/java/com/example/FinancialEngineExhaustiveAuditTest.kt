@@ -485,4 +485,46 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(6780.0, dps3200.totalAnnualBenefit, 0.001)
         assertEquals("ABOVE SUBSIDY CAP", dps3200.badgeLabel)
     }
+
+    @Test
+    fun `test 12 - two-bucket liquidity bridge and zero balance propagation`() {
+        val zeroPortfolioSettings = defaultSettings.copy(
+            liquidPortfolioCurrent = 0.0,
+            eLiquidPortfolioCurrent = 0.0,
+            dpsBalanceCurrent = 0.0,
+            eDpsBalanceCurrent = 0.0,
+            dipBalanceCurrent = 0.0,
+            eDipBalanceCurrent = 0.0,
+            primaryAge = 34
+        )
+        val state = FinancialEngine.calculate(zeroPortfolioSettings)
+        assertEquals(0.0, state.currentLiquidPortfolio, 0.001)
+        assertEquals(0.0, state.currentPensionPortfolio, 0.001)
+        assertFalse(state.isLiquidBridgeFundedToday)
+        assertTrue(state.liquidBridgeTo60RequiredToday > 0.0)
+        assertEquals(state.liquidBridgeTo60RequiredToday, state.liquidBridgeDeficitToday, 0.001)
+
+        // At exact age 60, bridge deficit should collapse to 0.0
+        val age60Settings = zeroPortfolioSettings.copy(primaryAge = 60)
+        val stateAt60 = FinancialEngine.calculate(age60Settings)
+        assertEquals(0.0, stateAt60.liquidBridgeTo60RequiredToday, 0.001)
+        assertEquals(0.0, stateAt60.liquidBridgeDeficitToday, 0.001)
+        assertTrue(stateAt60.isLiquidBridgeFundedToday)
+
+        // Per-field fallback: a blank (0.0) ledger bucket falls back to settings; filled buckets win.
+        val partialLedger = com.example.data.LedgerEntryEntity(
+            yearMonth = "2026-10",
+            portfolioBalanceAtMonthEnd = 0.0,
+            pensionBalanceAtMonthEnd = 300000.0,
+            emergencyReserveAtMonthEnd = 0.0
+        )
+        val statePartial = FinancialEngine.calculate(
+            settings = defaultSettings,
+            activeLedgerEntry = partialLedger
+        )
+        val expectedLiquid = defaultSettings.liquidPortfolioCurrent +
+            (if (!defaultSettings.isSingleHousehold) defaultSettings.eLiquidPortfolioCurrent else 0.0)
+        assertEquals(expectedLiquid, statePartial.currentLiquidPortfolio, 0.001)
+        assertEquals(300000.0, statePartial.currentPensionPortfolio, 0.001)
+    }
 }

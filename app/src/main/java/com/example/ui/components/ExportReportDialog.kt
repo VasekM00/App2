@@ -68,8 +68,12 @@ fun ExportReportDialog(
         appendLine("• Emergency Reserve: ${fmtCZK(state.settings.emergencyReserveCurrent)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
         appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
-        appendLine("• Projected FIRE Year (Dual): ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
-        appendLine("• Projected FIRE Year (Single): ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+        if (state.settings.isSingleHousehold) {
+            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+        } else {
+            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+        }
         appendLine()
         appendLine("MONTHLY CASH FLOW")
         appendLine("• Václav Net Income: ${fmtCZK(state.currentIncome.vaclavNet)}")
@@ -106,7 +110,7 @@ fun ExportReportDialog(
         appendLine("CZECH TAX & PENSION REFORM")
         appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")
         appendLine("• DIP Annual Tax Saved: ${fmtCZK(state.taxReturnHelper.dipSaving)}")
-        appendLine("• DPS Pension Balance: ${fmtCZK(state.settings.dpsBalanceCurrent + state.settings.eDpsBalanceCurrent)}")
+        appendLine("• DPS Pension Balance: ${fmtCZK(state.settings.dpsBalanceCurrent + if (!state.settings.isSingleHousehold) state.settings.eDpsBalanceCurrent else 0.0)}")
         appendLine("• DPS Statutory Fee Cap: ${String.format(java.util.Locale.ROOT, "%.1f", state.settings.dpsAnnualFeePct)}% p.a.")
         appendLine()
         appendLine("MONTE CARLO STRESS TEST")
@@ -122,7 +126,8 @@ fun ExportReportDialog(
     val csvReportText = remember(state) {
         buildString {
             appendLine("Year,Age,Portfolio CZK,Target CZK,Invested Annual CZK,Status")
-            state.dualTrajectory.forEach { point ->
+            val traj = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory
+            traj.forEach { point ->
                 appendLine("${point.year},${point.age},${point.portfolio.toLong()},${point.target.toLong()},${point.investedAnnual.toLong()},${point.status}")
             }
         }

@@ -50,13 +50,9 @@ fun TwoBucketLiquidityBridgeCard(
     modifier: Modifier = Modifier
 ) {
     val s = state.settings
-    val isSingleHh = s.isSingleHousehold
-    val liquidBal = if (state.currentLiquidPortfolio > 0.0) state.currentLiquidPortfolio else (s.liquidPortfolioCurrent + if (!isSingleHh) s.eLiquidPortfolioCurrent else 0.0)
-    val pensionBal = if (state.currentPensionPortfolio > 0.0) state.currentPensionPortfolio else {
-        val dpsBal = s.dpsBalanceCurrent + if (!isSingleHh) s.eDpsBalanceCurrent else 0.0
-        val dipBal = s.dipBalanceCurrent + if (!isSingleHh) s.eDipBalanceCurrent else 0.0
-        dpsBal + dipBal
-    }
+    // Engine already resolves ledger snapshot vs settings per bucket; display exactly what it used.
+    val liquidBal = state.currentLiquidPortfolio
+    val pensionBal = state.currentPensionPortfolio
     val totalInvestable = liquidBal + pensionBal
 
     val yearsTo60 = max(0, 60 - s.primaryAge)

@@ -1702,6 +1702,8 @@ object FinancialEngine {
         val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
         val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
 
+        // Per-field fallback: the ledger dialog stores blank balance fields as 0.0, so a 0.0 value
+        // means "not entered" and must fall back to settings independently for each bucket.
         val snapLiquid = if (activeLedgerEntry != null && activeLedgerEntry.portfolioBalanceAtMonthEnd > 0.0) {
             activeLedgerEntry.portfolioBalanceAtMonthEnd
         } else {

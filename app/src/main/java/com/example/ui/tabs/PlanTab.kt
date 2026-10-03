@@ -331,13 +331,11 @@ private fun FireRoadmapSubTab(
 ) {
     val scrollState = rememberScrollState()
     val currentYear = state.settings.baseYear
-    val fireYear = state.fireDualPoint?.year ?: (currentYear + 10)
+    val activeFirePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
+    val fireYear = activeFirePoint?.year ?: (currentYear + 10)
     val targetWorth = roundTo10k(state.fireBaseTargetToday)
     val monthlyPassiveIncome = roundTo1k((targetWorth * (state.settings.safeWithdrawalRatePct / 100.0)) / 12.0)
-    val isSingleHh = state.settings.isSingleHousehold
-    val investableNetWorth = state.settings.liquidPortfolioCurrent + (if (!isSingleHh) state.settings.eLiquidPortfolioCurrent else 0.0) +
-            state.settings.dpsBalanceCurrent + (if (!isSingleHh) state.settings.eDpsBalanceCurrent else 0.0) +
-            state.settings.dipBalanceCurrent + (if (!isSingleHh) state.settings.eDipBalanceCurrent else 0.0)
+    val investableNetWorth = state.currentLiquidPortfolio + state.currentPensionPortfolio
 
     val primaryProgress = if (targetWorth > 0) ((investableNetWorth / targetWorth) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
@@ -1455,10 +1453,7 @@ private fun FireMilestonesComparisonCard(
     onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
-    val isSingleHh = state.settings.isSingleHousehold
-    val investableNetWorth = state.settings.liquidPortfolioCurrent + (if (!isSingleHh) state.settings.eLiquidPortfolioCurrent else 0.0) +
-            state.settings.dpsBalanceCurrent + (if (!isSingleHh) state.settings.eDpsBalanceCurrent else 0.0) +
-            state.settings.dipBalanceCurrent + (if (!isSingleHh) state.settings.eDipBalanceCurrent else 0.0)
+    val investableNetWorth = state.currentLiquidPortfolio + state.currentPensionPortfolio
 
     val baristaMilestone = milestones.baristaFire
     val items = buildList {

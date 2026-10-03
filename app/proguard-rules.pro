@@ -16,6 +16,16 @@
 # debugging stack traces.
 -keepattributes SourceFile,LineNumberTable
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Room database, entities, and data structures
+-keepclassmembers class * extends androidx.room.RoomDatabase {
+    public abstract <methods>;
+}
+-keepclassmembers class * {
+    @androidx.room.PrimaryKey *;
+    @androidx.room.ColumnInfo *;
+}
+-keepclassmembers class com.example.data.** { *; }
+-keepclassmembers class com.example.domain.** { *; }
+-keep class com.example.data.** { *; }
+-keep class com.example.domain.** { *; }
+

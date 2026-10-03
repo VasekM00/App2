@@ -91,7 +91,7 @@ fun OverviewTab(
         accentColor = BrandGold
     )
 
-    val firePoint = state.fireDualPoint
+    val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
     val fireAgeInfo = MetricInfo(
         title = "Projected FIRE Horizon",
         category = "Trajectory Milestone",
@@ -191,7 +191,7 @@ fun OverviewTab(
 
         // Net Worth Chart
         NetWorthChart(
-            data = state.dualTrajectory,
+            data = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory,
             cpiInflationPct = state.settings.cpiInflationPct,
             ledgerEntries = ledgerEntries
         )
