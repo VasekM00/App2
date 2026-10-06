@@ -115,14 +115,15 @@ object Formatters {
 
     fun fmtPct(value: Double, digits: Int? = null): String {
         if (value.isNaN() || value.isInfinite()) return "--%"
+        val cleanVal = if (abs(value) < 1e-9) 0.0 else value
         val formatted = if (digits != null) {
-            String.format(czkLocale, "%.${digits.coerceAtLeast(0)}f%%", value)
+            String.format(czkLocale, "%.${digits.coerceAtLeast(0)}f%%", cleanVal)
         } else {
-            val isWhole = abs(value - kotlin.math.round(value)) < 1e-6
+            val isWhole = abs(cleanVal - kotlin.math.round(cleanVal)) < 1e-6
             if (isWhole) {
-                String.format(czkLocale, "%.0f%%", value)
+                String.format(czkLocale, "%.0f%%", cleanVal)
             } else {
-                String.format(czkLocale, "%.1f%%", value)
+                String.format(czkLocale, "%.1f%%", cleanVal)
             }
         }
         return formatted.replace(' ', '\u00A0')

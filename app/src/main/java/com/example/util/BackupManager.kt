@@ -293,6 +293,12 @@ object BackupManager {
         } catch (_: Exception) {
             f.merchantRulesJson
         }
+        fun cleanArrayJson(raw: String, fallback: String): String = try {
+            org.json.JSONArray(raw)
+            raw
+        } catch (_: Exception) {
+            fallback
+        }
         fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
@@ -393,6 +399,10 @@ object BackupManager {
             monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct),
             dividendYieldPct = pct(s.dividendYieldPct, f.dividendYieldPct),
             dividendTaxRatePct = pct(s.dividendTaxRatePct, f.dividendTaxRatePct),
+            customExpensesJson = cleanArrayJson(s.customExpensesJson, f.customExpensesJson),
+            customGoalsJson = cleanArrayJson(s.customGoalsJson, f.customGoalsJson),
+            customLumpSumsJson = cleanArrayJson(s.customLumpSumsJson, f.customLumpSumsJson),
+            deletedCategoriesJson = cleanArrayJson(s.deletedCategoriesJson, f.deletedCategoriesJson),
             merchantRulesJson = cleanMerchantRules,
             emergencyReserveMode = if (s.emergencyReserveMode in setOf("3M", "6M", "9M", "12M", "Target")) s.emergencyReserveMode else f.emergencyReserveMode
         )

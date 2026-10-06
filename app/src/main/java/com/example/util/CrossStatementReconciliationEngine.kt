@@ -215,6 +215,7 @@ object CrossStatementReconciliationEngine {
 
         // 2a. Cross-Statement Pairwise Matcher within current month: Pair debit on Account A with credit on Account B within ±5 days
         val matchedPairs = mutableListOf<MatchedTransferPair>()
+        val pairedWorkingIndices = mutableSetOf<Int>()
         val debits = workingList.filter { it.amount < 0 && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
         val credits = workingList.filter { it.amount > 0 }.toMutableList()
 
@@ -247,11 +248,16 @@ object CrossStatementReconciliationEngine {
                 val creditDate = parseDate(credit.date)!!
                 val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
 
-                val debitIdxInWorking = workingList.indexOfFirst { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
-                val creditIdxInWorking = workingList.indexOfFirst { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
+                val debitIdxInWorking = workingList.indices.firstOrNull { idx ->
+                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
+                } ?: -1
+                val creditIdxInWorking = workingList.indices.firstOrNull { idx ->
+                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
+                } ?: -1
 
                 val reason = "Cross-account transfer: ${debit.bankName} -> ${credit.bankName} ($daysApart d apart)"
                 if (debitIdxInWorking != -1) {
+                    pairedWorkingIndices.add(debitIdxInWorking)
                     workingList[debitIdxInWorking] = workingList[debitIdxInWorking].copy(
                         isNetted = true,
                         category = BankTransactionType.INTERNAL_TRANSFER.name,
@@ -259,6 +265,7 @@ object CrossStatementReconciliationEngine {
                     )
                 }
                 if (creditIdxInWorking != -1) {
+                    pairedWorkingIndices.add(creditIdxInWorking)
                     workingList[creditIdxInWorking] = workingList[creditIdxInWorking].copy(
                         isNetted = true,
                         category = BankTransactionType.INTERNAL_TRANSFER.name,
@@ -312,11 +319,14 @@ object CrossStatementReconciliationEngine {
                 val creditDate = parseDate(credit.date)!!
                 val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
 
-                val debitIdx = workingList.indexOfFirst { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
+                val debitIdx = workingList.indices.firstOrNull { idx ->
+                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
+                } ?: -1
                 val creditIdx = workingBoundary.indexOfFirst { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
 
                 val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
                 if (debitIdx != -1) {
+                    pairedWorkingIndices.add(debitIdx)
                     workingList[debitIdx] = workingList[debitIdx].copy(
                         isNetted = true,
                         category = BankTransactionType.INTERNAL_TRANSFER.name,
@@ -370,11 +380,14 @@ object CrossStatementReconciliationEngine {
                 val debitDate = parseDate(debit.date)!!
                 val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
 
-                val creditIdx = workingList.indexOfFirst { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
+                val creditIdx = workingList.indices.firstOrNull { idx ->
+                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
+                } ?: -1
                 val debitIdx = workingBoundary.indexOfFirst { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
 
                 val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
                 if (creditIdx != -1) {
+                    pairedWorkingIndices.add(creditIdx)
                     workingList[creditIdx] = workingList[creditIdx].copy(
                         isNetted = true,
                         category = BankTransactionType.INTERNAL_TRANSFER.name,
@@ -401,13 +414,8 @@ object CrossStatementReconciliationEngine {
         }
 
         // 3. Compute audit report metrics
-        val singleSideTransfers = workingList.filter { tx ->
-            tx.isNetted && matchedPairs.none {
-                (it.debitTx.id != 0L && it.debitTx.id == tx.id) ||
-                (it.creditTx.id != 0L && it.creditTx.id == tx.id) ||
-                (it.debitTx.date == tx.date && it.debitTx.amount == tx.amount) ||
-                (it.creditTx.date == tx.date && it.creditTx.amount == tx.amount)
-            }
+        val singleSideTransfers = workingList.filterIndexed { idx, tx ->
+            tx.isNetted && idx !in pairedWorkingIndices
         }
 
         val totalNetted = (matchedPairs.sumOf { it.amount } * 2.0) + singleSideTransfers.sumOf { abs(it.amount) }

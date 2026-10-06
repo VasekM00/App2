@@ -153,28 +153,23 @@ class MainViewModel(
         viewModelScope.launch { repository.repairLegacyEmployerContribution() }
         viewModelScope.launch(Dispatchers.IO) { repository.cleanupOrphanedImportedTransactions() }
         viewModelScope.launch(Dispatchers.IO) {
-            val entries = repository.getAllLedgerEntriesDirect()
-            if (entries.isNotEmpty()) {
-                val cur = repository.settingsFlow.first()
-                val isSingle = cur.isSingleHousehold
-                val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
-                val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
-                val toUpdate = mutableListOf<LedgerEntryEntity>()
-                for (e in entries) {
-                    if (e.portfolioBalanceAtMonthEnd <= 0.0 && e.totalNetWorthAtMonthEnd <= 0.0) {
-                        val reserve = if (e.emergencyReserveAtMonthEnd > 0.0) e.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
-                        toUpdate.add(
-                            e.copy(
-                                portfolioBalanceAtMonthEnd = snapLiquid,
-                                pensionBalanceAtMonthEnd = snapPension,
-                                emergencyReserveAtMonthEnd = reserve
-                            )
-                        )
+            if (!importPrefs.getBoolean("legacy_balances_backfilled", false)) {
+                val entries = repository.getAllLedgerEntriesDirect()
+                if (entries.isNotEmpty()) {
+                    val cur = repository.settingsFlow.first()
+                    val isSingle = cur.isSingleHousehold
+                    val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
+                    val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
+                    val toUpdate = mutableListOf<LedgerEntryEntity>()
+                    for (e in entries) {
+                        if (e.portfolioBalanceAtMonthEnd <= 0.0 && e.totalNetWorthAtMonthEnd <= 0.0) {
+                            val reserve = if (e.emergencyReserveAtMonthEnd > 0.0) e.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
+                            toUpdate.add(e.copy(portfolioBalanceAtMonthEnd = snapLiquid, pensionBalanceAtMonthEnd = snapPension, emergencyReserveAtMonthEnd = reserve))
+                        }
                     }
+                    if (toUpdate.isNotEmpty()) repository.updateLedgerEntries(toUpdate)
                 }
-                if (toUpdate.isNotEmpty()) {
-                    repository.updateLedgerEntries(toUpdate)
-                }
+                importPrefs.edit().putBoolean("legacy_balances_backfilled", true).apply()
             }
         }
     }
