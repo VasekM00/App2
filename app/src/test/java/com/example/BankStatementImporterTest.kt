@@ -416,4 +416,56 @@ class BankStatementImporterTest {
         assertEquals(BankTransactionType.GROCERIES, augustTxs[0].category)
         assertEquals(BankTransactionType.GROCERIES, augustTxs[1].category)
     }
+
+    @Test
+    fun testCardRefundsAndExpenseOffsets() {
+        // Albert groceries purchase: 3 000 CZK, Albert refund: 600 CZK
+        // General shopping purchase: 2 500 CZK, Alza refund: 1 000 CZK
+        val csvWithRefunds = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
+            10.09.2026;123456/0800;Albert Česká republika s.r.o.;-3 000,00;CZK;Platba kartou Albert
+            12.09.2026;123456/0800;Albert Česká republika s.r.o.;600,00;CZK;Platba kartou - vrácení částky
+            15.09.2026;987654/0300;Alza.cz a.s.;-2 500,00;CZK;Nákup zboží
+            18.09.2026;987654/0300;Alza.cz a.s.;1 000,00;CZK;Vratka storno nákupu
+        """.trimIndent()
+
+        val summary = BankStatementImporter.parseStatement(csvWithRefunds.byteInputStream(Charsets.UTF_8))
+
+        assertEquals(4, summary.transactions.size)
+        assertEquals(BankTransactionType.GROCERIES, summary.transactions[0].category)
+        assertEquals(-3000.0, summary.transactions[0].amount, 0.01)
+
+        assertEquals(BankTransactionType.GROCERIES, summary.transactions[1].category)
+        assertEquals(600.0, summary.transactions[1].amount, 0.01)
+
+        assertEquals(BankTransactionType.SHOPPING_GOODS, summary.transactions[2].category)
+        assertEquals(-2500.0, summary.transactions[2].amount, 0.01)
+
+        assertEquals(BankTransactionType.SHOPPING_GOODS, summary.transactions[3].category)
+        assertEquals(1000.0, summary.transactions[3].amount, 0.01)
+
+        // Groceries should net to 3000 - 600 = 2400
+        assertEquals(2400.0, summary.expGroceries, 0.01)
+        // Other expenses should net to 2500 - 1000 = 1500
+        assertEquals(1500.0, summary.expOther, 0.01)
+        assertEquals(3900.0, summary.totalExpenses, 0.01)
+    }
+
+    @Test
+    fun testStandaloneRefundExceedingExpensesFlowsToOtherInflows() {
+        // Month where only an Alza refund of 1 500 CZK occurred without other expenses
+        val csvRefundOnly = """
+            Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
+            05.09.2026;987654/0300;Alza.cz a.s.;1 500,00;CZK;Vratka nákupu
+        """.trimIndent()
+
+        val summary = BankStatementImporter.parseStatement(csvRefundOnly.byteInputStream(Charsets.UTF_8))
+
+        assertEquals(1, summary.transactions.size)
+        assertEquals(1500.0, summary.transactions[0].amount, 0.01)
+        assertEquals(0.0, summary.expOther, 0.01)
+        assertEquals(0.0, summary.totalExpenses, 0.01)
+        assertEquals(1500.0, summary.incOther, 0.01)
+        assertEquals(1500.0, summary.totalInflows, 0.01)
+    }
 }

@@ -20,7 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -107,14 +111,15 @@ fun StatementImportReviewDialog(
 
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     val filterLabels = listOf("All (${summary.transactions.size})", "Inflows", "Expenses", "Investments", "Transfers")
+    var searchQuery by remember { mutableStateOf("") }
 
-    val filteredTransactions = remember(selectedFilterIndex, selectedMonthFilter, summary.transactions) {
+    val filteredTransactions = remember(selectedFilterIndex, selectedMonthFilter, searchQuery, summary.transactions) {
         val baseList = if (selectedMonthFilter != null) {
             summary.transactions.filter { it.date.startsWith(selectedMonthFilter!!) }
         } else {
             summary.transactions
         }
-        when (selectedFilterIndex) {
+        val categoryFiltered = when (selectedFilterIndex) {
             1 -> baseList.filter { it.amount > 0 }
             2 -> baseList.filter {
                 it.amount < 0 && it.category != BankTransactionType.INVESTMENT_PORTU &&
@@ -129,6 +134,17 @@ fun StatementImportReviewDialog(
             }
             4 -> baseList.filter { it.category == BankTransactionType.INTERNAL_TRANSFER }
             else -> baseList
+        }
+        if (searchQuery.isBlank()) {
+            categoryFiltered
+        } else {
+            val q = searchQuery.trim().lowercase(java.util.Locale.ROOT)
+            categoryFiltered.filter {
+                it.counterpartyName.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    it.message.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    it.category.name.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    it.date.contains(q)
+            }
         }
     }
 
@@ -702,6 +718,49 @@ fun StatementImportReviewDialog(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            text = "Filter by merchant, note, or date...",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            modifier = Modifier.size(15.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = bankColor,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .testTag("statement_review_search_field")
+                )
 
                 Spacer(modifier = Modifier.height(6.dp))
 

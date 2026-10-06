@@ -764,7 +764,10 @@ object BankStatementImporter {
 
             if (parsed != 0.0) {
                 val lower = text.lowercase(Locale.ROOT)
-                if (parsed > 0 && (lower.contains("odchozí") || lower.contains("debet") || lower.contains("platba kartou") || lower.contains("nákup"))) {
+                val isRefund = lower.contains("vrácení") || lower.contains("vraceni") ||
+                    lower.contains("vratka") || lower.contains("storno") ||
+                    lower.contains("refund")
+                if (parsed > 0 && !isRefund && (lower.contains("odchozí") || lower.contains("debet") || lower.contains("platba kartou") || lower.contains("nákup"))) {
                     if (!rawNum.contains("+") && trailingSign != "+") {
                         parsed = -parsed
                     }
@@ -777,9 +780,12 @@ object BankStatementImporter {
         if (amounts.isEmpty()) {
             val wholeCurrencyRegex = Regex("""(?<!\w)([+-]?\s*(?:\d{1,3}(?:[\s\u00A0]\d{3})+|\d+))\s*(?:CZK|Kč)(?!\w)""")
             val lower = text.lowercase(Locale.ROOT)
+            val isRefund = lower.contains("vrácení") || lower.contains("vraceni") ||
+                lower.contains("vratka") || lower.contains("storno") ||
+                lower.contains("refund")
             for (m in wholeCurrencyRegex.findAll(text)) {
                 var parsed = parseCzechAmount(m.groupValues[1])
-                if (parsed > 0 && (lower.contains("odchozí") || lower.contains("debet") || lower.contains("platba kartou") || lower.contains("nákup"))) {
+                if (parsed > 0 && !isRefund && (lower.contains("odchozí") || lower.contains("debet") || lower.contains("platba kartou") || lower.contains("nákup"))) {
                     parsed = -parsed
                 }
                 if (parsed != 0.0) amounts.add(parsed)
@@ -1642,7 +1648,35 @@ object BankStatementImporter {
             return BankTransactionType.INTERNAL_TRANSFER
         }
 
+        val isExplicitRefund = combinedText.contains("vrácení") || combinedText.contains("vraceni") ||
+            combinedText.contains("vratka") || combinedText.contains("storno") ||
+            combinedText.contains("refund")
+
         if (amount > 0) {
+            val isKnownSalaryOrBenefit = combinedText.contains("rodičov") || combinedText.contains("rodicov") ||
+                combinedText.contains("úřad práce") || combinedText.contains("urad prace") ||
+                combinedText.contains("rodp") || combinedText.contains("úp brno") || combinedText.contains("up brno") ||
+                combinedText.contains("eleonora") || combinedText.contains("uohs") ||
+                combinedText.contains("úřad hosp") || combinedText.contains("urad hosp") ||
+                combinedText.contains("zaměstnavatel") || combinedText.contains("zamestnavatel") ||
+                combinedText.contains("mzda") || Regex("""\bplat\b""").containsMatchIn(combinedText) ||
+                combinedText.contains("výplata") || combinedText.contains("vyplata") ||
+                combinedText.contains("odměna") || combinedText.contains("odmena")
+
+            if (!isKnownSalaryOrBenefit && isExplicitRefund) {
+                val catalogMatch = CzechMerchantCatalog.matchCategory("$counterpartyName $counterpartyAcc $message $rawContext", userOverrides)
+                if (catalogMatch != null) return catalogMatch
+                if (combinedText.contains("albert") || combinedText.contains("billa") || combinedText.contains("lidl") ||
+                    combinedText.contains("tesco") || combinedText.contains("penny") || combinedText.contains("kaufland") ||
+                    combinedText.contains("rohlík") || combinedText.contains("rohlik") || combinedText.contains("košík") ||
+                    combinedText.contains("kosik") || combinedText.contains("globus") || combinedText.contains("jip") ||
+                    combinedText.contains("potraviny") || combinedText.contains("pekarstvi") || combinedText.contains("pekárna") ||
+                    combinedText.contains("pekarna") || combinedText.contains("řeznictví") || combinedText.contains("reznictvi")
+                ) {
+                    return BankTransactionType.GROCERIES
+                }
+            }
+
             return when {
                 combinedText.contains("rodičov") || combinedText.contains("rodicov") || combinedText.contains("úřad práce") || combinedText.contains("urad prace") ||
                         combinedText.contains("rodp") || combinedText.contains("úp brno") || combinedText.contains("up brno") ->
@@ -1760,8 +1794,12 @@ object BankStatementImporter {
                 BankTransactionType.SALARY_ELEONORA -> incEleonora += amt
                 BankTransactionType.PARENTAL_BENEFIT -> incEleonora += amt
                 BankTransactionType.OTHER_INFLOW -> incOther += amt
-                BankTransactionType.HOUSING_RENT -> expRent += kotlin.math.abs(amt)
-                BankTransactionType.GROCERIES -> expGroceries += kotlin.math.abs(amt)
+                BankTransactionType.HOUSING_RENT -> {
+                    if (amt < 0) expRent += -amt else expRent -= amt
+                }
+                BankTransactionType.GROCERIES -> {
+                    if (amt < 0) expGroceries += -amt else expGroceries -= amt
+                }
                 BankTransactionType.LIFESTYLE_LIVING,
                 BankTransactionType.DINING_RESTAURANT,
                 BankTransactionType.TRANSPORTATION,
@@ -1771,15 +1809,40 @@ object BankStatementImporter {
                 BankTransactionType.SERVICES_UTILITIES,
                 BankTransactionType.ATM_CASH,
                 BankTransactionType.CHARITY_DONATION,
-                BankTransactionType.GENERAL_EXPENSE -> expOther += kotlin.math.abs(amt)
-                BankTransactionType.INVESTMENT_PORTU -> invPortu += kotlin.math.abs(amt)
-                BankTransactionType.INVESTMENT_DIP -> invDip += kotlin.math.abs(amt)
-                BankTransactionType.INVESTMENT_DPS -> invDps += kotlin.math.abs(amt)
+                BankTransactionType.GENERAL_EXPENSE -> {
+                    if (amt < 0) expOther += -amt else expOther -= amt
+                }
+                BankTransactionType.INVESTMENT_PORTU -> {
+                    if (amt < 0) invPortu += -amt else invPortu -= amt
+                }
+                BankTransactionType.INVESTMENT_DIP -> {
+                    if (amt < 0) invDip += -amt else invDip -= amt
+                }
+                BankTransactionType.INVESTMENT_DPS -> {
+                    if (amt < 0) invDps += -amt else invDps -= amt
+                }
                 BankTransactionType.UNCATEGORIZED -> {
-                    if (amt > 0) incOther += amt else expOther += kotlin.math.abs(amt)
+                    if (amt > 0) incOther += amt else expOther += -amt
                 }
             }
         }
+
+        // Reconcile any category where refunds exceeded expenses in this single statement
+        if (expRent < 0.0) {
+            incOther += -expRent
+            expRent = 0.0
+        }
+        if (expGroceries < 0.0) {
+            incOther += -expGroceries
+            expGroceries = 0.0
+        }
+        if (expOther < 0.0) {
+            incOther += -expOther
+            expOther = 0.0
+        }
+        if (invPortu < 0.0) invPortu = 0.0
+        if (invDip < 0.0) invDip = 0.0
+        if (invDps < 0.0) invDps = 0.0
 
         val totalInflows = incVaclav + incEleonora + incOther
         val totalExpenses = expRent + expGroceries + expOther

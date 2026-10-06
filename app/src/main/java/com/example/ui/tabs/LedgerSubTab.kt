@@ -338,7 +338,8 @@ internal fun LedgerSubTab(
     onShowAuditReport: ((String) -> Unit)? = null,
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     lastImportTimestamp: Long? = null,
-    onDeleteImportedStatement: ((String, String?) -> Unit)? = null
+    onDeleteImportedStatement: ((String, String?) -> Unit)? = null,
+    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList()
 ) {
     val sortedEntries = remember(entries) {
         entries.sortedByDescending { it.yearMonth }
@@ -779,6 +780,17 @@ internal fun LedgerSubTab(
                         onDeleteImportedStatement = onDeleteImportedStatement,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
+
+                    val monthTransactions = remember(allImportedTransactions, activeEntry.yearMonth) {
+                        allImportedTransactions.filter { it.yearMonth == activeEntry.yearMonth }
+                    }
+                    if (monthTransactions.isNotEmpty()) {
+                        com.example.ui.components.MonthlyTransactionsCard(
+                            yearMonth = activeEntry.yearMonth,
+                            transactions = monthTransactions,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
                 // 6 Months Inflows vs Outflows Visualizer

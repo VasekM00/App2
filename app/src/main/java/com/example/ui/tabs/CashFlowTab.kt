@@ -159,7 +159,8 @@ fun CashFlowTab(
                     onShowAuditReport = onShowAuditReport,
                     importedBankSourcesByMonth = importedBankSourcesByMonth,
                     lastImportTimestamp = lastImportTimestamp,
-                    onDeleteImportedStatement = onDeleteImportedStatement
+                    onDeleteImportedStatement = onDeleteImportedStatement,
+                    allImportedTransactions = allImportedTransactions
                 )
             }
         }
