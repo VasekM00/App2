@@ -525,7 +525,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val diningTotal = summary.transactions.filter { it.category == BankTransactionType.DINING_RESTAURANT }.sumOf { kotlin.math.abs(it.amount) }
+                            val diningTotal = summary.transactions.filter { it.category == BankTransactionType.DINING_RESTAURANT }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (diningTotal > 0) {
                                 ColorPill(
                                     text = "Dining: " + fmtCompact(diningTotal),
@@ -537,7 +537,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val shoppingTotal = summary.transactions.filter { it.category == BankTransactionType.SHOPPING_GOODS }.sumOf { kotlin.math.abs(it.amount) }
+                            val shoppingTotal = summary.transactions.filter { it.category == BankTransactionType.SHOPPING_GOODS }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (shoppingTotal > 0) {
                                 ColorPill(
                                     text = "Shopping: " + fmtCompact(shoppingTotal),
@@ -549,7 +549,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val transportTotal = summary.transactions.filter { it.category == BankTransactionType.TRANSPORTATION }.sumOf { kotlin.math.abs(it.amount) }
+                            val transportTotal = summary.transactions.filter { it.category == BankTransactionType.TRANSPORTATION }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (transportTotal > 0) {
                                 ColorPill(
                                     text = "Transport: " + fmtCompact(transportTotal),
@@ -561,7 +561,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val subsTotal = summary.transactions.filter { it.category == BankTransactionType.SUBSCRIPTIONS_MEDIA }.sumOf { kotlin.math.abs(it.amount) }
+                            val subsTotal = summary.transactions.filter { it.category == BankTransactionType.SUBSCRIPTIONS_MEDIA }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (subsTotal > 0) {
                                 ColorPill(
                                     text = "Subs: " + fmtCompact(subsTotal),
@@ -573,7 +573,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val healthTotal = summary.transactions.filter { it.category == BankTransactionType.HEALTH_DRUGSTORE }.sumOf { kotlin.math.abs(it.amount) }
+                            val healthTotal = summary.transactions.filter { it.category == BankTransactionType.HEALTH_DRUGSTORE }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (healthTotal > 0) {
                                 ColorPill(
                                     text = "Health: " + fmtCompact(healthTotal),
@@ -585,7 +585,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val utilTotal = summary.transactions.filter { it.category == BankTransactionType.SERVICES_UTILITIES }.sumOf { kotlin.math.abs(it.amount) }
+                            val utilTotal = summary.transactions.filter { it.category == BankTransactionType.SERVICES_UTILITIES }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (utilTotal > 0) {
                                 ColorPill(
                                     text = "Utilities: " + fmtCompact(utilTotal),
@@ -597,7 +597,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val atmTotal = summary.transactions.filter { it.category == BankTransactionType.ATM_CASH }.sumOf { kotlin.math.abs(it.amount) }
+                            val atmTotal = summary.transactions.filter { it.category == BankTransactionType.ATM_CASH }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (atmTotal > 0) {
                                 ColorPill(
                                     text = "ATM: " + fmtCompact(atmTotal),
@@ -609,7 +609,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val charityTotal = summary.transactions.filter { it.category == BankTransactionType.CHARITY_DONATION }.sumOf { kotlin.math.abs(it.amount) }
+                            val charityTotal = summary.transactions.filter { it.category == BankTransactionType.CHARITY_DONATION }.sumOf { -it.amount }.coerceAtLeast(0.0)
                             if (charityTotal > 0) {
                                 ColorPill(
                                     text = "Charity: " + fmtCompact(charityTotal),

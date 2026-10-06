@@ -159,13 +159,14 @@ class FinancialRepository(
         ledgerDao.getAllEntriesDirect()
     }
 
-    suspend fun deleteLedgerEntry(id: Long) = withContext(Dispatchers.IO) {
+    suspend fun deleteLedgerEntry(id: Long): String? = withContext(Dispatchers.IO) {
         database.withTransaction {
             val entry = ledgerDao.getEntryById(id)
             ledgerDao.deleteEntry(id)
             if (entry != null) {
                 importedTransactionDao.deleteTransactionsForMonth(entry.yearMonth)
             }
+            entry?.yearMonth
         }
     }
 

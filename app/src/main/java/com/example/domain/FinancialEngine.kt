@@ -506,8 +506,8 @@ object FinancialEngine {
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
         val sy = settings.baseYear
         if (year < sy) return 0.0
-        val growthFactor = if (settings.vSalaryGrowthPct > 0.0) {
-            (1.0 + settings.vSalaryGrowthPct / 100.0).pow(year - sy)
+        val growthFactor = if (settings.vSalaryGrowthPct != 0.0) {
+            (1.0 + settings.vSalaryGrowthPct / 100.0).coerceAtLeast(0.0).pow(year - sy)
         } else 1.0
         return settings.vSalary * growthFactor
     }

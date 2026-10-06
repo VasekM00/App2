@@ -9,6 +9,7 @@ import com.example.util.CzechMerchantCatalog
 import com.example.util.MerchantCategoryManager
 import com.example.util.SubscriptionAuditor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -467,5 +468,57 @@ class ChildCostAndStatementIntelligenceTest {
         assertTrue("Deficit should produce negative freedom days", daysBurned < 0.0)
         val dailyCost = livingCostMonthly / 30.42
         assertEquals(deficitSavings / dailyCost, daysBurned, 0.001)
+    }
+
+    @Test
+    fun testExpenseRefundNetsOutflowCorrectly() {
+        val groceryPurchases = listOf(
+            ImportedBankTransactionEntity(
+                yearMonth = "2026-09",
+                bankName = "MONETA",
+                date = "2026-09-10",
+                amount = -2500.0,
+                category = "GROCERIES"
+            ),
+            ImportedBankTransactionEntity(
+                yearMonth = "2026-09",
+                bankName = "MONETA",
+                date = "2026-09-12",
+                amount = 450.0, // Refund
+                category = "GROCERIES"
+            )
+        )
+        val netGroceries = (-groceryPurchases.sumOf { it.amount }).coerceAtLeast(0.0)
+        assertEquals(2050.0, netGroceries, 0.001)
+    }
+
+    @Test
+    fun testVaclavSalaryMonthlySupportsNegativeGrowth() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            vSalary = 80_000.0,
+            vSalaryGrowthPct = -2.0 // Real decline
+        )
+        val salary2026 = FinancialEngine.vaclavSalaryMonthly(2026, settings)
+        val salary2027 = FinancialEngine.vaclavSalaryMonthly(2027, settings)
+        val salary2028 = FinancialEngine.vaclavSalaryMonthly(2028, settings)
+
+        assertEquals(80_000.0, salary2026, 0.001)
+        assertEquals(80_000.0 * 0.98, salary2027, 0.001)
+        assertEquals(80_000.0 * 0.98 * 0.98, salary2028, 0.001)
+        assertTrue("Salary should decrease under negative growth", salary2028 < salary2027)
+    }
+
+    @Test
+    fun testHighBalanceDoublePrecisionConversion() {
+        val originalBalance = 5_234_567.89
+        // Storing as String preserves exact cents
+        val storedString = originalBalance.toString()
+        val parsedDouble = storedString.toDoubleOrNull()
+        assertEquals(originalBalance, parsedDouble!!, 0.0001)
+
+        // Float conversion loses precision above 1M
+        val asFloat = originalBalance.toFloat().toDouble()
+        assertFalse(kotlin.math.abs(originalBalance - asFloat) < 0.01)
     }
 }

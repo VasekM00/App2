@@ -39,7 +39,15 @@ class MainViewModel(
 
     companion object {
         private const val KEY_PENDING_STATEMENT = "pending_statement_import"
+        private val OTHER_EXPENSE_TYPES = setOf(
+            "LIFESTYLE_LIVING", "DINING_RESTAURANT", "TRANSPORTATION", "SHOPPING_GOODS",
+            "HEALTH_DRUGSTORE", "SUBSCRIPTIONS_MEDIA", "SERVICES_UTILITIES", "ATM_CASH",
+            "CHARITY_DONATION", "GENERAL_EXPENSE"
+        )
     }
+
+    private fun isGeneralExpense(cat: String, amount: Double): Boolean =
+        cat in OTHER_EXPENSE_TYPES || (cat == com.example.util.BankTransactionType.UNCATEGORIZED.name && amount < 0)
 
     // Architectural Note (F-018): Lightweight manual dependency injection.
     // Avoids annotation processor and code-gen overhead of Hilt/Dagger while maintaining clear separation.
@@ -330,7 +338,13 @@ class MainViewModel(
 
     fun deleteLedgerEntry(id: Long) {
         viewModelScope.launch {
-            repository.deleteLedgerEntry(id)
+            val deletedYm = repository.deleteLedgerEntry(id)
+            if (deletedYm != null) {
+                val editor = importPrefs.edit()
+                val prefix = "bank_bal_${deletedYm}_"
+                importPrefs.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
+                editor.apply()
+            }
             _uiEvent.emit(UiMessage.ShowSnackbar("Ledger entry and associated bank transactions deleted"))
         }
     }
@@ -500,13 +514,16 @@ class MainViewModel(
     // Active Cross-Statement Audit Report for transparency
     val activeAuditReport = MutableStateFlow<com.example.util.CrossStatementAuditReport?>(null)
 
+    private fun List<com.example.data.ImportedBankTransactionEntity>.netOutflow(): Double =
+        (-sumOf { it.amount }).coerceAtLeast(0.0)
+
     private fun getStoredBankBalancesForMonth(yearMonth: String): Map<String, Double> {
         val prefix = "bank_bal_${yearMonth}_"
         val map = mutableMapOf<String, Double>()
         importPrefs.all.forEach { (key, value) ->
-            if (key.startsWith(prefix) && value is Number) {
-                val bankName = key.removePrefix(prefix)
-                map[bankName] = value.toDouble()
+            if (key.startsWith(prefix)) {
+                val bal = (value as? Number)?.toDouble() ?: (value as? String)?.toDoubleOrNull()
+                if (bal != null) map[key.removePrefix(prefix)] = bal
             }
         }
         return map
@@ -565,25 +582,13 @@ class MainViewModel(
         val incVaclav = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
         val incEleonora = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
         val incOther = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
-        val expRent = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.sumOf { kotlin.math.abs(it.amount) }
-        val expGroceries = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.sumOf { kotlin.math.abs(it.amount) }
-        val expOther = allMonthTxs.filter { !it.isNetted && (
-            it.category == com.example.util.BankTransactionType.LIFESTYLE_LIVING.name ||
-            it.category == com.example.util.BankTransactionType.DINING_RESTAURANT.name ||
-            it.category == com.example.util.BankTransactionType.TRANSPORTATION.name ||
-            it.category == com.example.util.BankTransactionType.SHOPPING_GOODS.name ||
-            it.category == com.example.util.BankTransactionType.HEALTH_DRUGSTORE.name ||
-            it.category == com.example.util.BankTransactionType.SUBSCRIPTIONS_MEDIA.name ||
-            it.category == com.example.util.BankTransactionType.SERVICES_UTILITIES.name ||
-            it.category == com.example.util.BankTransactionType.ATM_CASH.name ||
-            it.category == com.example.util.BankTransactionType.CHARITY_DONATION.name ||
-            it.category == com.example.util.BankTransactionType.GENERAL_EXPENSE.name ||
-            (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount < 0)
-        ) }.sumOf { kotlin.math.abs(it.amount) }
+        val expRent = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.netOutflow()
+        val expGroceries = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.netOutflow()
+        val expOther = allMonthTxs.filter { !it.isNetted && isGeneralExpense(it.category, it.amount) }.netOutflow()
 
-        val invPortu = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.sumOf { kotlin.math.abs(it.amount) }
-        val invDip = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.sumOf { kotlin.math.abs(it.amount) }
-        val invDps = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.sumOf { kotlin.math.abs(it.amount) }
+        val invPortu = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.netOutflow()
+        val invDip = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.netOutflow()
+        val invDps = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.netOutflow()
         val totalInvested = invPortu + invDip + invDps
 
         val existingEntry = repository.getLedgerEntryByYearMonth(targetYm)
@@ -660,7 +665,7 @@ class MainViewModel(
                 } else emptyList()
 
                 if (summary.monthEndBalance != null && targetYm == latestMonth) {
-                    importPrefs.edit().putFloat("bank_bal_${targetYm}_${summary.detectedBank.name}", summary.monthEndBalance.toFloat()).apply()
+                    importPrefs.edit().putString("bank_bal_${targetYm}_${summary.detectedBank.name}", summary.monthEndBalance.toString()).apply()
                 }
                 val storedBalances = getStoredBankBalancesForMonth(targetYm)
 
@@ -693,25 +698,13 @@ class MainViewModel(
                 val incVaclav = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
                 val incEleonora = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
                 val incOther = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
-                val expRent = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.sumOf { kotlin.math.abs(it.amount) }
-                val expGroceries = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.sumOf { kotlin.math.abs(it.amount) }
-                val expOther = reconciledTxs.filter { !it.isNetted && (
-                    it.category == com.example.util.BankTransactionType.LIFESTYLE_LIVING.name ||
-                    it.category == com.example.util.BankTransactionType.DINING_RESTAURANT.name ||
-                    it.category == com.example.util.BankTransactionType.TRANSPORTATION.name ||
-                    it.category == com.example.util.BankTransactionType.SHOPPING_GOODS.name ||
-                    it.category == com.example.util.BankTransactionType.HEALTH_DRUGSTORE.name ||
-                    it.category == com.example.util.BankTransactionType.SUBSCRIPTIONS_MEDIA.name ||
-                    it.category == com.example.util.BankTransactionType.SERVICES_UTILITIES.name ||
-                    it.category == com.example.util.BankTransactionType.ATM_CASH.name ||
-                    it.category == com.example.util.BankTransactionType.CHARITY_DONATION.name ||
-                    it.category == com.example.util.BankTransactionType.GENERAL_EXPENSE.name ||
-                    (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount < 0)
-                ) }.sumOf { kotlin.math.abs(it.amount) }
+                val expRent = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.netOutflow()
+                val expGroceries = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.netOutflow()
+                val expOther = reconciledTxs.filter { !it.isNetted && isGeneralExpense(it.category, it.amount) }.netOutflow()
 
-                val invPortu = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.sumOf { kotlin.math.abs(it.amount) }
-                val invDip = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.sumOf { kotlin.math.abs(it.amount) }
-                val invDps = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.sumOf { kotlin.math.abs(it.amount) }
+                val invPortu = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.netOutflow()
+                val invDip = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.netOutflow()
+                val invDps = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.netOutflow()
                 val totalInvested = invPortu + invDip + invDps
 
                 // 5. Update or insert LedgerEntryEntity with true reconciled figures
@@ -879,6 +872,7 @@ class MainViewModel(
     fun resetSettingsToDefault() {
         viewModelScope.launch {
             repository.saveSettings(SettingsEntity.freshDefaults())
+            com.example.util.MerchantCategoryManager.clearOverrides(getApplication())
             setSensitivityOverrides(null, null, null)
             _uiEvent.emit(UiMessage.ShowSnackbar("Reset all settings to default"))
         }
@@ -889,8 +883,14 @@ class MainViewModel(
             repository.clearAllData()
             repository.saveSettings(SettingsEntity.freshDefaults())
             setSensitivityOverrides(null, null, null)
+            importPrefs.edit().clear().apply()
+            _lastImportTimestamp.value = null
+            subscriptionPrefs.edit().clear().apply()
+            _dismissedSubscriptionMerchants.value = emptySet()
+            com.example.util.MerchantCategoryManager.clearOverrides(getApplication())
+            setPendingStatementImport(null)
+            activeAuditReport.value = null
             _uiEvent.emit(UiMessage.ShowSnackbar("All user data cleared"))
         }
     }
 }
-
