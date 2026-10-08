@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
@@ -232,6 +233,7 @@ fun SettingsTab(
     var newCategoryName by remember { mutableStateOf("") }
     var newCategoryAmount by remember { mutableStateOf("") }
     var showAddLumpSumDialog by remember { mutableStateOf(false) }
+    var editingLumpSumItem by remember { mutableStateOf<CustomLumpSumItem?>(null) }
     var newLumpSumName by remember { mutableStateOf("") }
     var newLumpSumYear by remember { mutableStateOf("") }
     var newLumpSumMonth by remember { mutableStateOf<Int?>(null) }
@@ -437,6 +439,24 @@ fun SettingsTab(
                                                     )
                                                     IconButton(
                                                         onClick = {
+                                                            editingLumpSumItem = item
+                                                            newLumpSumName = item.name
+                                                            newLumpSumYear = item.year.toString()
+                                                            newLumpSumMonth = item.month
+                                                            newLumpSumAmount = if (item.amount % 1.0 == 0.0) item.amount.toLong().toString() else item.amount.toString()
+                                                            showAddLumpSumDialog = true
+                                                        },
+                                                        modifier = Modifier.size(48.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Edit lump sum",
+                                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
                                                             val updated = customLumpSums.filter { it.id != item.id }
                                                             onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
                                                         },
@@ -459,6 +479,7 @@ fun SettingsTab(
                             Spacer(modifier = Modifier.height(6.dp))
                             OutlinedButton(
                                 onClick = {
+                                    editingLumpSumItem = null
                                     newLumpSumName = ""
                                     newLumpSumYear = "${s.baseYear + 5}"
                                     newLumpSumMonth = null
@@ -1375,8 +1396,16 @@ fun SettingsTab(
             9 to "Sep", 10 to "Oct", 11 to "Nov", 12 to "Dec"
         )
         AlertDialog(
-            onDismissRequest = { showAddLumpSumDialog = false },
-            title = { Text("Add Planned Lump Sum", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+            onDismissRequest = {
+                showAddLumpSumDialog = false
+                editingLumpSumItem = null
+            },
+            title = {
+                Text(
+                    text = if (editingLumpSumItem == null) "Add Planned Lump Sum" else "Edit Planned Lump Sum",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -1445,24 +1474,42 @@ fun SettingsTab(
                         val amt = sanitizedAmt.toDoubleOrNull() ?: 0.0
                         if (amt > 0.0) {
                             val currentList = parseCustomLumpSums(s.customLumpSumsJson)
-                            val updated = currentList + CustomLumpSumItem(
-                                id = UUID.randomUUID().toString(),
-                                name = name,
-                                year = yr,
-                                month = newLumpSumMonth,
-                                amount = amt,
-                                enabled = true
-                            )
+                            val targetItem = editingLumpSumItem
+                            val updated = if (targetItem != null) {
+                                currentList.map {
+                                    if (it.id == targetItem.id) {
+                                        it.copy(
+                                            name = name,
+                                            year = yr,
+                                            month = newLumpSumMonth,
+                                            amount = amt
+                                        )
+                                    } else it
+                                }
+                            } else {
+                                currentList + CustomLumpSumItem(
+                                    id = UUID.randomUUID().toString(),
+                                    name = name,
+                                    year = yr,
+                                    month = newLumpSumMonth,
+                                    amount = amt,
+                                    enabled = true
+                                )
+                            }
                             onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
                         }
                         showAddLumpSumDialog = false
+                        editingLumpSumItem = null
                     }
                 ) {
-                    Text("Add Lump Sum")
+                    Text(if (editingLumpSumItem == null) "Add Lump Sum" else "Save Changes")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddLumpSumDialog = false }) {
+                TextButton(onClick = {
+                    showAddLumpSumDialog = false
+                    editingLumpSumItem = null
+                }) {
                     Text("Cancel")
                 }
             }

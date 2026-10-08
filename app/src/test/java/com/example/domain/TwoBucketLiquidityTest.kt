@@ -197,5 +197,35 @@ class TwoBucketLiquidityTest {
         assertEquals(3000000.0, fullState.currentLiquidPortfolio, 0.01)
         assertEquals(1500000.0, fullState.currentPensionPortfolio, 0.01)
     }
+
+    @Test
+    fun testLiquidBridgeRequiredAtFutureYearAccountsForInflation() {
+        val settings = SettingsEntity(
+            primaryAge = 40,
+            rentMonthly = 20000.0,
+            groceriesMonthly = 15000.0,
+            child1Enabled = false,
+            child2Enabled = false,
+            portfolioNominalReturnPct = 8.0,
+            cpiInflationPct = 3.0,
+            isSingleHousehold = true
+        )
+
+        val points = FinancialEngine.buildLiquidPortfolio(settings, dualIncome = false)
+        // Point at index 5 (year = baseYear + 5, age = 45)
+        val p5 = points[5]
+        assertEquals(settings.baseYear + 5, p5.year)
+        assertEquals(45, p5.age)
+
+        val yearsTo60 = 60 - p5.age // 15 years
+        val yearsElapsed = p5.year - settings.baseYear // 5 years
+        val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).pow(yearsElapsed)
+        val expectedLivingAtP5 = FinancialEngine.totalLivingCostMonthly(settings, p5.year) * 12.0 * inflationFactor
+        val rReal = (settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0
+        val expectedPv = expectedLivingAtP5 * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+
+        assertEquals(expectedPv, p5.liquidBridgeTo60Required, 1.0)
+        assertTrue(p5.liquidBridgeTo60Required > 0.0)
+    }
 }
 

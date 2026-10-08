@@ -264,4 +264,45 @@ class DataLayerIntegrityTest {
 
         assertEquals("Serialized and parsed custom lump sums should match original", originalList, parsed)
     }
+
+    // 2.14: Custom lump sums sorted chronologically by date (year then month)
+    @Test
+    fun test2_14_customLumpSumsSortedChronologicallyByDate() {
+        // Items created out of order: 2038, 2028 Nov, 2028 Jan, 2028 full year, 2030
+        val outOfOrderList = listOf(
+            CustomLumpSumItem(id = "l1", name = "Future Sale", year = 2038, month = null, amount = 1000000.0),
+            CustomLumpSumItem(id = "l2", name = "Winter Bonus", year = 2028, month = 11, amount = 100000.0),
+            CustomLumpSumItem(id = "l3", name = "New Year Gift", year = 2028, month = 1, amount = 50000.0),
+            CustomLumpSumItem(id = "l4", name = "Annual Dividend", year = 2028, month = null, amount = 75000.0),
+            CustomLumpSumItem(id = "l5", name = "Midterm Inflow", year = 2030, month = 6, amount = 200000.0)
+        )
+        val serialized = serializeCustomLumpSums(outOfOrderList)
+        val parsed = parseCustomLumpSums(serialized)
+
+        assertEquals(5, parsed.size)
+        // 1st: 2028 month null (month 0)
+        assertEquals("l4", parsed[0].id)
+        assertEquals(2028, parsed[0].year)
+        assertEquals(null, parsed[0].month)
+
+        // 2nd: 2028 month 1
+        assertEquals("l3", parsed[1].id)
+        assertEquals(2028, parsed[1].year)
+        assertEquals(1, parsed[1].month)
+
+        // 3rd: 2028 month 11
+        assertEquals("l2", parsed[2].id)
+        assertEquals(2028, parsed[2].year)
+        assertEquals(11, parsed[2].month)
+
+        // 4th: 2030 month 6
+        assertEquals("l5", parsed[3].id)
+        assertEquals(2030, parsed[3].year)
+        assertEquals(6, parsed[3].month)
+
+        // 5th: 2038 month null
+        assertEquals("l1", parsed[4].id)
+        assertEquals(2038, parsed[4].year)
+        assertEquals(null, parsed[4].month)
+    }
 }

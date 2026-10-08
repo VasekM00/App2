@@ -180,15 +180,16 @@ fun parseCustomLumpSums(jsonStr: String): List<CustomLumpSumItem> {
                 )
             )
         }
-        list
+        list.sortedWith(compareBy({ it.year }, { it.month ?: 0 }, { it.name }, { it.id }))
     } catch (_: Exception) {
         emptyList()
     }
 }
 
 fun serializeCustomLumpSums(items: List<CustomLumpSumItem>): String {
+    val sortedItems = items.sortedWith(compareBy({ it.year }, { it.month ?: 0 }, { it.name }, { it.id }))
     val array = org.json.JSONArray()
-    items.forEach { item ->
+    sortedItems.forEach { item ->
         val obj = org.json.JSONObject()
         obj.put("id", item.id)
         obj.put("name", item.name)
@@ -917,11 +918,13 @@ object FinancialEngine {
             val gap = t - totalBal
 
             val yearsTo60 = max(0, 60 - age)
-            val annualLiving = totalLivingCostMonthly(settings) * 12.0
+            val yearsElapsed = (year + 1) - sy
+            val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.0).pow(yearsElapsed)
+            val annualLivingAtYear = totalLivingCostMonthly(settings, year + 1) * 12.0 * inflationFactor
             val bridgeReq = if (yearsTo60 == 0) 0.0 else if (rReal > 0.001) {
-                annualLiving * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+                annualLivingAtYear * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
             } else {
-                annualLiving * yearsTo60
+                annualLivingAtYear * yearsTo60
             }
             val bridgeFunded = if (yearsTo60 == 0) true else bal >= bridgeReq
 
