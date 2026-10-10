@@ -393,114 +393,103 @@ class MainViewModel(
         }
     }
 
-    fun importCsvData(uri: android.net.Uri) {
+    fun importStatements(uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val contentResolver = getApplication<Application>().contentResolver
-                val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
-                val reportedSize = pfd?.use { it.statSize } ?: -1L
-                if (reportedSize > com.example.util.BankStatementImporter.MAX_STATEMENT_BYTES) {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("Statement file is too large (max 25 MB)"))
-                    return@launch
-                }
+                val byteList = mutableListOf<ByteArray>()
+                var hasOversized = false
 
-                val inputStream = contentResolver.openInputStream(uri)
-                if (inputStream == null) {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("Error: Unable to open statement file"))
-                    return@launch
-                }
-                val maxAllowed = com.example.util.BankStatementImporter.MAX_STATEMENT_BYTES
-                val bytes = inputStream.use { stream ->
-                    val buffer = java.io.ByteArrayOutputStream()
-                    val chunk = ByteArray(16384)
-                    var total = 0
-                    while (true) {
-                        val count = stream.read(chunk)
-                        if (count <= 0) break
-                        total += count
-                        if (total > maxAllowed) return@use null
-                        buffer.write(chunk, 0, count)
+                for (uri in uris) {
+                    val bytes = com.example.util.BankStatementImporter.readUriBytes(contentResolver, uri)
+                    if (bytes != null) {
+                        byteList.add(bytes)
+                    } else {
+                        hasOversized = true
                     }
-                    buffer.toByteArray()
                 }
 
-                if (bytes == null || !com.example.util.BankStatementImporter.isWithinSizeLimit(bytes.size)) {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("Statement file is too large (max 25 MB)"))
+                if (byteList.isEmpty()) {
+                    val msg = if (hasOversized) "Statement file is too large (max 25 MB)" else "Error: Unable to open statement file"
+                    _uiEvent.emit(UiMessage.ShowSnackbar(msg))
                     return@launch
                 }
 
-                // 1. Try bank statement parser first (Moneta, CSOB, mBank) - supports PDF and CSV
-                try {
-                    val settingsRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson)
-                    val prefOverrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication())
-                    val overrides = prefOverrides + settingsRules
-                    val bankSummary = com.example.util.BankStatementImporter.parseStatement(
-                        bytes.inputStream(),
-                        userOverrides = overrides
-                    )
-                    if (bankSummary.detectedBank != com.example.util.BankType.GENERIC && bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
-                        setPendingStatementImport(bankSummary)
-                        return@launch
-                    }
-                } catch (_: Exception) {
-                    // Fall back to standard ledger CSV format below
+                // 1. Try bank statement parser first (batch or single)
+                val settingsRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson)
+                val prefOverrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication())
+                val overrides = prefOverrides + settingsRules
+                val parsedSummaries = mutableListOf<com.example.util.StatementParseSummary>()
+
+                for (bytes in byteList) {
+                    try {
+                        val bankSummary = com.example.util.BankStatementImporter.parseStatement(
+                            bytes.inputStream(),
+                            userOverrides = overrides
+                        )
+                        if (bankSummary.detectedBank != com.example.util.BankType.GENERIC && bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
+                            parsedSummaries.add(bankSummary)
+                        }
+                    } catch (_: Exception) {}
                 }
 
-                // 2. Standard monthly ledger CSV format fallback
-                val existingYearMonths = repository.existingYearMonths()
-                val entriesToInsert = mutableListOf<LedgerEntryEntity>()
-                var skippedDuplicates = 0
-                java.io.BufferedReader(java.io.InputStreamReader(bytes.inputStream())).use { reader ->
-                    var line: String? = reader.readLine() // Skip header
-                    while (run { line = reader.readLine(); line } != null) {
-                        val rawLine = line!!.trim()
-                        if (rawLine.isBlank()) continue
-                        val tokens = parseCsvLine(rawLine)
-                        if (tokens.size >= 6) {
-                            val ym = tokens[0].trim()
-                            val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
-                            val incE = tokens[2].trim().toDoubleOrNull() ?: 0.0
-                            val incExtra = if (tokens.size >= 8) tokens[3].trim().toDoubleOrNull() ?: 0.0 else 0.0
-                            val expR = if (tokens.size >= 8) tokens[4].trim().toDoubleOrNull() ?: 0.0 else tokens[3].trim().toDoubleOrNull() ?: 0.0
-                            val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
-                            val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
-                            val notes = tokens.last().trim()
-                            if (ym.isNotEmpty() && ym.matches(Regex("""\d{4}-\d{2}"""))) {
-                                if (ym in existingYearMonths) {
-                                    skippedDuplicates++
-                                } else {
-                                    entriesToInsert.add(
-                                        LedgerEntryEntity(
-                                            yearMonth = ym,
-                                            incVaclav = incV,
-                                            incEleonora = incE,
-                                            incUnforeseen = incExtra,
-                                            expRent = expR,
-                                            expGroceries = expG + expO,
-                                            expOther = 0.0,
-                                            notes = notes
-                                        )
-                                    )
+                if (parsedSummaries.isNotEmpty()) {
+                    val consolidated = com.example.util.BankStatementImporter.mergeSummaries(parsedSummaries)
+                    setPendingStatementImport(consolidated)
+                    return@launch
+                }
+
+                // 2. Standard monthly ledger CSV format fallback (only if single file)
+                if (byteList.size == 1) {
+                    val existingYearMonths = repository.existingYearMonths()
+                    val entriesToInsert = mutableListOf<LedgerEntryEntity>()
+                    var skippedDuplicates = 0
+                    java.io.BufferedReader(java.io.InputStreamReader(byteList[0].inputStream())).use { reader ->
+                        var line: String? = reader.readLine()
+                        while (run { line = reader.readLine(); line } != null) {
+                            val rawLine = line!!.trim()
+                            if (rawLine.isBlank()) continue
+                            val tokens = parseCsvLine(rawLine)
+                            if (tokens.size >= 6) {
+                                val ym = tokens[0].trim()
+                                val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
+                                val incE = tokens[2].trim().toDoubleOrNull() ?: 0.0
+                                val incExtra = if (tokens.size >= 8) tokens[3].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                                val expR = if (tokens.size >= 8) tokens[4].trim().toDoubleOrNull() ?: 0.0 else tokens[3].trim().toDoubleOrNull() ?: 0.0
+                                val expG = if (tokens.size >= 8) tokens[5].trim().toDoubleOrNull() ?: 0.0 else tokens[4].trim().toDoubleOrNull() ?: 0.0
+                                val expO = if (tokens.size >= 8) tokens[6].trim().toDoubleOrNull() ?: 0.0 else if (tokens.size >= 7) tokens[5].trim().toDoubleOrNull() ?: 0.0 else 0.0
+                                val notes = tokens.last().trim()
+                                if (ym.isNotEmpty() && ym.matches(Regex("""\d{4}-\d{2}"""))) {
+                                    if (ym in existingYearMonths) {
+                                        skippedDuplicates++
+                                    } else {
+                                        entriesToInsert.add(LedgerEntryEntity(yearMonth = ym, incVaclav = incV, incEleonora = incE, incUnforeseen = incExtra, expRent = expR, expGroceries = expG + expO, expOther = 0.0, notes = notes))
+                                    }
                                 }
                             }
                         }
                     }
+                    if (entriesToInsert.isNotEmpty()) {
+                        repository.addLedgerEntries(entriesToInsert)
+                        val dupNote = if (skippedDuplicates > 0) " ($skippedDuplicates duplicate months skipped)" else ""
+                        _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${entriesToInsert.size} entries!$dupNote"))
+                        return@launch
+                    } else if (skippedDuplicates > 0) {
+                        _uiEvent.emit(UiMessage.ShowSnackbar("All $skippedDuplicates entries already exist - nothing imported"))
+                        return@launch
+                    }
                 }
-                if (entriesToInsert.isNotEmpty()) {
-                    repository.addLedgerEntries(entriesToInsert)
-                    val dupNote = if (skippedDuplicates > 0) " ($skippedDuplicates duplicate months skipped)" else ""
-                    _uiEvent.emit(UiMessage.ShowSnackbar("Successfully imported ${entriesToInsert.size} entries!$dupNote"))
-                } else if (skippedDuplicates > 0) {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("All $skippedDuplicates entries already exist - nothing imported"))
-                } else {
-                    _uiEvent.emit(UiMessage.ShowSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV."))
-                }
+
+                _uiEvent.emit(UiMessage.ShowSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV."))
             } catch (e: Exception) {
                 e.printStackTrace()
                 _uiEvent.emit(UiMessage.ShowSnackbar("Statement import failed: ${e.localizedMessage ?: "Invalid format"}"))
             }
         }
     }
+
+    fun importCsvData(uri: android.net.Uri) = importStatements(listOf(uri))
 
     // Active Cross-Statement Audit Report for transparency
     val activeAuditReport = MutableStateFlow<com.example.util.CrossStatementAuditReport?>(null)

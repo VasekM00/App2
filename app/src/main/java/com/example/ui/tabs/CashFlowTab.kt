@@ -56,6 +56,7 @@ fun CashFlowTab(
     onUpdateLedgerEntry: (LedgerEntryEntity) -> Unit = {},
     onDeleteLedgerEntry: (Long) -> Unit,
     onImportCsv: (Uri) -> Unit = {},
+    onImportStatements: (List<Uri>) -> Unit = { uris -> uris.firstOrNull()?.let(onImportCsv) },
     pendingStatementImport: StatementParseSummary? = null,
     onConfirmStatementImport: (StatementParseSummary) -> Unit = {},
     onDismissStatementImport: () -> Unit = {},
@@ -84,9 +85,11 @@ fun CashFlowTab(
         "*/*"
     )
     val csvLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let { onImportCsv(it) }
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            onImportStatements(uris)
+        }
     }
 
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }

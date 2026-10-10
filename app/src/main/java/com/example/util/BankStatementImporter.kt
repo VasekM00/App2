@@ -1,5 +1,7 @@
 package com.example.util
 
+import android.content.ContentResolver
+import android.net.Uri
 import com.example.data.LedgerEntryEntity
 import java.io.InputStream
 import java.nio.charset.Charset
@@ -1976,6 +1978,64 @@ object BankStatementImporter {
         }
         tokens.add(sb.toString().trim())
         return tokens
+    }
+
+    fun readUriBytes(contentResolver: ContentResolver, uri: Uri): ByteArray? {
+        return try {
+            val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
+            val reportedSize = pfd?.use { it.statSize } ?: -1L
+            if (reportedSize > MAX_STATEMENT_BYTES) return null
+
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            inputStream.use { stream ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(16384)
+                var total = 0
+                while (true) {
+                    val count = stream.read(chunk)
+                    if (count <= 0) break
+                    total += count
+                    if (total > MAX_STATEMENT_BYTES) return null
+                    buffer.write(chunk, 0, count)
+                }
+                val result = buffer.toByteArray()
+                if (isWithinSizeLimit(result.size)) result else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun mergeSummaries(summaries: List<StatementParseSummary>): StatementParseSummary {
+        if (summaries.isEmpty()) return emptySummary(BankType.GENERIC)
+        if (summaries.size == 1) return summaries[0]
+
+        val allTransactions = summaries.flatMap { it.transactions }
+        val seen = mutableSetOf<String>()
+        val uniqueTxs = mutableListOf<ParsedBankTransaction>()
+        for (tx in allTransactions) {
+            val key = "${tx.date}|${tx.amount}|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
+            if (seen.add(key)) {
+                uniqueTxs.add(tx)
+            }
+        }
+
+        val sortedTxs = uniqueTxs.sortedWith(compareBy({ it.date }, { it.amount }))
+        val banks = summaries.map { it.detectedBank }.distinct()
+        val bankType = if (banks.size == 1) banks[0] else BankType.GENERIC
+
+        val yearMonths = summaries.map { it.yearMonth }.filter { it.matches(Regex("""\d{4}-\d{2}""")) }.distinct().sorted()
+        val latestYm = yearMonths.lastOrNull() ?: summaries.first().yearMonth
+        val latestBalance = summaries.lastOrNull { it.monthEndBalance != null }?.monthEndBalance
+
+        return buildSummary(
+            bankType = bankType,
+            transactions = sortedTxs,
+            monthEndBalance = latestBalance,
+            forcedYearMonth = latestYm
+        ).copy(
+            isPdfSource = summaries.any { it.isPdfSource }
+        )
     }
 
     private fun emptySummary(bankType: BankType): StatementParseSummary {

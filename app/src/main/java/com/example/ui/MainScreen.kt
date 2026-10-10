@@ -361,6 +361,7 @@ fun MainScreen(
                                 },
                                 onDeleteLedgerEntry = { id -> viewModel.deleteLedgerEntry(id) },
                                 onImportCsv = { uri -> viewModel.importCsvData(uri) },
+                                onImportStatements = { uris -> viewModel.importStatements(uris) },
                                 pendingStatementImport = pendingStatementImport,
                                 onConfirmStatementImport = { summary -> viewModel.confirmStatementImport(summary) },
                                 onDismissStatementImport = { viewModel.dismissStatementImport() },

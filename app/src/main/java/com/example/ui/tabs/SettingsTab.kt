@@ -725,11 +725,43 @@ fun SettingsTab(
                                 value = s.emergencyReserveCurrent,
                                 onValueChange = { onUpdateSettings(s.copy(emergencyReserveCurrent = it)) }
                             )
-                            NumberSettingField(
-                                label = "Target Reserve Threshold",
-                                value = s.emergencyReserveTarget,
-                                onValueChange = { onUpdateSettings(s.copy(emergencyReserveTarget = it)) }
-                            )
+                            if (s.emergencyReserveMode == "Target") {
+                                NumberSettingField(
+                                    label = "Target Reserve Threshold (Manual)",
+                                    value = s.emergencyReserveTarget,
+                                    onValueChange = { onUpdateSettings(s.copy(emergencyReserveTarget = it)) }
+                                )
+                            } else {
+                                val dynamicTarget = FinancialEngine.effectiveEmergencyReserveTarget(s)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "Dynamic Reserve Target (${s.emergencyReserveMode})",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                                            )
+                                            Text(
+                                                text = "${s.emergencyReserveMode.removeSuffix("M")} months of baseline living costs",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Text(
+                                            text = fmtCZK(dynamicTarget),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        )
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Runway Calculation Mode",

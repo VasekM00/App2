@@ -402,7 +402,10 @@ data class FullCalculationState(
     val isLiquidBridgeFundedToday: Boolean = true,
     val liquidBridgeDeficitToday: Double = 0.0,
     val currentLiquidPortfolio: Double = 0.0,
-    val currentPensionPortfolio: Double = 0.0
+    val currentPensionPortfolio: Double = 0.0,
+    val effectiveEmergencyReserveTargetToday: Double = 0.0,
+    val isEmergencyReserveFundedToday: Boolean = true,
+    val emergencyReserveSurplusOrDeficitToday: Double = 0.0
 )
 
 object FinancialEngine {
@@ -820,6 +823,19 @@ object FinancialEngine {
         if (portfolioBalance <= 0.0 || monthlyLivingCost <= 0.0) return 0.0
         val dailyBurn = monthlyLivingCost / 30.42
         return if (dailyBurn > 0.0) portfolioBalance / dailyBurn else 0.0
+    }
+
+    fun effectiveEmergencyReserveTarget(settings: SettingsEntity): Double {
+        val livingCostTotal = totalLivingCostMonthly(settings)
+        val raw = when (settings.emergencyReserveMode) {
+            "3M" -> livingCostTotal * 3.0
+            "6M" -> livingCostTotal * 6.0
+            "9M" -> livingCostTotal * 9.0
+            "12M" -> livingCostTotal * 12.0
+            "Target" -> if (settings.emergencyReserveTarget > 0.0) settings.emergencyReserveTarget else livingCostTotal * 6.0
+            else -> if (settings.emergencyReserveTarget > 0.0) settings.emergencyReserveTarget else livingCostTotal * 6.0
+        }
+        return (kotlin.math.round(raw / 1_000.0) * 1_000.0).coerceAtLeast(1_000.0)
     }
 
     fun baseInvestMonthly(settings: SettingsEntity): Double {
@@ -1747,6 +1763,9 @@ object FinancialEngine {
         val investMonthly = baseInvestMonthly(settings)
         val livingCostTotal = totalLivingCostMonthly(settings)
         val emergencyMonths = if (livingCostTotal > 0) max(0.0, settings.emergencyReserveCurrent / livingCostTotal) else 0.0
+        val effectiveReserveTarget = effectiveEmergencyReserveTarget(settings)
+        val isReserveFunded = snapReserve >= effectiveReserveTarget
+        val reserveSurplusOrDeficit = snapReserve - effectiveReserveTarget
 
         val dps = buildDpsProjection(settings)
         val dip = buildDipProjection(settings)
@@ -1828,7 +1847,7 @@ object FinancialEngine {
             "ac5" to max(0.0, dip.taxSavedYear),
             "ac6" to (if (!settings.isSingleHousehold) settings.eStartingSalary * 12.0 * (settings.eReinvestedPct / 100.0) else 0.0),
             "ac8" to (settings.subscriptionsMonthly * 12.0),
-            "ac9" to max(0.0, snapReserve - settings.emergencyReserveTarget),
+            "ac9" to max(0.0, snapReserve - effectiveReserveTarget),
             "ac10" to (snapPension * 0.005)
         )
 
@@ -2005,7 +2024,10 @@ object FinancialEngine {
             isLiquidBridgeFundedToday = bridgeFundedToday,
             liquidBridgeDeficitToday = bridgeDeficitToday,
             currentLiquidPortfolio = snapLiquid,
-            currentPensionPortfolio = snapPension
+            currentPensionPortfolio = snapPension,
+            effectiveEmergencyReserveTargetToday = effectiveReserveTarget,
+            isEmergencyReserveFundedToday = isReserveFunded,
+            emergencyReserveSurplusOrDeficitToday = reserveSurplusOrDeficit
         )
     }
 }
