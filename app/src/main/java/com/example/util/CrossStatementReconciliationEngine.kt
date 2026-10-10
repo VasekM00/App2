@@ -53,7 +53,8 @@ object CrossStatementReconciliationEngine {
     private val EXTERNAL_INCOME_CATEGORIES = setOf(
         BankTransactionType.SALARY_VACLAV.name,
         BankTransactionType.SALARY_ELEONORA.name,
-        BankTransactionType.PARENTAL_BENEFIT.name
+        BankTransactionType.PARENTAL_BENEFIT.name,
+        BankTransactionType.OTHER_INFLOW.name
     )
 
     fun computeFingerprint(

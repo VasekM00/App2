@@ -536,7 +536,7 @@ object FinancialEngine {
         if (!hasChildren) return 0.0
 
         val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear, settings) else 0.0) +
-                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
+                (if (settings.child2Enabled && year >= settings.child2BirthYear) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
 
         // Calculate cumulative benefits drawn in prior years
         var cumulativeDrawn = 0.0
@@ -574,7 +574,7 @@ object FinancialEngine {
         if (!hasChildren) return 0.0
 
         val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear, settings) else 0.0) +
-                (if (settings.child2Enabled) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
+                (if (settings.child2Enabled && year >= settings.child2BirthYear) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
 
         var cumulativeDrawnBeforeThisYear = 0.0
         for (y in settings.baseYear until year) {
@@ -1460,11 +1460,12 @@ object FinancialEngine {
 
             var depletedAge: Int? = null
             var guardrailTriggeredInPath = false
+            var spendingScale = 1.0
             for (k in 0 until horizon) {
                 val year = fireYear + k
                 val age = baseAge + (year - baseYear)
                 val indexation = (1.0 + cpi).pow((year - baseYear).coerceAtLeast(0))
-                val lifestyleAnnual = lifestyleToday * 12.0 * indexation
+                val lifestyleAnnual = lifestyleToday * 12.0 * indexation * spendingScale
                 var pensionAnnual = 0.0
                 if (age >= settings.vStatePensionAge) pensionAnnual += vPensionToday * 12.0 * indexation
                 if (!settings.isSingleHousehold && age >= settings.eStatePensionAge) {
@@ -1478,12 +1479,15 @@ object FinancialEngine {
                     if (currentWithdrawalRate > targetSwr * 1.20) {
                         // Upper Guardrail (Capital Preservation Rule):
                         // Reduce discretionary spending by 10%, protected by a 70% essential floor
-                        val essentialFloor = lifestyleAnnual * 0.70 - pensionAnnual
-                        need = max(max(0.0, essentialFloor), need * 0.90)
+                        spendingScale = (spendingScale * 0.90).coerceAtLeast(0.70)
+                        val adjustedLifestyle = lifestyleToday * 12.0 * indexation * spendingScale
+                        need = max(0.0, adjustedLifestyle - pensionAnnual)
                         guardrailTriggeredInPath = true
                     } else if (currentWithdrawalRate < targetSwr * 0.80) {
                         // Lower Guardrail (Prosperity Rule): boost spending by 10%
-                        need = need * 1.10
+                        spendingScale = min(1.20, spendingScale * 1.10)
+                        val adjustedLifestyle = lifestyleToday * 12.0 * indexation * spendingScale
+                        need = max(0.0, adjustedLifestyle - pensionAnnual)
                     }
                 }
 
@@ -1852,7 +1856,7 @@ object FinancialEngine {
         val coastPoint = if (coastAchieved) dual.firstOrNull() else if (realReturnRate > 0.0) dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
             val futureTarget = coastTarget * cpiCompounding.pow(yDiff)
-            point.portfolio >= futureTarget
+            point.totalPortfolio >= futureTarget
         } else null
         val coastMilestone = FireMilestone(
             id = "coast",
@@ -1879,7 +1883,7 @@ object FinancialEngine {
         val baristaPoint = if (baristaAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
             val futureTarget = baristaTarget * cpiCompounding.pow(yDiff)
-            point.portfolio >= futureTarget
+            point.totalPortfolio >= futureTarget
         }
         val baristaMilestone = FireMilestone(
             id = "barista",
@@ -1902,7 +1906,7 @@ object FinancialEngine {
         val leanPoint = if (leanAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
             val futureTarget = leanTarget * cpiCompounding.pow(yDiff)
-            point.portfolio >= futureTarget
+            point.totalPortfolio >= futureTarget
         }
         val leanMilestone = FireMilestone(
             id = "lean",
@@ -1944,7 +1948,7 @@ object FinancialEngine {
         val fatPoint = if (fatAchieved) dual.firstOrNull() else dual.firstOrNull { point ->
             val yDiff = point.year - settings.baseYear
             val futureTarget = fatTarget * cpiCompounding.pow(yDiff)
-            point.portfolio >= futureTarget
+            point.totalPortfolio >= futureTarget
         }
         val fatMilestone = FireMilestone(
             id = "fat",

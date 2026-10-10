@@ -1674,7 +1674,11 @@ private fun NumberSettingField(
         val sanitized = textValue.replace(',', '.').trim()
         val parsed = if (sanitized.isEmpty()) 0.0 else sanitized.toDoubleOrNull()
         if (parsed != null) {
-            val clamped = parsed.coerceIn(minValue, maxValue ?: parsed)
+            val clamped = if (maxValue != null) {
+                parsed.coerceIn(minValue, maxValue)
+            } else {
+                parsed.coerceAtLeast(minValue)
+            }
             if (clamped != value) {
                 onValueChange(clamped)
             }

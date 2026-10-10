@@ -1278,7 +1278,7 @@ private fun TrajectoryMilestonesTable(
             trajectory
         } else {
             trajectory.mapIndexed { idx, pt ->
-                val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                val discount = (1.0 + (cpiInflationPct / 100.0)).coerceAtLeast(0.0001).pow(idx.toDouble())
                 val discPort = pt.portfolio / discount
                 val discPension = pt.pensionPortfolio / discount
                 pt.copy(

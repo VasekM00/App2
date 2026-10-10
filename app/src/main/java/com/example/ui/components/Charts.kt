@@ -117,7 +117,7 @@ fun NetWorthChart(
             data
         } else {
             data.mapIndexed { idx, pt ->
-                val discount = (1.0 + (cpiInflationPct / 100.0)).pow(idx.toDouble())
+                val discount = (1.0 + (cpiInflationPct / 100.0)).coerceAtLeast(0.0001).pow(idx.toDouble())
                 val discPort = pt.portfolio / discount
                 val discPension = pt.pensionPortfolio / discount
                 pt.copy(
@@ -320,7 +320,7 @@ fun NetWorthChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(displayData, zoomScale) {
+                        .pointerInput(displayData) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
                                 val maxPan = (size.width * (zoomScale - 1f))
@@ -332,6 +332,7 @@ fun NetWorthChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
 
                     // Y-value -> pixel mapping (linear axis: 0 .. maxVal)
                     fun yPix(value: Double): Float =
@@ -455,7 +456,7 @@ fun NetWorthChart(
                             val yr = entry.yearMonth.take(4).toIntOrNull() ?: baseYear
                             val mo = entry.yearMonth.takeLast(2).toIntOrNull() ?: 1
                             val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
-                            val discount = if (effectiveIsReal) (1.0 + (cpiInflationPct / 100.0)).pow(yearFraction) else 1.0
+                            val discount = if (effectiveIsReal) (1.0 + (cpiInflationPct / 100.0)).coerceAtLeast(0.0001).pow(yearFraction) else 1.0
                             // Compare like-for-like with the model: investable assets only (liquid + pension),
                             // the emergency reserve is a separate safety buffer and not part of the trajectory.
                             val investable = entry.portfolioBalanceAtMonthEnd + entry.pensionBalanceAtMonthEnd
@@ -623,6 +624,7 @@ fun MonteCarloFanChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
                     val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
 
                     // Draw Y-Axis lines and numeric labels
@@ -931,14 +933,14 @@ fun CashFlowProjectionChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(data, zoomScale) {
+                        .pointerInput(data) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
                                 val maxPan = (size.width * (zoomScale - 1f))
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
                             }
                         }
-                        .pointerInput(data, zoomScale, panOffsetX) {
+                        .pointerInput(data) {
                             detectTapGestures { offset ->
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
@@ -952,6 +954,7 @@ fun CashFlowProjectionChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
 
                     // Y-Axis
                     val ySteps = 4
@@ -1197,6 +1200,7 @@ fun StressComparisonChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
 
                     // Y-Axis
                     val ySteps = 4
@@ -1780,14 +1784,14 @@ fun DcaTrajectoryBarChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(220.dp)
-                        .pointerInput(data, zoomScale) {
+                        .pointerInput(data) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
                                 val maxPan = (size.width * (zoomScale - 1f))
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
                             }
                         }
-                        .pointerInput(data, zoomScale, panOffsetX) {
+                        .pointerInput(data) {
                             detectTapGestures { offset ->
                                 val chartWidth = (size.width - paddingLeft - paddingRight) * zoomScale
                                 val relativeX = offset.x - paddingLeft - panOffsetX
@@ -1801,6 +1805,7 @@ fun DcaTrajectoryBarChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
 
                     // Y-Axis
                     val ySteps = 4

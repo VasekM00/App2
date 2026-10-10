@@ -206,6 +206,7 @@ internal fun LedgerChart(
                     val h = size.height
                     val plotW = w - (paddingHorizontal * 2)
                     val plotH = h - paddingTop - paddingBottom
+                    if (plotW <= 0f || plotH <= 0f) return@Canvas
                     val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else plotW
 
                     // 1. Grid Lines (3 horizontal dotted lines)

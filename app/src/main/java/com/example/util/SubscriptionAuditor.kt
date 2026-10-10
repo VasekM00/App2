@@ -246,6 +246,9 @@ object SubscriptionAuditor {
                 } else if (isVerifiedProvider && hasQuarterlyHint) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
+                } else if (isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) {
+                    cadence = "MONTHLY"
+                    normalizedAmount = latestAmount
                 } else {
                     // Single one-off charge from unverified merchant: reject!
                     continue

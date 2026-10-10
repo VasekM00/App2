@@ -370,7 +370,11 @@ private fun TransactionRowItem(tx: ImportedBankTransactionEntity) {
     val displayDate = remember(tx.date) {
         if (tx.date.length >= 10) {
             val parts = tx.date.split("-")
-            if (parts.size == 3) "${parts[2].toInt()}.${parts[1].toInt()}." else tx.date
+            if (parts.size == 3) {
+                val d = parts[2].toIntOrNull()
+                val m = parts[1].toIntOrNull()
+                if (d != null && m != null) "$d.$m." else tx.date
+            } else tx.date
         } else tx.date
     }
 

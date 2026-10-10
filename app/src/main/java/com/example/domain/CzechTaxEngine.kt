@@ -102,8 +102,10 @@ object CzechTaxEngine {
                 settings.eDipContributionMonthly * 12.0 + max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0,
                 settings.taxDeductionCeilingAnnual
             )
+            val eSalary = FinancialEngine.eleonoraSalaryMonthly(year, settings)
+            val eLec = FinancialEngine.eleonoraLecturingMonthly(year, settings)
             val eGross = netToGrossAnnual(
-                FinancialEngine.eleonoraSalaryMonthly(year, settings),
+                eSalary + eLec,
                 settings.taxpayerCreditAnnual,
                 settings.taxSecondBracketThresholdAnnual
             )

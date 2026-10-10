@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import java.time.YearMonth
 
 sealed interface UiMessage {
@@ -137,21 +138,16 @@ class MainViewModel(
 
     // Czech economic sync recency tracking
     private val syncPrefs = application.getSharedPreferences("czech_sync_prefs", android.content.Context.MODE_PRIVATE)
-    private val _lastCzechSyncTimestamp = MutableStateFlow<Long?>(
-        syncPrefs.getLong("last_czech_sync_time", 0L).let { if (it > 0L) it else null }
-    )
+    private val _lastCzechSyncTimestamp = MutableStateFlow<Long?>(syncPrefs.getLong("last_czech_sync_time", 0L).let { if (it > 0L) it else null })
     val lastCzechSyncTimestamp: StateFlow<Long?> = _lastCzechSyncTimestamp.asStateFlow()
 
     // Dismissed recurring subscriptions tracking
     private val subscriptionPrefs = application.getSharedPreferences("subscription_auditor_prefs", android.content.Context.MODE_PRIVATE)
-    private val _dismissedSubscriptionMerchants = MutableStateFlow<Set<String>>(
-        subscriptionPrefs.getStringSet("dismissed_merchants", emptySet()) ?: emptySet()
-    )
+    private val _dismissedSubscriptionMerchants = MutableStateFlow<Set<String>>(subscriptionPrefs.getStringSet("dismissed_merchants", emptySet()) ?: emptySet())
     val dismissedSubscriptionMerchants: StateFlow<Set<String>> = _dismissedSubscriptionMerchants.asStateFlow()
 
     init {
         viewModelScope.launch { repository.repairLegacyEmployerContribution() }
-        viewModelScope.launch(Dispatchers.IO) { repository.cleanupOrphanedImportedTransactions() }
         viewModelScope.launch(Dispatchers.IO) {
             if (!importPrefs.getBoolean("legacy_balances_backfilled", false)) {
                 val entries = repository.getAllLedgerEntriesDirect()
@@ -614,9 +610,12 @@ class MainViewModel(
         }
     }
 
+    private val importMutex = kotlinx.coroutines.sync.Mutex()
+
     fun confirmStatementImport(summary: com.example.util.StatementParseSummary) {
         viewModelScope.launch {
-            // Group transactions by calendar month (YYYY-MM)
+            importMutex.withLock {
+                // Group transactions by calendar month (YYYY-MM)
             val txsByMonth = summary.transactions.groupBy { tx ->
                 val ym = tx.date.take(7)
                 if (ym.matches(Regex("""\d{4}-\d{2}"""))) ym else summary.yearMonth
@@ -775,6 +774,7 @@ class MainViewModel(
             val monthsLabel = affectedMonths.joinToString(", ")
             _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${summary.transactions.size} txs from ${summary.detectedBank.name})"))
             setPendingStatementImport(null)
+            }
         }
     }
 

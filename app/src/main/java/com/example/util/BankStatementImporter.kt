@@ -211,7 +211,8 @@ object BankStatementImporter {
     }
 
     private fun detectPdfBankType(fullText: String, lines: List<String>): BankType {
-        return detectBankFromText(foldHeader(fullText), lines)
+        val headerSample = lines.take(40).joinToString("\n").ifBlank { fullText.take(3000) }
+        return detectBankFromText(foldHeader(headerSample), lines.take(40))
     }
 
     private fun parseMonetaPdf(
@@ -801,7 +802,7 @@ object BankStatementImporter {
     }
 
     private fun extractVariableSymbol(text: String): String {
-        val vsRegex = Regex("""\b(?:VS|vs|v\.s\.|variabilní symbol)[:\s]*(\d{1,10})\b""")
+        val vsRegex = Regex("""(?i)\b(?:vs|v\.s\.|var(?:iabiln[ií])?\s*symbol)[:\s]*(\d{1,10})\b""")
         val match = vsRegex.find(text)
         return match?.groupValues?.getOrNull(1)?.trim() ?: ""
     }
@@ -1893,12 +1894,21 @@ object BankStatementImporter {
         clean = clean.replace("CZK", "", ignoreCase = true)
             .replace("Kč", "", ignoreCase = true)
             .replace("Kc", "", ignoreCase = true)
+            .replace("EUR", "", ignoreCase = true)
+            .replace("USD", "", ignoreCase = true)
+            .replace("€", "")
+            .replace("$", "")
 
         // Strip all Unicode whitespace categories:
         // \p{Z} (space, line, paragraph separators), \s, \u00A0 (NBSP), \u202F (Narrow NBSP), \u200B (Zero-width), \uFEFF (BOM)
         clean = clean.replace(Regex("[\\p{Z}\\s\\uFEFF]"), "").trim()
 
         if (clean.isBlank()) return 0.0
+
+        val hasTrailingMinus = clean.endsWith("-")
+        if (hasTrailingMinus) {
+            clean = clean.removeSuffix("-").trim()
+        }
 
         clean = if (clean.contains(',') && clean.contains('.')) {
             if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
@@ -1910,7 +1920,8 @@ object BankStatementImporter {
             clean.replace(',', '.')
         }
 
-        val result = clean.toDoubleOrNull() ?: 0.0
+        var result = clean.toDoubleOrNull() ?: 0.0
+        if (hasTrailingMinus && result > 0) result = -result
         return if (isNegativeParentheses && result > 0) -result else result
     }
 
