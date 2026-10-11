@@ -276,12 +276,15 @@ class FinancialEngineExhaustiveAuditTest {
         assertTrue(ms.leanFire.targetAmountToday < ms.standardFire.targetAmountToday)
         assertTrue(ms.standardFire.targetAmountToday < ms.fatFire.targetAmountToday)
 
-        // Check Lean FIRE target is 75% of Standard FIRE
-        val leanExpected = kotlin.math.round((state.fireBaseTargetToday * 0.75) / 10000.0) * 10000.0
+        // Check Lean FIRE target (75% lifestyle with affine pension deduction)
+        val effectiveLiving = FinancialEngine.baselineLivingCostAtFireMonthly(defaultSettings)
+        val leanExpectedRaw = FinancialEngine.fireTargetBase(defaultSettings.copy(lifestyleCostAtFireMonthly = effectiveLiving * 0.75))
+        val leanExpected = kotlin.math.round(leanExpectedRaw / 10000.0) * 10000.0
         assertEquals(leanExpected, ms.leanFire.targetAmountToday, 0.001)
 
-        // Check Fat FIRE target is 130% of Standard FIRE
-        val fatExpected = kotlin.math.round((state.fireBaseTargetToday * 1.30) / 10000.0) * 10000.0
+        // Check Fat FIRE target (130% lifestyle with affine pension deduction)
+        val fatExpectedRaw = FinancialEngine.fireTargetBase(defaultSettings.copy(lifestyleCostAtFireMonthly = effectiveLiving * 1.30))
+        val fatExpected = kotlin.math.round(fatExpectedRaw / 10000.0) * 10000.0
         assertEquals(fatExpected, ms.fatFire.targetAmountToday, 0.001)
 
         // Check Coast description contains dynamic retirement age

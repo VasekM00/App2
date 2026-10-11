@@ -44,7 +44,8 @@ class ChildCostAndStatementIntelligenceTest {
             childSchoolMonthly = 8500.0,
             childTeenMonthly = 13000.0,
             childUniMonthly = 10000.0,
-            child2Enabled = false
+            child2Enabled = false,
+            rentGrowthPct = 0.0
         )
 
         val manualBaseline = 20000.0 + 15000.0 + 5000.0 // 40,000 Kč
@@ -116,7 +117,8 @@ class ChildCostAndStatementIntelligenceTest {
             child2Enabled = true,
             child2BirthYear = 2028, // Future child born 2 years later
             childToddlerMonthly = 4800.0,
-            childPreschoolMonthly = 6500.0
+            childPreschoolMonthly = 6500.0,
+            rentGrowthPct = 0.0
         )
 
         val manualBaseline = 30000.0
@@ -414,7 +416,9 @@ class ChildCostAndStatementIntelligenceTest {
         val state = FinancialEngine.calculate(settings, runMonteCarlo = false)
         val barista = state.fireMilestones.baristaFire
         assertNotNull("Barista FIRE milestone must be computed", barista)
-        val expectedBaristaTarget = kotlin.math.round((state.fireBaseTargetToday * 0.50) / 10_000.0) * 10_000.0
+        val effectiveLiving = FinancialEngine.baselineLivingCostAtFireMonthly(settings)
+        val expectedBaristaRaw = FinancialEngine.fireTargetBase(settings.copy(lifestyleCostAtFireMonthly = effectiveLiving * 0.50))
+        val expectedBaristaTarget = kotlin.math.round(expectedBaristaRaw / 10_000.0) * 10_000.0
         assertEquals(expectedBaristaTarget, barista!!.targetAmountToday, 0.001)
         assertEquals("Barista FIRE", barista.name)
         assertEquals("Semi-Retired", barista.badgeLabel)
@@ -520,5 +524,166 @@ class ChildCostAndStatementIntelligenceTest {
         // Float conversion loses precision above 1M
         val asFloat = originalBalance.toFloat().toDouble()
         assertFalse(kotlin.math.abs(originalBalance - asFloat) < 0.01)
+    }
+
+    @Test
+    fun testRentGrowthCompoundingInTotalLivingCostMonthly() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            rentMonthly = 20_000.0,
+            groceriesMonthly = 10_000.0,
+            otherDiscretionaryMonthly = 0.0,
+            cafesMonthly = 0.0,
+            therapyMonthly = 0.0,
+            charityMonthly = 0.0,
+            entertainmentMonthly = 0.0,
+            transportMonthly = 0.0,
+            subscriptionsMonthly = 0.0,
+            rentGrowthPct = 5.0,
+            childExpensesEnabled = false
+        )
+        // Base year: 20,000 + 10,000 = 30,000
+        val cost2026 = FinancialEngine.totalLivingCostMonthly(settings, 2026)
+        assertEquals(30_000.0, cost2026, 0.001)
+
+        // 1 year later: 20,000 * 1.05 + 10,000 = 31,000
+        val cost2027 = FinancialEngine.totalLivingCostMonthly(settings, 2027)
+        assertEquals(20_000.0 * 1.05 + 10_000.0, cost2027, 0.001)
+
+        // 5 years later: 20,000 * 1.05^5 + 10,000
+        val cost2031 = FinancialEngine.totalLivingCostMonthly(settings, 2031)
+        val expectedRent2031 = 20_000.0 * Math.pow(1.05, 5.0)
+        assertEquals(expectedRent2031 + 10_000.0, cost2031, 0.001)
+
+        // Zero rent growth
+        val flatSettings = settings.copy(rentGrowthPct = 0.0)
+        val flat2031 = FinancialEngine.totalLivingCostMonthly(flatSettings, 2031)
+        assertEquals(30_000.0, flat2031, 0.001)
+    }
+
+    @Test
+    fun testChildUniversitySupportIsFiniteBridgeNotPerpetuity() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            primaryAge = 26,
+            child1Enabled = true,
+            child1BirthYear = 2024,
+            child2Enabled = false,
+            childExpensesEnabled = true,
+            prolongChildSupportInFire = true,
+            childSupportUntilAge = 26,
+            childUniMonthly = 10_000.0,
+            safeWithdrawalRatePct = 4.0,
+            safetyBufferPct = 0.0,
+            vStatePensionAge = 67,
+            vStatePensionMonthly = 20_000.0
+        )
+
+        // Early retirement at age 26: child is 2, remaining years to 26 = 24 years
+        val targetEarly = FinancialEngine.fireTargetBase(settings, age = 26)
+
+        // Retirement at age 67: child is 2024 + (67 - 26) = 43 years old, past 26
+        // Child bridge capital must be exactly 0.0!
+        val targetPensionAge = FinancialEngine.fireTargetBase(settings, age = 67)
+        val targetPensionAgeWithoutProlong = FinancialEngine.fireTargetBase(settings.copy(prolongChildSupportInFire = false), age = 67)
+        assertEquals(
+            "At pension age 67+, child university support bridge must be 0 because child is an adult",
+            targetPensionAgeWithoutProlong,
+            targetPensionAge,
+            0.001
+        )
+
+        // Early retirement target with prolonging must NOT be inflated by immortal perpetuity of 10,000/mo forever (which is 120,000 / 0.04 = 3,000,000)
+        val targetEarlyWithoutProlong = FinancialEngine.fireTargetBase(settings.copy(prolongChildSupportInFire = false), age = 26)
+        val finiteBridgeCapital = targetEarly - targetEarlyWithoutProlong
+        val swr = 0.04
+        val remainingYears = 24
+        val expectedFiniteBridge = 120_000.0 * FinancialEngine.annuityFactor(swr, remainingYears)
+        assertEquals(expectedFiniteBridge, finiteBridgeCapital, 0.01)
+        assertTrue(
+            "Finite annuity bridge must be strictly less than perpetual 3M capital",
+            finiteBridgeCapital < (120_000.0 / 0.04)
+        )
+    }
+
+    @Test
+    fun testPre60LiquidityGatingInRetirementSurvival() {
+        // Person with 0 liquid wealth and 10M locked in DIP/DPS
+        val lockedWealthOnly = SettingsEntity(
+            primaryAge = 35,
+            vStatePensionAge = 65,
+            liquidPortfolioCurrent = 0.0,
+            eLiquidPortfolioCurrent = 0.0,
+            portuDcaMonthly = 0.0,
+            dipBalanceCurrent = 5_000_000.0,
+            dpsBalanceCurrent = 5_000_000.0,
+            dipContributionMonthly = 0.0,
+            dpsOwnContributionMonthly = 0.0,
+            employerRetirementMonthly = 0.0,
+            monteCarloN = 100,
+            lifestyleCostAtFireMonthly = 30_000.0,
+            retirementHorizonYears = 30
+        )
+
+        // If retiring early at age 35, liquid funds are 0, so decumulation before age 60
+        // cannot draw from locked DIP/DPS. Survival rate must be 0% due to pre-60 liquidity gating!
+        val earlyResult = FinancialEngine.runRetirementSurvival(lockedWealthOnly)
+        assertEquals(
+            "Zero liquid funds before age 60 must result in depletion under statutory lock-in",
+            0.0,
+            earlyResult.successRatePct,
+            0.001
+        )
+
+        // Conversely, if starting at age 60, pension assets unlock immediately
+        val unlockedAt60 = lockedWealthOnly.copy(
+            primaryAge = 60,
+            vStatePensionAge = 65,
+            retirementHorizonYears = 20
+        )
+        val unlockedResult = FinancialEngine.runRetirementSurvival(unlockedAt60)
+        assertTrue(
+            "At age 60+, unlocked pension assets fund retirement successfully",
+            unlockedResult.successRatePct > 50.0
+        )
+    }
+
+    @Test
+    fun testMilestoneTargets_CoastPensionAge_and_AffineBaristaLeanTargets() {
+        val settings = SettingsEntity(
+            baseYear = 2026,
+            primaryAge = 26,
+            vStatePensionAge = 67,
+            vSalary = 65_000.0,
+            rentMonthly = 20_000.0,
+            groceriesMonthly = 15_000.0,
+            safeWithdrawalRatePct = 3.5,
+            vStatePensionMonthly = 20_000.0,
+            isSingleHousehold = true
+        )
+
+        val state = FinancialEngine.calculate(settings, runMonteCarlo = false)
+        val ms = state.fireMilestones
+
+        // Coast FIRE target is discounted from state pension age (67), where bridge years are 0
+        val targetAt67 = FinancialEngine.fireTargetBase(settings, age = 67)
+        val yearsTo67 = 67 - 26
+        val rReal = ((1.0 + settings.portfolioNominalReturnPct / 100.0) / (1.0 + settings.cpiInflationPct / 100.0)) - 1.0
+        val expectedCoastRaw = targetAt67 / Math.pow(1.0 + rReal, yearsTo67.toDouble())
+        val expectedCoastTarget = kotlin.math.round(expectedCoastRaw / 10_000.0) * 10_000.0
+        assertEquals(expectedCoastTarget, ms.coastFire.targetAmountToday, 0.001)
+
+        // Barista and Lean FIRE targets are affine due to fixed Czech state pension deduction
+        val effectiveLiving = FinancialEngine.baselineLivingCostAtFireMonthly(settings)
+        val expectedBaristaRaw = FinancialEngine.fireTargetBase(settings.copy(lifestyleCostAtFireMonthly = effectiveLiving * 0.50))
+        val expectedBaristaTarget = kotlin.math.round(expectedBaristaRaw / 10_000.0) * 10_000.0
+        assertEquals(expectedBaristaTarget, ms.baristaFire!!.targetAmountToday, 0.001)
+
+        // Prove affine target is NOT equal to naive proportional 50% target
+        val naiveProportionalTarget = kotlin.math.round((state.fireBaseTargetToday * 0.50) / 10_000.0) * 10_000.0
+        assertFalse(
+            "Affine milestone target must properly account for fixed state pension deduction",
+            ms.baristaFire!!.targetAmountToday == naiveProportionalTarget
+        )
     }
 }

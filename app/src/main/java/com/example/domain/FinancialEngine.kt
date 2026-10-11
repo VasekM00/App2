@@ -435,29 +435,27 @@ object FinancialEngine {
         return max(vBridge, eBridge)
     }
 
+    fun baselineLivingCostAtFireMonthly(settings: SettingsEntity): Double {
+        if (settings.lifestyleCostAtFireMonthly > 0.0) {
+            return settings.lifestyleCostAtFireMonthly
+        }
+        var cost = totalLivingCostMonthly(settings.copy(childExpensesEnabled = false), settings.baseYear)
+        if (settings.currentChildCostsInBaseline) {
+            if (settings.child1Enabled && settings.child1BirthYear <= settings.baseYear) {
+                cost = max(0.0, cost - childMonthlyExpense(settings.child1BirthYear, settings.baseYear, settings))
+            }
+            if (settings.child2Enabled && settings.child2BirthYear <= settings.baseYear) {
+                cost = max(0.0, cost - childMonthlyExpense(settings.child2BirthYear, settings.baseYear, settings))
+            }
+        }
+        return cost
+    }
+
     fun fireTargetBase(settings: SettingsEntity, age: Int = settings.primaryAge): Double {
         if (settings.fireTargetOverride > 0) return settings.fireTargetOverride
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
 
-        val lifestyleMonthly = if (settings.lifestyleCostAtFireMonthly > 0.0) {
-            settings.lifestyleCostAtFireMonthly
-        } else {
-            val effSettings = if (settings.childExpensesEnabled && settings.prolongChildSupportInFire) settings else settings.copy(childExpensesEnabled = false)
-            var cost = totalLivingCostMonthly(effSettings, settings.baseYear)
-            if (!settings.prolongChildSupportInFire && settings.currentChildCostsInBaseline) {
-                if (settings.child1Enabled && settings.child1BirthYear <= settings.baseYear) {
-                    cost = max(0.0, cost - childMonthlyExpense(settings.child1BirthYear, settings.baseYear, settings))
-                }
-                if (settings.child2Enabled && settings.child2BirthYear <= settings.baseYear) {
-                    cost = max(0.0, cost - childMonthlyExpense(settings.child2BirthYear, settings.baseYear, settings))
-                }
-            } else if (settings.childExpensesEnabled && settings.prolongChildSupportInFire) {
-                if (settings.child2Enabled && settings.child2BirthYear > settings.baseYear) {
-                    cost += settings.childUniMonthly
-                }
-            }
-            cost
-        }
+        val lifestyleMonthly = baselineLivingCostAtFireMonthly(settings)
         val annualLifestyle = max(0.0, lifestyleMonthly * 12.0)
         
         val vAnnualPension = max(0.0, settings.vStatePensionMonthly * 12.0)
@@ -494,8 +492,21 @@ object FinancialEngine {
             } else 0.0
         } else 0.0
 
+        // Child support bridge during early retirement:
+        // When prolongChildSupportInFire is enabled, support is modeled as a finite annuity bridge
+        // ending when the children reach childSupportUntilAge (age 26),
+        // rather than an immortal perpetuity into age 70+.
+        val childBridgeCapital = if (age < settings.vStatePensionAge && settings.childExpensesEnabled && settings.prolongChildSupportInFire) {
+            val retireCalYear = settings.baseYear + (age - settings.primaryAge)
+            val c1Remaining = if (settings.child1Enabled) max(0, (settings.child1BirthYear + settings.childSupportUntilAge) - retireCalYear) else 0
+            val c2Remaining = if (settings.child2Enabled) max(0, (settings.child2BirthYear + settings.childSupportUntilAge) - retireCalYear) else 0
+            val c1CostAnnual = settings.childUniMonthly * 12.0
+            val c2CostAnnual = settings.childUniMonthly * 12.0
+            c1CostAnnual * annuityFactor(swr, c1Remaining) + c2CostAnnual * annuityFactor(swr, c2Remaining)
+        } else 0.0
+
         val safetyBuffer = (1.0 + settings.safetyBufferPct / 100.0).coerceAtLeast(0.0)
-        val total = (costPhase1 + costPhase2 + targetCapitalPhase3) * safetyBuffer
+        val total = (costPhase1 + costPhase2 + targetCapitalPhase3 + childBridgeCapital) * safetyBuffer
         return if (total.isNaN() || total.isInfinite()) 0.0 else max(0.0, total)
     }
 
@@ -763,7 +774,14 @@ object FinancialEngine {
     fun totalLivingCostMonthly(settings: SettingsEntity, year: Int = settings.baseYear): Double {
         val deletedSet = parseDeletedCategories(settings.deletedCategoriesJson)
         var base = 0.0
-        if (!deletedSet.contains("rent")) base += settings.rentMonthly
+        if (!deletedSet.contains("rent")) {
+            val rentYears = max(0, year - settings.baseYear)
+            val rentFactor = if (rentYears > 0 && settings.rentGrowthPct != 0.0) {
+                (1.0 + settings.rentGrowthPct / 100.0).coerceAtLeast(0.0).pow(rentYears)
+            } else 1.0
+            val safeRentFactor = if (rentFactor.isNaN() || rentFactor.isInfinite()) 1.0 else rentFactor
+            base += settings.rentMonthly * safeRentFactor
+        }
         if (!deletedSet.contains("groceries")) base += settings.groceriesMonthly
         if (!deletedSet.contains("other_discretionary")) base += settings.otherDiscretionaryMonthly
         if (!deletedSet.contains("cafes")) base += settings.cafesMonthly
@@ -1392,27 +1410,18 @@ object FinancialEngine {
         val returnShift = meanReturn - (meanHistoricalRaw - taxDrag) / 100.0
         val blockSize = 3
 
-        val lifestyleToday = max(
-            0.0,
-            if (settings.lifestyleCostAtFireMonthly > 0.0) {
-                settings.lifestyleCostAtFireMonthly
-            } else {
-                totalLivingCostMonthly(settings.copy(childExpensesEnabled = false), baseYear)
-            }
-        )
+        val lifestyleToday = max(0.0, baselineLivingCostAtFireMonthly(settings))
         val vPensionToday = max(0.0, settings.vStatePensionMonthly)
         val ePensionToday = if (!settings.isSingleHousehold) max(0.0, settings.eStatePensionMonthly) else 0.0
         val eLiquid = if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0
         val eDps = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
         val eDip = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
-        val initial = max(
-            0.0,
-            settings.liquidPortfolioCurrent + eLiquid +
-                settings.dpsBalanceCurrent + eDps +
-                settings.dipBalanceCurrent + eDip
-        )
+        val initialLiquid = max(0.0, settings.liquidPortfolioCurrent + eLiquid)
+        val initialPension = max(0.0, settings.dpsBalanceCurrent + eDps + settings.dipBalanceCurrent + eDip)
 
-        val additions = DoubleArray(maxAccumYears) { y ->
+        val liquidAdditions = DoubleArray(maxAccumYears)
+        val pensionAdditions = DoubleArray(maxAccumYears)
+        for (y in 0 until maxAccumYears) {
             val sy = baseYear + y
             val age = baseAge + y
             val ePortu = if (!settings.isSingleHousehold) settings.ePortuDcaMonthly else 0.0
@@ -1428,7 +1437,9 @@ object FinancialEngine {
             val subV = dpsSubsidy(settings.dpsOwnContributionMonthly, age, settings, sy) * 12.0
             val subE = if (!settings.isSingleHousehold) dpsSubsidy(settings.eDpsOwnContributionMonthly, age, settings, sy) * 12.0 else 0.0
             val pensionInflows = (settings.dipContributionMonthly + eDipOwn + settings.dpsOwnContributionMonthly + eDpsOwn + settings.employerRetirementMonthly + eEmp) * 12.0 + subV + subE
-            baseDca + eleonoraSal + lump + pensionInflows
+
+            liquidAdditions[y] = baseDca + eleonoraSal + lump
+            pensionAdditions[y] = pensionInflows
         }
 
         val targets = DoubleArray(maxAccumYears) { y ->
@@ -1461,12 +1472,14 @@ object FinancialEngine {
                 returns
             } else null
 
-            var bal = initial
+            var liquidBal = initialLiquid
+            var pensionBal = initialPension
             var fireYear = -1
             for (y in 0 until maxAccumYears) {
                 val ret = pathReturns?.get(y) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
-                bal = max(0.0, bal * max(0.0, 1.0 + ret) + additions[y] * (1.0 + ret * 0.5))
-                if (bal >= targets[y]) {
+                liquidBal = max(0.0, liquidBal * max(0.0, 1.0 + ret) + liquidAdditions[y] * (1.0 + ret * 0.5))
+                pensionBal = max(0.0, pensionBal * max(0.0, 1.0 + ret) + pensionAdditions[y] * (1.0 + ret * 0.5))
+                if ((liquidBal + pensionBal) >= targets[y]) {
                     fireYear = baseYear + y + 1
                     break
                 }
@@ -1477,9 +1490,18 @@ object FinancialEngine {
             var depletedAge: Int? = null
             var guardrailTriggeredInPath = false
             var spendingScale = 1.0
+            var bal = liquidBal + pensionBal
             for (k in 0 until horizon) {
                 val year = fireYear + k
                 val age = baseAge + (year - baseYear)
+
+                // Statutory Czech lock-in guard (Act No. 586/1992 Coll. § 15a & Act No. 427/2011 Coll. § 94):
+                // Pension assets (DIP/DPS) unlock into the liquid spending pool at age 60.
+                if (age >= 60 && pensionBal > 0.0) {
+                    liquidBal += pensionBal
+                    pensionBal = 0.0
+                }
+
                 val indexation = (1.0 + cpi).pow((year - baseYear).coerceAtLeast(0))
                 val lifestyleAnnual = lifestyleToday * 12.0 * indexation * spendingScale
                 var pensionAnnual = 0.0
@@ -1489,8 +1511,9 @@ object FinancialEngine {
                 }
                 var need = max(0.0, lifestyleAnnual - pensionAnnual)
 
-                if (settings.guardrailsEnabled && bal > 0.0) {
-                    val currentWithdrawalRate = need / bal
+                val currentTotalBal = liquidBal + pensionBal
+                if (settings.guardrailsEnabled && currentTotalBal > 0.0) {
+                    val currentWithdrawalRate = need / currentTotalBal
                     val targetSwr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
                     if (currentWithdrawalRate > targetSwr * 1.20) {
                         // Upper Guardrail (Capital Preservation Rule):
@@ -1507,15 +1530,31 @@ object FinancialEngine {
                     }
                 }
 
-                bal -= need
-                if (bal <= 0.0) {
-                    bal = 0.0
-                    depletedAge = age
-                    break
-                }
                 val returnIdx = (fireYear - baseYear) + k
                 val ret = pathReturns?.getOrNull(returnIdx) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
-                bal *= max(0.0, 1.0 + ret)
+
+                if (age < 60) {
+                    if (liquidBal < need) {
+                        bal = 0.0
+                        depletedAge = age
+                        break
+                    }
+                    liquidBal -= need
+                    liquidBal *= max(0.0, 1.0 + ret)
+                    pensionBal *= max(0.0, 1.0 + ret)
+                    bal = liquidBal + pensionBal
+                } else {
+                    bal = liquidBal + pensionBal
+                    bal -= need
+                    if (bal <= 0.0) {
+                        bal = 0.0
+                        depletedAge = age
+                        break
+                    }
+                    bal *= max(0.0, 1.0 + ret)
+                    liquidBal = bal
+                    pensionBal = 0.0
+                }
             }
 
             if (depletedAge == null) {
@@ -1862,12 +1901,17 @@ object FinancialEngine {
         val cpiCompounding = (1.0 + settings.cpiInflationPct / 100.0).coerceAtLeast(0.0)
 
         // 1. Coast FIRE
-        // If real return <= 0 (stagflation or zero return), portfolio loses or preserves purchasing power.
-        // It cannot grow on its own to cover the FIRE target without ongoing contributions.
-        val coastRawTarget = if (realReturnRate > 0.0) {
-            fireBase / (1.0 + realReturnRate).pow(yearsToRetire)
+        // The portfolio needs to grow on its own without additional contributions to reach the required
+        // capital at statutory state pension age (settings.vStatePensionAge), where bridge years are 0.
+        val targetAtPensionAge = if (settings.fireTargetOverride > 0) {
+            settings.fireTargetOverride
         } else {
-            fireBase / realReturnFactor.coerceAtLeast(0.01).pow(yearsToRetire)
+            fireTargetBase(settings, age = settings.vStatePensionAge)
+        }
+        val coastRawTarget = if (realReturnRate > 0.0) {
+            targetAtPensionAge / (1.0 + realReturnRate).pow(yearsToRetire)
+        } else {
+            targetAtPensionAge / realReturnFactor.coerceAtLeast(0.01).pow(yearsToRetire)
         }
         val coastTarget = kotlin.math.round(coastRawTarget / 10_000.0) * 10_000.0
         val coastProgress = if (coastTarget > 0) ((investableNetWorth / coastTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
@@ -1895,7 +1939,12 @@ object FinancialEngine {
         )
 
         // 1b. Barista FIRE (50% baseline living expenses)
-        val baristaRawTarget = fireBase * 0.50
+        val effectiveBaseLiving = baselineLivingCostAtFireMonthly(settings)
+        val baristaRawTarget = if (settings.fireTargetOverride > 0) {
+            settings.fireTargetOverride * 0.50
+        } else {
+            fireTargetBase(settings.copy(lifestyleCostAtFireMonthly = effectiveBaseLiving * 0.50))
+        }
         val baristaTarget = kotlin.math.round(baristaRawTarget / 10_000.0) * 10_000.0
         val baristaProgress = if (baristaTarget > 0) ((investableNetWorth / baristaTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val baristaAchieved = investableNetWorth >= baristaTarget
@@ -1918,7 +1967,11 @@ object FinancialEngine {
         )
 
         // 2. Lean FIRE (75% baseline living expenses)
-        val leanRawTarget = fireBase * 0.75
+        val leanRawTarget = if (settings.fireTargetOverride > 0) {
+            settings.fireTargetOverride * 0.75
+        } else {
+            fireTargetBase(settings.copy(lifestyleCostAtFireMonthly = effectiveBaseLiving * 0.75))
+        }
         val leanTarget = kotlin.math.round(leanRawTarget / 10_000.0) * 10_000.0
         val leanProgress = if (leanTarget > 0) ((investableNetWorth / leanTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val leanAchieved = investableNetWorth >= leanTarget
@@ -1960,7 +2013,11 @@ object FinancialEngine {
         )
 
         // 4. Fat FIRE (130% baseline living expenses)
-        val fatRawTarget = fireBase * 1.30
+        val fatRawTarget = if (settings.fireTargetOverride > 0) {
+            settings.fireTargetOverride * 1.30
+        } else {
+            fireTargetBase(settings.copy(lifestyleCostAtFireMonthly = effectiveBaseLiving * 1.30))
+        }
         val fatTarget = kotlin.math.round(fatRawTarget / 10_000.0) * 10_000.0
         val fatProgress = if (fatTarget > 0) ((investableNetWorth / fatTarget) * 100.0).coerceIn(0.0, 100.0) else 100.0
         val fatAchieved = investableNetWorth >= fatTarget
