@@ -94,4 +94,47 @@ class HouseholdDomainModelAndBurnRateTest {
         assertEquals(settings.eDpsBalanceCurrent, mappedBack.eDpsBalanceCurrent, 0.01)
         assertEquals(settings.eDipBalanceCurrent, mappedBack.eDipBalanceCurrent, 0.01)
     }
+
+    @Test
+    fun testTrailingBurnRateBudgetVarianceLogic() {
+        val actualBurnUnder = 45000.0
+        val budgetedCost = 50000.0
+        val varianceUnderPct = ((actualBurnUnder - budgetedCost) / budgetedCost) * 100.0
+        assertEquals(-10.0, varianceUnderPct, 0.01)
+
+        val actualBurnOver = 55000.0
+        val varianceOverPct = ((actualBurnOver - budgetedCost) / budgetedCost) * 100.0
+        assertEquals(10.0, varianceOverPct, 0.01)
+    }
+
+    @Test
+    fun testHouseholdTimelineEventGenerationComprehensive() {
+        val settings = SettingsEntity(
+            isSingleHousehold = false,
+            baseYear = 2026,
+            eReturnYear = 2028,
+            eStartingSalary = 48000.0,
+            child1Enabled = true,
+            child1BirthYear = 2024,
+            child2Enabled = true,
+            child2BirthYear = 2027,
+            childSupportUntilAge = 26
+        )
+
+        val profile = HouseholdProfile.fromSettings(settings)
+        val events = profile.timelineEvents
+
+        val returnEvent = events.firstOrNull { it.type == TimelineEventType.CAREER_RETURN }
+        assertNotNull(returnEvent)
+        assertEquals(2028, returnEvent!!.targetYear)
+        assertEquals(48000.0, returnEvent.monthlyCashFlowImpact, 0.01)
+
+        val child1Independence = events.firstOrNull { it.id == "event_child1_independence" }
+        assertNotNull(child1Independence)
+        assertEquals(2050, child1Independence!!.targetYear)
+
+        val child2Independence = events.firstOrNull { it.id == "event_child2_independence" }
+        assertNotNull(child2Independence)
+        assertEquals(2053, child2Independence!!.targetYear)
+    }
 }

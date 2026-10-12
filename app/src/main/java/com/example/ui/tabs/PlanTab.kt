@@ -270,8 +270,8 @@ private fun RoadmapAndGoalsSubTab(
     onUpdateSettings: ((SettingsEntity) -> Unit)?,
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
-    var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Life Goals Simulator
-    val views = listOf("Action Checklist & Tasks", "Life Goals Simulator")
+    var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Household Timeline, 2 = Life Goals Simulator
+    val views = listOf("Action & Tasks", "Household Timeline", "Life Goals")
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -305,7 +305,7 @@ private fun RoadmapAndGoalsSubTab(
                             text = name,
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.5.sp
+                                fontSize = 11.5.sp
                             ),
                             maxLines = 1
                         )
@@ -316,8 +316,25 @@ private fun RoadmapAndGoalsSubTab(
 
         when (selectedView) {
             0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = onShowInfo)
-            1 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
+            1 -> HouseholdTimelineSubTab(state)
+            2 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
         }
+    }
+}
+
+@Composable
+private fun HouseholdTimelineSubTab(state: FullCalculationState) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp)
+            .testTag("household_timeline_subtab"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        com.example.ui.components.HouseholdTimelineCard(settings = state.settings)
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

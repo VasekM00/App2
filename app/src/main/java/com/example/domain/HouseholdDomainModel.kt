@@ -161,7 +161,8 @@ data class HouseholdProfile(
                         id = "event_spouse_return_to_work",
                         name = "Career Return to Work",
                         targetYear = settings.eReturnYear,
-                        type = TimelineEventType.CAREER_RETURN
+                        type = TimelineEventType.CAREER_RETURN,
+                        monthlyCashFlowImpact = settings.eStartingSalary
                     )
                 )
             }

@@ -241,15 +241,20 @@ fun OverviewTab(
                     onShowInfo = { infoState.show(it) }
                 )
                 if (state.trailingBurnRate3mMonthly != null) {
+                    val actualBurn = state.trailingBurnRate3mMonthly
+                    val budgetedCost = state.totalLivingCostMonthly
+                    val variancePct = if (budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
+                    val varianceNote = if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
                     Spacer(modifier = Modifier.height(8.dp))
                     SummaryRow(
                         label = "Trailing 3m actual burn",
-                        value = fmtCZK(state.trailingBurnRate3mMonthly),
+                        value = "${fmtCZK(actualBurn)} ($varianceNote)",
                         info = MetricInfo(
                             title = "Trailing Actual Living Burn",
                             category = "Empirical Cash Flow Feedback Loop",
-                            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months",
+                            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
                             explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
+                            practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
                             accentColor = BrandTeal
                         ),
                         onShowInfo = { infoState.show(it) }

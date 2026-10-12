@@ -429,7 +429,7 @@ class MainViewModel(
                             bytes.inputStream(),
                             userOverrides = overrides
                         )
-                        if (bankSummary.detectedBank != com.example.util.BankType.GENERIC && bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
+                        if (bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
                             parsedSummaries.add(bankSummary)
                         }
                     } catch (_: Exception) {}
@@ -438,6 +438,10 @@ class MainViewModel(
                 if (parsedSummaries.isNotEmpty()) {
                     val consolidated = com.example.util.BankStatementImporter.mergeSummaries(parsedSummaries)
                     setPendingStatementImport(consolidated)
+                    val bankName = consolidated.detectedBank.name
+                    val nettedCount = consolidated.internalTransfersCount
+                    val nettingMsg = if (nettedCount > 0) " ($nettedCount netted)" else ""
+                    _uiEvent.emit(UiMessage.ShowSnackbar("Parsed: ${consolidated.transactions.size} transactions for ${consolidated.yearMonth} ($bankName)$nettingMsg"))
                     return@launch
                 }
 
