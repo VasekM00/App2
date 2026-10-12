@@ -136,5 +136,22 @@ class HouseholdDomainModelAndBurnRateTest {
         val child2Independence = events.firstOrNull { it.id == "event_child2_independence" }
         assertNotNull(child2Independence)
         assertEquals(2053, child2Independence!!.targetYear)
+
+        val fireEvent = events.firstOrNull { it.id == "event_fire_target" }
+        assertNotNull(fireEvent)
+        assertEquals(settings.baseYear + settings.retirementHorizonYears, fireEvent!!.targetYear)
+
+        val unlockEvent = events.firstOrNull { it.id == "event_age_60_unlock" }
+        assertNotNull(unlockEvent)
+        assertEquals(settings.baseYear + (60 - settings.primaryAge), unlockEvent!!.targetYear)
+        assertEquals(TimelineEventType.STATUTORY_UNLOCK, unlockEvent.type)
+
+        val vPensionEvent = events.firstOrNull { it.id == "event_v_state_pension" }
+        assertNotNull(vPensionEvent)
+        assertEquals(settings.baseYear + (settings.vStatePensionAge - settings.primaryAge), vPensionEvent!!.targetYear)
+
+        val ePensionEvent = events.firstOrNull { it.id == "event_e_state_pension" }
+        assertNotNull(ePensionEvent)
+        assertTrue(ePensionEvent!!.targetYear > settings.baseYear)
     }
 }

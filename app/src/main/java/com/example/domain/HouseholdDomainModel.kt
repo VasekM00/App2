@@ -35,6 +35,7 @@ enum class TimelineEventType {
     CAREER_RETURN,
     PRIMARY_RETIREMENT,
     SPOUSE_RETIREMENT,
+    STATUTORY_UNLOCK,
     CUSTOM_GOAL
 }
 
@@ -178,6 +179,62 @@ data class HouseholdProfile(
                         lumpSumCapitalImpact = -g.targetAmountCzk
                     )
                 )
+            }
+
+            val horizonYears = settings.retirementHorizonYears
+            if (horizonYears > 0) {
+                events.add(
+                    LifeTimelineEvent(
+                        id = "event_fire_target",
+                        name = "Target Investment Horizon (Age ${settings.primaryAge + horizonYears})",
+                        targetYear = settings.baseYear + horizonYears,
+                        type = TimelineEventType.PRIMARY_RETIREMENT
+                    )
+                )
+            }
+
+            val yearsTo60 = 60 - settings.primaryAge
+            if (yearsTo60 > 0) {
+                val pensionCapital = settings.dpsBalanceCurrent + settings.dipBalanceCurrent +
+                    (if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent + settings.eDipBalanceCurrent else 0.0)
+                events.add(
+                    LifeTimelineEvent(
+                        id = "event_age_60_unlock",
+                        name = "Age 60 DIP & DPS Liquidity Unlock",
+                        targetYear = settings.baseYear + yearsTo60,
+                        type = TimelineEventType.STATUTORY_UNLOCK,
+                        lumpSumCapitalImpact = pensionCapital
+                    )
+                )
+            }
+
+            val vPensionYears = settings.vStatePensionAge - settings.primaryAge
+            if (vPensionYears > 0) {
+                events.add(
+                    LifeTimelineEvent(
+                        id = "event_v_state_pension",
+                        name = "Vaclav State Pension (Age ${settings.vStatePensionAge})",
+                        targetYear = settings.baseYear + vPensionYears,
+                        type = TimelineEventType.PRIMARY_RETIREMENT,
+                        monthlyCashFlowImpact = settings.vStatePensionMonthly
+                    )
+                )
+            }
+
+            if (!settings.isSingleHousehold) {
+                val eCurrentAge = settings.baseYear - ELEONORA_BIRTH_YEAR
+                val ePensionYears = settings.eStatePensionAge - eCurrentAge
+                if (ePensionYears > 0) {
+                    events.add(
+                        LifeTimelineEvent(
+                            id = "event_e_state_pension",
+                            name = "Eleonora State Pension (Age ${settings.eStatePensionAge})",
+                            targetYear = settings.baseYear + ePensionYears,
+                            type = TimelineEventType.SPOUSE_RETIREMENT,
+                            monthlyCashFlowImpact = settings.eStatePensionMonthly
+                        )
+                    )
+                }
             }
 
             return HouseholdProfile(

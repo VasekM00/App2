@@ -249,6 +249,7 @@ fun OverviewTab(
                     SummaryRow(
                         label = "Trailing 3m actual burn",
                         value = "${fmtCZK(actualBurn)} ($varianceNote)",
+                        valueColor = if (variancePct <= 0.0) GoodGreen else BrandGold,
                         info = MetricInfo(
                             title = "Trailing Actual Living Burn",
                             category = "Empirical Cash Flow Feedback Loop",

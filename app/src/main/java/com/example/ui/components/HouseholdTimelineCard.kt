@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -226,6 +227,7 @@ private fun TimelineEventRow(
         TimelineEventType.CHILD_INDEPENDENCE -> GoodGreen to Icons.Default.School
         TimelineEventType.CAREER_RETURN -> BrandTeal to Icons.Default.Person
         TimelineEventType.PRIMARY_RETIREMENT, TimelineEventType.SPOUSE_RETIREMENT -> BrandBlue to Icons.Default.Flag
+        TimelineEventType.STATUTORY_UNLOCK -> GoodGreen to Icons.Default.Shield
         TimelineEventType.CUSTOM_GOAL -> BrandTeal to Icons.Default.Event
     }
 
