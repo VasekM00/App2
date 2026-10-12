@@ -468,4 +468,68 @@ class BankStatementImporterTest {
         assertEquals(1500.0, summary.incOther, 0.01)
         assertEquals(1500.0, summary.totalInflows, 0.01)
     }
+
+    @Test
+    fun testAboGpcStatementImport() {
+        val header = "074" +
+                "1234567890123456" + // 16 chars client acc
+                "MARTINU VACLAV            " + // 26 chars name
+                "010726" + // 6 chars old date
+                "00000001154000" + "+" + // 14 chars old bal + sign
+                "00000008500000" + "+" + // 14 chars new bal + sign
+                "00000000154000" + // 14 chars debit turnover
+                "00000007500000" + // 14 chars credit turnover
+                "001" + // 3 chars st num
+                "150726" // 6 chars st date
+
+        val txDebit = "075" +
+                "1234567890123456" +
+                "0000001234567890" + // 16 chars cp acc
+                "1234567890123" + // 13 chars doc
+                "000000154000" + // 12 chars amt: 1,540.00 CZK
+                "1" + // code 1 = debit
+                "0000000000" + // 10 chars vs
+                "0800" + // 4 chars bank
+                "0000" + // 4 chars ks
+                "0000000000" + // 10 chars ss
+                "Billa nakup potravin      " + // 26 chars note
+                "120726" // 6 chars date: 2026-07-12
+
+        val txCredit = "075" +
+                "1234567890123456" +
+                "0000009876543210" +
+                "1234567890124" +
+                "000007500000" + // 12 chars amt: 75,000.00 CZK
+                "2" + // code 2 = credit
+                "0000012345" +
+                "0100" +
+                "0000" +
+                "0000000000" +
+                "Zamestnavatel a.s.        " +
+                "150726" // 6 chars date: 2026-07-15
+        val txCreditMemo = "076 Mzda za 06/2026"
+
+        val gpcContent = listOf(header, txDebit, txCredit, txCreditMemo).joinToString("\r\n")
+
+        val summary = BankStatementImporter.parseStatement(gpcContent.byteInputStream(Charsets.UTF_8))
+
+        assertEquals("2026-07", summary.yearMonth)
+        assertEquals(85000.0, summary.monthEndBalance ?: 0.0, 0.01)
+        assertEquals(2, summary.transactions.size)
+
+        val debit = summary.transactions[0]
+        assertEquals("2026-07-12", debit.date)
+        assertEquals(-1540.0, debit.amount, 0.01)
+        assertEquals(BankTransactionType.GROCERIES, debit.category)
+        assertEquals("1234567890/0800", debit.counterpartyAccount)
+
+        val credit = summary.transactions[1]
+        assertEquals("2026-07-15", credit.date)
+        assertEquals(75000.0, credit.amount, 0.01)
+        assertEquals(BankTransactionType.SALARY_VACLAV, credit.category)
+
+        assertEquals(75000.0, summary.incVaclav, 0.01)
+        assertEquals(1540.0, summary.expGroceries, 0.01)
+        assertEquals(1540.0, summary.totalExpenses, 0.01)
+    }
 }

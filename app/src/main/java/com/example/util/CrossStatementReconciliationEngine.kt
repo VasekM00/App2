@@ -164,6 +164,37 @@ object CrossStatementReconciliationEngine {
         }
     }
 
+    fun bankCodeForBankName(bankName: String): String? {
+        val norm = bankName.trim().uppercase(Locale.ROOT)
+        return when {
+            norm.contains("MONETA") -> "0600"
+            norm.contains("CSOB") || norm.contains("ČSOB") -> "0300"
+            norm.contains("MBANK") -> "6210"
+            norm.contains("SPORITELNA") || norm.contains("ČS") -> "0800"
+            norm.contains("KOMERCNI") || norm.contains("KB") -> "0100"
+            norm.contains("FIO") -> "2010"
+            norm.contains("RAIFFEISEN") || norm.contains("RB") -> "5500"
+            norm.contains("AIR") -> "3030"
+            norm.contains("UNICREDIT") -> "2700"
+            norm.contains("CREDITAS") -> "2250"
+            else -> null
+        }
+    }
+
+    private fun isCrossBankRoutingMatch(
+        debit: ImportedBankTransactionEntity,
+        credit: ImportedBankTransactionEntity
+    ): Boolean {
+        val creditBankCode = bankCodeForBankName(credit.bankName)
+        val debitBankCode = bankCodeForBankName(debit.bankName)
+        val debitTargetCode = debit.counterpartyAccount.split("/").getOrNull(1)?.trim()
+        val creditSourceCode = credit.counterpartyAccount.split("/").getOrNull(1)?.trim()
+
+        if (creditBankCode != null && debitTargetCode == creditBankCode) return true
+        if (debitBankCode != null && creditSourceCode == debitBankCode) return true
+        return false
+    }
+
     fun reconcileTransactions(
         transactions: List<ImportedBankTransactionEntity>,
         yearMonth: String,
@@ -241,7 +272,25 @@ object CrossStatementReconciliationEngine {
                 }
 
                 val isCrossBank = credit.bankName != debit.bankName
-                isCrossBank || isFlaggedSelf
+                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
+                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
+                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
+                        !isFlaggedSelf &&
+                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
+
+                if (hasConflictingThirdParties) return@indexOfFirst false
+
+                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
+                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
+                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
+
+                if (isSelfOrExplicitTransfer) {
+                    true
+                } else if (isCrossBank && bothBlankCounterparties) {
+                    true
+                } else {
+                    false
+                }
             }
 
             if (candidateIndex != -1) {
@@ -373,7 +422,25 @@ object CrossStatementReconciliationEngine {
                 val isCrossBank = credit.bankName != debit.bankName
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
                         isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
-                isCrossBank || isFlaggedSelf
+                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
+                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
+                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
+                        !isFlaggedSelf &&
+                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
+
+                if (hasConflictingThirdParties) return@indexOfFirst false
+
+                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
+                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
+                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
+
+                if (isSelfOrExplicitTransfer) {
+                    true
+                } else if (isCrossBank && bothBlankCounterparties) {
+                    true
+                } else {
+                    false
+                }
             }
 
             if (candidateIndex != -1) {

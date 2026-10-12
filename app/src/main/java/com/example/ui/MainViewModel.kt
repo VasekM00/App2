@@ -224,7 +224,8 @@ class MainViewModel(
             actionStates = actions,
             runMonteCarlo = true,
             activeLedgerEntry = activeEntry,
-            activeMonth = currentMonth
+            activeMonth = currentMonth,
+            ledgerEntries = ledger
         )
     }.flowOn(Dispatchers.Default).conflate().stateIn(
         scope = viewModelScope,

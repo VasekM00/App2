@@ -91,7 +91,7 @@ fun OverviewTab(
         accentColor = BrandGold
     )
 
-    val firePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
+    val firePoint = state.fireLiquidBridgePoint ?: (if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint)
     val fireAgeInfo = MetricInfo(
         title = "Projected FIRE Horizon",
         category = "Trajectory Milestone",
@@ -240,6 +240,21 @@ fun OverviewTab(
                     info = surplusInfo,
                     onShowInfo = { infoState.show(it) }
                 )
+                if (state.trailingBurnRate3mMonthly != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SummaryRow(
+                        label = "Trailing 3m actual burn",
+                        value = fmtCZK(state.trailingBurnRate3mMonthly),
+                        info = MetricInfo(
+                            title = "Trailing Actual Living Burn",
+                            category = "Empirical Cash Flow Feedback Loop",
+                            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months",
+                            explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
+                            accentColor = BrandTeal
+                        ),
+                        onShowInfo = { infoState.show(it) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 SummaryRow(
                     label = "Monthly savings rate",

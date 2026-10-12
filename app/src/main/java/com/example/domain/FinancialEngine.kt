@@ -405,10 +405,21 @@ data class FullCalculationState(
     val currentPensionPortfolio: Double = 0.0,
     val effectiveEmergencyReserveTargetToday: Double = 0.0,
     val isEmergencyReserveFundedToday: Boolean = true,
-    val emergencyReserveSurplusOrDeficitToday: Double = 0.0
+    val emergencyReserveSurplusOrDeficitToday: Double = 0.0,
+    val trailingBurnRate3mMonthly: Double? = null,
+    val trailingBurnRate12mMonthly: Double? = null
 )
 
 object FinancialEngine {
+
+    fun computeTrailingBurnRateMonthly(ledger: List<LedgerEntryEntity>, months: Int): Double? {
+        val nonZeroEntries = ledger.filter { (it.expRent + it.expGroceries + it.expOther) > 0.0 }
+            .sortedByDescending { it.yearMonth }
+            .take(months)
+        if (nonZeroEntries.isEmpty()) return null
+        val sum = nonZeroEntries.sumOf { it.expRent + it.expGroceries + it.expOther }
+        return sum / nonZeroEntries.size
+    }
 
     fun perpetualFireLeverageMultiplier(settings: SettingsEntity): Double {
         val swr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
@@ -552,7 +563,7 @@ object FinancialEngine {
         val totalPot = (if (settings.child1Enabled) parentalAllowancePot(settings.child1BirthYear, settings) else 0.0) +
                 (if (settings.child2Enabled && year >= settings.child2BirthYear) parentalAllowancePot(settings.child2BirthYear, settings) else 0.0)
 
-        // Calculate cumulative benefits drawn in prior years
+        // Calculate cumulative benefits drawn in prior years starting from baseYear
         var cumulativeDrawn = 0.0
         for (y in settings.baseYear until year) {
             val annualForY = if (y == settings.eReturnYear) {
@@ -1479,6 +1490,14 @@ object FinancialEngine {
                 val ret = pathReturns?.get(y) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
                 liquidBal = max(0.0, liquidBal * max(0.0, 1.0 + ret) + liquidAdditions[y] * (1.0 + ret * 0.5))
                 pensionBal = max(0.0, pensionBal * max(0.0, 1.0 + ret) + pensionAdditions[y] * (1.0 + ret * 0.5))
+                val currentAge = baseAge + y + 1
+                val yearsTo60 = max(0, 60 - currentAge)
+                val targetYearIndexation = (1.0 + cpi).pow(y + 1)
+                val annualLivingAtRetirement = lifestyleToday * 12.0 * targetYearIndexation
+                val rReal = ((meanReturn - cpi) / 100.0).coerceAtLeast(0.001)
+                val bridgeReq = if (yearsTo60 == 0) 0.0 else {
+                    annualLivingAtRetirement * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+                }
                 if ((liquidBal + pensionBal) >= targets[y]) {
                     fireYear = baseYear + y + 1
                     break
@@ -1490,7 +1509,9 @@ object FinancialEngine {
             var depletedAge: Int? = null
             var guardrailTriggeredInPath = false
             var spendingScale = 1.0
-            var bal = liquidBal + pensionBal
+            val reserveTargetAnnual = effectiveEmergencyReserveTarget(settings)
+            var cashCushion = min(settings.emergencyReserveCurrent, reserveTargetAnnual)
+            var bal = liquidBal + pensionBal + cashCushion
             for (k in 0 until horizon) {
                 val year = fireYear + k
                 val age = baseAge + (year - baseYear)
@@ -1511,7 +1532,7 @@ object FinancialEngine {
                 }
                 var need = max(0.0, lifestyleAnnual - pensionAnnual)
 
-                val currentTotalBal = liquidBal + pensionBal
+                val currentTotalBal = liquidBal + pensionBal + cashCushion
                 if (settings.guardrailsEnabled && currentTotalBal > 0.0) {
                     val currentWithdrawalRate = need / currentTotalBal
                     val targetSwr = (settings.safeWithdrawalRatePct / 100.0).coerceAtLeast(0.001)
@@ -1533,6 +1554,30 @@ object FinancialEngine {
                 val returnIdx = (fireYear - baseYear) + k
                 val ret = pathReturns?.getOrNull(returnIdx) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
 
+                // Dynamic cash cushion sequence-of-returns defense:
+                // During market drawdowns (ret < 0), draw living expenses from emergency cash reserve
+                // first rather than liquidating equity at market troughs.
+                if (ret < 0.0 && cashCushion > 0.0) {
+                    val drawFromCash = min(cashCushion, need)
+                    cashCushion -= drawFromCash
+                    need -= drawFromCash
+                } else if (ret > 0.05 && cashCushion < reserveTargetAnnual) {
+                    val replenish = min(reserveTargetAnnual - cashCushion, currentTotalBal * 0.02)
+                    if (age < 60 && liquidBal > replenish) {
+                        liquidBal -= replenish
+                        cashCushion += replenish
+                    } else if (age >= 60 && (liquidBal + pensionBal) > replenish) {
+                        if (liquidBal >= replenish) {
+                            liquidBal -= replenish
+                        } else {
+                            val rem = replenish - liquidBal
+                            liquidBal = 0.0
+                            pensionBal -= rem
+                        }
+                        cashCushion += replenish
+                    }
+                }
+
                 if (age < 60) {
                     if (liquidBal < need) {
                         bal = 0.0
@@ -1542,7 +1587,7 @@ object FinancialEngine {
                     liquidBal -= need
                     liquidBal *= max(0.0, 1.0 + ret)
                     pensionBal *= max(0.0, 1.0 + ret)
-                    bal = liquidBal + pensionBal
+                    bal = liquidBal + pensionBal + cashCushion
                 } else {
                     bal = liquidBal + pensionBal
                     bal -= need
@@ -1554,6 +1599,7 @@ object FinancialEngine {
                     bal *= max(0.0, 1.0 + ret)
                     liquidBal = bal
                     pensionBal = 0.0
+                    bal += cashCushion
                 }
             }
 
@@ -1749,8 +1795,11 @@ object FinancialEngine {
         actionStates: Map<String, Boolean> = emptyMap(),
         runMonteCarlo: Boolean = true,
         activeLedgerEntry: LedgerEntryEntity? = null,
-        activeMonth: Int? = null
+        activeMonth: Int? = null,
+        ledgerEntries: List<LedgerEntryEntity> = emptyList()
     ): FullCalculationState {
+        val trailing3m = computeTrailingBurnRateMonthly(ledgerEntries, 3)
+        val trailing12m = computeTrailingBurnRateMonthly(ledgerEntries, 12)
         val fireBase = fireTargetBase(settings)
         val dual = buildLiquidPortfolio(settings, true)
         val single = buildLiquidPortfolio(settings, false)
@@ -2084,7 +2133,9 @@ object FinancialEngine {
             currentPensionPortfolio = snapPension,
             effectiveEmergencyReserveTargetToday = effectiveReserveTarget,
             isEmergencyReserveFundedToday = isReserveFunded,
-            emergencyReserveSurplusOrDeficitToday = reserveSurplusOrDeficit
+            emergencyReserveSurplusOrDeficitToday = reserveSurplusOrDeficit,
+            trailingBurnRate3mMonthly = trailing3m,
+            trailingBurnRate12mMonthly = trailing12m
         )
     }
 }

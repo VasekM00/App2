@@ -484,4 +484,38 @@ class CrossStatementReconciliationEngineTest {
         )
         assertEquals(fp1, fp2)
     }
+
+    @Test
+    fun testUncategorizedThirdPartyTransactionsNotNettedAcrossBanksWithinClearingWindow() {
+        val debitTx = ImportedBankTransactionEntity(
+            id = 501L,
+            yearMonth = "2026-07",
+            bankName = "Moneta",
+            date = "2026-07-10",
+            amount = -3500.0,
+            counterpartyAccount = "111/0300",
+            counterpartyName = "Remeslnik Novak",
+            message = "Oprava dveri",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+        val creditTx = ImportedBankTransactionEntity(
+            id = 502L,
+            yearMonth = "2026-07",
+            bankName = "CSOB",
+            date = "2026-07-12",
+            amount = 3500.0,
+            counterpartyAccount = "222/0800",
+            counterpartyName = "Kolega Dvorak",
+            message = "Vraceni penez za obed",
+            category = BankTransactionType.UNCATEGORIZED.name
+        )
+        val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
+            transactions = listOf(debitTx, creditTx),
+            yearMonth = "2026-07"
+        )
+        assertEquals(0, auditReport.matchedPairs.size)
+        assertFalse(reconciled.any { it.isNetted })
+        assertEquals(3500.0, auditReport.reconciledInflows, 0.01)
+        assertEquals(3500.0, auditReport.reconciledExpenses, 0.01)
+    }
 }

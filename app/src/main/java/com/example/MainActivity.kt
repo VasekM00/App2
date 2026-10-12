@@ -1,5 +1,8 @@
 package com.example
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,6 +29,8 @@ class MainActivity : ComponentActivity() {
             android.view.WindowManager.LayoutParams.FLAG_SECURE
         )
         enableEdgeToEdge()
+        handleIncomingIntent(intent)
+
         val prefs = getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
         val initialDarkTheme = if (prefs.contains("is_dark_theme")) prefs.getBoolean("is_dark_theme", false) else null
 
@@ -46,6 +51,43 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val uris = mutableListOf<Uri>()
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+                if (uri != null) uris.add(uri)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val streamUris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+                }
+                if (streamUris != null) uris.addAll(streamUris.filterNotNull())
+            }
+            Intent.ACTION_VIEW -> {
+                intent.data?.let { uris.add(it) }
+            }
+        }
+        if (uris.isNotEmpty()) {
+            viewModel.importStatements(uris)
         }
     }
 }
