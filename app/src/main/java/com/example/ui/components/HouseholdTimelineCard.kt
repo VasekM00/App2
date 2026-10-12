@@ -281,8 +281,14 @@ private fun TimelineEventRow(
                 )
                 if (event.monthlyCashFlowImpact != 0.0 || event.lumpSumCapitalImpact != 0.0) {
                     val impactStr = when {
-                        event.monthlyCashFlowImpact != 0.0 -> "${fmtCZK(event.monthlyCashFlowImpact)} / mo"
-                        else -> fmtCZK(event.lumpSumCapitalImpact)
+                        event.monthlyCashFlowImpact != 0.0 -> {
+                            val prefix = if (event.monthlyCashFlowImpact > 0.0) "+" else ""
+                            "$prefix${fmtCZK(event.monthlyCashFlowImpact)} / mo"
+                        }
+                        else -> {
+                            val prefix = if (event.lumpSumCapitalImpact > 0.0) "+" else ""
+                            "$prefix${fmtCZK(event.lumpSumCapitalImpact)} capital"
+                        }
                     }
                     Text(
                         text = "Impact: $impactStr",
