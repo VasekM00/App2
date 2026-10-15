@@ -15,19 +15,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +62,7 @@ import com.example.util.Formatters.fmtCZK
 @Composable
 fun HouseholdTimelineCard(
     settings: SettingsEntity,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val profile = HouseholdProfile.fromSettings(settings)
@@ -87,16 +98,16 @@ fun HouseholdTimelineCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            MemberSummaryRow(member = profile.primaryEarner, baseYear = settings.baseYear)
+            MemberSummaryRow(member = profile.primaryEarner, baseYear = settings.baseYear, settings = settings, onUpdateSettings = onUpdateSettings)
 
             if (profile.spouseEarner != null) {
                 Spacer(modifier = Modifier.height(6.dp))
-                MemberSummaryRow(member = profile.spouseEarner, baseYear = settings.baseYear)
+                MemberSummaryRow(member = profile.spouseEarner, baseYear = settings.baseYear, settings = settings, onUpdateSettings = onUpdateSettings)
             }
 
             profile.children.forEach { child ->
                 Spacer(modifier = Modifier.height(6.dp))
-                MemberSummaryRow(member = child, baseYear = settings.baseYear)
+                MemberSummaryRow(member = child, baseYear = settings.baseYear, settings = settings, onUpdateSettings = onUpdateSettings)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -133,8 +144,59 @@ fun HouseholdTimelineCard(
 @Composable
 private fun MemberSummaryRow(
     member: HouseholdMember,
-    baseYear: Int
+    baseYear: Int,
+    settings: SettingsEntity,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
 ) {
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    if (showEditDialog && onUpdateSettings != null) {
+        var editedName by rememberSaveable { mutableStateOf(member.name) }
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Rename Child", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter a custom name for this child:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it },
+                        label = { Text("Child Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = editedName.trim()
+                        if (trimmed.isNotEmpty()) {
+                            if (member.id == "child_1") {
+                                onUpdateSettings(settings.copy(child1Name = trimmed))
+                            } else if (member.id == "child_2") {
+                                onUpdateSettings(settings.copy(child2Name = trimmed))
+                            }
+                        }
+                        showEditDialog = false
+                    }
+                ) {
+                    Text("Save", color = BrandTeal, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     val currentAge = baseYear - member.birthYear
     val (roleLabel, roleColor) = when (member.role) {
         HouseholdRole.PRIMARY_EARNER -> "Primary Earner" to BrandBlue
@@ -195,6 +257,20 @@ private fun MemberSummaryRow(
                     color = roleColor,
                     fontWeight = FontWeight.Medium
                 )
+            }
+
+            if (member.role == HouseholdRole.DEPENDENT_CHILD && onUpdateSettings != null) {
+                IconButton(
+                    onClick = { showEditDialog = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Rename ${member.name}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             if (member.currentMonthlyGrossSalary > 0) {

@@ -102,15 +102,23 @@ class RetirementSurvivalTest {
 
     @Test
     fun dpsYouthSubsidyOnlyAppliesFrom2027ReformYear() {
-        val settings = SettingsEntity(dpsYouthAgeLimit = 30)
+        val settings = SettingsEntity(
+            dpsYouthAgeLimit = 30,
+            dpsSubsidyRateYouthPct = 40.0,
+            dpsYouthSubsidyMaxMonthly = 680.0
+        )
         // Age 25 (youth) in 2026: reform not yet effective -> standard 20% cap (340).
         assertEquals(340.0, FinancialEngine.dpsSubsidy(1700.0, 25, settings, year = 2026), 0.001)
-        // From 2027 the youth 40% cap (680) applies.
+        // From 2027 the custom youth 40% cap (680) applies.
         assertEquals(680.0, FinancialEngine.dpsSubsidy(1700.0, 25, settings, year = 2027), 0.001)
         // Age 30+ is always standard.
         assertEquals(340.0, FinancialEngine.dpsSubsidy(1700.0, 30, settings, year = 2030), 0.001)
         // Below minimum deposit: no subsidy.
         assertEquals(0.0, FinancialEngine.dpsSubsidy(499.0, 25, settings, year = 2030), 0.001)
+
+        // Under statutory default (340 cap): youth subsidy in 2027 is 340
+        val statutorySettings = SettingsEntity()
+        assertEquals(340.0, FinancialEngine.dpsSubsidy(1700.0, 25, statutorySettings, year = 2027), 0.001)
     }
 
     @Test
@@ -118,17 +126,26 @@ class RetirementSurvivalTest {
         val before2027 = SettingsEntity(
             child1Enabled = true,
             child1BirthYear = 2026,
-            child2Enabled = false
+            child2Enabled = false,
+            parentalAllowanceTotalBeforeCutoff = 350000.0,
+            parentalAllowanceTotalFromCutoff = 400000.0
         )
         val from2027 = SettingsEntity(
             child1Enabled = true,
             child1BirthYear = 2027,
-            child2Enabled = false
+            child2Enabled = false,
+            parentalAllowanceTotalBeforeCutoff = 350000.0,
+            parentalAllowanceTotalFromCutoff = 400000.0
         )
-        // By 2028 the smaller (350k) pot is partially exhausted while the higher (400k) pot still
-        // pays the full monthly allowance, so the 2027 child must draw a strictly higher benefit.
+        // When configured with a higher pot from cutoff, by 2028 the smaller (350k) pot is partially exhausted
+        // while the higher (400k) pot still pays the full monthly allowance.
         val monthlyBefore = FinancialEngine.eleonoraBenefitMonthly(2028, before2027)
         val monthlyAfter = FinancialEngine.eleonoraBenefitMonthly(2028, from2027)
         assertTrue(monthlyAfter > monthlyBefore)
+
+        // And under current statutory law, default settings have equal pots (350k flat)
+        val statutoryDefault = SettingsEntity()
+        assertEquals(350000.0, FinancialEngine.parentalAllowancePot(2026, statutoryDefault), 0.001)
+        assertEquals(350000.0, FinancialEngine.parentalAllowancePot(2027, statutoryDefault), 0.001)
     }
 }

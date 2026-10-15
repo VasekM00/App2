@@ -225,8 +225,8 @@ class FinancialEngineBoundaryFuzzingTest {
     @Test
     fun test22_dpsYouthBonus_effectiveFrom2027Only() {
         assertEquals(2027, RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
-        assertEquals(40.0, RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT, 0.001)
-        assertEquals(680.0, RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY, 0.001)
+        assertEquals(20.0, RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT, 0.001)
+        assertEquals(340.0, RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY, 0.001)
     }
 
     @Test

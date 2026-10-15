@@ -187,19 +187,19 @@ class FinancialEngineExhaustiveAuditTest {
 
     @Test
     fun `test 4 - lepsi penzijko DPS reform dynamic subsidy rates and limits`() {
-        // 2026 (current year): Standard 20% applies to all ages (youth 40% starts from 2027)
+        // 2026 (current year): Standard 20% applies to all ages
         val subsidy2026At26 = FinancialEngine.dpsSubsidy(1000.0, 26, defaultSettings, year = 2026)
         assertEquals(200.0, subsidy2026At26, 0.001) // 1000 * 0.20 = 200 <= 340
 
-        // 2027+ (Lepší penzijko active): Under 30 (youth active) -> 40% up to 680 CZK
+        // 2027+ (Lepší penzijko active): Under 30 (youth active) -> statutory 20% capped at 340 CZK
         val youthSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 26, defaultSettings, year = 2027)
-        assertEquals(400.0, youthSubsidy1000, 0.001) // 1000 * 0.40 = 400 <= 680
+        assertEquals(200.0, youthSubsidy1000, 0.001) // 1000 * 0.20 = 200 <= 340
 
         val youthSubsidy1700 = FinancialEngine.dpsSubsidy(1700.0, 26, defaultSettings, year = 2027)
-        assertEquals(680.0, youthSubsidy1700, 0.001) // 1700 * 0.40 = 680 (capped at 680)
+        assertEquals(340.0, youthSubsidy1700, 0.001) // 1700 * 0.20 = 340 (capped at 340)
 
         val youthSubsidy2500 = FinancialEngine.dpsSubsidy(2500.0, 26, defaultSettings, year = 2027)
-        assertEquals(680.0, youthSubsidy2500, 0.001) // Capped at 680
+        assertEquals(340.0, youthSubsidy2500, 0.001) // Capped at 340
 
         // Over 30 in 2027+ (standard rate) -> 20% up to 340 CZK
         val stdSubsidy1000 = FinancialEngine.dpsSubsidy(1000.0, 31, defaultSettings, year = 2027)

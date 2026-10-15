@@ -86,6 +86,8 @@ object BackupManager {
         json.put("deletedCategoriesJson", s.deletedCategoriesJson)
 
         // Children & Family
+        json.put("child1Name", s.child1Name)
+        json.put("child2Name", s.child2Name)
         json.put("childExpensesEnabled", s.childExpensesEnabled)
         json.put("currentChildCostsInBaseline", s.currentChildCostsInBaseline)
         json.put("child1Enabled", s.child1Enabled)
@@ -222,6 +224,8 @@ object BackupManager {
                 customLumpSumsJson = json.optString("customLumpSumsJson", fallback.customLumpSumsJson),
                 deletedCategoriesJson = json.optString("deletedCategoriesJson", fallback.deletedCategoriesJson),
 
+                child1Name = json.optString("child1Name", fallback.child1Name),
+                child2Name = json.optString("child2Name", fallback.child2Name),
                 childExpensesEnabled = json.optBoolean("childExpensesEnabled", fallback.childExpensesEnabled),
                 currentChildCostsInBaseline = json.optBoolean("currentChildCostsInBaseline", fallback.currentChildCostsInBaseline),
                 child1Enabled = json.optBoolean("child1Enabled", fallback.child1Enabled),
@@ -310,6 +314,8 @@ object BackupManager {
             lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
             vStatePensionAge = if (s.vStatePensionAge in 55..75) s.vStatePensionAge else f.vStatePensionAge,
             eStatePensionAge = if (s.eStatePensionAge in 55..75) s.eStatePensionAge else f.eStatePensionAge,
+            child1Name = s.child1Name.trim().ifEmpty { f.child1Name },
+            child2Name = s.child2Name.trim().ifEmpty { f.child2Name },
             child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
             childSupportUntilAge = if (s.childSupportUntilAge in 18..35) s.childSupportUntilAge else f.childSupportUntilAge,

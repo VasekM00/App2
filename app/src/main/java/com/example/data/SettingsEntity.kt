@@ -87,19 +87,21 @@ data class SettingsEntity(
     val hasChildUnder3: Boolean = true,
     val minWageMonthly: Double = 22400.0,
     val dpsDeductionThresholdMonthly: Double = 1700.0, // ZDP § 15(5)
-    val dpsStandardSubsidyMaxMonthly: Double = 340.0, // Lepší penzijko 20% cap
-    val dpsYouthSubsidyMaxMonthly: Double = 680.0, // Lepší penzijko 40% youth cap (<30y)
-    val dpsMinDepositForSubsidy: Double = 500.0, // Lepší penzijko min deposit
+    val dpsStandardSubsidyMaxMonthly: Double = 340.0, // Statutory 20% cap
+    val dpsYouthSubsidyMaxMonthly: Double = 340.0, // Statutory cap (340 CZK/mo)
+    val dpsMinDepositForSubsidy: Double = 500.0, // Statutory min deposit
     val dpsYouthAgeLimit: Int = 30,
     val dpsSubsidyRateStandardPct: Double = 20.0,
-    val dpsSubsidyRateYouthPct: Double = 40.0,
+    val dpsSubsidyRateYouthPct: Double = 20.0,
     val dpsStatutoryFeeCapPct: Double = 0.5,
     val employerRetirementExemptionAnnual: Double = 50000.0,
     val childBonusMinWageMultiplier: Double = 6.0,
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0,
-    val parentalAllowanceTotalFromCutoff: Double = 400000.0,
+    val parentalAllowanceTotalFromCutoff: Double = 350000.0,
     val parentalAllowanceCutoffYear: Int = 2027,
     // Child expenses & Multi-child settings (ZDP § 35c)
+    val child1Name: String = "Child 1",
+    val child2Name: String = "Child 2",
     val childExpensesEnabled: Boolean = true,
     val currentChildCostsInBaseline: Boolean = true,
     val child1Enabled: Boolean = true,

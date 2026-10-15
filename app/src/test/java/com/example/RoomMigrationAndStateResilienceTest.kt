@@ -161,7 +161,7 @@ class RoomMigrationAndStateResilienceTest {
     @Test
     fun test6_databaseVersion_matchesTarget30() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(33, version)
+        assertEquals(34, version)
     }
 
     @Test
@@ -232,6 +232,18 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
+    fun test7g_schema_v34_settingsColumnsExist() {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+        assertTrue("child1Name must exist in app_settings", columns.contains("child1Name"))
+        assertTrue("child2Name must exist in app_settings", columns.contains("child2Name"))
+    }
+
+    @Test
     fun test8_stateRestoration_savedStateHandle_simulatedProcessRecreation() {
         val originalHandle = SavedStateHandle()
         originalHandle["selected_tab_index"] = 2
@@ -246,7 +258,10 @@ class RoomMigrationAndStateResilienceTest {
 
     @Test
     fun test9_settingsEntity_schemaParity_allFieldsSerializedInBackupManager() {
-        val settings = SettingsEntity()
+        val settings = SettingsEntity(
+            child1Name = "Anička",
+            child2Name = "Jakoubek"
+        )
         val json = BackupManager.serializeSettingsToJson(settings)
         val deserialized = BackupManager.deserializeSettingsFromJson(json, fallback = SettingsEntity())
 
@@ -261,6 +276,8 @@ class RoomMigrationAndStateResilienceTest {
         assertEquals(settings.parentalAllowanceTotalBeforeCutoff, deserialized.parentalAllowanceTotalBeforeCutoff, 0.001)
         assertEquals(settings.parentalAllowanceTotalFromCutoff, deserialized.parentalAllowanceTotalFromCutoff, 0.001)
         assertEquals(settings.parentalAllowanceCutoffYear, deserialized.parentalAllowanceCutoffYear)
+        assertEquals("Anička", deserialized.child1Name)
+        assertEquals("Jakoubek", deserialized.child2Name)
     }
 
     @Test

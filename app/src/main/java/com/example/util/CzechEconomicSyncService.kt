@@ -151,7 +151,7 @@ object CzechEconomicSyncService {
                 currentValueFormatted = fmtCZK(current.child2TaxBonusAnnual),
                 liveValueFormatted = fmtCZK(live.child2TaxBonusAnnual),
                 isDifferent = isChild2Diff,
-                impactHint = "Annual tax bonus for 2nd child (born 2027)"
+                impactHint = "Annual tax credit reduction for 2nd child"
             )
         )
 
@@ -181,16 +181,16 @@ object CzechEconomicSyncService {
             )
         )
 
-        // 6. DPS Youth Subsidy Cap
+        // 6. DPS Subsidy Cap
         val isYouthSubsidyDiff = abs(current.dpsYouthSubsidyMaxMonthly - live.dpsYouthSubsidyMaxMonthly) > 1.0
         list.add(
             SyncDifferenceItem(
                 category = "Pension Regulations (DPS)",
-                label = "DPS Youth Subsidy (<30 yrs)",
+                label = "DPS Subsidy Cap (State Match)",
                 currentValueFormatted = "${fmtCZK(current.dpsYouthSubsidyMaxMonthly)}/mo",
                 liveValueFormatted = "${fmtCZK(live.dpsYouthSubsidyMaxMonthly)}/mo",
                 isDifferent = isYouthSubsidyDiff,
-                impactHint = "Doubled 40% state match for young accumulators"
+                impactHint = "Statutory 20% state match up to 340 CZK/mo under Act No. 427/2011"
             )
         )
 
@@ -207,17 +207,17 @@ object CzechEconomicSyncService {
             )
         )
 
-        // 8. Parental Allowance Reform Pot
+        // 8. Parental Allowance Pot
         val isParentalDiff = abs(current.parentalAllowanceTotalFromCutoff - live.parentalAllowanceTotalFromCutoff) > 1.0 ||
                 abs(current.parentalAllowanceTotalBeforeCutoff - live.parentalAllowanceTotalBeforeCutoff) > 1.0
         list.add(
             SyncDifferenceItem(
                 category = "Social & Parental Support",
-                label = "Parental Benefit Pot (Post-${live.parentalAllowanceCutoffYear})",
+                label = "Parental Benefit Pot",
                 currentValueFormatted = fmtCZK(current.parentalAllowanceTotalFromCutoff),
                 liveValueFormatted = fmtCZK(live.parentalAllowanceTotalFromCutoff),
                 isDifferent = isParentalDiff,
-                impactHint = "Statutory total allowance pot under Zákon č. 117/1995 Sb."
+                impactHint = "Statutory 350 000 CZK total pot under Zákon č. 117/1995 Sb."
             )
         )
 

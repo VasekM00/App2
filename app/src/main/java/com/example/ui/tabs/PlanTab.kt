@@ -176,10 +176,10 @@ private object PlanMetricInfos {
     val dpsLepsiPenzijko = MetricInfo(
         title = "DPS 'Lepší Penzijko' Reform (Proposed 2027)",
         category = "State Subsidy & Pension",
-        formulaOrRule = "20% standard match · 40% youth match (<30 yrs) up to 680 CZK/mo",
-        explanation = "State supplementary pension savings. Current statutory law provides a 20% flat match (up to 340 CZK/mo). The 40% youth match (<30 yrs) and fee caps are approved government reform proposals with planned effect from 2027.",
-        statutoryReference = "Act No. 427/2011 Coll. & Proposed 2027 Reform",
-        practicalImplication = "Under current law, deposits between 500 CZK and 1,700 CZK receive 20% state subsidy. Proposed reform doubles this for youth under 30.",
+        formulaOrRule = "20% state match up to 340 CZK/mo on deposits up to 1,700 CZK/mo",
+        explanation = "State supplementary pension savings. Current statutory law provides a 20% flat match (up to 340 CZK/mo) on monthly contributions up to 1,700 CZK/mo.",
+        statutoryReference = "Act No. 427/2011 Coll.",
+        practicalImplication = "Under current statutory law, deposits between 500 CZK and 1,700 CZK receive a 20% state subsidy (max 340 CZK/mo).",
         accentColor = Color(0xFF0F766E)
     )
 
@@ -316,14 +316,17 @@ private fun RoadmapAndGoalsSubTab(
 
         when (selectedView) {
             0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = onShowInfo)
-            1 -> HouseholdTimelineSubTab(state)
+            1 -> HouseholdTimelineSubTab(state, onUpdateSettings)
             2 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
         }
     }
 }
 
 @Composable
-private fun HouseholdTimelineSubTab(state: FullCalculationState) {
+private fun HouseholdTimelineSubTab(
+    state: FullCalculationState,
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+) {
     val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
@@ -333,7 +336,7 @@ private fun HouseholdTimelineSubTab(state: FullCalculationState) {
             .testTag("household_timeline_subtab"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        com.example.ui.components.HouseholdTimelineCard(settings = state.settings)
+        com.example.ui.components.HouseholdTimelineCard(settings = state.settings, onUpdateSettings = onUpdateSettings)
         Spacer(modifier = Modifier.height(24.dp))
     }
 }

@@ -65,10 +65,10 @@ private object WaterfallMetricInfos {
     val dpsSubsidy = MetricInfo(
         title = "Step 3: State Supplementary Pension (DPS)",
         category = "State Cash Subsidy",
-        formulaOrRule = "20% standard match · 40% youth match (<30 yrs) up to 1,700 CZK/mo",
-        explanation = "Deposits up to 1,700 CZK/mo receive direct monthly state cash payments (up to 340 CZK/mo standard, or 680 CZK/mo youth match). Above 1,700 CZK, subsidy is 0 CZK; tax shield is identical to DIP, but DIP has lower ETF fees.",
+        formulaOrRule = "20% state match up to 1,700 CZK/mo deposit (max 340 CZK/mo)",
+        explanation = "Deposits up to 1,700 CZK/mo receive direct monthly state cash payments (up to 340 CZK/mo standard match). Above 1,700 CZK, subsidy is 0 CZK; tax shield is identical to DIP, but DIP has lower ETF fees.",
         statutoryReference = "Act No. 427/2011 Coll. (ZPS)",
-        practicalImplication = "Max out 1,700 CZK/mo first for guaranteed 20-40% state match. Any additional retirement savings beyond 1,700 CZK should go to DIP rather than DPS to avoid pension fund fee drag.",
+        practicalImplication = "Max out 1,700 CZK/mo first for guaranteed 20% state match. Any additional retirement savings beyond 1,700 CZK should go to DIP rather than DPS to avoid pension fund fee drag.",
         accentColor = Color(0xFFD97706)
     )
 
@@ -193,11 +193,7 @@ fun FundsAllocatorCard(
                 currentAlloc = "${fmtCZK(vDps + eDps)} / month",
                 statusText = if (isDpsMaxed) "MAX SUBSIDY" else "OPTIMIZE TO 1,700",
                 statusColor = if (isDpsMaxed) GoodGreen else BrandGold,
-                recommendation = if (state.dps.youthSubsidyActive) {
-                    "Deposit 1,700 Kč/mo for the 40% youth match (680 Kč/mo cash). Above 1,700 Kč, route savings to DIP for lower ETF fees."
-                } else {
-                    "Deposit 1,700 Kč/mo for the max 20% state match (340 Kč/mo). Above 1,700 Kč, route savings to DIP for lower ETF fees."
-                },
+                recommendation = "Deposit 1,700 Kč/mo for the max 20% state match (340 Kč/mo). Above 1,700 Kč, route savings to DIP for lower ETF fees.",
                 info = WaterfallMetricInfos.dpsSubsidy,
                 onShowInfo = onShowInfo
             )

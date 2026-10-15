@@ -624,6 +624,7 @@ fun SettingsTab(
 
                             BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { onUpdateSettings(s.copy(child1Enabled = it)) })
                             if (s.child1Enabled) {
+                                TextSettingField(label = "Child 1 Name", value = s.child1Name, onValueChange = { onUpdateSettings(s.copy(child1Name = it)) })
                                 NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt())) })
                                 NumberSettingField(label = "Child 1 Tax Bonus Annual", value = s.child1TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child1TaxBonusAnnual = it)) })
 
@@ -639,6 +640,7 @@ fun SettingsTab(
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             BooleanSettingField(label = "Include Planned Child 2 Milestone", checked = s.child2Enabled, onCheckedChange = { onUpdateSettings(s.copy(child2Enabled = it)) })
                             if (s.child2Enabled) {
+                                TextSettingField(label = "Child 2 Name", value = s.child2Name, onValueChange = { onUpdateSettings(s.copy(child2Name = it)) })
                                 NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
                                 NumberSettingField(label = "Child 2 Tax Bonus Annual", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
                             }
@@ -1811,6 +1813,56 @@ private fun NumberSettingField(
             singleLine = true,
             modifier = Modifier
                 .width(140.dp)
+                .onFocusChanged {
+                    if (isFocused && !it.isFocused) {
+                        commitCurrentText()
+                    }
+                    isFocused = it.isFocused
+                }
+                .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
+        )
+    }
+}
+
+@Composable
+private fun TextSettingField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    testTagStr: String = ""
+) {
+    var textValue by remember(value) { mutableStateOf(value) }
+    var isFocused by remember { mutableStateOf(false) }
+
+    fun commitCurrentText() {
+        val trimmed = textValue.trim()
+        if (trimmed.isNotEmpty()) {
+            onValueChange(trimmed)
+        } else {
+            textValue = value
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        OutlinedTextField(
+            value = textValue,
+            onValueChange = { textValue = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { commitCurrentText() }),
+            singleLine = true,
+            modifier = Modifier
+                .width(160.dp)
                 .onFocusChanged {
                     if (isFocused && !it.isFocused) {
                         commitCurrentText()

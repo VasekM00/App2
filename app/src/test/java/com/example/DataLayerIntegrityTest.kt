@@ -118,7 +118,7 @@ class DataLayerIntegrityTest {
             minWageMonthly = 25000.0,
             dpsDeductionThresholdMonthly = 1700.0,
             dpsStandardSubsidyMaxMonthly = 340.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             dpsMinDepositForSubsidy = 500.0,
             dpsYouthAgeLimit = 30,
             dpsSubsidyRateStandardPct = 20.0,

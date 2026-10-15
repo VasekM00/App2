@@ -101,7 +101,7 @@ data class HouseholdProfile(
                 children.add(
                     HouseholdMember(
                         id = "child_1",
-                        name = "Child 1",
+                        name = settings.child1Name,
                         role = HouseholdRole.DEPENDENT_CHILD,
                         birthYear = settings.child1BirthYear
                     )
@@ -111,7 +111,7 @@ data class HouseholdProfile(
                 children.add(
                     HouseholdMember(
                         id = "child_2",
-                        name = "Child 2",
+                        name = settings.child2Name,
                         role = HouseholdRole.DEPENDENT_CHILD,
                         birthYear = settings.child2BirthYear
                     )
@@ -123,7 +123,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_child1_birth",
-                        name = "Child 1 Birth",
+                        name = "${settings.child1Name} Birth",
                         targetYear = settings.child1BirthYear,
                         type = TimelineEventType.CHILD_BIRTH
                     )
@@ -131,7 +131,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_child1_independence",
-                        name = "Child 1 Independence",
+                        name = "${settings.child1Name} Independence",
                         targetYear = settings.child1BirthYear + settings.childSupportUntilAge,
                         type = TimelineEventType.CHILD_INDEPENDENCE
                     )
@@ -141,7 +141,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_child2_birth",
-                        name = "Child 2 Birth",
+                        name = if (settings.child2BirthYear > settings.baseYear) "${settings.child2Name} Planned (Birth)" else "${settings.child2Name} Birth",
                         targetYear = settings.child2BirthYear,
                         type = TimelineEventType.CHILD_BIRTH
                     )
@@ -149,7 +149,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_child2_independence",
-                        name = "Child 2 Independence",
+                        name = "${settings.child2Name} Independence",
                         targetYear = settings.child2BirthYear + settings.childSupportUntilAge,
                         type = TimelineEventType.CHILD_INDEPENDENCE
                     )

@@ -11,8 +11,8 @@ import kotlin.math.min
 object CzechTaxEngine {
 
     /**
-     * Lepší penzijko Reform: State Subsidy calculation with customizable threshold, rates, youth cutoff and caps.
-     * Standard: 20% max 340 CZK; Youth < 30 y/o: 40% max 680 CZK effective starting from 2027.
+     * State Subsidy calculation with customizable threshold, rates, youth cutoff and caps.
+     * Standard: 20% max 340 CZK; Youth < 30 y/o: capped at statutory maximum (340 CZK/mo).
      */
     fun dpsSubsidy(
         monthlyDeposit: Double,
@@ -20,15 +20,15 @@ object CzechTaxEngine {
         settings: SettingsEntity? = null,
         year: Int = settings?.baseYear ?: 2026
     ): Double {
-        val minDeposit = settings?.dpsMinDepositForSubsidy ?: 500.0
+        val minDeposit = settings?.dpsMinDepositForSubsidy ?: RegulatoryConstants.LEPSI_PENZIJKO_MIN_DEPOSIT_MONTHLY
         if (monthlyDeposit < minDeposit) return 0.0
-        val youthAge = settings?.dpsYouthAgeLimit ?: 30
-        val stdRate = (settings?.dpsSubsidyRateStandardPct ?: 20.0) / 100.0
-        val youthRate = (settings?.dpsSubsidyRateYouthPct ?: 40.0) / 100.0
+        val youthAge = settings?.dpsYouthAgeLimit ?: RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_AGE_LIMIT
+        val stdRate = (settings?.dpsSubsidyRateStandardPct ?: RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_SUBSIDY_RATE_PCT) / 100.0
+        val youthRate = (settings?.dpsSubsidyRateYouthPct ?: RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT) / 100.0
         val isYouthEligible = (age < youthAge) && (year >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR)
         val rate = if (isYouthEligible) youthRate else stdRate
-        val youthCap = settings?.dpsYouthSubsidyMaxMonthly ?: 680.0
-        val standardCap = settings?.dpsStandardSubsidyMaxMonthly ?: 340.0
+        val youthCap = settings?.dpsYouthSubsidyMaxMonthly ?: RegulatoryConstants.LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY
+        val standardCap = settings?.dpsStandardSubsidyMaxMonthly ?: RegulatoryConstants.LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY
         val maxSub = if (isYouthEligible) youthCap else standardCap
         return min(monthlyDeposit * rate, maxSub)
     }

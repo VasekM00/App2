@@ -795,12 +795,12 @@ private fun PortfolioAccountsView(
     )
 
     val youthSubsidyInfo = MetricInfo(
-        title = "DPS Youth State Match (<30 y/o)",
+        title = "DPS State Contribution",
         category = "State Subsidy Optimization",
-        formulaOrRule = "40% state match up to 680 CZK/mo on 1,700 CZK deposit",
-        explanation = "Provides a doubled 40% matching contribution for participants under age 30, up to a monthly maximum of 680 CZK on a 1,700 CZK deposit (vs standard 20% / 340 CZK).",
-        statutoryReference = "Act No. 427/2011 Coll. Amendments",
-        practicalImplication = "Yields an instantaneous, guaranteed 40% risk-free return on deposits prior to turning 30.",
+        formulaOrRule = "20% state match up to 340 CZK/mo on 1,700 CZK deposit",
+        explanation = "Provides a 20% matching contribution up to a monthly maximum of 340 CZK on a 1,700 CZK deposit under Czech Act No. 427/2011 Coll.",
+        statutoryReference = "Act No. 427/2011 Coll.",
+        practicalImplication = "Yields an instantaneous, guaranteed 20% risk-free return on deposits up to 1,700 CZK/mo.",
         accentColor = GoodGreen
     )
 

@@ -141,8 +141,8 @@ internal object CashFlowMetricInfos {
     val dpsSubsidy = MetricInfo(
         title = "DPS (Doplňkové penzijní spoření)",
         category = "State Subsidy & Pension",
-        formulaOrRule = "20% standard / 40% youth match + § 15(5) ZDP deduction",
-        explanation = "Supplementary pension savings with direct state matching. Under 30 receives 40% state match up to 680 CZK/mo. Contributions over 1,700 CZK/mo qualify for additional personal income tax deduction.",
+        formulaOrRule = "20% state match up to 340 CZK/mo + § 15(5) ZDP deduction",
+        explanation = "Supplementary pension savings with direct state matching. Contributions receive a 20% state match up to 340 CZK/mo (on deposits up to 1,700 CZK/mo). Contributions over 1,700 CZK/mo qualify for additional personal income tax deduction.",
         statutoryReference = "Act No. 427/2011 Coll.",
         practicalImplication = "Combines guaranteed state subsidy returns with long-term compound equity growth in dynamic participation funds.",
         accentColor = Color(0xFF0F766E)

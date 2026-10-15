@@ -154,4 +154,36 @@ class HouseholdDomainModelAndBurnRateTest {
         assertNotNull(ePensionEvent)
         assertTrue(ePensionEvent!!.targetYear > settings.baseYear)
     }
+
+    @Test
+    fun testCustomChildNamesMappedToHouseholdProfileAndTimelineEvents() {
+        val settings = SettingsEntity(
+            child1Enabled = true,
+            child1Name = "Anička",
+            child1BirthYear = 2024,
+            child2Enabled = true,
+            child2Name = "Jakub",
+            child2BirthYear = 2027
+        )
+
+        val profile = HouseholdProfile.fromSettings(settings)
+        assertEquals("Anička", profile.children[0].name)
+        assertEquals("Jakub", profile.children[1].name)
+
+        val c1Birth = profile.timelineEvents.firstOrNull { it.id == "event_child1_birth" }
+        assertNotNull(c1Birth)
+        assertTrue(c1Birth!!.name.contains("Anička"))
+
+        val c2Birth = profile.timelineEvents.firstOrNull { it.id == "event_child2_birth" }
+        assertNotNull(c2Birth)
+        assertTrue(c2Birth!!.name.contains("Jakub"))
+
+        val c1Ind = profile.timelineEvents.firstOrNull { it.id == "event_child1_independence" }
+        assertNotNull(c1Ind)
+        assertTrue(c1Ind!!.name.contains("Anička"))
+
+        val c2Ind = profile.timelineEvents.firstOrNull { it.id == "event_child2_independence" }
+        assertNotNull(c2Ind)
+        assertTrue(c2Ind!!.name.contains("Jakub"))
+    }
 }

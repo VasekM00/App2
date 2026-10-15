@@ -112,7 +112,7 @@ class NetworkAndSyncResilienceTest {
             child2TaxBonusAnnual = 22320.0,
             taxpayerCreditAnnual = 30840.0,
             dipDpsCombinedCeilingAnnual = 48000.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             progressive23ThresholdAnnual = 1762812.0
         )
 
@@ -122,7 +122,7 @@ class NetworkAndSyncResilienceTest {
             child2TaxBonusAnnual = 22320.0,
             taxpayerCreditAnnual = 30840.0,
             taxDeductionCeilingAnnual = 48000.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             taxSecondBracketThresholdAnnual = 1762812.0
         )
 
@@ -148,7 +148,7 @@ class NetworkAndSyncResilienceTest {
             child2TaxBonusAnnual = 22320.0,
             taxpayerCreditAnnual = 30840.0,
             dipDpsCombinedCeilingAnnual = 48000.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             progressive23ThresholdAnnual = 1762812.0
         )
 
@@ -158,7 +158,7 @@ class NetworkAndSyncResilienceTest {
             child2TaxBonusAnnual = 22320.0,
             taxpayerCreditAnnual = 30840.0,
             taxDeductionCeilingAnnual = 48000.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             taxSecondBracketThresholdAnnual = 1762812.0
         )
 
@@ -211,7 +211,7 @@ class NetworkAndSyncResilienceTest {
             dpsMinDepositForSubsidy = 500.0,
             dpsDeductionThresholdMonthly = 1700.0,
             dpsStandardSubsidyMaxMonthly = 340.0,
-            dpsYouthSubsidyMaxMonthly = 680.0,
+            dpsYouthSubsidyMaxMonthly = 340.0,
             dpsYouthAgeLimit = 30,
             minWageMonthly = 22400.0
         )
@@ -283,7 +283,7 @@ class NetworkAndSyncResilienceTest {
             baseTaxRatePct = 15.0,
             taxpayerCreditAnnual = 30840.0,
             child1TaxBonusAnnual = 15204.0,
-            dpsYouthSubsidyMaxMonthly = 680.0
+            dpsYouthSubsidyMaxMonthly = 340.0
         )
 
         val updated = CzechEconomicSyncService.applyRegulatoryUpdates(

@@ -45,23 +45,19 @@ object RegulatoryConstants {
     const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026 = 1762812.0
     const val STATUTORY_INCOME_TAX_LAW_REF = "ZDP § 16 (15 % základní pásmo, 23 % nad 36× průměrné mzdy)"
 
-    // --- REFORMA DPS "LEPŠÍ PENZIJKO" (novela zákona o doplňkovém penzijním spoření, schváleno vládou 8/2026) ---
-    // 1. Státní příspěvek pro mladé (do 30. narozenin): 40 % z vkladu, max 680 Kč/měsíc při úložce 1 700 Kč/měsíc
-    // 2. Standardní státní příspěvek (≥ 30 let): 20 % z vkladu, max 340 Kč/měsíc při úložce 1 700 Kč/měsíc (min vklad 500 Kč/měsíc)
-    // 3. Zákonný poplatkový strop pro správu fondů: 0.5 % p.a. (ruší se výkonnostní poplatek)
-    // 4. Možnost jednorázového výběru až jedné TŘETINY vlastních vkladů včetně jejich zhodnocení
-    //    do 36. narozenin (po minimálně 10 letech spoření, bez sankce; výběr není vázán na účel)
+    // --- STÁTNÍ PŘÍSPĚVEK DPS (zákon č. 427/2011 Sb., o doplňkovém penzijním spoření) ---
+    // Státní příspěvek: 20 % z vkladu, max 340 Kč/měsíc při úložce 1 700 Kč/měsíc (min vklad 500 Kč/měsíc)
     const val LEPSI_PENZIJKO_MIN_DEPOSIT_MONTHLY = 500.0
     const val LEPSI_PENZIJKO_STANDARD_SUBSIDY_RATE_PCT = 20.0
     const val LEPSI_PENZIJKO_STANDARD_MAX_SUBSIDY_MONTHLY = 340.0
     const val LEPSI_PENZIJKO_YOUTH_AGE_LIMIT = 30
-    const val LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT = 40.0
-    const val LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY = 680.0
+    const val LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT = 20.0
+    const val LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY = 340.0
     const val LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT = 0.5
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE = 36
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT = 100.0 / 3.0
     const val LEPSI_PENZIJKO_EFFECTIVE_YEAR = 2027
-    const val LEPSI_PENZIJKO_LAW_REF = "Novela zákona o doplňkovém penzijním spoření (Lepší penzijko, účinnost od 1. 1. 2027)"
+    const val LEPSI_PENZIJKO_LAW_REF = "Zákon č. 427/2011 Sb., o doplňkovém penzijním spoření (strop 340 Kč/měsíc)"
 
     // --- Minimální mzda v ČR ---
     const val STATUTORY_MIN_WAGE_MONTHLY_2026 = 22400.0
@@ -82,10 +78,8 @@ object RegulatoryConstants {
     const val DEFAULT_CPI_BENCHMARK_PCT = 2.8
 
     // --- Rodičovský příspěvek (zákon č. 117/1995 Sb., o státní sociální podpoře) ---
-    // Celková částka je určena na každé narozené dítě podle data narození:
-    // - narozené před 1. 1. 2027: 350 000 Kč
-    // - narozené od 1. 1. 2027: 400 000 Kč
+    // Celková částka je určena na každé narozené dítě: 350 000 Kč
     const val PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF = 350000.0
-    const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 400000.0
+    const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 350000.0
     const val PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR = 2027
 }

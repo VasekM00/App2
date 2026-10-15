@@ -41,12 +41,12 @@ data class CzechRegulatoryData(
     val dpsMinDepositForSubsidy: Double = 500.0,
     val dpsDeductionThresholdMonthly: Double = 1700.0,
     val dpsStandardSubsidyMaxMonthly: Double = 340.0, // 20% on 1,700 CZK
-    val dpsYouthSubsidyMaxMonthly: Double = 680.0, // 40% youth subsidy under 30 yrs
+    val dpsYouthSubsidyMaxMonthly: Double = 340.0, // Statutory cap on state subsidy (340 CZK/mo)
     val dpsYouthAgeLimit: Int = 30,
     val dpsStatutoryFeeCapPct: Double = 0.5, // Maximum TER management fee cap
     val childBonusMinWageMultiplier: Double = 6.0, // ZDP § 35c(4) min wage multiplier
-    val parentalAllowanceTotalBeforeCutoff: Double = 350000.0, // Pre-2027 total pot
-    val parentalAllowanceTotalFromCutoff: Double = 400000.0, // Post-2027 total pot
+    val parentalAllowanceTotalBeforeCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)
+    val parentalAllowanceTotalFromCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)
     val parentalAllowanceCutoffYear: Int = 2027
 )
 
