@@ -115,122 +115,36 @@ fun HouseholdTimelineCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Total Household Net Income Banner
-            Surface(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("household_total_income_banner"),
-                shape = RoundedCornerShape(14.dp),
-                color = BrandTeal.copy(alpha = 0.08f),
-                border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f))
+                    .testTag("household_members_header_row"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "TOTAL HOUSEHOLD NET CASH FLOW",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandTeal,
-                                letterSpacing = 0.8.sp
-                            )
-                            Text(
-                                text = "Combined monthly net cash flow across all family income streams",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BrandTeal.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "net/mo",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandTeal,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
+                Text(
+                    text = "FAMILY MEMBERS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    letterSpacing = 0.8.sp
+                )
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = BrandTeal.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
+                    modifier = Modifier.testTag("household_total_income_banner")
+                ) {
                     Text(
-                        text = fmtCZK(totalHouseholdNet),
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = "Total: ${fmtCZK(totalHouseholdNet)} net/mo",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = BrandTeal,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BrandBlue.copy(alpha = 0.12f),
-                            border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
-                        ) {
-                            Text(
-                                text = "${settings.primaryName}: ${fmtCZK(primaryNetTotal)}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BrandBlue,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                        if (isSpouseActive) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = BrandTeal.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f))
-                            ) {
-                                Text(
-                                    text = "${settings.spouseName}: ${fmtCZK(spouseNetTotal)}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = BrandTeal,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                        if (income.lumpSumMonthly > 0.0) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = BrandGold.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f))
-                            ) {
-                                Text(
-                                    text = "Other: +${fmtCZK(income.lumpSumMonthly)}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = BrandGold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "FAMILY MEMBERS",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                letterSpacing = 0.8.sp
-            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
