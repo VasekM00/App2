@@ -63,9 +63,10 @@ fun EmergencyReserveWidget(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE) }
-    val initialMode = state.settings.emergencyReserveMode.ifBlank {
+    val rawMode = state.settings.emergencyReserveMode.ifBlank {
         prefs.getString("emergency_reserve_mode", "6M") ?: "6M"
     }
+    val initialMode = if (rawMode == "Target") "6M" else rawMode
     var selectedTargetMode by remember(state.settings.emergencyReserveMode) {
         mutableStateOf(initialMode)
     }
@@ -156,15 +157,8 @@ fun EmergencyReserveWidget(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             ),
-                            maxLines = 2,
-                            softWrap = true
-                        )
-                        Text(
-                            text = "${String.format(java.util.Locale.forLanguageTag("cs-CZ"), "%.1f", monthsCovered)} Mo. Expenses Covered",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            softWrap = true
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -198,7 +192,7 @@ fun EmergencyReserveWidget(
                     softWrap = false
                 )
                 Text(
-                    text = "Target ($selectedTargetMode): ${fmtCompact(targetAmount)}",
+                    text = "Target: ${fmtCompact(targetAmount)}",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -252,7 +246,7 @@ fun EmergencyReserveWidget(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf("3M", "6M", "9M", "12M", "Target").forEach { mode ->
+                    listOf("3M", "6M", "9M", "12M").forEach { mode ->
                         FilterChip(
                             selected = selectedTargetMode == mode,
                             onClick = {

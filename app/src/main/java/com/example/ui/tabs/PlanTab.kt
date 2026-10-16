@@ -336,7 +336,7 @@ private fun HouseholdTimelineSubTab(
             .testTag("household_timeline_subtab"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        com.example.ui.components.HouseholdTimelineCard(settings = state.settings, onUpdateSettings = onUpdateSettings)
+        com.example.ui.components.HouseholdTimelineCard(settings = state.settings, state = state, onUpdateSettings = onUpdateSettings)
         Spacer(modifier = Modifier.height(24.dp))
     }
 }

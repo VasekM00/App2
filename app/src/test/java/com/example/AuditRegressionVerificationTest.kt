@@ -284,4 +284,62 @@ class AuditRegressionVerificationTest {
         assertTrue(year10.pensionPortfolio > year0.pensionPortfolio)
         assertEquals(year10.portfolio + year10.pensionPortfolio, year10.totalPortfolio, 0.001)
     }
+
+    // 6. Household Timeline Net Cash Flow Verification & Ledger Overrides
+    @Test
+    fun testHouseholdTimeline_netCashFlowAndLedgerOverrides() {
+        val baseSettings = SettingsEntity.freshDefaults().copy(
+            baseYear = 2026,
+            vSalary = 33500.0,
+            vMealVouchersMonthly = 2090.0,
+            familyGiftMonthly = 16000.0,
+            vGiftsMonthly = 16000.0,
+            eStartingSalary = 25000.0,
+            eParentalAllowanceMonthly = 13000.0,
+            eLecturingMonthly = 6900.0,
+            eIncludeLecturing = true,
+            eReturnYear = 2028,
+            isSingleHousehold = false
+        )
+
+        // 1. Baseline scenario before return year:
+        // Vaclav net = 33500, vouchers = 2090, gift = 16000 -> primary = 51590
+        // Eleonora net = 13000 (RP) + 6900 (lecturing) = 19900
+        // Total household net = 51590 + 19900 = 71490
+        val baseIncome = FinancialEngine.householdIncome(2026, baseSettings)
+        val primaryNetBase = baseIncome.vaclavNet + baseIncome.vouchers + baseIncome.vaclavGifts + baseIncome.vaclavOther
+        val spouseNetBase = baseIncome.eleonoraSalary + baseIncome.benefit + baseIncome.lecturing + baseIncome.eleonoraGifts + baseIncome.eleonoraOther
+        assertEquals(33500.0, baseIncome.vaclavNet, 0.001)
+        assertEquals(51590.0, primaryNetBase, 0.001)
+        assertEquals(19900.0, spouseNetBase, 0.001)
+        assertEquals(71490.0, baseIncome.totalMonthly, 0.001)
+
+        // 2. Active ledger month override (e.g. October actual statement net cash flow totaling 91 000 CZK net):
+        val octLedger = LedgerEntryEntity(
+            yearMonth = "2026-10",
+            incVaclav = 45000.0,
+            incEleonora = 25000.0,
+            incUnforeseen = 2910.0,
+            expRent = 18000.0,
+            expGroceries = 12000.0,
+            expOther = 5000.0,
+            portfolioBalanceAtMonthEnd = 300000.0,
+            pensionBalanceAtMonthEnd = 80000.0,
+            emergencyReserveAtMonthEnd = 150000.0
+        )
+        // With active ledger entry and lecturing enabled:
+        // v = 45000, e = 25000, lecturing = 6900, vouchers = 2090, gift = 16000, unforeseen = 2910 -> total = 97900
+        val octIncome = FinancialEngine.householdIncome(2026, baseSettings, activeLedgerEntry = octLedger, month = 10)
+        assertEquals(97900.0, octIncome.totalMonthly, 0.001)
+
+        // When lecturing is already folded into ledger incEleonora (includeLecturing = false):
+        val octSettingsNoExtraLec = baseSettings.copy(eIncludeLecturing = false)
+        val octIncomeExact91k = FinancialEngine.householdIncome(2026, octSettingsNoExtraLec, activeLedgerEntry = octLedger, month = 10)
+        assertEquals(91000.0, octIncomeExact91k.totalMonthly, 0.001)
+
+        // 3. Post career return (e.g. 2029):
+        val futureIncome = FinancialEngine.householdIncome(2029, baseSettings)
+        assertTrue(futureIncome.eleonoraSalary > 0.0)
+        assertEquals(0.0, futureIncome.benefit, 0.001)
+    }
 }
