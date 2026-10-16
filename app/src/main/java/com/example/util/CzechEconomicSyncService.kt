@@ -17,7 +17,7 @@ import kotlin.math.abs
 
 object CzechEconomicSyncService {
 
-    private const val CNB_DAILY_RATES_URL = "https://data.cnb.cz/cnbapi/exrates/daily?lang=EN"
+    private const val CNB_DAILY_RATES_URL = "https://api.cnb.cz/cnbapi/exrates/daily?lang=EN"
     private const val CNB_TXT_FALLBACK_URL = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt"
     private const val STATUTORY_MANIFEST_URL = "https://raw.githubusercontent.com/VasekM00/App2/main/regulatory_manifest.json"
 

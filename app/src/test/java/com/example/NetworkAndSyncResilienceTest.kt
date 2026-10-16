@@ -27,10 +27,10 @@ class NetworkAndSyncResilienceTest {
 
     /**
      * 3.1: Live ČNB daily rates REST API sync.
-     * SKIPPED: fetchLiveRegulatoryData requires active HTTP connectivity to data.cnb.cz,
+     * SKIPPED: fetchLiveRegulatoryData requires active HTTP connectivity to api.cnb.cz,
      * which is not guaranteed or hermetic in local/CI unit test environments.
      */
-    @Ignore("Skipped: fetchLiveRegulatoryData requires real HTTP connection to ČNB REST endpoint (https://data.cnb.cz).")
+    @Ignore("Skipped: fetchLiveRegulatoryData requires real HTTP connection to ČNB REST endpoint (https://api.cnb.cz).")
     @Test
     fun test3_1_liveCnbDailyRatesSync() {
         // Skipped in unit test suite. Handled via mock/integration tests.
