@@ -152,7 +152,7 @@ fun EmergencyReserveWidget(
                             .padding(end = 6.dp)
                     ) {
                         Text(
-                            text = "Emergency Fund & Runway",
+                            text = "Emergency Fund",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp

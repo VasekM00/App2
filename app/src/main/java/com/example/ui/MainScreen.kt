@@ -144,7 +144,7 @@ fun MainScreen(
     val searchCatalog = remember {
         listOf(
             SearchIndexEntry("Emergency Cash Reserve & Runway", "Overview", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
-            SearchIndexEntry("FIRE Milestones & Freedom Score", "Overview", 0, 0, listOf("freedom", "score", "milestone", "coast", "lean", "standard", "barista", "overview")),
+            SearchIndexEntry("FIRE Milestones & Targets", "Overview", 0, 0, listOf("milestone", "coast", "lean", "standard", "barista", "fat", "overview", "target")),
             SearchIndexEntry("Monthly Budget & Surplus Summary", "Cash Flow > Budget & Incomes", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
             SearchIndexEntry("Live Czech Economic & Regulatory Sync", "Settings > Data & System", 4, 2, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp")),
             SearchIndexEntry("Vaclav & Eleonora Salaries, Raises & Bonuses", "Cash Flow > Budget & Incomes", 1, 0, listOf("income", "salary", "bonus", "raise", "vaclav", "eleonora", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),

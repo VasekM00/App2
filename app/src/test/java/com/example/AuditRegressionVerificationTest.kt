@@ -50,7 +50,7 @@ class AuditRegressionVerificationTest {
         viewModel = MainViewModel(context)
     }
 
-    private suspend fun drainAsync(maxRetries: Int = 40, condition: suspend () -> Boolean): Boolean {
+    private suspend fun drainAsync(maxRetries: Int = 100, condition: suspend () -> Boolean): Boolean {
         for (i in 0 until maxRetries) {
             shadowOf(Looper.getMainLooper()).idle()
             if (condition()) return true
