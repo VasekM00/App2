@@ -47,13 +47,15 @@ class NetworkAndSyncResilienceTest {
     }
 
     /**
-     * 3.3: Remote statutory manifest JSON download.
-     * SKIPPED: Downloading raw manifest from GitHub requires real outbound internet access.
+     * 3.3: Direct official statutory baseline verification.
+     * The app relies directly on codified Czech statutory constants, eliminating external manifest dependencies.
      */
-    @Ignore("Skipped: Remote statutory manifest sync requires live GitHub HTTP access.")
     @Test
-    fun test3_3_remoteStatutoryManifestDownload() {
-        // Skipped in unit test suite.
+    fun test3_3_officialStatutoryBaselineVerification() {
+        val data = CzechRegulatoryData()
+        assertEquals(30840.0, data.taxpayerCreditAnnual, 0.001)
+        assertEquals(48000.0, data.dipDpsCombinedCeilingAnnual, 0.001)
+        assertEquals(1762812.0, data.progressive23ThresholdAnnual, 0.001)
     }
 
     /**

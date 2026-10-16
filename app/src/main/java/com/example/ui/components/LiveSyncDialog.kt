@@ -112,7 +112,7 @@ fun LiveSyncDialog(
                     CircularProgressIndicator(color = BrandTeal, modifier = Modifier.size(36.dp))
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Connecting to ČSÚ & ČNB open data registries...",
+                        text = "Connecting to official ČNB exchange rate API...",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

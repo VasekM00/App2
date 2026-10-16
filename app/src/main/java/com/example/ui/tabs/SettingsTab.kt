@@ -1055,7 +1055,7 @@ fun SettingsTab(
                             badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold
                         ) {
                             Text(
-                                text = "Benchmark live macroeconomic parameters directly against official feeds from Český statistický úřad (ČSÚ), Česká národní banka (ČNB), and Czech tax/pension legislation.",
+                                text = "Fetch live daily exchange rates directly from the official Česká národní banka (ČNB) API and benchmark settings against verified Czech statutory tax and pension regulations.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

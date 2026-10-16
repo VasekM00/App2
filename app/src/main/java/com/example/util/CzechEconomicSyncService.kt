@@ -19,41 +19,27 @@ object CzechEconomicSyncService {
 
     private const val CNB_DAILY_RATES_URL = "https://api.cnb.cz/cnbapi/exrates/daily?lang=EN"
     private const val CNB_TXT_FALLBACK_URL = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt"
-    private const val STATUTORY_MANIFEST_URL = "https://raw.githubusercontent.com/VasekM00/App2/main/regulatory_manifest.json"
-
     /**
-     * Fetches live Czech macroeconomic, ČNB FX rates, and statutory tax/pension parameters.
-     * Guaranteed to return a valid CzechRegulatoryData object (uses local statutory defaults if offline
-     * or if the remote manifest contains out-of-range values).
+     * Fetches live official Czech National Bank (ČNB) daily exchange rates and
+     * couples them with the verified statutory legal baseline (Act No. 586/1992 Coll. ZDP).
+     * Guaranteed to return a valid CzechRegulatoryData object with zero third-party dependencies.
      */
     suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
         var eurRate = 25.15
         var usdRate = 23.25
         var rateDate = ""
-        var sourceDescription = "Local Verified Statutory Registry"
-        var parsed = localDefaults()
+        var sourceDescription = "Verified Czech Statutory Registry"
+        val parsed = localDefaults()
 
-        // 1. Fetch live ČNB exchange rates
+        // 1. Fetch live ČNB exchange rates directly from official CNB API
         try {
             val fxRates = fetchCnbRates()
             if (fxRates.first in 5.0..200.0) eurRate = fxRates.first
             if (fxRates.second in 5.0..200.0) usdRate = fxRates.second
             if (fxRates.third.isNotBlank()) rateDate = fxRates.third
-            sourceDescription = "ČNB Daily API & Statutory Registry"
+            sourceDescription = "Official ČNB Daily API & Statutory Registry"
         } catch (e: Exception) {
             // Keep default robust fallback
-        }
-
-        // 2. Fetch remote statutory manifest if available
-        try {
-            val remoteJson = fetchUrlContentWithRetry(STATUTORY_MANIFEST_URL, timeoutMs = 2500, maxRetries = 2)
-            if (!remoteJson.isNullOrBlank()) {
-                val json = JSONObject(remoteJson)
-                parsed = parseManifestSanitized(json, parsed)
-                sourceDescription = "Live ČSÚ, ČNB & Statutory Registry"
-            }
-        } catch (e: Exception) {
-            // Offline or repo manifest unreachable, use built-in statutory data
         }
 
         parsed.copy(
@@ -66,49 +52,6 @@ object CzechEconomicSyncService {
     }
 
     private fun localDefaults() = CzechRegulatoryData()
-
-    /**
-     * Parses the remote manifest but keeps the local default for any field that is
-     * missing, non-finite, or outside a sane statutory range, so a rogue or corrupted
-     * manifest can never corrupt user settings.
-     */
-    private fun parseManifestSanitized(json: JSONObject, fallback: CzechRegulatoryData): CzechRegulatoryData {
-        fun d(key: String, fallbackVal: Double, min: Double, max: Double): Double {
-            val v = json.optDouble(key, fallbackVal)
-            return if (v.isFinite() && v in min..max) v else fallbackVal
-        }
-        fun i(key: String, fallbackVal: Int, min: Int, max: Int): Int {
-            val v = json.optInt(key, fallbackVal)
-            return if (v in min..max) v else fallbackVal
-        }
-        return fallback.copy(
-            effectiveYear = i("effectiveYear", fallback.effectiveYear, 2020, 2100),
-            csuCpiInflationPct = d("csuCpiInflationPct", fallback.csuCpiInflationPct, -10.0, 50.0),
-            csuNationalAverageWageMonthly = d("csuNationalAverageWageMonthly", fallback.csuNationalAverageWageMonthly, 20000.0, 200000.0),
-            baseTaxRatePct = d("baseTaxRatePct", fallback.baseTaxRatePct, 0.0, 50.0),
-            progressiveTaxRatePct = d("progressiveTaxRatePct", fallback.progressiveTaxRatePct, 0.0, 60.0),
-            progressive23ThresholdAnnual = d("progressive23ThresholdAnnual", fallback.progressive23ThresholdAnnual, 500000.0, 10000000.0),
-            taxpayerCreditAnnual = d("taxpayerCreditAnnual", fallback.taxpayerCreditAnnual, 0.0, 200000.0),
-            spouseTaxCreditAnnual = d("spouseTaxCreditAnnual", fallback.spouseTaxCreditAnnual, 0.0, 200000.0),
-            spouseIncomeLimitAnnual = d("spouseIncomeLimitAnnual", fallback.spouseIncomeLimitAnnual, 0.0, 500000.0),
-            minWageMonthly = d("minWageMonthly", fallback.minWageMonthly, 5000.0, 100000.0),
-            child1TaxBonusAnnual = d("child1TaxBonusAnnual", fallback.child1TaxBonusAnnual, 0.0, 200000.0),
-            child2TaxBonusAnnual = d("child2TaxBonusAnnual", fallback.child2TaxBonusAnnual, 0.0, 200000.0),
-            child3PlusTaxBonusAnnual = d("child3PlusTaxBonusAnnual", fallback.child3PlusTaxBonusAnnual, 0.0, 200000.0),
-            dipDpsCombinedCeilingAnnual = d("dipDpsCombinedCeilingAnnual", fallback.dipDpsCombinedCeilingAnnual, 0.0, 500000.0),
-            employerRetirementExemptionAnnual = d("employerRetirementExemptionAnnual", fallback.employerRetirementExemptionAnnual, 0.0, 500000.0),
-            dpsMinDepositForSubsidy = d("dpsMinDepositForSubsidy", fallback.dpsMinDepositForSubsidy, 0.0, 10000.0),
-            dpsDeductionThresholdMonthly = d("dpsDeductionThresholdMonthly", fallback.dpsDeductionThresholdMonthly, 0.0, 20000.0),
-            dpsStandardSubsidyMaxMonthly = d("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly, 0.0, 20000.0),
-            dpsYouthSubsidyMaxMonthly = d("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly, 0.0, 20000.0),
-            dpsYouthAgeLimit = i("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit, 18, 40),
-            dpsStatutoryFeeCapPct = d("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct, 0.0, 10.0),
-            childBonusMinWageMultiplier = d("childBonusMinWageMultiplier", fallback.childBonusMinWageMultiplier, 1.0, 20.0),
-            parentalAllowanceTotalBeforeCutoff = d("parentalAllowanceTotalBeforeCutoff", fallback.parentalAllowanceTotalBeforeCutoff, 100000.0, 1000000.0),
-            parentalAllowanceTotalFromCutoff = d("parentalAllowanceTotalFromCutoff", fallback.parentalAllowanceTotalFromCutoff, 100000.0, 1000000.0),
-            parentalAllowanceCutoffYear = i("parentalAllowanceCutoffYear", fallback.parentalAllowanceCutoffYear, 2020, 2040)
-        )
-    }
 
     /**
      * Compares live official data against the user's current settings.
@@ -325,19 +268,6 @@ object CzechEconomicSyncService {
             } catch (ignored: Exception) {}
         }
         return Triple(eur, usd, rateDate)
-    }
-
-    private suspend fun fetchUrlContentWithRetry(urlString: String, timeoutMs: Int = 3000, maxRetries: Int = 2): String? {
-        var currentDelay = 250L
-        for (attempt in 0..maxRetries) {
-            val res = fetchUrlContent(urlString, timeoutMs)
-            if (res != null) return res
-            if (attempt < maxRetries) {
-                delay(currentDelay)
-                currentDelay *= 2
-            }
-        }
-        return null
     }
 
     private fun fetchUrlContent(urlString: String, timeoutMs: Int = 3000): String? {
