@@ -209,13 +209,13 @@ fun OverviewTab(
             accentColor = BrandTeal
         )
 
-        val dipSavingInfo = MetricInfo(
-            title = "DIP & DPS Statutory Tax Shield",
+        val taxRefundInfo = MetricInfo(
+            title = "Annual Tax Refund & Relief",
             category = "Czech Tax Optimization",
-            formulaOrRule = "Tax Refund = min(DIP + DPS Deposits - Subsidy Threshold, 48k CZK) × Tax Rate (15% / 23%)",
-            explanation = "Under § 15a of the Czech Income Tax Act (ZDP), taxpayers can deduct up to 48,000 CZK combined annually from their personal taxable base across qualifying Long-Term Investment Products (DIP) and Supplementary Pension Savings (DPS).",
-            statutoryReference = "§ 15 odst. 5 & § 15a Act No. 586/1992 Coll. (ZDP)",
-            practicalImplication = "Contributing 4,000 CZK/month into DIP unlocks the full 48k ceiling, providing an immediate risk-free 15% (7,200 CZK) or 23% (11,040 CZK) annual tax refund.",
+            formulaOrRule = "Annual Refund = Partner Credit (24 840 Kč) + Child Tax Credit (15 204 Kč) + DIP & DPS Deduction (up to 7 200 Kč)",
+            explanation = "This is not direct money you save from monthly spending. Rather, it is an annual statutory tax refund / cash rebate from the state (daňová vratka / daňový bonus) paid out in spring after your annual tax reconciliation (roční zúčtování daně) or via your tax return (daňové přiznání).",
+            statutoryReference = "§ 15a, § 35ba, § 35c Act No. 586/1992 Coll. (ZDP)",
+            practicalImplication = "Because this is an annual cash rebate returned to you by the tax authority, it represents unbudgeted lump-sum liquidity each spring that can be directly invested into your portfolio without reducing your monthly living budget.",
             accentColor = GoodGreen
         )
 
@@ -327,10 +327,10 @@ fun OverviewTab(
                 if (totalRetirementTaxSavings > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     SummaryRow(
-                        label = "DIP / DPS tax savings",
-                        value = "${fmtCZK(totalRetirementTaxSavings)}/yr",
+                        label = "Annual tax refund",
+                        value = fmtCZK(totalRetirementTaxSavings),
                         valueColor = GoodGreen,
-                        info = dipSavingInfo,
+                        info = taxRefundInfo,
                         onShowInfo = { infoState.show(it) }
                     )
                 }
