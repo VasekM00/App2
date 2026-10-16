@@ -233,110 +233,111 @@ fun OverviewTab(
                     accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                SummaryRow(
-                    label = "Monthly surplus",
-                    value = fmtCZK(surplusVal),
-                    valueColor = if (surplusVal < 0) BadRed else GoodGreen,
-                    info = surplusInfo,
-                    onShowInfo = { infoState.show(it) }
-                )
-                if (state.trailingBurnRate3mMonthly != null) {
-                    val actualBurn = state.trailingBurnRate3mMonthly
-                    val budgetedCost = state.totalLivingCostMonthly
-                    val variancePct = if (budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
-                    val varianceNote = if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     SummaryRow(
-                        label = "Trailing 3m actual burn",
-                        value = "${fmtCZK(actualBurn)} ($varianceNote)",
-                        valueColor = if (variancePct <= 0.0) GoodGreen else BrandGold,
+                        label = "Monthly surplus",
+                        value = fmtCZK(surplusVal),
+                        valueColor = if (surplusVal < 0) BadRed else GoodGreen,
+                        info = surplusInfo,
+                        onShowInfo = { infoState.show(it) }
+                    )
+                    if (state.trailingBurnRate3mMonthly != null) {
+                        val actualBurn = state.trailingBurnRate3mMonthly
+                        val budgetedCost = state.totalLivingCostMonthly
+                        val variancePct = if (budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
+                        val varianceNote = if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
+                        SummaryRow(
+                            label = "Trailing 3m actual burn",
+                            value = "${fmtCZK(actualBurn)} ($varianceNote)",
+                            valueColor = if (variancePct <= 0.0) GoodGreen else BrandGold,
+                            info = MetricInfo(
+                                title = "Trailing Actual Living Burn",
+                                category = "Empirical Cash Flow Feedback Loop",
+                                formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
+                                explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
+                                practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
+                                accentColor = BrandTeal
+                            ),
+                            onShowInfo = { infoState.show(it) }
+                        )
+                    }
+                    SummaryRow(
+                        label = "Monthly savings rate",
+                        value = fmtPct(state.savingsRatePct, 1),
                         info = MetricInfo(
-                            title = "Trailing Actual Living Burn",
-                            category = "Empirical Cash Flow Feedback Loop",
-                            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
-                            explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
-                            practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
+                            title = "Monthly Investment Rate",
+                            category = "Wealth Accumulation Velocity",
+                            formulaOrRule = "Investment Rate = Automated Monthly Investments (DCA) / Total Net Inflows",
+                            explanation = "Measures the percentage of total household net income channeled directly into automated wealth-building vehicles (Brokerage/ETF, DIP, and DPS).",
+                            practicalImplication = "Elevating investment rate accelerates FIRE milestones by boosting compounding capital while curbing lifestyle creep.",
                             accentColor = BrandTeal
                         ),
                         onShowInfo = { infoState.show(it) }
                     )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                SummaryRow(
-                    label = "Monthly savings rate",
-                    value = fmtPct(state.savingsRatePct, 1),
-                    info = MetricInfo(
-                        title = "Monthly Investment Rate",
-                        category = "Wealth Accumulation Velocity",
-                        formulaOrRule = "Investment Rate = Automated Monthly Investments (DCA) / Total Net Inflows",
-                        explanation = "Measures the percentage of total household net income channeled directly into automated wealth-building vehicles (Brokerage/ETF, DIP, and DPS).",
-                        practicalImplication = "Elevating investment rate accelerates FIRE milestones by boosting compounding capital while curbing lifestyle creep.",
-                        accentColor = BrandTeal
-                    ),
-                    onShowInfo = { infoState.show(it) }
-                )
-                val coastMilestone = state.fireMilestones.coastFire
-                SummaryRow(
-                    label = if (coastMilestone.isAchieved) "Coast FIRE achieved" else "Coast FIRE progress",
-                    value = if (coastMilestone.isAchieved) {
-                        "Age ${coastMilestone.estimatedAge ?: "—"}"
-                    } else {
-                        fmtPct(coastMilestone.progressPct, 0)
-                    },
-                    valueColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold,
-                    info = MetricInfo(
-                        title = "Coast FIRE",
-                        category = "Financial Independence Milestones",
-                        formulaOrRule = "Coast FIRE Target = FIRE Target / (1 + Real Return)^(Years to Age 65)",
-                        explanation = "Coast FIRE is the portfolio size at which compound growth alone — with zero further contributions — will reach your full FIRE target by traditional retirement age. Once reached, you could theoretically stop saving entirely and still retire on time.",
-                        practicalImplication = if (coastMilestone.isAchieved) {
-                            "You have crossed the Coast FIRE threshold. Every additional contribution now accelerates your FIRE date beyond the baseline."
-                        } else {
-                            "You are ${fmtPct(coastMilestone.progressPct, 0)} of the way to Coast FIRE (target: ${fmtCompact(coastMilestone.targetAmountToday)}). Keep contributing to reach this milestone."
-                        },
-                        accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
-                    ),
-                    onShowInfo = { infoState.show(it) }
-                )
-                val baristaMilestone = state.fireMilestones.baristaFire
-                if (baristaMilestone != null) {
+                    val coastMilestone = state.fireMilestones.coastFire
                     SummaryRow(
-                        label = if (baristaMilestone.isAchieved) "Barista FIRE achieved" else "Barista FIRE progress",
-                        value = if (baristaMilestone.isAchieved) {
-                            "Age ${baristaMilestone.estimatedAge ?: "—"}"
+                        label = if (coastMilestone.isAchieved) "Coast FIRE achieved" else "Coast FIRE progress",
+                        value = if (coastMilestone.isAchieved) {
+                            "Age ${coastMilestone.estimatedAge ?: "—"}"
                         } else {
-                            fmtPct(baristaMilestone.progressPct, 0)
+                            fmtPct(coastMilestone.progressPct, 0)
                         },
-                        valueColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold,
+                        valueColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold,
                         info = MetricInfo(
-                            title = "Barista FIRE",
+                            title = "Coast FIRE",
                             category = "Financial Independence Milestones",
-                            formulaOrRule = "Barista FIRE Target = 50% of Full FIRE Target",
-                            explanation = "Barista FIRE means your portfolio covers 50% of your household expenses indefinitely. You only need part-time, freelance, or low-stress work to cover the other half.",
-                            practicalImplication = if (baristaMilestone.isAchieved) {
-                                "You have reached Barista FIRE. Your invested capital covers 50% of baseline living expenses."
+                            formulaOrRule = "Coast FIRE Target = FIRE Target / (1 + Real Return)^(Years to Age 65)",
+                            explanation = "Coast FIRE is the portfolio size at which compound growth alone — with zero further contributions — will reach your full FIRE target by traditional retirement age. Once reached, you could theoretically stop saving entirely and still retire on time.",
+                            practicalImplication = if (coastMilestone.isAchieved) {
+                                "You have crossed the Coast FIRE threshold. Every additional contribution now accelerates your FIRE date beyond the baseline."
                             } else {
-                                "You are ${fmtPct(baristaMilestone.progressPct, 0)} of the way to Barista FIRE (target: ${fmtCompact(baristaMilestone.targetAmountToday)})."
+                                "You are ${fmtPct(coastMilestone.progressPct, 0)} of the way to Coast FIRE (target: ${fmtCompact(coastMilestone.targetAmountToday)}). Keep contributing to reach this milestone."
                             },
-                            accentColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold
+                            accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
                         ),
                         onShowInfo = { infoState.show(it) }
                     )
-                }
-                val totalRetirementTaxSavings = state.taxReturnHelper.totalIncrementalValue
-                if (totalRetirementTaxSavings > 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SummaryRow(
-                        label = "Annual tax refund",
-                        value = fmtCZK(totalRetirementTaxSavings),
-                        valueColor = GoodGreen,
-                        info = taxRefundInfo,
-                        onShowInfo = { infoState.show(it) }
-                    )
+                    val baristaMilestone = state.fireMilestones.baristaFire
+                    if (baristaMilestone != null) {
+                        SummaryRow(
+                            label = if (baristaMilestone.isAchieved) "Barista FIRE achieved" else "Barista FIRE progress",
+                            value = if (baristaMilestone.isAchieved) {
+                                "Age ${baristaMilestone.estimatedAge ?: "—"}"
+                            } else {
+                                fmtPct(baristaMilestone.progressPct, 0)
+                            },
+                            valueColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold,
+                            info = MetricInfo(
+                                title = "Barista FIRE",
+                                category = "Financial Independence Milestones",
+                                formulaOrRule = "Barista FIRE Target = 50% of Full FIRE Target",
+                                explanation = "Barista FIRE means your portfolio covers 50% of your household expenses indefinitely. You only need part-time, freelance, or low-stress work to cover the other half.",
+                                practicalImplication = if (baristaMilestone.isAchieved) {
+                                    "You have reached Barista FIRE. Your invested capital covers 50% of baseline living expenses."
+                                } else {
+                                    "You are ${fmtPct(baristaMilestone.progressPct, 0)} of the way to Barista FIRE (target: ${fmtCompact(baristaMilestone.targetAmountToday)})."
+                                },
+                                accentColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold
+                            ),
+                            onShowInfo = { infoState.show(it) }
+                        )
+                    }
+                    val totalRetirementTaxSavings = state.taxReturnHelper.totalIncrementalValue
+                    if (totalRetirementTaxSavings > 0) {
+                        SummaryRow(
+                            label = "Annual tax refund",
+                            value = fmtCZK(totalRetirementTaxSavings),
+                            valueColor = GoodGreen,
+                            info = taxRefundInfo,
+                            onShowInfo = { infoState.show(it) }
+                        )
+                    }
                 }
             }
         }
-
 
         Spacer(modifier = Modifier.height(96.dp))
     }
@@ -392,8 +393,7 @@ private fun SummaryRow(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
             color = valueColor,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            modifier = Modifier.weight(1f)
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
         )
     }
 }

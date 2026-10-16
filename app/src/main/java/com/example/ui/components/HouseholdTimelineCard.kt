@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -465,12 +467,16 @@ private fun TimelineEventRow(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         verticalAlignment = Alignment.Top
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(36.dp)
+            modifier = Modifier
+                .width(36.dp)
+                .fillMaxHeight()
         ) {
             Box(
                 modifier = Modifier
@@ -490,7 +496,7 @@ private fun TimelineEventRow(
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(24.dp)
+                        .weight(1f)
                         .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 )
             }

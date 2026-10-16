@@ -1017,64 +1017,69 @@ private fun PensionSubTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. KPI Highlights Hero Grid (2x2)
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            KpiCard(
-                title = "Annual Tax Refund",
-                value = "+${fmtCZK(yearlyTaxSaved)}",
-                hint = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% relief via tax return",
-                accentColor = GoodGreen,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dipDeduction,
-                onShowInfo = onShowInfo
-            )
-            val isSingle = s.isSingleHousehold
-            val totalMonthlyRetirement = vDipMonthly + (if (!isSingle) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!isSingle) s.eDpsOwnContributionMonthly else 0.0)
-            val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
-            val eTotalRetirement = if (!isSingle) eDipMonthly + s.eDpsOwnContributionMonthly else 0.0
-            KpiCard(
-                title = "Monthly Deposit",
-                value = fmtCZK(totalMonthlyRetirement),
-                hint = if (s.isSingleHousehold) "DIP: ${fmtCompact(vDipMonthly)} · DPS: ${fmtCompact(s.dpsOwnContributionMonthly)}" else "V: ${fmtCompact(vTotalRetirement)} · E: ${fmtCompact(eTotalRetirement)}",
-                accentColor = BrandTeal,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dipDeduction,
-                onShowInfo = onShowInfo
-            )
-        }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                KpiCard(
+                    title = "Annual Tax Refund",
+                    value = "+${fmtCZK(yearlyTaxSaved)}",
+                    hint = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% relief via tax return",
+                    accentColor = GoodGreen,
+                    modifier = Modifier.weight(1f),
+                    info = PlanMetricInfos.dipDeduction,
+                    onShowInfo = onShowInfo
+                )
+                val isSingle = s.isSingleHousehold
+                val totalMonthlyRetirement = vDipMonthly + (if (!isSingle) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!isSingle) s.eDpsOwnContributionMonthly else 0.0)
+                val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
+                val eTotalRetirement = if (!isSingle) eDipMonthly + s.eDpsOwnContributionMonthly else 0.0
+                KpiCard(
+                    title = "Monthly Deposit",
+                    value = fmtCZK(totalMonthlyRetirement),
+                    hint = if (s.isSingleHousehold) "DIP: ${fmtCompact(vDipMonthly)} · DPS: ${fmtCompact(s.dpsOwnContributionMonthly)}" else "V: ${fmtCompact(vTotalRetirement)} · E: ${fmtCompact(eTotalRetirement)}",
+                    accentColor = BrandTeal,
+                    modifier = Modifier.weight(1f),
+                    info = PlanMetricInfos.dipDeduction,
+                    onShowInfo = onShowInfo
+                )
+            }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            val eAge = s.baseYear - ELEONORA_BIRTH_YEAR
-            val totalSubsidyMonthly = currentSubsidy + (if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0)
-            val dpsTotalDeposit = s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
-            KpiCard(
-                title = "State Subsidy Match",
-                value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
-                hint = if (dps.youthSubsidyActive) {
-                    "${fmtCZK(totalSubsidyMonthly)}/mo on ${fmtCompact(dpsTotalDeposit)}"
-                } else {
-                    "${fmtCZK(totalSubsidyMonthly)}/mo (40% in 2027)"
-                },
-                accentColor = BrandGold,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dpsLepsiPenzijko,
-                onShowInfo = onShowInfo
-            )
-            val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
-            KpiCard(
-                title = "DIP + DPS at Age 60",
-                value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
-                hint = "DIP ${String.format(java.util.Locale.getDefault(), "%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format(java.util.Locale.getDefault(), "%.1f", dpsNetReturnPct)}% net",
-                accentColor = BrandBlue,
-                modifier = Modifier.weight(1f),
-                info = PlanMetricInfos.dpsAge36,
-                onShowInfo = onShowInfo
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val eAge = s.baseYear - ELEONORA_BIRTH_YEAR
+                val totalSubsidyMonthly = currentSubsidy + (if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0)
+                val dpsTotalDeposit = s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
+                KpiCard(
+                    title = "State Subsidy Match",
+                    value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
+                    hint = if (dps.youthSubsidyActive) {
+                        "${fmtCZK(totalSubsidyMonthly)}/mo on ${fmtCompact(dpsTotalDeposit)}"
+                    } else {
+                        "${fmtCZK(totalSubsidyMonthly)}/mo (40% in 2027)"
+                    },
+                    accentColor = BrandGold,
+                    modifier = Modifier.weight(1f),
+                    info = PlanMetricInfos.dpsLepsiPenzijko,
+                    onShowInfo = onShowInfo
+                )
+                val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
+                KpiCard(
+                    title = "DIP + DPS at Age 60",
+                    value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
+                    hint = "DIP ${String.format(java.util.Locale.getDefault(), "%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format(java.util.Locale.getDefault(), "%.1f", dpsNetReturnPct)}% net",
+                    accentColor = BrandBlue,
+                    modifier = Modifier.weight(1f),
+                    info = PlanMetricInfos.dpsAge36,
+                    onShowInfo = onShowInfo
+                )
+            }
         }
 
         // 2. Main Hero Card: DIP & DPS Two-Stage Statutory Optimization (Subsidy + Tax Shield)
