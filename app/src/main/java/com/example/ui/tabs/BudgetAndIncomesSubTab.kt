@@ -251,19 +251,7 @@ private fun SummarySubTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 2. Freedom Days Metric Banner
-        val liquidPortfolio = state.settings.liquidPortfolioCurrent +
-            (if (!state.settings.isSingleHousehold) state.settings.eLiquidPortfolioCurrent else 0.0)
-        val effectiveSavings = if (netFlow < 0.0) netFlow else state.investMonthlyTotal
-        com.example.ui.components.FreedomDaysBanner(
-            monthlySavings = effectiveSavings,
-            monthlyLivingCost = state.totalLivingCostMonthly,
-            portfolioBalance = liquidPortfolio
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 3. Subscription & Fixed Debit Auditor Card
+        // 2. Subscription & Fixed Debit Auditor Card
         com.example.ui.components.SubscriptionAuditorCard(
             transactions = allImportedTransactions,
             swrPct = state.settings.safeWithdrawalRatePct,
