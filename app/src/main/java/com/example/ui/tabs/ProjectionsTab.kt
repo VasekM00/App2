@@ -616,7 +616,7 @@ private fun WhatIfSandboxSubTab(
         }
 
         // 5. Read-only accounts & DCA breakdown
-        PortfolioAccountsView(state = state, onShowInfo = onShowInfo)
+        PortfolioAccountsView(state = sandboxState, onShowInfo = onShowInfo)
     }
 }
 

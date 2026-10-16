@@ -385,10 +385,28 @@ class MainViewModel(
             val existingEntry = repository.getLedgerEntryByYearMonth(yearMonth)
             if (existingEntry != null) {
                 if (remainingTxs.isEmpty()) {
-                    repository.updateLedgerEntry(existingEntry.copy(notes = ""))
+                    repository.updateLedgerEntry(
+                        existingEntry.copy(
+                            incVaclav = 0.0,
+                            incEleonora = 0.0,
+                            incUnforeseen = 0.0,
+                            expRent = 0.0,
+                            expGroceries = 0.0,
+                            expOther = 0.0,
+                            notes = ""
+                        )
+                    )
+                    activeAuditReport.value = null
                 } else {
-                    val remainingBanks = remainingTxs.map { it.bankName }.filter { it.isNotBlank() }.distinct().joinToString(" + ")
-                    repository.updateLedgerEntry(existingEntry.copy(notes = "Imported from $remainingBanks (${remainingTxs.size} txs)"))
+                    val storedBalances = getStoredBankBalancesForMonth(yearMonth)
+                    val (reconciledTxs, auditReport) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(
+                        transactions = remainingTxs.map { it.copy(isNetted = false, nettingReason = "") },
+                        yearMonth = yearMonth,
+                        bankBalances = storedBalances
+                    )
+                    repository.updateImportedTransactions(reconciledTxs)
+                    activeAuditReport.value = auditReport
+                    recalculateMonthLedger(yearMonth)
                 }
             }
         }
@@ -455,7 +473,7 @@ class MainViewModel(
                         while (run { line = reader.readLine(); line } != null) {
                             val rawLine = line!!.trim()
                             if (rawLine.isBlank()) continue
-                            val tokens = parseCsvLine(rawLine)
+                            val tokens = com.example.util.BankStatementImporter.parseCsvLine(rawLine)
                             if (tokens.size >= 6) {
                                 val ym = tokens[0].trim()
                                 val incV = tokens[1].trim().toDoubleOrNull() ?: 0.0
@@ -592,12 +610,12 @@ class MainViewModel(
 
         if (existingEntry != null) {
             val updated = existingEntry.copy(
-                incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
-                incEleonora = if (incEleonora > 0) incEleonora else existingEntry.incEleonora,
-                incUnforeseen = if (incOther > 0) incOther else existingEntry.incUnforeseen,
-                expRent = if (expRent > 0) expRent else existingEntry.expRent,
-                expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
-                expOther = if (expOther > 0) expOther else existingEntry.expOther,
+                incVaclav = incVaclav,
+                incEleonora = incEleonora,
+                incUnforeseen = incOther,
+                expRent = expRent,
+                expGroceries = expGroceries,
+                expOther = expOther,
                 notes = autoNotes
             )
             repository.updateLedgerEntry(updated)
@@ -619,23 +637,26 @@ class MainViewModel(
             val affectedMonths = txsByMonth.keys.sorted()
 
             for ((targetYm, monthTxs) in txsByMonth) {
-                // 1. Smart Fingerprint Merge: insert only new non-duplicate transactions for this bank and month
-                val txEntities = monthTxs.map { tx ->
-                    com.example.data.ImportedBankTransactionEntity(
-                        yearMonth = targetYm,
-                        bankName = summary.detectedBank.name,
-                        date = tx.date,
-                        amount = tx.amount,
-                        counterpartyAccount = tx.counterpartyAccount,
-                        counterpartyName = tx.counterpartyName,
-                        message = tx.message,
-                        variableSymbol = tx.variableSymbol,
-                        category = tx.category.name,
-                        isNetted = tx.isNetted,
-                        nettingReason = tx.nettingReason
-                    )
+                // 1. Smart Fingerprint Merge: insert transactions grouped by bank
+                val byBank = monthTxs.groupBy { if (it.bankType != com.example.util.BankType.GENERIC) it.bankType.name else summary.detectedBank.name }
+                for ((bankName, bTxs) in byBank) {
+                    val txEntities = bTxs.map { tx ->
+                        com.example.data.ImportedBankTransactionEntity(
+                            yearMonth = targetYm,
+                            bankName = bankName,
+                            date = tx.date,
+                            amount = tx.amount,
+                            counterpartyAccount = tx.counterpartyAccount,
+                            counterpartyName = tx.counterpartyName,
+                            message = tx.message,
+                            variableSymbol = tx.variableSymbol,
+                            category = tx.category.name,
+                            isNetted = tx.isNetted,
+                            nettingReason = tx.nettingReason
+                        )
+                    }
+                    repository.saveImportedTransactionsSmartMerge(targetYm, bankName, txEntities)
                 }
-                repository.saveImportedTransactionsSmartMerge(targetYm, summary.detectedBank.name, txEntities)
 
                 // 2. Fetch boundary transactions within ±5 days across month borders for cross-month pairing
                 val ymObj = try { YearMonth.parse(targetYm) } catch (e: Exception) { null }
@@ -718,12 +739,12 @@ class MainViewModel(
 
                 if (existingEntry != null) {
                     val updated = existingEntry.copy(
-                        incVaclav = if (incVaclav > 0) incVaclav else existingEntry.incVaclav,
-                        incEleonora = if (incEleonora > 0) incEleonora else existingEntry.incEleonora,
-                        incUnforeseen = if (incOther > 0) incOther else existingEntry.incUnforeseen,
-                        expRent = if (expRent > 0) expRent else existingEntry.expRent,
-                        expGroceries = if (expGroceries > 0) expGroceries else existingEntry.expGroceries,
-                        expOther = if (expOther > 0) expOther else existingEntry.expOther,
+                        incVaclav = incVaclav,
+                        incEleonora = incEleonora,
+                        incUnforeseen = incOther,
+                        expRent = expRent,
+                        expGroceries = expGroceries,
+                        expOther = expOther,
                         notes = autoNotes,
                         portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
                         pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
@@ -817,31 +838,6 @@ class MainViewModel(
                 updatedTransactions
             )
         )
-    }
-
-    private fun parseCsvLine(line: String): List<String> {
-        val fields = mutableListOf<String>()
-        val sb = StringBuilder()
-        var inQuotes = false
-        var i = 0
-        while (i < line.length) {
-            val c = line[i]
-            when {
-                c == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
-                    sb.append('"')
-                    i++
-                }
-                c == '"' -> inQuotes = !inQuotes
-                c == ',' && !inQuotes -> {
-                    fields.add(sb.toString())
-                    sb.setLength(0)
-                }
-                else -> sb.append(c)
-            }
-            i++
-        }
-        fields.add(sb.toString())
-        return fields
     }
 
     fun toggleAction(year: Int, actionId: String, currentIsDone: Boolean) {

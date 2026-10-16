@@ -373,13 +373,10 @@ fun SettingsTab(
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
-                                text = "Gifts & Lump Sum Inflows",
+                                text = "Planned Lump Sum Inflows",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
                             )
-                            NumberSettingField(label = "Václav's Gifts Monthly (§ 10 ZDP)", value = s.vGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) })
-                            if (!s.isSingleHousehold) {
-                                NumberSettingField(label = "Eleonora's Gifts Monthly (§ 10 ZDP)", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
-                            }
+                            Spacer(modifier = Modifier.height(4.dp))
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             Text(
@@ -1796,8 +1793,9 @@ private fun NumberSettingField(
                 {
                     IconButton(
                         onClick = {
-                            textValue = ""
-                            onValueChange(0.0)
+                            val clearedVal = 0.0.coerceAtLeast(minValue)
+                            textValue = if (clearedVal == 0.0) "" else formatVal(clearedVal)
+                            onValueChange(clearedVal)
                         },
                         modifier = Modifier.size(24.dp)
                     ) {

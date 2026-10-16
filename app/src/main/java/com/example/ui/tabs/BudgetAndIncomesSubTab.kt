@@ -456,14 +456,14 @@ private fun IncomeSubTab(
     var editFieldText by remember { mutableStateOf("") }
 
     val now = remember { java.util.Calendar.getInstance() }
-    val currentYear = now.get(java.util.Calendar.YEAR)
-    val currentMonth = now.get(java.util.Calendar.MONTH) + 1
-    val currentYm = String.format(java.util.Locale.ROOT, "%04d-%02d", currentYear, currentMonth)
+    val activeYear = s.baseYear
+    val activeMonth = now.get(java.util.Calendar.MONTH) + 1
+    val currentYm = String.format(java.util.Locale.ROOT, "%04d-%02d", activeYear, activeMonth)
     val activeLedger = remember(ledgerEntries, currentYm) {
         ledgerEntries.find { it.yearMonth == currentYm } ?: ledgerEntries.maxByOrNull { it.yearMonth }
     }
-    val scheduledLumpSums = remember(s.customLumpSumsJson, currentYear, currentMonth) {
-        FinancialEngine.lumpSumsForMonth(currentYear, currentMonth, s)
+    val scheduledLumpSums = remember(s.customLumpSumsJson, activeYear, activeMonth) {
+        FinancialEngine.lumpSumsForMonth(activeYear, activeMonth, s)
     }
     val scheduledLumpSumTotal = scheduledLumpSums.sumOf { it.amount }
     val effectiveScheduledLumpTotal = minOf(inc.lumpSumMonthly, scheduledLumpSumTotal)
@@ -630,26 +630,24 @@ private fun IncomeSubTab(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    if (inc.eleonoraSalary > 0.0) {
-                        EditableIncomeRow(
-                            label = "Eleonora's Net Salary",
-                            value = fmtCZK(inc.eleonoraSalary),
-                            info = CashFlowMetricInfos.eleonoraSalary,
-                            onShowInfo = onShowInfo,
-                            onEdit = if (onUpdateSettings != null) {
-                                {
-                                    editFieldText = s.eStartingSalary.toInt().toString()
-                                    editFieldData = EditIncomeFieldData(
-                                        title = "Edit Eleonora's Net Salary",
-                                        description = "Update baseline monthly net take-home salary for Eleonora.",
-                                        currentValue = s.eStartingSalary,
-                                        onConfirm = { onUpdateSettings(s.copy(eStartingSalary = it)) }
-                                    )
-                                }
-                            } else null
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    }
+                    EditableIncomeRow(
+                        label = "Eleonora's Net Salary",
+                        value = fmtCZK(inc.eleonoraSalary),
+                        info = CashFlowMetricInfos.eleonoraSalary,
+                        onShowInfo = onShowInfo,
+                        onEdit = if (onUpdateSettings != null) {
+                            {
+                                editFieldText = s.eStartingSalary.toInt().toString()
+                                editFieldData = EditIncomeFieldData(
+                                    title = "Edit Eleonora's Net Salary",
+                                    description = "Update baseline monthly net take-home salary for Eleonora.",
+                                    currentValue = s.eStartingSalary,
+                                    onConfirm = { onUpdateSettings(s.copy(eStartingSalary = it)) }
+                                )
+                            }
+                        } else null
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                     if (inc.benefit > 0.0) {
                         EditableIncomeRow(
@@ -762,7 +760,7 @@ private fun IncomeSubTab(
                         } else item.amount
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                         IncomeRow(
-                            label = "${item.name} (${currentMonth}/$currentYear Bonus)",
+                            label = "${item.name} (${activeMonth}/$activeYear Bonus)",
                             value = fmtCZK(displayAmt),
                             isBold = false
                         )
@@ -772,7 +770,7 @@ private fun IncomeSubTab(
                 if (unforeseenLump > 0.0) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     IncomeRow(
-                        label = "Unforeseen Inflow (${currentMonth}/$currentYear Ledger)",
+                        label = "Unforeseen Inflow (${activeMonth}/$activeYear Ledger)",
                         value = fmtCZK(unforeseenLump),
                         isBold = false
                     )
@@ -916,20 +914,22 @@ private fun SpendingSubTab(
                 }
 
                 if (s.childExpensesEnabled) {
+                    val child1Label = s.child1Name.ifBlank { "Child 1" }
+                    val child2Label = s.child2Name.ifBlank { "Child 2" }
                     if (s.child1Enabled) {
                         val isEmbedded1 = s.currentChildCostsInBaseline && s.child1BirthYear <= s.baseYear
                         val c1 = FinancialEngine.childMonthlyExpense(s.child1BirthYear, s.baseYear, s)
                         if (c1 > 0) {
                             if (isEmbedded1) {
                                 ExpenseItem(
-                                    label = "Child 1 (Embedded in groceries & rent)",
+                                    label = "$child1Label (Embedded in groceries & rent)",
                                     value = 0.0,
                                     badgeText = "IN BASELINE",
                                     info = CashFlowMetricInfos.childExpenses,
                                     onShowInfo = onShowInfo
                                 )
                             } else {
-                                ExpenseItem("Child 1 Expenses (Age ${s.baseYear - s.child1BirthYear})", c1, info = CashFlowMetricInfos.childExpenses, onShowInfo = onShowInfo)
+                                ExpenseItem("$child1Label Expenses (Age ${s.baseYear - s.child1BirthYear})", c1, info = CashFlowMetricInfos.childExpenses, onShowInfo = onShowInfo)
                             }
                         }
                     }
@@ -939,14 +939,14 @@ private fun SpendingSubTab(
                         if (c2 > 0) {
                             if (isEmbedded2) {
                                 ExpenseItem(
-                                    label = "Child 2 (Embedded in groceries & rent)",
+                                    label = "$child2Label (Embedded in groceries & rent)",
                                     value = 0.0,
                                     badgeText = "IN BASELINE",
                                     info = CashFlowMetricInfos.childExpenses,
                                     onShowInfo = onShowInfo
                                 )
                             } else {
-                                ExpenseItem("Child 2 Expenses (Age ${s.baseYear - s.child2BirthYear})", c2, info = CashFlowMetricInfos.childExpenses, onShowInfo = onShowInfo)
+                                ExpenseItem("$child2Label Expenses (Age ${s.baseYear - s.child2BirthYear})", c2, info = CashFlowMetricInfos.childExpenses, onShowInfo = onShowInfo)
                             }
                         }
                     }

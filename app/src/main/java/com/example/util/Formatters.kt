@@ -146,8 +146,8 @@ object Formatters {
         result = result.replace(Regex("§\\s+"), "§\u00A0")
 
         // 2. Czech thousands separators within multi-digit numbers: "48 000" -> "48\u00A0000"
-        result = result.replace(Regex("(\\d{1,3})\\s+(\\d{3})"), "$1\u00A0$2")
-        result = result.replace(Regex("(\\d{1,3})\\s+(\\d{3})"), "$1\u00A0$2")
+        result = result.replace(Regex("(?<!\\d)(\\d{1,3})\\s+(\\d{3})(?!\\d)"), "$1\u00A0$2")
+        result = result.replace(Regex("(?<!\\d)(\\d{1,3})\\s+(\\d{3})(?!\\d)"), "$1\u00A0$2")
 
         // 3. Numbers with currency, units, or percentages: "1,700 Kč", "48k CZK", "15 %"
         result = result.replace(Regex("(\\d+)\\s+(Kč|CZK|EUR|USD|%)"), "$1\u00A0$2")

@@ -47,7 +47,11 @@ object CrossStatementReconciliationEngine {
         BankTransactionType.HOUSING_RENT.name,
         BankTransactionType.CHARITY_DONATION.name,
         BankTransactionType.GENERAL_EXPENSE.name,
-        BankTransactionType.LIFESTYLE_LIVING.name
+        BankTransactionType.LIFESTYLE_LIVING.name,
+        BankTransactionType.ATM_CASH.name,
+        BankTransactionType.INVESTMENT_PORTU.name,
+        BankTransactionType.INVESTMENT_DIP.name,
+        BankTransactionType.INVESTMENT_DPS.name
     )
 
     private val EXTERNAL_INCOME_CATEGORIES = setOf(
@@ -96,6 +100,13 @@ object CrossStatementReconciliationEngine {
             return false
         }
 
+        // Salaries, wages, and state parental benefits are employment/statutory income, never internal transfers
+        val isSalaryOrBenefit = text.contains("mzda") || text.contains("vyplata") || text.contains("výplata") ||
+            text.contains("rodičov") || text.contains("rodicov") || text.contains("úřad práce") || text.contains("urad prace")
+        if (isSalaryOrBenefit) {
+            return false
+        }
+
         // Self and spouse name occurrences:
         // On an incoming credit (!isDebit), receiving money from either spouse or family is an internal household transfer.
         // On an outgoing debit (isDebit), the account holder's name on the statement simply reflects the ordering party (plátce/příkazce).
@@ -107,8 +118,9 @@ object CrossStatementReconciliationEngine {
         val msgLower = message.lowercase(Locale.ROOT)
 
         if (!isDebit) {
-            if (text.contains("vaclav martinu") || text.contains("václav martinů") || text.contains("martinu vaclav") || text.contains("martinů václav")) return true
-            if (text.contains("eleonora martinu") || text.contains("eleonora martinů") || text.contains("martinu eleonora") || text.contains("martinů eleonora")) return true
+            if (cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav")) return true
+            if (cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora")) return true
+            if (msgLower.contains("prevod z uctu") || msgLower.contains("převod z účtu")) return true
         } else {
             val mentionsVaclav = cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav") ||
                     msgLower.contains("pro vaclava") || msgLower.contains("pro václava") || msgLower.contains("prevod vaclavovi") || msgLower.contains("převod václavovi")
@@ -267,9 +279,8 @@ object CrossStatementReconciliationEngine {
 
                 val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
                 val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
-                if (debitIsExternal || creditIsExternal) {
-                    if (!isFlaggedSelf) return@indexOfFirst false
-                }
+                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
+                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
 
                 val isCrossBank = credit.bankName != debit.bankName
                 val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
@@ -356,9 +367,8 @@ object CrossStatementReconciliationEngine {
 
                 val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
                 val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
-                if (debitIsExternal || creditIsExternal) {
-                    if (!isFlaggedSelf) return@indexOfFirst false
-                }
+                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
+                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
 
                 val isCrossBank = credit.bankName != debit.bankName
                 isCrossBank || isFlaggedSelf
@@ -418,6 +428,11 @@ object CrossStatementReconciliationEngine {
                 val amountMatches = abs(abs(debit.amount) - creditAmount) < 0.05
                 val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
                 if (!amountMatches || !within5Days) return@indexOfFirst false
+
+                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
+                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
+                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
+                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
 
                 val isCrossBank = credit.bankName != debit.bankName
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
@@ -503,16 +518,46 @@ object CrossStatementReconciliationEngine {
                 BankTransactionType.SALARY_ELEONORA.name -> incEleonora += amt
                 BankTransactionType.PARENTAL_BENEFIT.name -> incEleonora += amt
                 BankTransactionType.OTHER_INFLOW.name -> incOther += amt
-                BankTransactionType.HOUSING_RENT.name -> expRent += abs(amt)
-                BankTransactionType.GROCERIES.name -> expGroceries += abs(amt)
-                BankTransactionType.LIFESTYLE_LIVING.name -> expOther += abs(amt)
-                BankTransactionType.INVESTMENT_PORTU.name -> expOther += 0.0
-                BankTransactionType.INVESTMENT_DIP.name -> expOther += 0.0
-                BankTransactionType.INVESTMENT_DPS.name -> expOther += 0.0
+                BankTransactionType.HOUSING_RENT.name -> {
+                    if (amt < 0) expRent += -amt else expRent -= amt
+                }
+                BankTransactionType.GROCERIES.name -> {
+                    if (amt < 0) expGroceries += -amt else expGroceries -= amt
+                }
+                BankTransactionType.LIFESTYLE_LIVING.name,
+                BankTransactionType.DINING_RESTAURANT.name,
+                BankTransactionType.TRANSPORTATION.name,
+                BankTransactionType.SHOPPING_GOODS.name,
+                BankTransactionType.HEALTH_DRUGSTORE.name,
+                BankTransactionType.SUBSCRIPTIONS_MEDIA.name,
+                BankTransactionType.SERVICES_UTILITIES.name,
+                BankTransactionType.ATM_CASH.name,
+                BankTransactionType.CHARITY_DONATION.name,
+                BankTransactionType.GENERAL_EXPENSE.name -> {
+                    if (amt < 0) expOther += -amt else expOther -= amt
+                }
+                BankTransactionType.INVESTMENT_PORTU.name,
+                BankTransactionType.INVESTMENT_DIP.name,
+                BankTransactionType.INVESTMENT_DPS.name -> {
+                    // Investments tracked separately
+                }
                 else -> {
-                    if (amt > 0) incOther += amt else expOther += abs(amt)
+                    if (amt > 0) incOther += amt else expOther += -amt
                 }
             }
+        }
+
+        if (expRent < 0.0) {
+            incOther += -expRent
+            expRent = 0.0
+        }
+        if (expGroceries < 0.0) {
+            incOther += -expGroceries
+            expGroceries = 0.0
+        }
+        if (expOther < 0.0) {
+            incOther += -expOther
+            expOther = 0.0
         }
 
         val auditReport = CrossStatementAuditReport(

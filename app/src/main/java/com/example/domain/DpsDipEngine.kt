@@ -43,8 +43,9 @@ object DpsDipEngine {
         for (m in 0 until totalMonths) {
             val currentYear = settings.baseYear + (m / 12)
             val currentAge = settings.primaryAge + (m / 12)
+            val eAgeCurrent = (settings.baseYear - ELEONORA_BIRTH_YEAR) + (m / 12)
             val subV = CzechTaxEngine.dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings, currentYear)
-            val subE = if (!settings.isSingleHousehold) CzechTaxEngine.dpsSubsidy(settings.eDpsOwnContributionMonthly, currentAge, settings, currentYear) else 0.0
+            val subE = if (!settings.isSingleHousehold) CzechTaxEngine.dpsSubsidy(settings.eDpsOwnContributionMonthly, eAgeCurrent, settings, currentYear) else 0.0
             val sub = subV + subE
 
             totalSubsidy += sub
@@ -63,8 +64,8 @@ object DpsDipEngine {
         val eMonthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - eAge0) * 12)
 
         var balAt36 = settings.dpsBalanceCurrent + eDpsBal
-        var vOwnValueTo36 = 0.0
-        var eOwnValueTo36 = 0.0
+        var vOwnValueTo36 = settings.dpsBalanceCurrent
+        var eOwnValueTo36 = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
 
         val maxMonthsTo36 = max(vMonthsTo36, if (!settings.isSingleHousehold) eMonthsTo36 else 0)
         if (maxMonthsTo36 in 1..totalMonths) {
@@ -166,7 +167,9 @@ object DpsDipEngine {
      */
     fun buildDipProjection(settings: SettingsEntity): DipProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val tsYear = CzechTaxEngine.dipTaxSavingYear(settings)
+        val tsCombined = CzechTaxEngine.dipTaxSavingYear(settings)
+        val tsDpsOnly = CzechTaxEngine.dipTaxSavingYear(settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0))
+        val tsYear = max(0.0, tsCombined - tsDpsOnly)
         val vDipMonthly = settings.dipContributionMonthly
         val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
         val totalMonthlyDip = vDipMonthly + eDipMonthly
@@ -201,13 +204,13 @@ object DpsDipEngine {
                 monthly = monthly,
                 annual = monthly * 12.0,
                 annualTaxSaved = asave,
-                netCostMonthly = monthly - asave / 12.0,
+                netCostMonthly = max(0.0, monthly - asave / 12.0),
                 headroom = max(0.0, settings.taxDeductionCeilingAnnual - (dipAnnual + vDpsAboveThreshold)),
                 riskLevel = risk
             )
         }
 
-        val annualRateDIP = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
+        val annualRateDIP = max(-0.99, FinancialEngine.netTaxableNominalReturnPct(settings) / 100.0)
         val monthlyRate = (1.0 + annualRateDIP).pow(1.0 / 12.0) - 1.0
         val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent else 0.0
         var dipBal = settings.dipBalanceCurrent + eDipBal
@@ -221,7 +224,7 @@ object DpsDipEngine {
 
         return DipProjection(
             taxSavedYear = tsYear,
-            netCostMonthly = totalMonthlyDip - tsYear / 12.0,
+            netCostMonthly = max(0.0, totalMonthlyDip - tsYear / 12.0),
             scenarios = scenarios,
             headroom = max(0.0, totalCeiling - totalUtilized),
             dipBalanceAt60 = dipBal

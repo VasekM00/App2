@@ -107,10 +107,10 @@ internal fun AddLedgerEntryDialog(
     onSave: (String, Double, Double, Double, Double, Double, String, Double, Double, Double) -> Unit
 ) {
     val defaultRent = state.settings.rentMonthly.toInt().toString()
-    val baselineLiving = (state.settings.groceriesMonthly + state.settings.cafesMonthly + state.settings.entertainmentMonthly + state.settings.otherDiscretionaryMonthly).toInt().toString()
+    val baselineLiving = (state.totalLivingCostMonthly - state.settings.rentMonthly).coerceAtLeast(0.0).toInt().toString()
     val defaultVaclav = state.currentIncome.vaclavNet.toInt().toString()
-    val defaultEleonora = state.currentIncome.eleonoraSalary.takeIf { it > 0 }?.toInt()?.toString()
-        ?: state.currentIncome.benefit.toInt().toString()
+    val defaultEleonora = if (state.settings.isSingleHousehold) "0" else (state.currentIncome.eleonoraSalary.takeIf { it > 0 }?.toInt()?.toString()
+        ?: state.currentIncome.benefit.toInt().toString())
 
     val sourceEntry = initialEntry ?: duplicateFrom
     val defaultYm = if (duplicateFrom != null) {
@@ -122,16 +122,16 @@ internal fun AddLedgerEntryDialog(
         if (latest != null) nextYearMonth(latest.yearMonth) else nextYearMonth("")
     }
 
-    var ym by remember { mutableStateOf(defaultYm) }
-    var incV by remember { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: defaultVaclav) }
-    var incE by remember { mutableStateOf(sourceEntry?.incEleonora?.toInt()?.toString() ?: defaultEleonora) }
-    var incU by remember { mutableStateOf(sourceEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
-    var expR by remember { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
-    var expL by remember { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: baselineLiving) }
-    var notes by remember { mutableStateOf(sourceEntry?.notes ?: "") }
-    var balPortu by remember { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
-    var balPension by remember { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
-    var balReserve by remember { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var ym by remember(sourceEntry) { mutableStateOf(defaultYm) }
+    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: defaultVaclav) }
+    var incE by remember(sourceEntry) { mutableStateOf(sourceEntry?.incEleonora?.toInt()?.toString() ?: defaultEleonora) }
+    var incU by remember(sourceEntry) { mutableStateOf(sourceEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
+    var expR by remember(sourceEntry) { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
+    var expL by remember(sourceEntry) { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: baselineLiving) }
+    var notes by remember(sourceEntry) { mutableStateOf(sourceEntry?.notes ?: "") }
+    var balPortu by remember(sourceEntry) { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var balPension by remember(sourceEntry) { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var balReserve by remember(sourceEntry) { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
 
     val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
     val primaryName = state.settings.primaryName.ifBlank { "Primary Earner" }

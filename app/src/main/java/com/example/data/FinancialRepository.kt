@@ -33,6 +33,9 @@ class FinancialRepository(
             settingsDao.saveSettings(newSettings)
             val currentEntry = ledgerDao.getEntryByYearMonth(currentYearMonth)
             if (currentEntry != null) {
+                if (currentEntry.notes.contains("Imported")) {
+                    return@withTransaction
+                }
                 val updatedEleonora = if (newSettings.baseYear < newSettings.eReturnYear) {
                     newSettings.eParentalAllowanceMonthly
                 } else {

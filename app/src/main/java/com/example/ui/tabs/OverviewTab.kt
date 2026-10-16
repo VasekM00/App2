@@ -323,11 +323,12 @@ fun OverviewTab(
                         onShowInfo = { infoState.show(it) }
                     )
                 }
-                if (state.dip.taxSavedYear > 0) {
+                val totalRetirementTaxSavings = state.taxReturnHelper.totalIncrementalValue
+                if (totalRetirementTaxSavings > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     SummaryRow(
                         label = "DIP / DPS tax savings",
-                        value = "${fmtCZK(state.dip.taxSavedYear)}/yr",
+                        value = "${fmtCZK(totalRetirementTaxSavings)}/yr",
                         valueColor = GoodGreen,
                         info = dipSavingInfo,
                         onShowInfo = { infoState.show(it) }

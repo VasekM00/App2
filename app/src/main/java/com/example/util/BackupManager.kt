@@ -305,9 +305,10 @@ object BackupManager {
         }
         fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
+        fun growthPct(v: Double, fallback: Double): Double = if (v.isFinite() && v in -50.0..100.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
         return s.copy(
-            primaryAge = if (s.primaryAge in 15..80) s.primaryAge else f.primaryAge,
+            primaryAge = if (s.primaryAge in 15..100) s.primaryAge else f.primaryAge,
             baseYear = year(s.baseYear, f.baseYear),
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
             eReturnMonth = if (s.eReturnMonth in 1..12) s.eReturnMonth else f.eReturnMonth,
@@ -324,11 +325,11 @@ object BackupManager {
             monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
             retirementHorizonYears = if (s.retirementHorizonYears in 10..60) s.retirementHorizonYears else f.retirementHorizonYears,
             vSalary = money(s.vSalary, f.vSalary),
-            vSalaryGrowthPct = pct(s.vSalaryGrowthPct, f.vSalaryGrowthPct),
+            vSalaryGrowthPct = growthPct(s.vSalaryGrowthPct, f.vSalaryGrowthPct),
             vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
             vOtherInflowsMonthly = money(s.vOtherInflowsMonthly, f.vOtherInflowsMonthly),
             eStartingSalary = money(s.eStartingSalary, f.eStartingSalary),
-            eSalaryGrowthPct = pct(s.eSalaryGrowthPct, f.eSalaryGrowthPct),
+            eSalaryGrowthPct = growthPct(s.eSalaryGrowthPct, f.eSalaryGrowthPct),
             eReinvestedPct = pct(s.eReinvestedPct, f.eReinvestedPct),
             eParentalAllowanceMonthly = money(s.eParentalAllowanceMonthly, f.eParentalAllowanceMonthly),
             eLecturingMonthly = money(s.eLecturingMonthly, f.eLecturingMonthly),
@@ -353,14 +354,14 @@ object BackupManager {
             eDpsOwnContributionMonthly = money(s.eDpsOwnContributionMonthly, f.eDpsOwnContributionMonthly),
             eDipContributionMonthly = money(s.eDipContributionMonthly, f.eDipContributionMonthly),
             eEmployerRetirementMonthly = money(s.eEmployerRetirementMonthly, f.eEmployerRetirementMonthly),
-            portfolioNominalReturnPct = pct(s.portfolioNominalReturnPct, f.portfolioNominalReturnPct),
+            portfolioNominalReturnPct = growthPct(s.portfolioNominalReturnPct, f.portfolioNominalReturnPct),
             dpsGrossReturnPct = pct(s.dpsGrossReturnPct, f.dpsGrossReturnPct),
             dpsAnnualFeePct = pct(s.dpsAnnualFeePct, f.dpsAnnualFeePct),
-            cpiInflationPct = pct(s.cpiInflationPct, f.cpiInflationPct),
+            cpiInflationPct = growthPct(s.cpiInflationPct, f.cpiInflationPct),
             safeWithdrawalRatePct = pct(s.safeWithdrawalRatePct, f.safeWithdrawalRatePct),
             safetyBufferPct = pct(s.safetyBufferPct, f.safetyBufferPct),
-            rentGrowthPct = pct(s.rentGrowthPct, f.rentGrowthPct),
-            dcaAnnualGrowthPct = pct(s.dcaAnnualGrowthPct, f.dcaAnnualGrowthPct),
+            rentGrowthPct = growthPct(s.rentGrowthPct, f.rentGrowthPct),
+            dcaAnnualGrowthPct = growthPct(s.dcaAnnualGrowthPct, f.dcaAnnualGrowthPct),
             vStatePensionMonthly = money(s.vStatePensionMonthly, f.vStatePensionMonthly),
             eStatePensionMonthly = money(s.eStatePensionMonthly, f.eStatePensionMonthly),
             lifestyleCostAtFireMonthly = money(s.lifestyleCostAtFireMonthly, f.lifestyleCostAtFireMonthly),

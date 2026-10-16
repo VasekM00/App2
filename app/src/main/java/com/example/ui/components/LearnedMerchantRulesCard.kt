@@ -93,7 +93,7 @@ fun LearnedMerchantRulesCard(
     var newKeyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(BankTransactionType.GROCERIES) }
     var categoryMenuExpanded by remember { mutableStateOf(false) }
-
+    val context = androidx.compose.ui.platform.LocalContext.current
     val rulesMap = remember(rulesJson) {
         MerchantCategoryManager.parseRulesFromJson(rulesJson)
     }
@@ -234,6 +234,7 @@ fun LearnedMerchantRulesCard(
                                     IconButton(
                                         onClick = {
                                             val updated = rulesMap.toMutableMap().apply { remove(keyword) }
+                                            MerchantCategoryManager.removeOverride(context, keyword)
                                             onUpdateRulesJson(MerchantCategoryManager.serializeRulesToJson(updated))
                                         },
                                         modifier = Modifier.size(32.dp)
@@ -313,6 +314,7 @@ fun LearnedMerchantRulesCard(
                         val clean = newKeyword.trim().lowercase()
                         if (clean.isNotBlank()) {
                             val updated = rulesMap.toMutableMap().apply { put(clean, selectedCategory) }
+                            MerchantCategoryManager.saveOverride(context, clean, selectedCategory)
                             onUpdateRulesJson(MerchantCategoryManager.serializeRulesToJson(updated))
                         }
                         showAddDialog = false

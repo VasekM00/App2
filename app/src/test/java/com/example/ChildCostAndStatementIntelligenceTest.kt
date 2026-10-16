@@ -612,6 +612,8 @@ class ChildCostAndStatementIntelligenceTest {
         val lockedWealthOnly = SettingsEntity(
             primaryAge = 35,
             vStatePensionAge = 65,
+            isSingleHousehold = true,
+            childExpensesEnabled = false,
             liquidPortfolioCurrent = 0.0,
             eLiquidPortfolioCurrent = 0.0,
             portuDcaMonthly = 0.0,

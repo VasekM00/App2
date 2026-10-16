@@ -129,23 +129,31 @@ object CzechTaxEngine {
     fun netToGrossAnnual(
         netMonthly: Double,
         taxpayerCreditAnnual: Double,
-        highBracketThresholdAnnual: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026
+        highBracketThresholdAnnual: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026,
+        baseTaxRatePct: Double = 15.0,
+        highTaxRatePct: Double = 23.0
     ): Double {
         if (netMonthly <= 0.0) return 0.0
         val creditMonthly = taxpayerCreditAnnual / 12.0
         val thresholdMonthly = highBracketThresholdAnnual / 12.0
+        val baseRate = (baseTaxRatePct / 100.0).coerceIn(0.01, 0.50)
+        val highRate = (highTaxRatePct / 100.0).coerceIn(baseRate, 0.60)
+        val socialHealthRate = 0.116 // 7.1% social + 4.5% health
 
-        val netZeroTax = (creditMonthly / 0.15) * 0.884
-        val netAtThreshold = thresholdMonthly * 0.734 + creditMonthly
+        val netZeroTax = (creditMonthly / baseRate) * (1.0 - socialHealthRate)
+        val factorBase = 1.0 - socialHealthRate - baseRate
+        val netAtThreshold = thresholdMonthly * factorBase + creditMonthly
 
         val socialCapMonthly = thresholdMonthly * (48.0 / 36.0)
-        val netAtSocialCap = netAtThreshold + (socialCapMonthly - thresholdMonthly) * 0.654
+        val factorHigh = 1.0 - socialHealthRate - highRate
+        val netAtSocialCap = netAtThreshold + (socialCapMonthly - thresholdMonthly) * factorHigh
+        val factorAboveCap = 1.0 - 0.045 - highRate // social capped at 48x average wage
 
         val grossMonthly = when {
-            netMonthly <= netZeroTax -> netMonthly / 0.884
-            netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / 0.734
-            netMonthly <= netAtSocialCap -> thresholdMonthly + (netMonthly - netAtThreshold) / 0.654
-            else -> socialCapMonthly + (netMonthly - netAtSocialCap) / 0.725
+            netMonthly <= netZeroTax -> netMonthly / (1.0 - socialHealthRate)
+            netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / factorBase
+            netMonthly <= netAtSocialCap -> thresholdMonthly + (netMonthly - netAtThreshold) / factorHigh
+            else -> socialCapMonthly + (netMonthly - netAtSocialCap) / factorAboveCap
         }
         return grossMonthly * 12.0
     }
@@ -163,17 +171,19 @@ object CzechTaxEngine {
         val vDpsAbove = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
         val vDip = settings.dipContributionMonthly * 12.0
         val vDeduction = min(vDip + vDpsAbove, settings.taxDeductionCeilingAnnual)
-        val vTaxableBase = netToGrossAnnual(FinancialEngine.vaclavSalaryMonthly(settings.baseYear, settings), credit, threshold)
+        val vTaxableBase = netToGrossAnnual(FinancialEngine.vaclavSalaryMonthly(settings.baseYear, settings), credit, threshold, settings.taxRatePct, settings.taxRateSecondPct)
         val vSaving = singleEarnerRetirementTaxSaved(vTaxableBase, vDeduction, threshold, baseRate, highRate, credit)
 
-        // Eleonora saving (including lecturing if enabled)
-        val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
-        val eDip = settings.eDipContributionMonthly * 12.0
-        val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
-        val eEarnedMonthly = FinancialEngine.eleonoraSalaryMonthly(settings.baseYear, settings) +
-            (if (!settings.isSingleHousehold && settings.eIncludeLecturing) settings.eLecturingMonthly else 0.0)
-        val eTaxableBase = netToGrossAnnual(eEarnedMonthly, credit, threshold)
-        val eSaving = singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
+        // Eleonora saving (including lecturing if enabled, only when not single household)
+        val eSaving = if (!settings.isSingleHousehold) {
+            val eDpsAbove = max(0.0, settings.eDpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
+            val eDip = settings.eDipContributionMonthly * 12.0
+            val eDeduction = min(eDip + eDpsAbove, settings.taxDeductionCeilingAnnual)
+            val eEarnedMonthly = FinancialEngine.eleonoraSalaryMonthly(settings.baseYear, settings) +
+                FinancialEngine.eleonoraLecturingMonthly(settings.baseYear, settings)
+            val eTaxableBase = netToGrossAnnual(eEarnedMonthly, credit, threshold, settings.taxRatePct, settings.taxRateSecondPct)
+            singleEarnerRetirementTaxSaved(eTaxableBase, eDeduction, threshold, baseRate, highRate, credit)
+        } else 0.0
 
         return vSaving + eSaving
     }

@@ -64,8 +64,8 @@ fun ExportReportDialog(
         appendLine()
         appendLine("EXECUTIVE SUMMARY")
         appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal)}")
-        appendLine("• Monthly Living Expenses: ${fmtCZK(state.totalLivingCostMonthly)}")
-        appendLine("• Emergency Reserve: ${fmtCZK(state.settings.emergencyReserveCurrent)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
+        val snapReserve = if (state.totalLivingCostMonthly > 0.0) state.emergencyCoverageMonths * state.totalLivingCostMonthly else state.settings.emergencyReserveCurrent
+        appendLine("• Emergency Reserve: ${fmtCZK(snapReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
         appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
         if (state.settings.isSingleHousehold) {
@@ -128,7 +128,7 @@ fun ExportReportDialog(
             appendLine("Year,Age,Portfolio CZK,Target CZK,Invested Annual CZK,Status")
             val traj = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory
             traj.forEach { point ->
-                appendLine("${point.year},${point.age},${point.portfolio.toLong()},${point.target.toLong()},${point.investedAnnual.toLong()},${point.status}")
+                appendLine("${point.year},${point.age},${point.totalPortfolio.toLong()},${point.target.toLong()},${point.investedAnnual.toLong()},${point.status}")
             }
         }
     }

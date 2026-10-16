@@ -1559,7 +1559,7 @@ fun DcaTrajectoryBarChart(
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
     var viewMode by remember { mutableIntStateOf(0) } // 0 = Annual Inflow Streams, 1 = Principal vs Compound Gains
 
-    val initialBal = remember(data) { data.firstOrNull()?.portfolio ?: 0.0 }
+    val initialBal = remember(data) { data.firstOrNull()?.totalPortfolio ?: 0.0 }
 
     // Precalculate cumulative invested principal and cumulative compound gains
     val cumulativeData = remember(data, initialBal) {
@@ -1568,7 +1568,7 @@ fun DcaTrajectoryBarChart(
             if (idx > 0) {
                 runningPrincipal += pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
             }
-            val gains = (pt.portfolio - runningPrincipal).coerceAtLeast(0.0)
+            val gains = (pt.totalPortfolio - runningPrincipal).coerceAtLeast(0.0)
             Triple(pt, runningPrincipal, gains)
         }
     }
@@ -1755,7 +1755,7 @@ fun DcaTrajectoryBarChart(
                 if (viewMode == 0) {
                     ((data.maxOfOrNull { it.investedAnnual + it.reinvestAnnual + it.lumpSum } ?: 100000.0) * 1.25).coerceAtLeast(100000.0)
                 } else {
-                    ((data.maxOfOrNull { it.portfolio } ?: 1000000.0) * 1.15).coerceAtLeast(100000.0)
+                    ((data.maxOfOrNull { it.totalPortfolio } ?: 1000000.0) * 1.15).coerceAtLeast(100000.0)
                 }
             }
 
@@ -1944,7 +1944,7 @@ fun DcaTrajectoryBarChart(
                 if (activeTriple != null) {
                     val (pt, principal, gains) = activeTriple
                     val totalInflow = pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
-                    val gainsPct = if (pt.portfolio > 0) (gains / pt.portfolio * 100.0) else 0.0
+                    val gainsPct = if (pt.totalPortfolio > 0) (gains / pt.totalPortfolio * 100.0) else 0.0
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
@@ -1978,7 +1978,7 @@ fun DcaTrajectoryBarChart(
                                 }
                                 ColorPill(
                                     text = pt.status,
-                                    color = if (pt.status == "FIRE OK") GoodGreen else BrandTeal,
+                                    color = if (pt.status == "FIRE OK" || pt.status == "FIRE READY") GoodGreen else BrandTeal,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     horizontalPadding = 6.dp,

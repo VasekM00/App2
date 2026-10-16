@@ -958,7 +958,7 @@ private fun PensionSubTab(
     val s = state.settings
     val dps = state.dps
     val dip = state.dip
-    val currentSubsidy = FinancialEngine.dpsSubsidy(s.dpsOwnContributionMonthly, s.primaryAge, s)
+    val currentSubsidy = FinancialEngine.dpsSubsidy(s.dpsOwnContributionMonthly, s.primaryAge, s, s.baseYear)
 
     val vDipMonthly = s.dipContributionMonthly
     val eDipMonthly = s.eDipContributionMonthly
@@ -1005,7 +1005,7 @@ private fun PensionSubTab(
     val maxCombinedBenefit = (vSubsidyMaxAnnual + eSubsidyMaxAnnual) +
         ((if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0) + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)) * (s.taxRatePct / 100.0)
 
-    val yearlyTaxSaved = state.taxReturnHelper.dipSaving
+    val yearlyTaxSaved = state.taxReturnHelper.totalIncrementalValue
     val totalSubsidyAnnual = (vSubsidy + eSubsidy) * 12.0
     val totalGovBenefitAnnual = totalSubsidyAnnual + yearlyTaxSaved
 
@@ -1970,8 +1970,9 @@ private fun FireMilestonesComparisonCard(
                     )
 
                     if (onUpdateSettings != null && activeM.id != "coast") {
-                        val isCurrentOverride = state.settings.fireTargetOverride > 0 &&
-                                (kotlin.math.abs(state.settings.fireTargetOverride - activeTarget) < 1.0)
+                        val hasManualOverride = state.settings.fireTargetOverride > 0
+                        val isCurrentOverride = (hasManualOverride && kotlin.math.abs(state.settings.fireTargetOverride - activeTarget) < 1.0) ||
+                                (!hasManualOverride && activeM.id == "standard")
 
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = activeConfig.accentColor.copy(alpha = 0.25f))
@@ -1985,23 +1986,25 @@ private fun FireMilestonesComparisonCard(
                             if (isCurrentOverride) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     ColorPill(
-                                        text = "Active Primary FIRE Goal",
+                                        text = if (hasManualOverride) "Active Primary FIRE Goal (Manual)" else "Active Primary FIRE Goal (Auto)",
                                         color = BrandGold,
                                         fontSize = 10.sp,
                                         horizontalPadding = 7.dp,
                                         verticalPadding = 3.dp
                                     )
                                 }
-                                TextButton(
-                                    onClick = {
-                                        onUpdateSettings(state.settings.copy(fireTargetOverride = 0.0))
+                                if (hasManualOverride) {
+                                    TextButton(
+                                        onClick = {
+                                            onUpdateSettings(state.settings.copy(fireTargetOverride = 0.0))
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "Reset to Auto",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
-                                ) {
-                                    Text(
-                                        text = "Reset to Auto",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
                                 }
                             } else {
                                 Text(

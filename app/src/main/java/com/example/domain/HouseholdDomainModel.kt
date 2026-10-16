@@ -3,6 +3,8 @@ package com.example.domain
 import com.example.data.ELEONORA_BIRTH_YEAR
 import com.example.data.SettingsEntity
 import com.example.data.VACLAV_BIRTH_YEAR
+import kotlin.math.max
+import kotlin.math.pow
 
 enum class HouseholdRole {
     PRIMARY_EARNER,
@@ -62,9 +64,9 @@ data class HouseholdProfile(
         fun fromSettings(settings: SettingsEntity): HouseholdProfile {
             val primary = HouseholdMember(
                 id = "primary",
-                name = "Vaclav",
+                name = if (settings.primaryName.isNotBlank() && settings.primaryName != "Václav") settings.primaryName else "Vaclav",
                 role = HouseholdRole.PRIMARY_EARNER,
-                birthYear = VACLAV_BIRTH_YEAR,
+                birthYear = settings.baseYear - settings.primaryAge,
                 currentMonthlyGrossSalary = settings.vSalary,
                 salaryGrowthPct = settings.vSalaryGrowthPct,
                 pensionProfile = PensionProfile(
@@ -80,7 +82,7 @@ data class HouseholdProfile(
             val spouse = if (!settings.isSingleHousehold) {
                 HouseholdMember(
                     id = "spouse",
-                    name = "Eleonora",
+                    name = settings.spouseName.ifBlank { "Eleonora" },
                     role = HouseholdRole.SPOUSE_EARNER,
                     birthYear = ELEONORA_BIRTH_YEAR,
                     currentMonthlyGrossSalary = settings.eStartingSalary,
@@ -176,7 +178,7 @@ data class HouseholdProfile(
                         name = g.name,
                         targetYear = g.targetYear,
                         type = TimelineEventType.CUSTOM_GOAL,
-                        lumpSumCapitalImpact = -g.targetAmountCzk
+                        lumpSumCapitalImpact = -max(0.0, g.targetAmountCzk - g.currentSavedCzk)
                     )
                 )
             }
@@ -197,13 +199,15 @@ data class HouseholdProfile(
             if (yearsTo60 > 0) {
                 val pensionCapital = settings.dpsBalanceCurrent + settings.dipBalanceCurrent +
                     (if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent + settings.eDipBalanceCurrent else 0.0)
+                val nominalRet = FinancialEngine.netTaxableNominalReturnPct(settings) / 100.0
+                val estUnlockCapital = pensionCapital * (1.0 + nominalRet).pow(yearsTo60)
                 events.add(
                     LifeTimelineEvent(
                         id = "event_age_60_unlock",
                         name = "Age 60 DIP & DPS Liquidity Unlock",
                         targetYear = settings.baseYear + yearsTo60,
                         type = TimelineEventType.STATUTORY_UNLOCK,
-                        lumpSumCapitalImpact = pensionCapital
+                        lumpSumCapitalImpact = estUnlockCapital
                     )
                 )
             }
@@ -213,7 +217,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_v_state_pension",
-                        name = "Vaclav State Pension (Age ${settings.vStatePensionAge})",
+                        name = "${settings.primaryName.ifBlank { "Vaclav" }} State Pension (Age ${settings.vStatePensionAge})",
                         targetYear = settings.baseYear + vPensionYears,
                         type = TimelineEventType.PRIMARY_RETIREMENT,
                         monthlyCashFlowImpact = settings.vStatePensionMonthly
@@ -228,7 +232,7 @@ data class HouseholdProfile(
                     events.add(
                         LifeTimelineEvent(
                             id = "event_e_state_pension",
-                            name = "Eleonora State Pension (Age ${settings.eStatePensionAge})",
+                            name = "${settings.spouseName.ifBlank { "Eleonora" }} State Pension (Age ${settings.eStatePensionAge})",
                             targetYear = settings.baseYear + ePensionYears,
                             type = TimelineEventType.SPOUSE_RETIREMENT,
                             monthlyCashFlowImpact = settings.eStatePensionMonthly
@@ -251,13 +255,16 @@ data class HouseholdProfile(
     }
 
     fun toSettings(baseSettings: SettingsEntity = SettingsEntity()): SettingsEntity {
-        val c1 = children.getOrNull(0)
-        val c2 = children.getOrNull(1)
+        val c1 = children.firstOrNull { it.id == "child_1" } ?: children.getOrNull(0)
+        val c2 = children.firstOrNull { it.id == "child_2" } ?: (if (children.size > 1) children[1] else null)
         val spouse = spouseEarner
 
         return baseSettings.copy(
             isSingleHousehold = this.isSingleHousehold,
             baseYear = this.baseYear,
+            primaryAge = max(18, this.baseYear - primaryEarner.birthYear),
+            primaryName = primaryEarner.name,
+            spouseName = spouse?.name ?: baseSettings.spouseName,
             vSalary = primaryEarner.currentMonthlyGrossSalary,
             vSalaryGrowthPct = primaryEarner.salaryGrowthPct,
             dpsBalanceCurrent = primaryEarner.pensionProfile.dpsBalanceCurrent,
@@ -275,8 +282,10 @@ data class HouseholdProfile(
             eEmployerRetirementMonthly = spouse?.pensionProfile?.employerContributionMonthly ?: baseSettings.eEmployerRetirementMonthly,
             eStatePensionAge = spouse?.targetPensionAge ?: baseSettings.eStatePensionAge,
             child1Enabled = c1 != null,
+            child1Name = c1?.name ?: baseSettings.child1Name,
             child1BirthYear = c1?.birthYear ?: baseSettings.child1BirthYear,
             child2Enabled = c2 != null,
+            child2Name = c2?.name ?: baseSettings.child2Name,
             child2BirthYear = c2?.birthYear ?: baseSettings.child2BirthYear,
             emergencyReserveCurrent = this.emergencyReserveCurrent
         )

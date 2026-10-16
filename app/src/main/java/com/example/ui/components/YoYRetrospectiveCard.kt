@@ -58,6 +58,7 @@ fun YoYRetrospectiveCard(
         val byYear = ledgerEntries.groupBy {
             it.yearMonth.take(4).toIntOrNull() ?: 2026
         }
+        val allSortedWithNw = ledgerEntries.filter { it.totalNetWorthAtMonthEnd > 0 }.sortedBy { it.yearMonth }
         byYear.keys.sortedDescending().map { yr ->
             val entries = byYear[yr]?.sortedBy { it.yearMonth } ?: emptyList()
             val totalIn = entries.sumOf { it.incVaclav + it.incEleonora + it.incUnforeseen }
@@ -66,7 +67,8 @@ fun YoYRetrospectiveCard(
             val sr = if (totalIn > 0) (surplus / totalIn) * 100.0 else 0.0
 
             val entriesWithNw = entries.filter { it.totalNetWorthAtMonthEnd > 0 }
-            val openNw = entriesWithNw.firstOrNull()?.totalNetWorthAtMonthEnd ?: 0.0
+            val prevYearEndNw = allSortedWithNw.lastOrNull { (it.yearMonth.take(4).toIntOrNull() ?: 0) < yr }?.totalNetWorthAtMonthEnd
+            val openNw = prevYearEndNw ?: entriesWithNw.firstOrNull()?.totalNetWorthAtMonthEnd ?: 0.0
             val closeNw = entriesWithNw.lastOrNull()?.totalNetWorthAtMonthEnd ?: 0.0
             val nwGrowth = if (openNw > 0 && closeNw > 0) closeNw - openNw else 0.0
 

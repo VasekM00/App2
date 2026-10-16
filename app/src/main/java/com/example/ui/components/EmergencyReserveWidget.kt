@@ -73,15 +73,11 @@ fun EmergencyReserveWidget(
     val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
     val currentLiquidCash = state.settings.emergencyReserveCurrent
 
-    val rawTargetAmount = when (selectedTargetMode) {
-        "3M" -> monthlyExpense * 3
-        "6M" -> monthlyExpense * 6
-        "9M" -> monthlyExpense * 9
-        "12M" -> monthlyExpense * 12
-        "Target" -> if (state.settings.emergencyReserveTarget > 0.0) state.settings.emergencyReserveTarget else monthlyExpense * 6
-        else -> monthlyExpense * 6
+    val targetAmount = if (selectedTargetMode == state.settings.emergencyReserveMode) {
+        state.effectiveEmergencyReserveTargetToday
+    } else {
+        com.example.domain.FinancialEngine.effectiveEmergencyReserveTarget(state.settings.copy(emergencyReserveMode = selectedTargetMode))
     }
-    val targetAmount = com.example.util.Formatters.roundTo1k(rawTargetAmount).coerceAtLeast(1000.0)
 
     val progress = (currentLiquidCash / targetAmount).coerceIn(0.0, 1.0).toFloat()
     val monthsCovered = if (monthlyExpense > 0.0) (currentLiquidCash / monthlyExpense).coerceAtLeast(0.0) else 0.0

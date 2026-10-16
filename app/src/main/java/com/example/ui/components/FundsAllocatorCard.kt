@@ -110,8 +110,8 @@ fun FundsAllocatorCard(
 ) {
     val s = state.settings
     val reserveCurrent = s.emergencyReserveCurrent
-    val reserveTarget = s.emergencyReserveTarget
-    val isReserveFilled = reserveCurrent >= reserveTarget && reserveTarget > 0
+    val reserveTarget = state.effectiveEmergencyReserveTargetToday
+    val isReserveFilled = state.isEmergencyReserveFundedToday
 
     // Employer match
     val vEmp = min(s.employerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0)

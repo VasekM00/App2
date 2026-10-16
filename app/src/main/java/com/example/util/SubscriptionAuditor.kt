@@ -134,8 +134,9 @@ object SubscriptionAuditor {
 
     private fun isExcludedByKeywords(text: String): Boolean {
         val norm = CzechMerchantCatalog.normalize(text)
+        val words = norm.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         return EXCLUDED_MERCHANT_KEYWORDS.any { kw ->
-            norm.contains(kw)
+            if (kw.length <= 4) words.contains(kw) else norm.contains(kw)
         }
     }
 
@@ -149,7 +150,10 @@ object SubscriptionAuditor {
 
     private fun hasRecurringTextHint(rawText: String): Boolean {
         val norm = CzechMerchantCatalog.normalize(rawText)
-        return RECURRING_TEXT_HINTS.any { hint -> norm.contains(hint) }
+        val words = norm.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        return RECURRING_TEXT_HINTS.any { hint ->
+            if (hint.length <= 4) words.contains(hint) else norm.contains(hint)
+        }
     }
 
     fun auditSubscriptions(
@@ -235,15 +239,18 @@ object SubscriptionAuditor {
             var cadence = "MONTHLY"
             var normalizedAmount = latestAmount
 
-            val lowerRaw = combinedRawText.lowercase(Locale.ROOT)
-            val hasAnnualHint = lowerRaw.contains("roční") || lowerRaw.contains("rocni") || lowerRaw.contains("annual") || lowerRaw.contains("rok")
-            val hasQuarterlyHint = lowerRaw.contains("čtvrtlet") || lowerRaw.contains("ctvrtlet") || lowerRaw.contains("quarter") || lowerRaw.contains("kvartál") || lowerRaw.contains("kvartal")
+            val normRaw = CzechMerchantCatalog.normalize(combinedRawText)
+            val annualRegex = Regex("""\b(rok|roky|roku|ročně|rocne|annual|annually)\b""", RegexOption.IGNORE_CASE)
+            val quarterlyRegex = Regex("""\b(čtvrtletí|ctvrtleti|čtvrtlet|ctvrtlet|quarter|quarterly|kvartál|kvartal)\b""", RegexOption.IGNORE_CASE)
+            val hasAnnualHint = annualRegex.containsMatchIn(combinedRawText) || annualRegex.containsMatchIn(normRaw)
+            val hasQuarterlyHint = quarterlyRegex.containsMatchIn(combinedRawText) || quarterlyRegex.containsMatchIn(normRaw)
+            val isTypicallyAnnualOnly = normRaw.contains("odpad") || normRaw.contains("poplatek za psa") || normRaw.contains("dalnicni znamk")
 
             if (distinctMonths.size == 1) {
-                if (isVerifiedProvider && (latestAmount >= 1200.0 || hasAnnualHint)) {
+                if (hasAnnualHint || (isVerifiedProvider && isTypicallyAnnualOnly)) {
                     cadence = "ANNUAL"
                     normalizedAmount = latestAmount / 12.0
-                } else if (isVerifiedProvider && hasQuarterlyHint) {
+                } else if (hasQuarterlyHint) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
                 } else if (isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) {
