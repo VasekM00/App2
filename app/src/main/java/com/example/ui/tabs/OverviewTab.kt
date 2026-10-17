@@ -66,12 +66,13 @@ fun OverviewTab(
     onToggleDarkTheme: (() -> Unit)? = null,
     onOpenExportReportDialog: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
+    onToggleSearch: (() -> Unit)? = null,
     onNavigateToNetWorth: (() -> Unit)? = null,
     onNavigateToEmergencyReserve: (() -> Unit)? = null,
     onNavigateToSavingsRate: (() -> Unit)? = null,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
     val infoState = rememberMetricInfoState()
 
     val incomeInfo = MetricInfo(
@@ -133,6 +134,7 @@ fun OverviewTab(
             onToggleDarkTheme = { onToggleDarkTheme?.invoke() },
             onOpenExportReportDialog = { onOpenExportReportDialog?.invoke() },
             onOpenSettings = { onOpenSettings?.invoke() },
+            onToggleSearch = onToggleSearch,
             onNavigateToNetWorth = { onNavigateToNetWorth?.invoke() ?: onNavigateToProjections?.invoke() },
             onNavigateToEmergencyReserve = { onNavigateToEmergencyReserve?.invoke() },
             onNavigateToSavingsRate = { onNavigateToSavingsRate?.invoke() ?: onNavigateToIncome?.invoke() }

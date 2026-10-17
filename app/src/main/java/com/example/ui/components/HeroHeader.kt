@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -66,6 +71,7 @@ fun HeroHeader(
     onToggleDarkTheme: () -> Unit,
     onOpenExportReportDialog: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onToggleSearch: (() -> Unit)? = null,
     onNavigateToNetWorth: () -> Unit = {},
     onNavigateToEmergencyReserve: () -> Unit = {},
     onNavigateToSavingsRate: () -> Unit = {},
@@ -109,20 +115,42 @@ fun HeroHeader(
                 ) {
                     Text(
                         text = "Financial Dashboard",
-                        style = MaterialTheme.typography.headlineMedium.copy(
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (onToggleSearch != null) {
+                            IconButton(
+                                onClick = onToggleSearch,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.15f))
+                                    .testTag("hero_search_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
                         IconButton(
                             onClick = onOpenExportReportDialog,
                             modifier = Modifier
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .testTag("export_report_button")
@@ -130,13 +158,15 @@ fun HeroHeader(
                             Icon(
                                 imageVector = Icons.Default.Description,
                                 contentDescription = "Export Summary Report",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
                         IconButton(
                             onClick = onToggleDarkTheme,
                             modifier = Modifier
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .testTag("theme_toggle_button")
@@ -144,13 +174,15 @@ fun HeroHeader(
                             Icon(
                                 imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                                 contentDescription = "Toggle Dark Mode",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
                         IconButton(
                             onClick = onOpenSettings,
                             modifier = Modifier
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.15f))
                                 .testTag("open_settings_button")
@@ -158,7 +190,8 @@ fun HeroHeader(
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Settings",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -167,7 +200,9 @@ fun HeroHeader(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MiniStatChip(
@@ -175,19 +210,28 @@ fun HeroHeader(
                         value = fmtCompact(state.netWorthTotal),
                         accentColor = BrandGoldDarkTheme,
                         onClick = onNavigateToNetWorth,
-                        modifier = Modifier.weight(1f).testTag("hero_stat_net_worth")
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .testTag("hero_stat_net_worth")
                     )
                     MiniStatChip(
-                        label = "Emergency Reserve",
+                        label = "Cash Reserve",
                         value = fmtCompact(state.currentEmergencyReserve),
                         onClick = onNavigateToEmergencyReserve,
-                        modifier = Modifier.weight(1f).testTag("hero_stat_emergency_reserve")
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .testTag("hero_stat_emergency_reserve")
                     )
                     MiniStatChip(
                         label = "Savings Rate",
                         value = fmtPct(state.savingsRatePct, 1),
                         onClick = onNavigateToSavingsRate,
-                        modifier = Modifier.weight(1f).testTag("hero_stat_savings_rate")
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .testTag("hero_stat_savings_rate")
                     )
                 }
 
@@ -238,7 +282,10 @@ fun MiniStatChip(
         } else modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -246,12 +293,13 @@ fun MiniStatChip(
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 9.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp,
+                    letterSpacing = 0.2.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center
                 ),
-                maxLines = 2,
-                softWrap = true
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(3.dp))
             Text(

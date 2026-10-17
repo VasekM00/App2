@@ -125,6 +125,7 @@ fun MainScreen(
     var showExportReportDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val overviewScrollState = androidx.compose.foundation.rememberScrollState()
 
     val haptic = LocalHapticFeedback.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -271,7 +272,7 @@ fun MainScreen(
                                 .testTag("search_input_field")
                         )
                     }
-                } else {
+                } else if (selectedTab != 0 || overviewScrollState.value > 260) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -313,33 +314,31 @@ fun MainScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            if (selectedTab != 0) {
-                                IconButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onToggleDarkTheme()
-                                    },
-                                    modifier = Modifier.testTag("action_toggle_theme")
-                                ) {
-                                    Icon(
-                                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                        contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        showExportReportDialog = true
-                                    },
-                                    modifier = Modifier.testTag("action_export_report")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Description,
-                                        contentDescription = "Export Financial Report",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onToggleDarkTheme()
+                                },
+                                modifier = Modifier.testTag("action_toggle_theme")
+                            ) {
+                                Icon(
+                                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showExportReportDialog = true
+                                },
+                                modifier = Modifier.testTag("action_export_report")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = "Export Financial Report",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -426,6 +425,10 @@ fun MainScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 4
                                 },
+                                onToggleSearch = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    isSearchExpanded = true
+                                },
                                 onNavigateToNetWorth = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 2
@@ -439,7 +442,8 @@ fun MainScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 1
                                     targetCashFlowSubTab = 0
-                                }
+                                },
+                                scrollState = overviewScrollState
                             )
                             1 -> CashFlowTab(
                                 state = state,

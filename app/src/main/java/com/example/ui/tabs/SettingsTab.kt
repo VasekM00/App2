@@ -13,8 +13,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
@@ -39,6 +43,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -111,6 +117,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import com.example.util.Formatters.fmtRelativeTime
 import kotlinx.coroutines.delay
@@ -243,7 +250,26 @@ fun SettingsTab(
     // Consolidated into 3 high-level cohesive hubs
     val clampedInitialTab = initialSubTab.coerceIn(0, 2)
     var selectedTab by rememberSaveable(initialSubTab) { mutableIntStateOf(clampedInitialTab) }
-    val tabs = listOf("Cashflow & Family", "FIRE & Assets", "Data & System")
+    var expandTrigger by rememberSaveable(selectedTab) { mutableIntStateOf(0) }
+    var expandTargetState by rememberSaveable(selectedTab) { mutableStateOf<Boolean?>(null) }
+
+    val hubDefinitions = listOf(
+        Triple(
+            "Cashflow & Family",
+            "${fmtCompact(state.currentIncome.totalMonthly)}/mo net",
+            Icons.Default.AccountBalanceWallet
+        ),
+        Triple(
+            "FIRE & Assets",
+            "${fmtCompact(state.netWorthTotal)} · ${fmtPct(s.safeWithdrawalRatePct)}",
+            Icons.AutoMirrored.Filled.TrendingUp
+        ),
+        Triple(
+            "Data & System",
+            if (liveRegulatoryData != null) "ČNB Live Synced" else "Sync & Backup",
+            Icons.Default.CloudDownload
+        )
+    )
 
     LaunchedEffect(selectedTab) {
         listState.scrollToItem(0)
@@ -254,28 +280,71 @@ fun SettingsTab(
             .fillMaxSize()
             .testTag("settings_tab")
     ) {
-        SecondaryTabRow(
-            selectedTabIndex = selectedTab,
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .height(IntrinsicSize.Max),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedTab = index
-                    },
-                    text = {
+            hubDefinitions.forEachIndexed { index, (title, subLabel, icon) ->
+                val isSelected = selectedTab == index
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isSelected) BrandTeal.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(
+                        width = if (isSelected) 1.5.dp else 1.dp,
+                        color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTab = index
+                        }
+                        .testTag("settings_subtab_$index")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = title,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            maxLines = 2,
-                            softWrap = true
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    },
-                    modifier = Modifier.testTag("settings_subtab_$index")
-                )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) BrandTeal.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                textAlign = TextAlign.Center
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
 
@@ -283,9 +352,70 @@ fun SettingsTab(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item {
+                val (hubSummaryTitle, hubSummaryDetail) = when (selectedTab) {
+                    0 -> "Household Budget & Demographics" to "Inflows ${fmtCZK(state.currentIncome.totalMonthly)} · Burn ${fmtCZK(state.totalLivingCostMonthly)} · Savings ${fmtPct(state.savingsRatePct, 1)}"
+                    1 -> "Portfolio, DCA & Statutory Tax Parameters" to "Net Worth ${fmtCZK(state.netWorthTotal)} · DCA ${fmtCZK(state.investMonthlyTotal)}/mo · Return ${fmtPct(s.portfolioNominalReturnPct)}"
+                    else -> "Regulatory Data, Backups & Categorization" to "Base Year ${s.baseYear} · ${if (s.isSingleHousehold) "Single Earner" else "Dual Earner"} · Portable JSON & ČNB Sync"
+                }
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                text = hubSummaryTitle,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = hubSummaryDetail,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        val nextExpand = !(expandTargetState ?: true)
+                        OutlinedButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                expandTargetState = nextExpand
+                                expandTrigger += 1
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (nextExpand) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (nextExpand) "Expand All" else "Collapse",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
             when (selectedTab) {
                 0 -> {
                     // ==========================================
@@ -296,9 +426,16 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Earned & Side Incomes",
-                            initiallyExpanded = false,
+                            subtitle = if (s.isSingleHousehold) {
+                                "Václav ${fmtCZK(s.vSalary)}/mo · Growth ${fmtPct(s.vSalaryGrowthPct)}/yr · Single household mode"
+                            } else {
+                                "Václav ${fmtCZK(s.vSalary)}/mo · Eleonora ${fmtCZK(s.eStartingSalary)}/mo · Return ${s.eReturnMonth}/${s.eReturnYear}"
+                            },
+                            initiallyExpanded = true,
                             badgeText = fmtCZK(state.currentIncome.totalMonthly) + "/mo",
-                            badgeColor = GoodGreen
+                            badgeColor = GoodGreen,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             BooleanSettingField(
                                 label = "Single Earner Household",
@@ -505,9 +642,12 @@ fun SettingsTab(
 
                         SettingsGroupCard(
                             title = "Monthly Living Expenses",
+                            subtitle = "Rent ${fmtCZK(s.rentMonthly)} · Groceries ${fmtCZK(s.groceriesMonthly)} · Cafes ${fmtCZK(s.cafesMonthly)}",
                             initiallyExpanded = false,
                             badgeText = fmtCZK(state.totalLivingCostMonthly) + "/mo",
-                            badgeColor = BadRed
+                            badgeColor = BadRed,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             if (!deletedSet.contains("rent")) {
                                 NumberSettingField(label = "Rent / Housing", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("rent", s.copy(rentMonthly = 0.0))) })
@@ -590,11 +730,14 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Family & Children",
+                            subtitle = "${if (s.child1Enabled) "${s.child1Name} (${s.child1BirthYear})" else "No Child 1"}${if (s.child2Enabled) " · ${s.child2Name} (${s.child2BirthYear})" else ""} · Bonus +${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
                             initiallyExpanded = false,
                             badgeText = if (s.childExpensesEnabled) "ACTIVE" else "OFF",
                             badgeColor = BrandTeal,
                             info = SettingsMetricInfos.childBonus,
-                            onShowInfo = { infoState.show(it) }
+                            onShowInfo = { infoState.show(it) },
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
                             if (s.childExpensesEnabled) {
@@ -675,9 +818,12 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Current Asset Balances & Cash Reserve",
-                            initiallyExpanded = false,
+                            subtitle = "Liquid ${fmtCompact(s.liquidPortfolioCurrent + if (s.isSingleHousehold) 0.0 else s.eLiquidPortfolioCurrent)} · Pension ${fmtCompact(s.dipBalanceCurrent + s.dpsBalanceCurrent + if (s.isSingleHousehold) 0.0 else (s.eDipBalanceCurrent + s.eDpsBalanceCurrent))} · Cash ${fmtCompact(s.emergencyReserveCurrent)}",
+                            initiallyExpanded = true,
                             badgeText = fmtCZK(state.netWorthTotal),
-                            badgeColor = BrandTeal
+                            badgeColor = BrandTeal,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Text(text = "Václav's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
@@ -798,9 +944,12 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Monthly Investment Flows (DCA)",
-                            initiallyExpanded = false,
+                            subtitle = "ETF ${fmtCZK(s.portuDcaMonthly + if (s.isSingleHousehold) 0.0 else s.ePortuDcaMonthly)} · DIP/DPS ${fmtCZK(s.dipContributionMonthly + s.dpsOwnContributionMonthly + if (s.isSingleHousehold) 0.0 else (s.eDipContributionMonthly + s.eDpsOwnContributionMonthly))} · Growth ${fmtPct(s.dcaAnnualGrowthPct)}/yr",
+                            initiallyExpanded = true,
                             badgeText = fmtCZK(state.investMonthlyTotal) + "/mo",
-                            badgeColor = GoodGreen
+                            badgeColor = GoodGreen,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Text(text = "Václav's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
                             NumberSettingField(
@@ -862,11 +1011,14 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Planning Assumptions & FIRE Targets",
+                            subtitle = "Return ${fmtPct(s.portfolioNominalReturnPct)} · CPI ${fmtPct(s.cpiInflationPct)} · SWR ${fmtPct(s.safeWithdrawalRatePct)} · Pension age ${s.vStatePensionAge}",
                             initiallyExpanded = false,
                             badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
                             badgeColor = BrandTeal,
                             info = SettingsMetricInfos.swr,
-                            onShowInfo = { infoState.show(it) }
+                            onShowInfo = { infoState.show(it) },
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             NumberSettingField(
                                 label = "Base Planning Year",
@@ -927,11 +1079,14 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Czech Tax Shield & Statutory Engine",
+                            subtitle = "Tax ${fmtPct(s.taxRatePct)}/${fmtPct(s.taxRateSecondPct)} · DIP Shield +${fmtCZK(state.taxReturnHelper.dipSaving)}/yr · Monte Carlo ${s.monteCarloN} runs",
                             initiallyExpanded = false,
                             badgeText = "ADVANCED",
                             badgeColor = BrandGold,
                             info = SettingsMetricInfos.spouseCredit,
-                            onShowInfo = { infoState.show(it) }
+                            onShowInfo = { infoState.show(it) },
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
@@ -1050,9 +1205,12 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Live Czech Economic & Regulatory Sync",
-                            initiallyExpanded = false,
+                            subtitle = liveDataSubtitle(liveRegulatoryData),
+                            initiallyExpanded = true,
                             badgeText = if (liveRegulatoryData != null) "SYNCED" else "OFFLINE",
-                            badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold
+                            badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Text(
                                 text = "Fetch live daily exchange rates directly from the official Česká národní banka (ČNB) API and benchmark settings against verified Czech statutory tax and pension regulations.",
@@ -1111,9 +1269,12 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Backup & Share Settings",
-                            initiallyExpanded = false,
+                            subtitle = "Portable JSON export/import and clipboard snapshot",
+                            initiallyExpanded = true,
                             badgeText = "JSON",
-                            badgeColor = BrandTeal
+                            badgeColor = BrandTeal,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Text(
                                 text = "Safely export your parameters as a portable JSON file, restore previous backups, or copy a plain-text summary.",
@@ -1210,9 +1371,12 @@ fun SettingsTab(
                     item {
                         SettingsGroupCard(
                             title = "Reset & Danger Zone",
+                            subtitle = "Restore default parameters or wipe local database",
                             initiallyExpanded = false,
                             badgeText = "RESET",
-                            badgeColor = BadRed
+                            badgeColor = BadRed,
+                            externalExpandTrigger = expandTrigger,
+                            externalExpandState = expandTargetState
                         ) {
                             Button(
                                 onClick = { showResetDialog = true },
@@ -1590,15 +1754,23 @@ private fun TaxSummaryRow(
 @Composable
 private fun SettingsGroupCard(
     title: String,
+    subtitle: String? = null,
     initiallyExpanded: Boolean = false,
     collapsible: Boolean = true,
     badgeText: String? = null,
     badgeColor: androidx.compose.ui.graphics.Color = BrandTeal,
     info: MetricInfo? = null,
     onShowInfo: ((MetricInfo) -> Unit)? = null,
+    externalExpandTrigger: Int = 0,
+    externalExpandState: Boolean? = null,
     content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+    LaunchedEffect(externalExpandTrigger) {
+        if (externalExpandTrigger > 0 && externalExpandState != null) {
+            expanded = externalExpandState
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
@@ -1622,6 +1794,18 @@ private fun SettingsGroupCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                    if (!subtitle.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
