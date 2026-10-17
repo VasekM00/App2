@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -22,8 +23,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.ui.draw.clip
@@ -96,6 +100,7 @@ fun NetWorthChart(
     val cGreen = GoodGreen
     val cPurple = Color(0xFF6366F1)
     val cCardSurface = MaterialTheme.colorScheme.surface
+    val haptic = LocalHapticFeedback.current
 
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffsetX by remember { mutableFloatStateOf(0.0f) }
@@ -314,6 +319,20 @@ fun NetWorthChart(
                 }
             }
 
+            val updateScrubber: (Float, Float) -> Unit = { touchX, width ->
+                val plotW = width - paddingLeft - paddingRight
+                val chartWidth = plotW * zoomScale
+                val stepX = if (displayData.size > 1) chartWidth / (displayData.size - 1).toFloat() else chartWidth
+                val relativeX = touchX - paddingLeft - panOffsetX
+                if (stepX > 0f && displayData.isNotEmpty()) {
+                    val newIdx = kotlin.math.round(relativeX / stepX).toInt().coerceIn(0, displayData.size - 1)
+                    if (newIdx != selectedIndex) {
+                        selectedIndex = newIdx
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -323,24 +342,33 @@ fun NetWorthChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(displayData) {
+                        .pointerInput(displayData, zoomScale, panOffsetX) {
                             detectTransformGestures { _, pan, zoom, _ ->
-                                zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
+                                if (zoom != 1.0f) {
+                                    zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
+                                }
                                 val plotW = size.width - paddingLeft - paddingRight
                                 val maxPan = (plotW * (zoomScale - 1f)).coerceAtLeast(0f)
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
                             }
                         }
-                        .pointerInput(displayData) {
-                            detectTapGestures { offset ->
-                                val plotW = size.width - paddingLeft - paddingRight
-                                val stepX = if (displayData.size > 1) plotW / (displayData.size - 1) else plotW
-                                val relativeX = offset.x - paddingLeft - panOffsetX
-                                if (stepX > 0f) {
-                                    val idx = kotlin.math.round(relativeX / stepX).toInt().coerceIn(0, displayData.size - 1)
-                                    selectedIndex = idx
+                        .pointerInput(displayData, zoomScale, panOffsetX) {
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    updateScrubber(offset.x, size.width.toFloat())
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    updateScrubber(change.position.x, size.width.toFloat())
                                 }
-                            }
+                            )
+                        }
+                        .pointerInput(displayData, zoomScale, panOffsetX) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    updateScrubber(offset.x, size.width.toFloat())
+                                }
+                            )
                         }
                 ) {
                     val w = size.width
@@ -530,22 +558,47 @@ fun NetWorthChart(
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
 
-                    // Draw Scrubber Crosshair on Selected Year
+                    // Draw Interactive Scrubber Crosshair on Selected Year
                     selectedIndex?.let { idx ->
                         if (idx in displayData.indices) {
                             val sx = paddingLeft + panOffsetX + (idx * stepX)
                             if (sx in paddingLeft..(w - paddingRight)) {
+                                // Vertical highlight glow band
                                 drawLine(
-                                    color = cTeal.copy(alpha = 0.5f),
-                                    start = Offset(sx, 0f),
+                                    color = cTeal.copy(alpha = 0.08f),
+                                    start = Offset(sx, paddingTop),
+                                    end = Offset(sx, plotH),
+                                    strokeWidth = 24f
+                                )
+                                // Vertical crosshair line
+                                drawLine(
+                                    color = cTeal.copy(alpha = 0.70f),
+                                    start = Offset(sx, paddingTop),
                                     end = Offset(sx, plotH),
                                     strokeWidth = 2f,
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
                                 )
                                 val pt = displayData[idx]
-                                val sy = yPix(if (hasPension) pt.totalPortfolio else pt.portfolio)
-                                drawCircle(color = if (hasPension) cPurple else cTeal, radius = 9f, center = Offset(sx, sy))
-                                drawCircle(color = cGold, radius = 5f, center = Offset(sx, yPix(pt.target)))
+                                val syTarget = yPix(pt.target)
+                                val syLiquid = yPix(pt.portfolio)
+                                val syTotal = yPix(pt.totalPortfolio)
+
+                                // Target indicator
+                                drawCircle(color = cGold.copy(alpha = 0.25f), radius = 10f, center = Offset(sx, syTarget))
+                                drawCircle(color = cGold, radius = 5.5f, center = Offset(sx, syTarget))
+                                drawCircle(color = cCardSurface, radius = 2.5f, center = Offset(sx, syTarget))
+
+                                if (hasPension) {
+                                    // Total portfolio (including DIP/DPS) indicator
+                                    drawCircle(color = cPurple.copy(alpha = 0.25f), radius = 14f, center = Offset(sx, syTotal))
+                                    drawCircle(color = cPurple, radius = 8f, center = Offset(sx, syTotal))
+                                    drawCircle(color = cCardSurface, radius = 4f, center = Offset(sx, syTotal))
+                                }
+
+                                // Liquid brokerage indicator
+                                drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(sx, syLiquid))
+                                drawCircle(color = cTeal, radius = 8f, center = Offset(sx, syLiquid))
+                                drawCircle(color = cCardSurface, radius = 4f, center = Offset(sx, syLiquid))
                             }
                         }
                     }
@@ -554,38 +607,104 @@ fun NetWorthChart(
                 }
             }
 
-            // Interactive Detail Tooltip Box for Selected Year
+            // Interactive Scrubber Detail HUD Box for Selected Year
             val activePt = selectedIndex?.let { displayData.getOrNull(it) }
             if (activePt != null) {
                 Spacer(modifier = Modifier.height(10.dp))
+                val isFireAchieved = activePt.totalPortfolio >= activePt.target
+                val pctFunded = if (activePt.target > 0) ((activePt.totalPortfolio / activePt.target) * 100.0).toInt() else 100
+                val phaseText = when {
+                    isFireAchieved -> "Financial Independence Achieved · Liquid bridge funded"
+                    activePt.age < 60 -> "Accumulation Phase · Automated DCA compounding"
+                    activePt.age < 65 -> "Retirement Phase · DIP & DPS pension assets unlocked"
+                    else -> "State Pension Phase · Public pension supplementing portfolio"
+                }
+
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth().testTag("net_worth_tooltip_box")
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
                     ) {
-                        Text(
-                            text = "${activePt.year} (Age ${activePt.age})",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                text = "Liquid: ${fmtCompact(activePt.portfolio)}",
-                                style = MaterialTheme.typography.bodySmall.copy(color = cTeal, fontWeight = FontWeight.SemiBold)
-                            )
-                            if (hasPension) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Text(
-                                    text = "Total: ${fmtCompact(activePt.totalPortfolio)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = cPurple, fontWeight = FontWeight.SemiBold)
+                                    text = "${activePt.year} · Age ${activePt.age}",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                )
+                                ColorPill(
+                                    text = if (isFireAchieved) "FIRE ACHIEVED ($pctFunded%)" else "$pctFunded% OF TARGET",
+                                    color = if (isFireAchieved) GoodGreen else BrandGold,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp,
+                                    cornerRadius = 6.dp
                                 )
                             }
-                            Text(
-                                text = "Target: ${fmtCompact(activePt.target)}",
-                                style = MaterialTheme.typography.bodySmall.copy(color = cGold, fontWeight = FontWeight.SemiBold)
+
+                            IconButton(
+                                onClick = { selectedIndex = null },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close details",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = phaseText,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ChartMetricPill(
+                                label = if (hasPension) "Liquid" else "Portfolio",
+                                value = fmtCompact(activePt.portfolio),
+                                color = cTeal,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (hasPension) {
+                                ChartMetricPill(
+                                    label = "Total NW",
+                                    value = fmtCompact(activePt.totalPortfolio),
+                                    color = cPurple,
+                                    isBold = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            ChartMetricPill(
+                                label = "Target",
+                                value = fmtCompact(activePt.target),
+                                color = cGold,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -703,6 +822,20 @@ fun MonteCarloFanChart(
                 }
             }
 
+            val haptic = LocalHapticFeedback.current
+            val updateScrubber: (Float, Float) -> Unit = { touchX, width ->
+                val plotW = width - paddingLeft - paddingRight
+                val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
+                val relativeX = touchX - paddingLeft
+                if (stepX > 0f && realPoints.isNotEmpty()) {
+                    val clickedIdx = round(relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1)
+                    if (clickedIdx != selectedIndex) {
+                        selectedIndex = clickedIdx
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -713,13 +846,18 @@ fun MonteCarloFanChart(
                         .fillMaxWidth()
                         .height(240.dp)
                         .pointerInput(realPoints) {
-                            detectTapGestures { offset ->
-                                val plotW = size.width - paddingLeft - paddingRight
-                                val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
-                                val relativeX = offset.x - paddingLeft
-                                val clickedIdx = if (realPoints.size > 1 && stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1) else 0
-                                selectedIndex = clickedIdx
-                            }
+                            detectDragGestures(
+                                onDragStart = { offset -> updateScrubber(offset.x, size.width.toFloat()) },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    updateScrubber(change.position.x, size.width.toFloat())
+                                }
+                            )
+                        }
+                        .pointerInput(realPoints) {
+                            detectTapGestures(
+                                onTap = { offset -> updateScrubber(offset.x, size.width.toFloat()) }
+                            )
                         }
                 ) {
                     val w = size.width

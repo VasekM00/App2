@@ -251,6 +251,14 @@ private fun SummarySubTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 2. Interactive Sankey Cash Flow Waterfall
+        com.example.ui.components.SankeyCashFlowCard(
+            state = state,
+            onShowInfo = onShowInfo
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // 2. Subscription & Fixed Debit Auditor Card
         com.example.ui.components.SubscriptionAuditorCard(
             transactions = allImportedTransactions,
