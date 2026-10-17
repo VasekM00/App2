@@ -1,8 +1,15 @@
 package com.example.ui.components
 
+import android.graphics.Paint
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,8 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -38,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
@@ -45,6 +53,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -56,6 +65,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FinancialEngine
@@ -68,16 +78,17 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
-import kotlin.math.max
 
-private data class SankeyNode(
+data class SankeyNode(
     val id: String,
     val title: String,
+    val shortLabel: String,
     val subtitle: String,
     val amount: Double,
     val color: Color,
     val category: String,
-    val description: String
+    val description: String,
+    val statutoryNote: String = ""
 )
 
 private data class LayoutNode(
@@ -95,7 +106,7 @@ fun SankeyCashFlowCard(
 ) {
     val s = state.settings
     val haptic = LocalHapticFeedback.current
-    var viewMode by remember { mutableIntStateOf(0) } // 0 = Granular Streams, 1 = 3-Pillar Allocation
+    var viewMode by remember { mutableIntStateOf(0) } // 0 = 3-Pillar Cascade (clean default), 1 = Granular Streams
     var selectedNodeId by remember { mutableStateOf<String?>(null) }
 
     val cTeal = BrandTeal
@@ -120,16 +131,18 @@ fun SankeyCashFlowCard(
     } else 0.0
 
     val inflowNodes = remember(state, viewMode, currentInc) {
-        if (viewMode == 1) {
+        if (viewMode == 0) {
             listOf(
                 SankeyNode(
                     id = "in_total",
-                    title = "Household Net Inflows",
+                    title = "Household Net Inflow",
+                    shortLabel = "Inflows",
                     subtitle = "All Salaries & Support",
                     amount = currentInc.totalMonthly,
                     color = cTeal,
-                    category = "Combined Cash Generation",
-                    description = "Total disposable take-home pay received into household accounts after Czech taxes, social and health deductions."
+                    category = "Combined Take-Home Cash",
+                    description = "Total disposable take-home pay received into household accounts after Czech personal income taxes, social, and health deductions.",
+                    statutoryNote = "§ 6 ZDP · Zálohová daň 15 % / 23 % + 7,1 % SP + 4,5 % ZP"
                 )
             )
         } else {
@@ -139,11 +152,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_vaclav",
                             title = "${s.primaryName}'s Net Salary",
+                            shortLabel = s.primaryName,
                             subtitle = "Take-home pay",
                             amount = currentInc.vaclavNet,
                             color = cTeal,
                             category = "Earned Employment Income",
-                            description = "Net monthly salary after statutory 15%/23% personal income tax, 7.1% social, and 4.5% health insurance."
+                            description = "Net monthly salary after statutory 15%/23% personal income tax, 7.1% social, and 4.5% health insurance.",
+                            statutoryNote = "§ 6 ZDP · Zálohová daň 15 % / 23 % + 7,1 % SP + 4,5 % ZP"
                         )
                     )
                 }
@@ -152,11 +167,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_eleonora",
                             title = "${s.spouseName}'s Net Salary",
+                            shortLabel = s.spouseName,
                             subtitle = "Take-home pay",
                             amount = currentInc.eleonoraSalary,
                             color = Color(0xFF0D9488),
                             category = "Earned Employment Income",
-                            description = "Net monthly salary upon return to employment, accounting for progressive tax credits."
+                            description = "Net monthly salary upon return to employment, accounting for progressive tax credits.",
+                            statutoryNote = "§ 6 ZDP · Sleva na poplatníka 30 840 Kč/rok"
                         )
                     )
                 }
@@ -165,11 +182,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_vouchers",
                             title = "Meal Vouchers",
+                            shortLabel = "Vouchers",
                             subtitle = "Tax-exempt allowance",
                             amount = currentInc.vouchers,
                             color = cGreen,
                             category = "Non-Taxable Allowance",
-                            description = "Monetary meal allowance (§ 6(9)(b) ZDP), 100% tax-free and exempt from social/health deductions."
+                            description = "Monetary meal allowance (§ 6(9)(b) ZDP), 100% tax-free and exempt from social and health deductions.",
+                            statutoryNote = "§ 6(9)(b) ZDP · Osvobozený stravenkový paušál do zákonného limitu"
                         )
                     )
                 }
@@ -179,11 +198,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_gifts",
                             title = "Family Support",
+                            shortLabel = "Support",
                             subtitle = "Lineage gift exemption",
                             amount = totalGifts,
                             color = Color(0xFF10B981),
                             category = "Tax-Exempt Transfer",
-                            description = "Financial assistance from direct-line family members (§ 10(3)(c) ZDP), fully exempt from income tax."
+                            description = "Financial assistance from direct-line family members (§ 10(3)(c) ZDP), fully exempt from income tax.",
+                            statutoryNote = "§ 10(3)(c) ZDP · Bezúplatné příjmy od příbuzných v linii přímé osvobozeny od daně"
                         )
                     )
                 }
@@ -192,11 +213,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_parental",
                             title = "Parental Allowance",
+                            shortLabel = "Parental",
                             subtitle = "State family benefit",
                             amount = currentInc.benefit,
                             color = cBlue,
                             category = "State Social Support",
-                            description = "Monthly parental allowance (Rodičovský příspěvek, Act No. 117/1995 Coll.), fully tax-exempt."
+                            description = "Monthly parental allowance (Rodičovský příspěvek, Act No. 117/1995 Coll.), fully tax-exempt.",
+                            statutoryNote = "Zákon č. 117/1995 Sb. · Celkový nárok 350 000 Kč nepodléhá dani ani odvodům"
                         )
                     )
                 }
@@ -205,11 +228,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_lecturing",
                             title = "Lecturing & Advisory",
+                            shortLabel = "Lecturing",
                             subtitle = "Academic side income",
                             amount = currentInc.lecturing,
                             color = Color(0xFF38BDF8),
                             category = "Professional Side Income",
-                            description = "Academic lecturing and consulting inflows."
+                            description = "Academic lecturing and consulting inflows.",
+                            statutoryNote = "§ 7 / § 10 ZDP · Autorské honoráře a vedlejší odborná činnost"
                         )
                     )
                 }
@@ -219,11 +244,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "in_other",
                             title = "Other Inflows",
+                            shortLabel = "Other",
                             subtitle = "Lump sums & misc",
                             amount = otherInflows,
                             color = Color(0xFF818CF8),
                             category = "Supplementary Inflows",
-                            description = "Other planned monthly cash inflows and annualized lump-sum deposits."
+                            description = "Other planned monthly cash inflows and annualized lump-sum deposits.",
+                            statutoryNote = "Ostatní příjmy domácnosti rozpočtené do pravidelného měsíčního toku"
                         )
                     )
                 }
@@ -232,29 +259,33 @@ fun SankeyCashFlowCard(
     }
 
     val outflowNodes = remember(state, viewMode, s, childCosts, unallocatedSurplus) {
-        if (viewMode == 1) {
+        if (viewMode == 0) {
             buildList {
                 add(
                     SankeyNode(
                         id = "out_living",
                         title = "Living Burn Rate",
+                        shortLabel = "Living Burn",
                         subtitle = "Rent, groceries & lifestyle",
                         amount = totalExpenses,
                         color = cRed,
                         category = "Baseline Living Expenses",
-                        description = "Baseline operational expenditures required to maintain your household standard of living."
+                        description = "Baseline operational expenditures required to maintain your household standard of living.",
+                        statutoryNote = "Základní spotřební koš domácnosti, bydlení a provozní výdaje"
                     )
                 )
                 if (totalInvest > 0.0) {
                     add(
                         SankeyNode(
                             id = "out_invest",
-                            title = "Automated Wealth DCA",
+                            title = "Wealth Compounding",
+                            shortLabel = "Wealth DCA",
                             subtitle = "Brokerage, DIP & DPS",
                             amount = totalInvest,
                             color = cTeal,
                             category = "Compounding Capital Formation",
-                            description = "Automated monthly investments directly compounding toward your early retirement independence target."
+                            description = "Automated monthly investments directly compounding toward your early retirement independence target.",
+                            statutoryNote = "§ 4(1)(w) ZDP (3letý časový test) + § 15a ZDP (DIP) + Zákon č. 427/2011 Sb. (DPS)"
                         )
                     )
                 }
@@ -263,11 +294,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_buffer",
                             title = "Unallocated Cash Buffer",
+                            shortLabel = "Cash Buffer",
                             subtitle = "Reserve & discretionary",
                             amount = unallocatedSurplus,
                             color = cGold,
                             category = "Liquid Capital Buffer",
-                            description = "Uncommitted monthly surplus retained in high-yield cash buffers to fund emergency reserves and future lump sums."
+                            description = "Uncommitted monthly surplus retained in high-yield cash buffers to fund emergency reserves and future lump sums.",
+                            statutoryNote = "Pohotovostní likvidní rezerva chránící před sekvenčním rizikem (SORR)"
                         )
                     )
                 }
@@ -279,11 +312,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_rent",
                             title = "Housing & Rent",
+                            shortLabel = "Rent",
                             subtitle = "Primary residence",
                             amount = s.rentMonthly,
                             color = cRed,
                             category = "Fixed Essential Living",
-                            description = "Monthly apartment lease and housing facility maintenance costs."
+                            description = "Monthly apartment lease and housing facility maintenance costs.",
+                            statutoryNote = "Pevné provozní výdaje na nájemné a energie"
                         )
                     )
                 }
@@ -292,11 +327,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_groceries",
                             title = "Groceries & Food",
+                            shortLabel = "Groceries",
                             subtitle = "Supermarket & nutrition",
                             amount = s.groceriesMonthly,
                             color = cOrange,
                             category = "Essential Living Cost",
-                            description = "Household food, cooking, and daily household supplies."
+                            description = "Household food, cooking, and daily household supplies.",
+                            statutoryNote = "Základní spotřební koš domácnosti s 12 % sníženou sazbou DPH"
                         )
                     )
                 }
@@ -305,11 +342,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_child",
                             title = "Child Lifecycle",
+                            shortLabel = "Children",
                             subtitle = "Care & development",
                             amount = childCosts,
                             color = cAmber,
                             category = "Family Living Cost",
-                            description = "Age-graded education, medical, clothing, and activity costs for dependent children."
+                            description = "Age-graded education, medical, clothing, and activity costs for dependent children.",
+                            statutoryNote = "Věkově odstupňované náklady na děti (0-3, 3-6, 6-15, 15-26 let)"
                         )
                     )
                 }
@@ -319,11 +358,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_other_living",
                             title = "Lifestyle & Discretionary",
+                            shortLabel = "Lifestyle",
                             subtitle = "Transport, leisure, utilities",
                             amount = otherLiving,
                             color = Color(0xFFF43F5E),
                             category = "Variable Living Expense",
-                            description = "Transportation, telecommunications, travel, and discretionary living expenditures."
+                            description = "Transportation, telecommunications, travel, and discretionary living expenditures.",
+                            statutoryNote = "Variabilní výdaje s možností okamžitého snížení při krizovém scénáři"
                         )
                     )
                 }
@@ -334,11 +375,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_portu",
                             title = "Brokerage ETF (Portu)",
+                            shortLabel = "Portu ETF",
                             subtitle = "Global equity index",
                             amount = portuTotal,
                             color = cTeal,
                             category = "Liquid Wealth Compounding",
-                            description = "Automated monthly dollar-cost averaging into globally diversified equity index ETFs (qualifying for the Czech 3-year time test exemption § 4(1)(w) ZDP)."
+                            description = "Automated monthly dollar-cost averaging into globally diversified equity index ETFs (qualifying for the Czech 3-year time test exemption § 4(1)(w) ZDP).",
+                            statutoryNote = "§ 4(1)(w) ZDP · Osvobozeno od 15% daně ze zisku po 3 letech držby"
                         )
                     )
                 }
@@ -348,11 +391,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_dip",
                             title = "DIP Retirement",
+                            shortLabel = "DIP",
                             subtitle = "Tax-sheltered account",
                             amount = dipTotal,
                             color = cGreen,
                             category = "Statutory Tax-Sheltered Account",
-                            description = "Dlouhodobý investiční produkt (§ 15a ZDP) enabling index ETF compounding with pre-tax income."
+                            description = "Dlouhodobý investiční produkt (§ 15a ZDP) enabling index ETF compounding with pre-tax income.",
+                            statutoryNote = "§ 15a ZDP · Daňový odpočet až 48 000 Kč/rok s pravidlem 120 měsíců a věkem 60 let"
                         )
                     )
                 }
@@ -362,11 +407,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_dps",
                             title = "DPS Pension",
+                            shortLabel = "DPS",
                             subtitle = "With state subsidies",
                             amount = dpsTotal,
                             color = cPurple,
                             category = "Supplementary State-Subsidized Pension",
-                            description = "Doplňkové penzijní spoření with up to 340 Kč/mo direct state matching (Act No. 427/2011 Coll.)."
+                            description = "Doplňkové penzijní spoření with up to 340 Kč/mo direct state matching (Act No. 427/2011 Coll.).",
+                            statutoryNote = "Zákon č. 427/2011 Sb. · Státní příspěvek 20 % z vkladu nad 500 Kč (max 340 Kč/měsíc)"
                         )
                     )
                 }
@@ -375,11 +422,13 @@ fun SankeyCashFlowCard(
                         SankeyNode(
                             id = "out_buffer",
                             title = "Unallocated Buffer",
+                            shortLabel = "Buffer",
                             subtitle = "Liquid reserve building",
                             amount = unallocatedSurplus,
                             color = cGold,
                             category = "Liquid Reserve Capital",
-                            description = "Disposable monthly surplus uncommitted to fixed living burn or automated DCA, accumulating in cash reserves."
+                            description = "Disposable monthly surplus uncommitted to fixed living burn or automated DCA, accumulating in cash reserves.",
+                            statutoryNote = "Likvidní pohotovostní rezerva na spořicím účtu chránící před sekvenčním rizikem"
                         )
                     )
                 }
@@ -390,12 +439,14 @@ fun SankeyCashFlowCard(
     val centralHubNode = remember(currentInc) {
         SankeyNode(
             id = "hub_central",
-            title = "Household Pool",
+            title = "Household Clearing Pool",
+            shortLabel = "Pool",
             subtitle = "Combined disposable cash",
             amount = currentInc.totalMonthly,
             color = cTeal,
-            category = "Central Cash Flow Hub",
-            description = "Central clearing pool representing 100% of disposable household cash generated each month."
+            category = "Central Cash Flow Clearing Hub",
+            description = "Central clearing pool representing 100% of disposable household cash generated each month.",
+            statutoryNote = "Disponibilní peněžní toky domácnosti před alokací do výdajů a investic"
         )
     }
 
@@ -414,73 +465,72 @@ fun SankeyCashFlowCard(
             .semantics {
                 contentDescription = "Interactive Sankey cash flow diagram visualizing the flow of household income to living expenses, DCA investments, and cash reserves."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CardHeaderPill(
-                    title = "Cash Flow Waterfall & Sankey",
-                    subtitle = "Visual journey from income to wealth assets",
+                    title = "Cash Flow Waterfall",
+                    subtitle = "Interactive inflow-to-asset cascade",
                     badgeText = "SANKEY",
                     accentColor = cTeal
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Mode Selector
+            // Mode Selector: Sleek Segmented Control
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f))
+                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)), RoundedCornerShape(12.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                AssistChip(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewMode = 0
-                        selectedNodeId = null
-                    },
-                    label = {
-                        Text(
-                            "Granular Streams",
-                            fontSize = 11.sp,
-                            fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (viewMode == 0) cTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        labelColor = if (viewMode == 0) cTeal else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.weight(1f).testTag("sankey_chip_granular")
-                )
-                AssistChip(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewMode = 1
-                        selectedNodeId = null
-                    },
-                    label = {
-                        Text(
-                            "3-Pillar Allocation",
-                            fontSize = 11.sp,
-                            fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (viewMode == 1) GoodGreen.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        labelColor = if (viewMode == 1) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.weight(1f).testTag("sankey_chip_3pillar")
-                )
+                listOf("3-Pillar Cascade", "Granular Streams").forEachIndexed { index, title ->
+                    val isSelected = viewMode == index
+                    Surface(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewMode = index
+                            selectedNodeId = null
+                        },
+                        shape = RoundedCornerShape(9.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)) else null,
+                        shadowElevation = if (isSelected) 1.5.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(if (index == 0) "sankey_chip_3pillar" else "sankey_chip_granular")
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(vertical = 7.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) cTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.5.sp
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Canvas drawing area
             val density = LocalDensity.current
@@ -489,35 +539,49 @@ fun SankeyCashFlowCard(
             val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
             val textMutedColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
 
-            val textPaint = remember(textColor, textPx) {
-                android.graphics.Paint().apply {
+            val labelPaint = remember(textColor, textPx) {
+                Paint().apply {
                     color = textColor
                     textSize = textPx
                     isAntiAlias = true
                 }
             }
             val boldPaint = remember(textColor, boldTextPx) {
-                android.graphics.Paint().apply {
+                Paint().apply {
                     color = textColor
                     textSize = boldTextPx
-                    isFakeBoldText = true
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                    isAntiAlias = true
+                }
+            }
+            val poolLabelPaint = remember(textMutedColor, textPx) {
+                Paint().apply {
+                    color = textMutedColor
+                    textSize = textPx * 0.95f
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                    letterSpacing = 0.08f
                     isAntiAlias = true
                 }
             }
 
-            val canvasHeight = if (viewMode == 0) 310.dp else 230.dp
+            val sumInflows = remember(inflowNodes) { inflowNodes.sumOf { it.amount }.coerceAtLeast(1.0) }
+            val sumOutflows = remember(outflowNodes) { outflowNodes.sumOf { it.amount }.coerceAtLeast(1.0) }
 
+            val canvasHeight = if (viewMode == 0) 210.dp else 270.dp
             var layoutNodesCache by remember { mutableStateOf<List<LayoutNode>>(emptyList()) }
 
-            Box(
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.20f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(canvasHeight)
             ) {
                 Canvas(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(canvasHeight)
+                        .fillMaxSize()
+                        .clipToBounds()
                         .pointerInput(inflowNodes, outflowNodes, viewMode) {
                             detectTapGestures { offset ->
                                 val clicked = layoutNodesCache.firstOrNull { it.bounds.contains(offset) }
@@ -533,17 +597,18 @@ fun SankeyCashFlowCard(
                     val w = size.width
                     val h = size.height
 
-                    val paddingTop = 12f
-                    val paddingBottom = 12f
-                    val nodeWidth = 14.dp.toPx()
-                    val cornerR = 5.dp.toPx()
+                    val paddingTop = 14.dp.toPx()
+                    val paddingBottom = 22.dp.toPx()
+                    val nodeWidth = 8.5f.dp.toPx()
+                    val cornerR = 4.dp.toPx()
+                    val labelMargin = 82.dp.toPx()
 
-                    val xInflow = 16f
+                    val xInflow = labelMargin
                     val xCenter = (w - nodeWidth) / 2f
-                    val xOutflow = w - 16f - nodeWidth
+                    val xOutflow = w - labelMargin - nodeWidth
 
                     val availableH = h - paddingTop - paddingBottom
-                    val gap = 6.dp.toPx()
+                    val gap = if (viewMode == 0) 10.dp.toPx() else 4.dp.toPx()
 
                     // 1. Layout Inflow Nodes
                     val totalInflowGap = (inflowNodes.size - 1) * gap
@@ -551,8 +616,16 @@ fun SankeyCashFlowCard(
                     val inflowLayouts = mutableListOf<LayoutNode>()
                     var currentY = paddingTop
 
+                    val minNodeH = if (viewMode == 0) 36.dp.toPx() else 15.dp.toPx()
+                    val extraInflowH = (usableInflowH - (inflowNodes.size * minNodeH)).coerceAtLeast(0f)
+
                     inflowNodes.forEach { node ->
-                        val nodeH = ((node.amount / totalInflows) * usableInflowH).toFloat().coerceAtLeast(14f)
+                        val fraction = (node.amount / sumInflows).toFloat()
+                        val nodeH = if (viewMode == 0) {
+                            usableInflowH
+                        } else {
+                            minNodeH + (fraction * extraInflowH)
+                        }
                         val bounds = RoundRect(
                             left = xInflow,
                             top = currentY,
@@ -583,8 +656,11 @@ fun SankeyCashFlowCard(
                     val outflowLayouts = mutableListOf<LayoutNode>()
                     var currentOutY = paddingTop
 
+                    val extraOutflowH = (usableOutflowH - (outflowNodes.size * minNodeH)).coerceAtLeast(0f)
+
                     outflowNodes.forEach { node ->
-                        val nodeH = ((node.amount / totalDestinations) * usableOutflowH).toFloat().coerceAtLeast(14f)
+                        val fraction = (node.amount / sumOutflows).toFloat()
+                        val nodeH = minNodeH + (fraction * extraOutflowH)
                         val bounds = RoundRect(
                             left = xOutflow,
                             top = currentOutY,
@@ -598,92 +674,103 @@ fun SankeyCashFlowCard(
 
                     layoutNodesCache = inflowLayouts + hubLayout + outflowLayouts
 
-                    // 4. Draw Inflow-to-Center Ribbons
+                    // 4. Draw Inflow-to-Center Ribbons with Smooth Tangents & Crisp Edge Strokes
                     var hubInY = hubTop
                     val hubUsableH = hubBottom - hubTop
 
                     inflowLayouts.forEach { inLayout ->
-                        val ribbonH = ((inLayout.node.amount / totalInflows) * hubUsableH).toFloat()
+                        val ribbonH = ((inLayout.node.amount / sumInflows) * hubUsableH).toFloat()
                         val hubTargetTop = hubInY
                         val hubTargetBottom = hubInY + ribbonH
                         hubInY += ribbonH
 
                         val isHighlighted = selectedNodeId == null || selectedNodeId == inLayout.node.id || selectedNodeId == centralHubNode.id
-                        val alpha = if (isHighlighted) 0.50f else 0.10f
+                        val fillAlpha = if (isHighlighted) 0.42f else 0.08f
+                        val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
+                        val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
+
+                        val x1 = inLayout.bounds.right
+                        val x2 = xCenter
+                        val cX = (x2 - x1) * 0.52f
 
                         val ribbonPath = Path().apply {
-                            moveTo(inLayout.bounds.right, inLayout.yTop)
-                            val dx = (xCenter - inLayout.bounds.right) * 0.5f
-                            cubicTo(
-                                inLayout.bounds.right + dx, inLayout.yTop,
-                                xCenter - dx, hubTargetTop,
-                                xCenter, hubTargetTop
-                            )
-                            lineTo(xCenter, hubTargetBottom)
-                            cubicTo(
-                                xCenter - dx, hubTargetBottom,
-                                inLayout.bounds.right + dx, inLayout.yBottom,
-                                inLayout.bounds.right, inLayout.yBottom
-                            )
+                            moveTo(x1, inLayout.yTop)
+                            cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
+                            lineTo(x2, hubTargetBottom)
+                            cubicTo(x2 - cX, hubTargetBottom, x1 + cX, inLayout.yBottom, x1, inLayout.yBottom)
                             close()
                         }
 
                         drawPath(
                             path = ribbonPath,
                             brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    inLayout.node.color.copy(alpha = alpha),
-                                    cTeal.copy(alpha = alpha)
-                                ),
-                                startX = inLayout.bounds.right,
-                                endX = xCenter
+                                colors = listOf(inLayout.node.color.copy(alpha = fillAlpha), cTeal.copy(alpha = fillAlpha)),
+                                startX = x1,
+                                endX = x2
                             )
                         )
+
+                        // Top & Bottom boundary stroke
+                        val topEdge = Path().apply {
+                            moveTo(x1, inLayout.yTop)
+                            cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
+                        }
+                        val bottomEdge = Path().apply {
+                            moveTo(x1, inLayout.yBottom)
+                            cubicTo(x1 + cX, inLayout.yBottom, x2 - cX, hubTargetBottom, x2, hubTargetBottom)
+                        }
+                        drawPath(topEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                        drawPath(bottomEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
                     }
 
-                    // 5. Draw Center-to-Outflow Ribbons
+                    // 5. Draw Center-to-Outflow Ribbons with Smooth Tangents & Crisp Edge Strokes
                     var hubOutY = hubTop
 
                     outflowLayouts.forEach { outLayout ->
-                        val ribbonH = ((outLayout.node.amount / totalDestinations) * hubUsableH).toFloat()
+                        val ribbonH = ((outLayout.node.amount / sumOutflows) * hubUsableH).toFloat()
                         val hubSourceTop = hubOutY
                         val hubSourceBottom = hubOutY + ribbonH
                         hubOutY += ribbonH
 
                         val isHighlighted = selectedNodeId == null || selectedNodeId == outLayout.node.id || selectedNodeId == centralHubNode.id
-                        val alpha = if (isHighlighted) 0.50f else 0.10f
+                        val fillAlpha = if (isHighlighted) 0.42f else 0.08f
+                        val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
+                        val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
+
+                        val x1 = xCenter + nodeWidth
+                        val x2 = outLayout.bounds.left
+                        val cX = (x2 - x1) * 0.52f
 
                         val ribbonPath = Path().apply {
-                            moveTo(xCenter + nodeWidth, hubSourceTop)
-                            val dx = (outLayout.bounds.left - (xCenter + nodeWidth)) * 0.5f
-                            cubicTo(
-                                xCenter + nodeWidth + dx, hubSourceTop,
-                                outLayout.bounds.left - dx, outLayout.yTop,
-                                outLayout.bounds.left, outLayout.yTop
-                            )
-                            lineTo(outLayout.bounds.left, outLayout.yBottom)
-                            cubicTo(
-                                outLayout.bounds.left - dx, outLayout.yBottom,
-                                xCenter + nodeWidth + dx, hubSourceBottom,
-                                xCenter + nodeWidth, hubSourceBottom
-                            )
+                            moveTo(x1, hubSourceTop)
+                            cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                            lineTo(x2, outLayout.yBottom)
+                            cubicTo(x2 - cX, outLayout.yBottom, x1 + cX, hubSourceBottom, x1, hubSourceBottom)
                             close()
                         }
 
                         drawPath(
                             path = ribbonPath,
                             brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    cTeal.copy(alpha = alpha),
-                                    outLayout.node.color.copy(alpha = alpha)
-                                ),
-                                startX = xCenter + nodeWidth,
-                                endX = outLayout.bounds.left
+                                colors = listOf(cTeal.copy(alpha = fillAlpha), outLayout.node.color.copy(alpha = fillAlpha)),
+                                startX = x1,
+                                endX = x2
                             )
                         )
+
+                        val topEdge = Path().apply {
+                            moveTo(x1, hubSourceTop)
+                            cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                        }
+                        val bottomEdge = Path().apply {
+                            moveTo(x1, hubSourceBottom)
+                            cubicTo(x1 + cX, hubSourceBottom, x2 - cX, outLayout.yBottom, x2, outLayout.yBottom)
+                        }
+                        drawPath(topEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                        drawPath(bottomEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
                     }
 
-                    // 6. Draw Node Bars & Text Labels
+                    // 6. Draw Inflow Nodes & Margin Labels (Never overlapping ribbons!)
                     inflowLayouts.forEach { layout ->
                         val isSel = selectedNodeId == layout.node.id
                         drawRoundRect(
@@ -698,24 +785,32 @@ fun SankeyCashFlowCard(
                                 topLeft = Offset(layout.bounds.left - 2f, layout.bounds.top - 2f),
                                 size = Size(layout.bounds.width + 4f, layout.bounds.height + 4f),
                                 cornerRadius = CornerRadius(cornerR + 2f, cornerR + 2f),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+                                style = Stroke(width = 2.5f)
                             )
                         }
 
-                        // Label
-                        val labelX = layout.bounds.right + 6f
-                        val labelY = ((layout.yTop + layout.yBottom) / 2f) + 4f
-                        val titleText = layout.node.title.take(12)
-                        val amtText = fmtCompact(layout.node.amount)
+                        // Right-aligned label in left margin
+                        labelPaint.textAlign = Paint.Align.RIGHT
+                        boldPaint.textAlign = Paint.Align.RIGHT
+                        val xLabel = layout.bounds.left - 6.dp.toPx()
+                        val yCenter = (layout.yTop + layout.yBottom) / 2f
                         drawContext.canvas.nativeCanvas.drawText(
-                            "$titleText ($amtText)",
-                            labelX,
-                            labelY,
-                            textPaint
+                            layout.node.shortLabel,
+                            xLabel,
+                            yCenter - 2.dp.toPx(),
+                            boldPaint
                         )
+                        labelPaint.color = layout.node.color.toArgb()
+                        drawContext.canvas.nativeCanvas.drawText(
+                            fmtCompact(layout.node.amount),
+                            xLabel,
+                            yCenter + 9.dp.toPx(),
+                            labelPaint
+                        )
+                        labelPaint.color = textColor
                     }
 
-                    // Draw Central Hub Bar
+                    // Draw Central Hub Node
                     drawRoundRect(
                         brush = Brush.verticalGradient(listOf(cTeal, cGreen)),
                         topLeft = Offset(hubBounds.left, hubBounds.top),
@@ -728,10 +823,18 @@ fun SankeyCashFlowCard(
                             topLeft = Offset(hubBounds.left - 2f, hubBounds.top - 2f),
                             size = Size(hubBounds.width + 4f, hubBounds.height + 4f),
                             cornerRadius = CornerRadius(cornerR + 2f, cornerR + 2f),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+                            style = Stroke(width = 2.5f)
                         )
                     }
+                    poolLabelPaint.textAlign = Paint.Align.CENTER
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "POOL",
+                        xCenter + (nodeWidth / 2f),
+                        hubTop - 5.dp.toPx(),
+                        poolLabelPaint
+                    )
 
+                    // 7. Draw Outflow Nodes & Margin Labels (Never overlapping ribbons!)
                     outflowLayouts.forEach { layout ->
                         val isSel = selectedNodeId == layout.node.id
                         drawRoundRect(
@@ -746,241 +849,414 @@ fun SankeyCashFlowCard(
                                 topLeft = Offset(layout.bounds.left - 2f, layout.bounds.top - 2f),
                                 size = Size(layout.bounds.width + 4f, layout.bounds.height + 4f),
                                 cornerRadius = CornerRadius(cornerR + 2f, cornerR + 2f),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+                                style = Stroke(width = 2.5f)
                             )
                         }
 
-                        // Label to left of outflow node
-                        val titleText = layout.node.title.take(12)
-                        val amtText = fmtCompact(layout.node.amount)
-                        val fullStr = "$titleText ($amtText)"
-                        val textW = textPaint.measureText(fullStr)
-                        val labelX = layout.bounds.left - 6f - textW
-                        val labelY = ((layout.yTop + layout.yBottom) / 2f) + 4f
+                        // Left-aligned label in right margin
+                        labelPaint.textAlign = Paint.Align.LEFT
+                        boldPaint.textAlign = Paint.Align.LEFT
+                        val xLabel = layout.bounds.right + 6.dp.toPx()
+                        val yCenter = (layout.yTop + layout.yBottom) / 2f
+                        val pct = (layout.node.amount / sumInflows * 100.0).coerceIn(0.0, 100.0)
+
                         drawContext.canvas.nativeCanvas.drawText(
-                            fullStr,
-                            labelX,
-                            labelY,
-                            textPaint
+                            "${layout.node.shortLabel} (${fmtPct(pct, 0)})",
+                            xLabel,
+                            yCenter - 2.dp.toPx(),
+                            boldPaint
                         )
+                        labelPaint.color = layout.node.color.toArgb()
+                        drawContext.canvas.nativeCanvas.drawText(
+                            fmtCompact(layout.node.amount),
+                            xLabel,
+                            yCenter + 9.dp.toPx(),
+                            labelPaint
+                        )
+                        labelPaint.color = textColor
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Detail Panel for Selected Flow
-            if (selectedNode != null) {
-                val pctOfTotal = if (totalInflows > 0) (selectedNode.amount / totalInflows * 100.0) else 0.0
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = selectedNode.color.copy(alpha = 0.10f),
-                    border = BorderStroke(1.dp, selectedNode.color.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth().testTag("sankey_selected_detail")
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+            // Detail Inspection Panel (When Selected) vs Guidance Banner
+            AnimatedVisibility(
+                visible = selectedNode != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                if (selectedNode != null) {
+                    val pctOfTotal = if (totalInflows > 0) (selectedNode.amount / totalInflows * 100.0) else 0.0
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = selectedNode.color.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, selectedNode.color.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth().testTag("sankey_selected_detail")
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(selectedNode.color)
-                                )
-                                Column {
-                                    Text(
-                                        text = selectedNode.title,
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 1
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(9.dp)
+                                            .clip(CircleShape)
+                                            .background(selectedNode.color)
                                     )
+                                    Column {
+                                        Text(
+                                            text = selectedNode.title,
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = selectedNode.category,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = selectedNode.color,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            ),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
-                                        text = selectedNode.category,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 11.sp
-                                        ),
-                                        maxLines = 1
+                                        text = "${fmtCZK(selectedNode.amount)} / mo (${fmtPct(pctOfTotal, 1)})",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = selectedNode.color
+                                        )
                                     )
+                                    IconButton(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            selectedNodeId = null
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear selection",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "${fmtCZK(selectedNode.amount)} / mo (${fmtPct(pctOfTotal, 1)})",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = selectedNode.color
-                                    )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = selectedNode.description,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 15.5.sp
                                 )
-                                IconButton(
-                                    onClick = { selectedNodeId = null },
-                                    modifier = Modifier.size(24.dp)
+                            )
+
+                            if (selectedNode.statutoryNote.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear selection",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "CZ LAW",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                color = selectedNode.color
+                                            )
+                                        )
+                                        Text(
+                                            text = selectedNode.statutoryNote,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = selectedNode.description,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.5.sp
-                            )
-                        )
                     }
                 }
-            } else {
-                // Interactive guidance banner
+            }
+
+            if (selectedNode == null) {
+                // Interactive Guidance Banner (Bulletproof layout, never wraps characters)
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = cTeal,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "Tap any stream or node to inspect details & statutory rules",
+                                text = "Tap any stream to inspect statutory rules",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-
-                        Text(
-                            text = "Net Inflow: ${fmtCompact(totalInflows)}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = cTeal
-                            )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ColorPill(
+                            text = "Net ${fmtCompact(totalInflows)}",
+                            color = cTeal,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 7.dp,
+                            verticalPadding = 2.5.dp
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            // In Granular Mode: Show 2-Column Stream Matrix for Easy Mobile Touch & Inspection
+            if (viewMode == 1) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Inflow Column
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "INFLOW SOURCES",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.4.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                            Text(
+                                text = fmtCompact(sumInflows),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 9.5.sp,
+                                    color = cTeal
+                                )
+                            )
+                        }
+                        inflowNodes.forEach { node ->
+                            val isSel = selectedNodeId == node.id
+                            StreamMatrixItem(
+                                title = node.shortLabel,
+                                amount = node.amount,
+                                color = node.color,
+                                isSelected = isSel,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedNodeId = if (isSel) null else node.id
+                                }
+                            )
+                        }
+                    }
 
-            // 3 KPI Footers
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+                    // Destination Column
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "ALLOCATIONS",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.4.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                            Text(
+                                text = fmtCompact(sumOutflows),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 9.5.sp,
+                                    color = cRed
+                                )
+                            )
+                        }
+                        outflowNodes.forEach { node ->
+                            val isSel = selectedNodeId == node.id
+                            StreamMatrixItem(
+                                title = node.shortLabel,
+                                amount = node.amount,
+                                color = node.color,
+                                isSelected = isSel,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedNodeId = if (isSel) null else node.id
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // In 3-Pillar Mode: Sleek Multi-segment allocation pill
+                Spacer(modifier = Modifier.height(10.dp))
                 val burnPct = (totalExpenses / totalInflows * 100.0).coerceIn(0.0, 100.0)
                 val dcaPct = (totalInvest / totalInflows * 100.0).coerceIn(0.0, 100.0)
                 val bufferPct = (unallocatedSurplus / totalInflows * 100.0).coerceIn(0.0, 100.0)
 
-                SankeyStatChip(
-                    label = "Living Burn",
-                    value = fmtCompact(totalExpenses),
-                    pct = "${fmtPct(burnPct, 0)}",
-                    color = cRed,
-                    modifier = Modifier.weight(1f)
-                )
-                SankeyStatChip(
-                    label = "Invested DCA",
-                    value = fmtCompact(totalInvest),
-                    pct = "${fmtPct(dcaPct, 0)}",
-                    color = cTeal,
-                    modifier = Modifier.weight(1f)
-                )
-                SankeyStatChip(
-                    label = "Buffer Surplus",
-                    value = fmtCompact(unallocatedSurplus),
-                    pct = "${fmtPct(bufferPct, 0)}",
-                    color = cGold,
-                    modifier = Modifier.weight(1f)
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Box(modifier = Modifier.weight((burnPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cRed))
+                                Box(modifier = Modifier.weight((dcaPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cTeal))
+                                Box(modifier = Modifier.weight((bufferPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cGold))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cRed))
+                                Text("Living ${fmtPct(burnPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cTeal))
+                                Text("Invested ${fmtPct(dcaPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cGold))
+                                Text("Buffer ${fmtPct(bufferPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SankeyStatChip(
-    label: String,
-    value: String,
-    pct: String,
+private fun StreamMatrixItem(
+    title: String,
+    amount: Double,
     color: Color,
-    modifier: Modifier = Modifier
+    isSelected: Boolean,
+    onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        color = color.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.25f))
+        onClick = onClick,
+        shape = RoundedCornerShape(7.dp),
+        color = if (isSelected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.5.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 9.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = label,
+                text = fmtCompact(amount),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
                 ),
                 maxLines = 1
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = color,
-                        fontSize = 11.5.sp
-                    ),
-                    maxLines = 1
-                )
-                Text(
-                    text = pct,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = color.copy(alpha = 0.85f),
-                        fontSize = 10.sp
-                    ),
-                    maxLines = 1
-                )
-            }
         }
     }
 }

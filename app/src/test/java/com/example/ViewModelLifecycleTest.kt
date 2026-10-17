@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -53,7 +54,7 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_2_resetSettingsToDefault() = runTest {
-        val states = mutableListOf<SettingsEntity>()
+        val states = CopyOnWriteArrayList<SettingsEntity>()
         val collectJob = launch(Dispatchers.Default) { viewModel.settingsState.collect { states.add(it) } }
         pollUntil { states.isNotEmpty() }
 
@@ -71,8 +72,8 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_3_clearAllUserData() = runTest {
-        val settingsStates = mutableListOf<SettingsEntity>()
-        val ledgerStates = mutableListOf<List<LedgerEntryEntity>>()
+        val settingsStates = CopyOnWriteArrayList<SettingsEntity>()
+        val ledgerStates = CopyOnWriteArrayList<List<LedgerEntryEntity>>()
         val collectSettings = launch(Dispatchers.Default) { viewModel.settingsState.collect { settingsStates.add(it) } }
         val collectLedger = launch(Dispatchers.Default) { viewModel.ledgerEntries.collect { ledgerStates.add(it) } }
         pollUntil { settingsStates.isNotEmpty() }
@@ -136,7 +137,7 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_9_importCsvData_invalidUri() = runTest {
-        val ledgerStates = mutableListOf<List<LedgerEntryEntity>>()
+        val ledgerStates = CopyOnWriteArrayList<List<LedgerEntryEntity>>()
         val collectJob = launch(Dispatchers.Default) { viewModel.ledgerEntries.collect { ledgerStates.add(it) } }
         pollUntil { ledgerStates.isNotEmpty() }
 
@@ -152,7 +153,7 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_10_importCsvData_corruptedOrValid() = runTest {
-        val ledgerStates = mutableListOf<List<LedgerEntryEntity>>()
+        val ledgerStates = CopyOnWriteArrayList<List<LedgerEntryEntity>>()
         val collectJob = launch(Dispatchers.Default) { viewModel.ledgerEntries.collect { ledgerStates.add(it) } }
         pollUntil { ledgerStates.isNotEmpty() }
 
