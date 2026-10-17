@@ -110,13 +110,18 @@ fun OverviewTab(
         accentColor = BrandBlue
     )
 
+    val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+    val surplusRatePct = if (state.currentIncome.totalMonthly > 0.0) {
+        ((monthlySurplus / state.currentIncome.totalMonthly) * 100.0).coerceIn(0.0, 100.0)
+    } else 0.0
+
     val savingsRateInfo = MetricInfo(
-        title = "Household Savings Rate",
+        title = "Monthly Investment & Savings Rate",
         category = "Cash Flow & DCA Firepower",
-        formulaOrRule = "Savings Rate = (Monthly Surplus / Total Net Inflows) * 100%",
-        explanation = "Measures the fraction of total net household income that is saved and invested each month rather than consumed. In FIRE dynamics, savings rate determines how many years of expenses are funded by one year of work.",
+        formulaOrRule = "Investment Rate = (${fmtCZK(state.investMonthlyTotal)} Invested / ${fmtCZK(state.currentIncome.totalMonthly)} Net Income) = ${fmtPct(state.savingsRatePct, 1)}",
+        explanation = "Measures the percentage of total net household income actively invested each month via automated DCA (${fmtCZK(state.investMonthlyTotal)}/mo). By comparison, your total monthly cash surplus (income minus living expenses) is ${fmtCZK(monthlySurplus)}/mo (${fmtPct(surplusRatePct, 1)} of net inflows).",
         statutoryReference = "Pure Mathematical Actuarial Lever",
-        practicalImplication = "Increasing savings rate from 30% to 50% cuts working career duration by more than a decade regardless of absolute salary level.",
+        practicalImplication = "Channeling a larger share of your ${fmtCZK(monthlySurplus)}/mo surplus into automated ETF and DIP contributions raises your active investment rate and accelerates your FIRE horizon.",
         accentColor = GoodGreen
     )
 
@@ -181,7 +186,10 @@ fun OverviewTab(
             KpiCard(
                 title = "Projected FIRE Age",
                 value = firePoint?.let { "Age ${it.age}" } ?: "Age ${state.settings.primaryAge + 35}+",
-                hint = firePoint?.let { "Projected year ${it.year}" } ?: "Beyond 35y horizon",
+                hint = firePoint?.let {
+                    val yearsAway = (it.age - state.settings.primaryAge).coerceAtLeast(0)
+                    if (yearsAway == 0) "Target reached" else "In $yearsAway years"
+                } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f),
                 testTagStr = "kpi_fire_age",
@@ -190,11 +198,10 @@ fun OverviewTab(
                 onClick = onNavigateToProjections
             )
 
-            val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
             KpiCard(
                 title = "Savings Rate",
                 value = fmtPct(state.savingsRatePct),
-                hint = "${fmtCompact(monthlySurplus)}/mo invested",
+                hint = "${fmtCompact(state.investMonthlyTotal)}/mo invested",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f),
                 testTagStr = "kpi_savings_rate",
@@ -225,12 +232,12 @@ fun OverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Quick Highlights
-        val surplusVal = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+        val surplusVal = monthlySurplus
         val surplusInfo = MetricInfo(
             title = "Monthly Capital Surplus",
             category = "Cash Flow & DCA Engine",
-            formulaOrRule = "Surplus = Total Net Monthly Inflows - All Fixed/Variable Living Expenses",
-            explanation = "Represents your monthly discretionary investment firepower. In pure FIRE math, your savings rate (Surplus / Inflows) is the single most dominant lever governing years-to-financial-independence, outweighing investment returns during early accumulation.",
+            formulaOrRule = "Surplus = Total Net Monthly Inflows (${fmtCZK(state.currentIncome.totalMonthly)}) - Living Expenses (${fmtCZK(state.totalLivingCostMonthly)})",
+            explanation = "Represents the total difference between household net income and living expenses (${fmtCZK(surplusVal)}/mo, or ${fmtPct(surplusRatePct, 1)} of income). Out of this surplus, ${fmtCZK(state.investMonthlyTotal)}/mo (${fmtPct(state.savingsRatePct, 1)} of income) is actively invested via automated DCA.",
             practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
             accentColor = BrandTeal
         )
@@ -264,7 +271,7 @@ fun OverviewTab(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SummaryRow(
-                        label = "Monthly surplus",
+                        label = "Monthly surplus (inc - exp)",
                         value = fmtCZK(surplusVal),
                         valueColor = if (surplusVal < 0) BadRed else GoodGreen,
                         info = surplusInfo,
@@ -291,12 +298,12 @@ fun OverviewTab(
                         )
                     }
                     SummaryRow(
-                        label = "Monthly savings rate",
-                        value = fmtPct(state.savingsRatePct, 1),
+                        label = "Monthly invested (DCA)",
+                        value = "${fmtCZK(state.investMonthlyTotal)} (${fmtPct(state.savingsRatePct, 1)})",
                         info = MetricInfo(
                             title = "Monthly Investment Rate",
                             category = "Wealth Accumulation Velocity",
-                            formulaOrRule = "Investment Rate = Automated Monthly Investments (DCA) / Total Net Inflows",
+                            formulaOrRule = "Investment Rate = Automated Monthly Investments (${fmtCZK(state.investMonthlyTotal)}) / Total Net Inflows (${fmtCZK(state.currentIncome.totalMonthly)})",
                             explanation = "Measures the percentage of total household net income channeled directly into automated wealth-building vehicles (Brokerage/ETF, DIP, and DPS).",
                             practicalImplication = "Elevating investment rate accelerates FIRE milestones by boosting compounding capital while curbing lifestyle creep.",
                             accentColor = BrandTeal
