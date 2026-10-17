@@ -1209,24 +1209,27 @@ private fun StreamMatrixItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(5.dp)
     Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(5.dp),
+        shape = shape,
         color = if (isSelected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         border = BorderStroke(
             1.dp,
             if (isSelected) color else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.5.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 Box(
@@ -1246,11 +1249,11 @@ private fun StreamMatrixItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.width(2.5.dp))
+            Spacer(modifier = Modifier.width(3.dp))
             Text(
                 text = fmtCompact(amount),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 9.sp,
+                    fontSize = 9.2.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
