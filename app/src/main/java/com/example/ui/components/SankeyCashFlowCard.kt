@@ -1057,17 +1057,17 @@ fun SankeyCashFlowCard(
 
             // In Granular Mode: Show 2-Column Stream Matrix for Easy Mobile Touch & Inspection
             if (viewMode == 1) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Inflow Column
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.5.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 2.dp, vertical = 2.dp),
+                                .padding(horizontal = 2.dp, vertical = 1.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1075,8 +1075,8 @@ fun SankeyCashFlowCard(
                                 text = "INFLOW SOURCES",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.4.sp,
+                                    fontSize = 8.5.sp,
+                                    letterSpacing = 0.3.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
@@ -1085,7 +1085,7 @@ fun SankeyCashFlowCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 9.5.sp,
+                                    fontSize = 9.sp,
                                     color = cTeal
                                 )
                             )
@@ -1106,11 +1106,11 @@ fun SankeyCashFlowCard(
                     }
 
                     // Destination Column
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.5.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 2.dp, vertical = 2.dp),
+                                .padding(horizontal = 2.dp, vertical = 1.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1118,8 +1118,8 @@ fun SankeyCashFlowCard(
                                 text = "ALLOCATIONS",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.4.sp,
+                                    fontSize = 8.5.sp,
+                                    letterSpacing = 0.3.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
@@ -1128,7 +1128,7 @@ fun SankeyCashFlowCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 9.5.sp,
+                                    fontSize = 9.sp,
                                     color = cRed
                                 )
                             )
@@ -1211,7 +1211,7 @@ private fun StreamMatrixItem(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(7.dp),
+        shape = RoundedCornerShape(5.dp),
         color = if (isSelected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         border = BorderStroke(
             1.dp,
@@ -1220,25 +1220,25 @@ private fun StreamMatrixItem(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(5.5.dp)
+                        .size(4.5.dp)
                         .clip(CircleShape)
                         .background(color)
                 )
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 9.5.sp,
+                        fontSize = 8.8.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
@@ -1246,11 +1246,11 @@ private fun StreamMatrixItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(2.5.dp))
             Text(
                 text = fmtCompact(amount),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
