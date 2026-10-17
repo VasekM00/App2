@@ -670,7 +670,7 @@ class ChildCostAndStatementIntelligenceTest {
         // Coast FIRE target is discounted from state pension age (67), where bridge years are 0
         val targetAt67 = FinancialEngine.fireTargetBase(settings, age = 67)
         val yearsTo67 = 67 - 26
-        val rReal = ((1.0 + settings.portfolioNominalReturnPct / 100.0) / (1.0 + settings.cpiInflationPct / 100.0)) - 1.0
+        val rReal = FinancialEngine.netRealReturnRate(settings)
         val expectedCoastRaw = targetAt67 / Math.pow(1.0 + rReal, yearsTo67.toDouble())
         val expectedCoastTarget = kotlin.math.round(expectedCoastRaw / 10_000.0) * 10_000.0
         assertEquals(expectedCoastTarget, ms.coastFire.targetAmountToday, 0.001)

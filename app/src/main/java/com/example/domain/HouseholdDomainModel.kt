@@ -84,7 +84,7 @@ data class HouseholdProfile(
                     id = "spouse",
                     name = settings.spouseName.ifBlank { "Eleonora" },
                     role = HouseholdRole.SPOUSE_EARNER,
-                    birthYear = ELEONORA_BIRTH_YEAR,
+                    birthYear = settings.baseYear - settings.primaryAge,
                     currentMonthlyGrossSalary = settings.eStartingSalary,
                     salaryGrowthPct = settings.eSalaryGrowthPct,
                     pensionProfile = PensionProfile(
@@ -225,8 +225,8 @@ data class HouseholdProfile(
                 )
             }
 
-            if (!settings.isSingleHousehold) {
-                val eCurrentAge = settings.baseYear - ELEONORA_BIRTH_YEAR
+            if (!settings.isSingleHousehold && spouse != null) {
+                val eCurrentAge = settings.baseYear - spouse.birthYear
                 val ePensionYears = settings.eStatePensionAge - eCurrentAge
                 if (ePensionYears > 0) {
                     events.add(
@@ -287,6 +287,7 @@ data class HouseholdProfile(
             child2Enabled = c2 != null,
             child2Name = c2?.name ?: baseSettings.child2Name,
             child2BirthYear = c2?.birthYear ?: baseSettings.child2BirthYear,
+            liquidPortfolioCurrent = this.liquidPortfolioCurrent,
             emergencyReserveCurrent = this.emergencyReserveCurrent
         )
     }

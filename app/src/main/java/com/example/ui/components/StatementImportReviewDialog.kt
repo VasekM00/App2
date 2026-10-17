@@ -113,37 +113,54 @@ fun StatementImportReviewDialog(
     val filterLabels = listOf("All (${summary.transactions.size})", "Inflows", "Expenses", "Investments", "Transfers")
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredTransactions = remember(selectedFilterIndex, selectedMonthFilter, searchQuery, summary.transactions) {
+    val indexedTransactions = remember(summary.transactions) {
+        summary.transactions.mapIndexed { idx, tx -> idx to tx }
+    }
+
+    val categoryTotals = remember(summary.transactions) {
+        mapOf(
+            BankTransactionType.DINING_RESTAURANT to summary.transactions.filter { it.category == BankTransactionType.DINING_RESTAURANT }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.SHOPPING_GOODS to summary.transactions.filter { it.category == BankTransactionType.SHOPPING_GOODS }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.TRANSPORTATION to summary.transactions.filter { it.category == BankTransactionType.TRANSPORTATION }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.SUBSCRIPTIONS_MEDIA to summary.transactions.filter { it.category == BankTransactionType.SUBSCRIPTIONS_MEDIA }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.HEALTH_DRUGSTORE to summary.transactions.filter { it.category == BankTransactionType.HEALTH_DRUGSTORE }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.SERVICES_UTILITIES to summary.transactions.filter { it.category == BankTransactionType.SERVICES_UTILITIES }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.ATM_CASH to summary.transactions.filter { it.category == BankTransactionType.ATM_CASH }.sumOf { -it.amount }.coerceAtLeast(0.0),
+            BankTransactionType.CHARITY_DONATION to summary.transactions.filter { it.category == BankTransactionType.CHARITY_DONATION }.sumOf { -it.amount }.coerceAtLeast(0.0)
+        )
+    }
+
+    val filteredTransactions = remember(selectedFilterIndex, selectedMonthFilter, searchQuery, indexedTransactions) {
         val baseList = if (selectedMonthFilter != null) {
-            summary.transactions.filter { it.date.startsWith(selectedMonthFilter!!) }
+            indexedTransactions.filter { (_, tx) -> tx.date.startsWith(selectedMonthFilter!!) }
         } else {
-            summary.transactions
+            indexedTransactions
         }
         val categoryFiltered = when (selectedFilterIndex) {
-            1 -> baseList.filter { it.amount > 0 }
-            2 -> baseList.filter {
-                it.amount < 0 && it.category != BankTransactionType.INVESTMENT_PORTU &&
-                        it.category != BankTransactionType.INVESTMENT_DIP &&
-                        it.category != BankTransactionType.INVESTMENT_DPS &&
-                        it.category != BankTransactionType.INTERNAL_TRANSFER
+            1 -> baseList.filter { (_, tx) -> tx.amount > 0 }
+            2 -> baseList.filter { (_, tx) ->
+                tx.amount < 0 && tx.category != BankTransactionType.INVESTMENT_PORTU &&
+                        tx.category != BankTransactionType.INVESTMENT_DIP &&
+                        tx.category != BankTransactionType.INVESTMENT_DPS &&
+                        tx.category != BankTransactionType.INTERNAL_TRANSFER
             }
-            3 -> baseList.filter {
-                it.category == BankTransactionType.INVESTMENT_PORTU ||
-                        it.category == BankTransactionType.INVESTMENT_DIP ||
-                        it.category == BankTransactionType.INVESTMENT_DPS
+            3 -> baseList.filter { (_, tx) ->
+                tx.category == BankTransactionType.INVESTMENT_PORTU ||
+                        tx.category == BankTransactionType.INVESTMENT_DIP ||
+                        tx.category == BankTransactionType.INVESTMENT_DPS
             }
-            4 -> baseList.filter { it.category == BankTransactionType.INTERNAL_TRANSFER }
+            4 -> baseList.filter { (_, tx) -> tx.category == BankTransactionType.INTERNAL_TRANSFER }
             else -> baseList
         }
         if (searchQuery.isBlank()) {
             categoryFiltered
         } else {
             val q = searchQuery.trim().lowercase(java.util.Locale.ROOT)
-            categoryFiltered.filter {
-                it.counterpartyName.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    it.message.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    it.category.name.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    it.date.contains(q)
+            categoryFiltered.filter { (_, tx) ->
+                tx.counterpartyName.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    tx.message.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    tx.category.name.lowercase(java.util.Locale.ROOT).contains(q) ||
+                    tx.date.contains(q)
             }
         }
     }
@@ -541,7 +558,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val diningTotal = summary.transactions.filter { it.category == BankTransactionType.DINING_RESTAURANT }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val diningTotal = categoryTotals[BankTransactionType.DINING_RESTAURANT] ?: 0.0
                             if (diningTotal > 0) {
                                 ColorPill(
                                     text = "Dining: " + fmtCompact(diningTotal),
@@ -553,7 +570,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val shoppingTotal = summary.transactions.filter { it.category == BankTransactionType.SHOPPING_GOODS }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val shoppingTotal = categoryTotals[BankTransactionType.SHOPPING_GOODS] ?: 0.0
                             if (shoppingTotal > 0) {
                                 ColorPill(
                                     text = "Shopping: " + fmtCompact(shoppingTotal),
@@ -565,7 +582,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val transportTotal = summary.transactions.filter { it.category == BankTransactionType.TRANSPORTATION }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val transportTotal = categoryTotals[BankTransactionType.TRANSPORTATION] ?: 0.0
                             if (transportTotal > 0) {
                                 ColorPill(
                                     text = "Transport: " + fmtCompact(transportTotal),
@@ -577,7 +594,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val subsTotal = summary.transactions.filter { it.category == BankTransactionType.SUBSCRIPTIONS_MEDIA }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val subsTotal = categoryTotals[BankTransactionType.SUBSCRIPTIONS_MEDIA] ?: 0.0
                             if (subsTotal > 0) {
                                 ColorPill(
                                     text = "Subs: " + fmtCompact(subsTotal),
@@ -589,7 +606,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val healthTotal = summary.transactions.filter { it.category == BankTransactionType.HEALTH_DRUGSTORE }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val healthTotal = categoryTotals[BankTransactionType.HEALTH_DRUGSTORE] ?: 0.0
                             if (healthTotal > 0) {
                                 ColorPill(
                                     text = "Health: " + fmtCompact(healthTotal),
@@ -601,7 +618,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val utilTotal = summary.transactions.filter { it.category == BankTransactionType.SERVICES_UTILITIES }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val utilTotal = categoryTotals[BankTransactionType.SERVICES_UTILITIES] ?: 0.0
                             if (utilTotal > 0) {
                                 ColorPill(
                                     text = "Utilities: " + fmtCompact(utilTotal),
@@ -613,7 +630,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val atmTotal = summary.transactions.filter { it.category == BankTransactionType.ATM_CASH }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val atmTotal = categoryTotals[BankTransactionType.ATM_CASH] ?: 0.0
                             if (atmTotal > 0) {
                                 ColorPill(
                                     text = "ATM: " + fmtCompact(atmTotal),
@@ -625,7 +642,7 @@ fun StatementImportReviewDialog(
                                     verticalPadding = 2.dp
                                 )
                             }
-                            val charityTotal = summary.transactions.filter { it.category == BankTransactionType.CHARITY_DONATION }.sumOf { -it.amount }.coerceAtLeast(0.0)
+                            val charityTotal = categoryTotals[BankTransactionType.CHARITY_DONATION] ?: 0.0
                             if (charityTotal > 0) {
                                 ColorPill(
                                     text = "Charity: " + fmtCompact(charityTotal),
@@ -783,14 +800,11 @@ fun StatementImportReviewDialog(
                                 .testTag("statement_transaction_list"),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            items(filteredTransactions) { tx ->
-                                val origIndex = summary.transactions.indexOf(tx)
+                            items(filteredTransactions, key = { (origIdx, tx) -> "${origIdx}_${tx.date}_${tx.amount}" }) { (origIndex, tx) ->
                                 TransactionRowItem(
                                     tx = tx,
                                     onClickCategory = {
-                                        if (origIndex != -1) {
-                                            editingTxIndex = origIndex
-                                        }
+                                        editingTxIndex = origIndex
                                     }
                                 )
                             }

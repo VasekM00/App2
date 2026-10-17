@@ -11,8 +11,8 @@ val BrandTeal: Color
 val BrandTealLight = Color(0xFF0F766E) // Teal 700 (high contrast on light surface)
 val BrandTealDark = Color(0xFF2DD4BF) // Teal 400 (bright accent on dark surface)
 
-val BrandGoldLight = Color(0xFFD97706) // Rich Warm Amber (high contrast on white light mode)
-val BrandGoldDarkTheme = Color(0xFFFBBF24) // Radiant Warm Gold (high contrast on dark mode)
+val BrandGoldLight = Color(0xFFB45309) // Rich Antique Gold (high contrast on white light mode)
+val BrandGoldDarkTheme = Color(0xFFFACC15) // Radiant Warm Gold (high contrast on dark mode)
 
 val BrandGold: Color
     @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BrandGoldDarkTheme else BrandGoldLight
@@ -28,8 +28,11 @@ val BrandPurpleText = Color(0xFF334155) // Replaced with Slate 700
 val GoodGreen: Color
     @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) GoodGreenDark else Color(0xFF16A34A)
 
+val WarnAmberLight = Color(0xFFEA580C) // Warning Orange/Amber (high contrast on light)
+val WarnAmberDark = Color(0xFFFB923C) // Warning Orange/Amber (high contrast on dark)
+
 val WarnAmber: Color
-    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) WarnAmberDark else Color(0xFFD97706)
+    @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) WarnAmberDark else WarnAmberLight
 
 val BadRed: Color
     @Composable get() = if (MaterialTheme.colorScheme.surface == SurfaceDark) BadRedDark else Color(0xFFDC2626)
@@ -48,7 +51,6 @@ val BrandPurpleDarkTheme = Color(0xFF1E293B)
 val BrandBlueDarkTheme = Color(0xFF60A5FA)
 
 val GoodGreenDark = Color(0xFF4ADE80)
-val WarnAmberDark = Color(0xFFFBBF24)
 val BadRedDark = Color(0xFFF87171)
 
 val SurfaceDark = Color(0xFF1E293B) // Slate 800

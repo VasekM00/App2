@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -178,7 +179,7 @@ fun HeroHeader(
                     )
                     MiniStatChip(
                         label = "Emergency Reserve",
-                        value = fmtCompact(state.settings.emergencyReserveCurrent),
+                        value = fmtCompact(state.currentEmergencyReserve),
                         onClick = onNavigateToEmergencyReserve,
                         modifier = Modifier.weight(1f).testTag("hero_stat_emergency_reserve")
                     )
@@ -243,7 +244,7 @@ fun MiniStatChip(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 8.sp,
+                    fontSize = 9.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.5.sp,
                     color = Color.White.copy(alpha = 0.7f),
@@ -282,6 +283,7 @@ fun PerpetualFireMultiplierPill(
         contentColor = Color.White,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
         modifier = modifier
+            .defaultMinSize(minHeight = 48.dp)
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
     ) {
@@ -311,7 +313,7 @@ fun PerpetualFireMultiplierPill(
                         Text(
                             text = "PERPETUAL FIRE LEVERAGE",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 8.5.sp,
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.5.sp,
                                 color = Color.White.copy(alpha = 0.7f)
@@ -325,7 +327,7 @@ fun PerpetualFireMultiplierPill(
                             Text(
                                 text = "${String.format(java.util.Locale.ROOT, "%.0fx", multiplier)} LEVERAGE",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 7.5.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.3.sp
                                 ),

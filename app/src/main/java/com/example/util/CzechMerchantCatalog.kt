@@ -301,14 +301,14 @@ object CzechMerchantCatalog {
                 "kafe mitte", "hostel mitte", "mitte",
                 "punkt", "punkt cafe", "kafe punkt",
                 "skog", "skog urban",
-                "podnik cafe", "podnik cafe bar", "podnik",
+                "podnik cafe", "podnik cafe bar",
                 "kafec", "kafec orli", "kafec uvoz",
                 "buchta caffe", "buchta cafe",
                 "pelisek", "kocici kavarna",
                 "mezzanine", "mezzanine cafe",
                 "cafe atlas", "kavarna atlas",
                 "cafe falk", "kavarna falk",
-                "kavarna spolek", "spolek",
+                "kavarna spolek",
                 "cafe tungsram", "tungsram",
                 "cafe pilat", "pilat",
                 "cafe momenta", "momenta",
@@ -407,7 +407,7 @@ object CzechMerchantCatalog {
                 "big one fitness", "big1fitness", "zone4you",
                 "form factory", "fitinn", "next move", "john reed", "fitness", "posilovna", "sauna", "masaze",
                 // Medical, Dental, Labs & Hospitals
-                "fn", "fnusa", "bohunice", "u svate anny", "nemocnice", "poliklinika", "ordinace",
+                "fn", "fnusa", "fn bohunice", "nemocnice bohunice", "u svate anny", "nemocnice", "poliklinika", "ordinace",
                 "zubni", "stomatol*", "ortodoncie", "dentalni hygiena", "fyzio",
                 "synlab", "aeskulab", "euc klinika",
                 // Optics & Cosmetics
@@ -423,7 +423,7 @@ object CzechMerchantCatalog {
             listOf(
                 // Brno Shopping Centers & Malls
                 "vankovka", "galerie vankovka", "olympia", "avion", "avion shopping park",
-                "kralovo pole", "nc kralovo pole", "krpole", "spalicek", "velky spalicek",
+                "nc kralovo pole", "oc kralovo pole", "krpole", "spalicek", "velky spalicek",
                 "letmo", "oc letmo", "palac omega",
                 // Brno Local Boutiques, Concept Stores & Design
                 "place store", "restart shop", "ty identity", "pokojovky", "kytky od pepy",
@@ -480,7 +480,7 @@ object CzechMerchantCatalog {
                 "epet", "veolia", "pvk", "vodovody",
                 // Insurance (Health & Commercial)
                 "zivotni pojisteni", "pojist*", "kooperativa", "generali", "ceska pojistovna",
-                "allianz", "uniqa", "pillow", "direct", "slavia pojistovna",
+                "allianz", "uniqa", "pillow", "direct pojistovna", "slavia pojistovna",
                 "pvzp", "vzp", "ozp", "vozp", "cpzp", "rbp",
                 // Banking Fees
                 "poplatek za vedeni", "vedeni uctu", "bankovni poplatek", "poplatek za kartu",

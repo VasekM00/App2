@@ -38,15 +38,22 @@ class RoomMigrationInstrumentedTest {
         AppDatabase.MIGRATION_23_24,
         AppDatabase.MIGRATION_24_25,
         AppDatabase.MIGRATION_25_26,
-        AppDatabase.MIGRATION_26_27
+        AppDatabase.MIGRATION_26_27,
+        AppDatabase.MIGRATION_27_28,
+        AppDatabase.MIGRATION_28_29,
+        AppDatabase.MIGRATION_29_30,
+        AppDatabase.MIGRATION_30_31,
+        AppDatabase.MIGRATION_31_32,
+        AppDatabase.MIGRATION_32_33,
+        AppDatabase.MIGRATION_33_34
     )
 
     @Test
     fun migrateFromEverySupportedVersionToLatest() {
-        for (start in 16..26) {
+        for (start in 16..33) {
             val applicable = migrationsInOrder.filter { it.startVersion >= start }
             helper.createDatabase(TEST_DB, start).close()
-            helper.runMigrationsAndValidate(TEST_DB, 27, true, *applicable.toTypedArray()).close()
+            helper.runMigrationsAndValidate(TEST_DB, 34, true, *applicable.toTypedArray()).close()
         }
     }
 

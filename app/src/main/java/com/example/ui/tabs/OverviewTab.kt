@@ -44,6 +44,7 @@ import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 
 import com.example.ui.components.EmergencyReserveWidget
+import com.example.ui.components.HeroHeader
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.infoTapHold
@@ -61,6 +62,13 @@ fun OverviewTab(
     onNavigateToProjections: (() -> Unit)? = null,
     onNavigateToPlan: (() -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    isDarkTheme: Boolean = false,
+    onToggleDarkTheme: (() -> Unit)? = null,
+    onOpenExportReportDialog: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
+    onNavigateToNetWorth: (() -> Unit)? = null,
+    onNavigateToEmergencyReserve: (() -> Unit)? = null,
+    onNavigateToSavingsRate: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -101,12 +109,13 @@ fun OverviewTab(
         accentColor = BrandBlue
     )
 
-    val netWorthInfo = MetricInfo(
-        title = "Consolidated Net Worth",
-        category = "Balance Sheet",
-        formulaOrRule = "Liquid Brokerage + DIP + DPS + Emergency Cash",
-        explanation = "Represents consolidated financial capital. Excludes illiquid primary residential real estate equity to ensure strict FIRE withdrawal modeling against income-generating assets.",
-        practicalImplication = "Tracking liquid investment equity versus emergency cash preserves an optimal allocation between cash drag and compounding growth.",
+    val savingsRateInfo = MetricInfo(
+        title = "Household Savings Rate",
+        category = "Cash Flow & DCA Firepower",
+        formulaOrRule = "Savings Rate = (Monthly Surplus / Total Net Inflows) * 100%",
+        explanation = "Measures the fraction of total net household income that is saved and invested each month rather than consumed. In FIRE dynamics, savings rate determines how many years of expenses are funded by one year of work.",
+        statutoryReference = "Pure Mathematical Actuarial Lever",
+        practicalImplication = "Increasing savings rate from 30% to 50% cuts working career duration by more than a decade regardless of absolute salary level.",
         accentColor = GoodGreen
     )
 
@@ -117,6 +126,20 @@ fun OverviewTab(
             .padding(16.dp)
             .testTag("overview_tab")
     ) {
+        // Pinned Hero Header moved inside scrollable column (UX-01)
+        HeroHeader(
+            state = state,
+            isDarkTheme = isDarkTheme,
+            onToggleDarkTheme = { onToggleDarkTheme?.invoke() },
+            onOpenExportReportDialog = { onOpenExportReportDialog?.invoke() },
+            onOpenSettings = { onOpenSettings?.invoke() },
+            onNavigateToNetWorth = { onNavigateToNetWorth?.invoke() ?: onNavigateToProjections?.invoke() },
+            onNavigateToEmergencyReserve = { onNavigateToEmergencyReserve?.invoke() },
+            onNavigateToSavingsRate = { onNavigateToSavingsRate?.invoke() ?: onNavigateToIncome?.invoke() }
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // 4 Interactive KPI Cards (Symmetric 2x2 Grid, Tap / Hold for deep insight)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -165,16 +188,17 @@ fun OverviewTab(
                 onClick = onNavigateToProjections
             )
 
+            val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
             KpiCard(
-                title = "Net Worth Total",
-                value = fmtCompact(state.netWorthTotal),
-                hint = "Liquid + reserve + pension",
+                title = "Savings Rate",
+                value = fmtPct(state.savingsRatePct),
+                hint = "${fmtCompact(monthlySurplus)}/mo invested",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f),
-                testTagStr = "kpi_net_worth",
-                info = netWorthInfo,
+                testTagStr = "kpi_savings_rate",
+                info = savingsRateInfo,
                 onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToProjections
+                onClick = onNavigateToIncome
             )
         }
 

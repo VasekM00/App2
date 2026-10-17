@@ -60,8 +60,14 @@ interface ActionStateDao {
     @Query("SELECT * FROM action_states")
     fun getAllActionStates(): Flow<List<ActionStateEntity>>
 
+    @Query("SELECT * FROM action_states")
+    suspend fun getAllActionStatesDirect(): List<ActionStateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveActionState(state: ActionStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveActionStates(states: List<ActionStateEntity>)
 
     @Query("UPDATE action_states SET isDone = NOT isDone WHERE actionKey = :key")
     suspend fun toggleActionState(key: String)
@@ -83,6 +89,9 @@ interface ImportedTransactionDao {
 
     @Query("SELECT * FROM imported_bank_transactions ORDER BY date ASC, id ASC")
     fun getAllImportedTransactions(): Flow<List<ImportedBankTransactionEntity>>
+
+    @Query("SELECT * FROM imported_bank_transactions ORDER BY date ASC, id ASC")
+    suspend fun getAllTransactionsDirect(): List<ImportedBankTransactionEntity>
 
     @Query("SELECT * FROM imported_bank_transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC, id ASC")
     suspend fun getTransactionsInDateRangeDirect(startDate: String, endDate: String): List<ImportedBankTransactionEntity>

@@ -60,6 +60,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -113,6 +115,7 @@ internal fun LedgerChart(
     val cTeal = BrandTeal
     val cGreen = GoodGreen
     val cRed = BadRed
+    val cSurface = MaterialTheme.colorScheme.surface
     val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
     val textPaintColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val textPx = with(LocalDensity.current) { 10.sp.toPx() }
@@ -130,7 +133,9 @@ internal fun LedgerChart(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "6-Month Cash Flow Trend chart showing monthly income and expense history." },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
@@ -177,13 +182,16 @@ internal fun LedgerChart(
 
             // Chart Canvas
             val paddingHorizontal = 36f
-            val paddingTop = 12f
+            val paddingTop = 18f
             val paddingBottom = 38f
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(130.dp)
+                    .semantics {
+                        contentDescription = "Monthly ledger trend chart showing income and expense history across ${sorted.size} months."
+                    }
             ) {
                 Canvas(
                     modifier = Modifier
@@ -285,7 +293,7 @@ internal fun LedgerChart(
 
                         // Incomes Node Dot
                         drawCircle(
-                            color = Color.White,
+                            color = cSurface,
                             radius = if (isSelected) 5.dp.toPx() else 3.5.dp.toPx(),
                             center = incPt
                         )
@@ -297,7 +305,7 @@ internal fun LedgerChart(
 
                         // Expenses Node Dot
                         drawCircle(
-                            color = Color.White,
+                            color = cSurface,
                             radius = if (isSelected) 5.dp.toPx() else 3.5.dp.toPx(),
                             center = expPt
                         )

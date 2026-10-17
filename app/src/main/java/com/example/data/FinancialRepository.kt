@@ -76,8 +76,10 @@ class FinancialRepository(
                 }
                 if (incEleonora > 0.0) {
                     if (cur.baseYear < cur.eReturnYear) {
-                        if (cur.eParentalAllowanceMonthly != incEleonora) {
-                            updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
+                        val candidateAllowance = (incEleonora - cur.eLecturingMonthly).coerceAtLeast(0.0)
+                        val allowanceToSet = if (candidateAllowance > 0.0) candidateAllowance else incEleonora
+                        if (cur.eParentalAllowanceMonthly != allowanceToSet) {
+                            updated = updated.copy(eParentalAllowanceMonthly = allowanceToSet)
                         }
                     } else {
                         if (cur.eStartingSalary != incEleonora) {
@@ -128,9 +130,11 @@ class FinancialRepository(
      * (2800 CZK/yr). Persists the correction so the value stops drifting between DB and UI.
      */
     suspend fun repairLegacyEmployerContribution() = withContext(Dispatchers.IO) {
-        val current = settingsDao.getSettingsDirect() ?: return@withContext
-        if (current.employerRetirementMonthly >= 2795.0 && current.employerRetirementMonthly <= 2805.0) {
-            settingsDao.saveSettings(current.copy(employerRetirementMonthly = 233.0))
+        database.withTransaction {
+            val current = settingsDao.getSettingsDirect() ?: return@withTransaction
+            if (current.employerRetirementMonthly >= 2795.0 && current.employerRetirementMonthly <= 2805.0) {
+                settingsDao.saveSettings(current.copy(employerRetirementMonthly = 233.0))
+            }
         }
     }
 
@@ -270,6 +274,38 @@ class FinancialRepository(
                 importedTransactionDao.insertTransactions(toInsert)
             }
             toInsert
+        }
+    }
+
+    suspend fun <R> withTransaction(block: suspend () -> R): R = withContext(Dispatchers.IO) {
+        database.withTransaction(block)
+    }
+
+    suspend fun getAllActionStatesDirect(): List<ActionStateEntity> = withContext(Dispatchers.IO) {
+        actionStateDao.getAllActionStatesDirect()
+    }
+
+    suspend fun getAllImportedTransactionsDirect(): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
+        importedTransactionDao.getAllTransactionsDirect()
+    }
+
+    suspend fun restoreFullBackupData(
+        settings: SettingsEntity,
+        ledgerEntries: List<LedgerEntryEntity>,
+        actionStates: List<ActionStateEntity>,
+        transactions: List<ImportedBankTransactionEntity>
+    ) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            settingsDao.saveSettings(settings)
+            if (ledgerEntries.isNotEmpty()) {
+                ledgerDao.insertEntries(ledgerEntries)
+            }
+            if (actionStates.isNotEmpty()) {
+                actionStateDao.saveActionStates(actionStates)
+            }
+            if (transactions.isNotEmpty()) {
+                importedTransactionDao.insertTransactions(transactions)
+            }
         }
     }
 }

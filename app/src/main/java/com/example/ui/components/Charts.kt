@@ -108,7 +108,7 @@ fun NetWorthChart(
 
     val actualPoints = remember(ledgerEntries) {
         ledgerEntries
-            .filter { it.totalNetWorthAtMonthEnd > 0 }
+            .filter { (it.portfolioBalanceAtMonthEnd + it.pensionBalanceAtMonthEnd) > 0 }
             .sortedBy { it.yearMonth }
     }
 
@@ -130,8 +130,9 @@ fun NetWorthChart(
         }
     }
 
-    val fireReachedIndex = displayData.indexOfFirst { it.portfolio >= it.target }
+    val fireReachedIndex = displayData.indexOfFirst { it.totalPortfolio >= it.target }
     val hasPension = displayData.any { it.pensionPortfolio > 0.0 }
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
 
     Card(
         modifier = modifier
@@ -295,9 +296,11 @@ fun NetWorthChart(
                 maxActual
             ) * 1.1).coerceAtLeast(100.0)
 
+            val cSurface = MaterialTheme.colorScheme.surface
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
+            val paddingTop = 18f
             val paddingLeft = 110f // Space for Y-Axis labels (log ticks can be long)
             val paddingRight = 32f // Space on right to prevent clipping of curve and labels
             val paddingBottom = 62f // Space for X-Axis labels
@@ -323,8 +326,20 @@ fun NetWorthChart(
                         .pointerInput(displayData) {
                             detectTransformGestures { _, pan, zoom, _ ->
                                 zoomScale = (zoomScale * zoom).coerceIn(1.0f, 4.0f)
-                                val maxPan = (size.width * (zoomScale - 1f))
+                                val plotW = size.width - paddingLeft - paddingRight
+                                val maxPan = (plotW * (zoomScale - 1f)).coerceAtLeast(0f)
                                 panOffsetX = (panOffsetX + pan.x).coerceIn(-maxPan, 0f)
+                            }
+                        }
+                        .pointerInput(displayData) {
+                            detectTapGestures { offset ->
+                                val plotW = size.width - paddingLeft - paddingRight
+                                val stepX = if (displayData.size > 1) plotW / (displayData.size - 1) else plotW
+                                val relativeX = offset.x - paddingLeft - panOffsetX
+                                if (stepX > 0f) {
+                                    val idx = kotlin.math.round(relativeX / stepX).toInt().coerceIn(0, displayData.size - 1)
+                                    selectedIndex = idx
+                                }
                             }
                         }
                 ) {
@@ -332,11 +347,12 @@ fun NetWorthChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
+                    val usableH = plotH - paddingTop
+                    if (plotW <= 0f || usableH <= 0f) return@Canvas
 
                     // Y-value -> pixel mapping (linear axis: 0 .. maxVal)
                     fun yPix(value: Double): Float =
-                        (plotH - plotH * (value / maxVal).coerceIn(0.0, 1.0)).toFloat()
+                        paddingTop + (usableH - usableH * (value / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Draw Y-Axis lines and numeric labels
                     val tickValues = (0..4).map { maxVal * it / 4.0 }
@@ -364,7 +380,7 @@ fun NetWorthChart(
                     // Vertical Y-Axis border line
                     drawLine(
                         color = gridColor,
-                        start = Offset(paddingLeft, 0f),
+                        start = Offset(paddingLeft, paddingTop),
                         end = Offset(paddingLeft, plotH),
                         strokeWidth = 2f
                     )
@@ -389,7 +405,7 @@ fun NetWorthChart(
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
-                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
                                 plotH + 34f,
                                 textPaint
                             )
@@ -398,7 +414,7 @@ fun NetWorthChart(
 
                     // Clip chart plotting within the axes space
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     // Build Target Path (Dashed Gold)
                     val targetPath = Path()
@@ -486,7 +502,7 @@ fun NetWorthChart(
 
                             drawCircle(color = cGreen.copy(alpha = 0.3f), radius = 13f, center = Offset(ax, ay))
                             drawCircle(color = cGreen, radius = 7f, center = Offset(ax, ay))
-                            drawCircle(color = Color.White, radius = 3.5f, center = Offset(ax, ay))
+                            drawCircle(color = cSurface, radius = 3.5f, center = Offset(ax, ay))
                         }
                     }
 
@@ -509,12 +525,70 @@ fun NetWorthChart(
                     // Draw FIRE Milestone marker dot
                     if (fireReachedIndex >= 0) {
                         val fx = paddingLeft + panOffsetX + (fireReachedIndex * stepX)
-                        val fy = yPix(displayData[fireReachedIndex].portfolio)
+                        val fy = yPix(displayData[fireReachedIndex].totalPortfolio)
                         drawCircle(color = cGold, radius = 12f, center = Offset(fx, fy))
                         drawCircle(color = cCardSurface, radius = 6f, center = Offset(fx, fy))
                     }
 
+                    // Draw Scrubber Crosshair on Selected Year
+                    selectedIndex?.let { idx ->
+                        if (idx in displayData.indices) {
+                            val sx = paddingLeft + panOffsetX + (idx * stepX)
+                            if (sx in paddingLeft..(w - paddingRight)) {
+                                drawLine(
+                                    color = cTeal.copy(alpha = 0.5f),
+                                    start = Offset(sx, 0f),
+                                    end = Offset(sx, plotH),
+                                    strokeWidth = 2f,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                                )
+                                val pt = displayData[idx]
+                                val sy = yPix(if (hasPension) pt.totalPortfolio else pt.portfolio)
+                                drawCircle(color = if (hasPension) cPurple else cTeal, radius = 9f, center = Offset(sx, sy))
+                                drawCircle(color = cGold, radius = 5f, center = Offset(sx, yPix(pt.target)))
+                            }
+                        }
+                    }
+
                     drawContext.canvas.restore()
+                }
+            }
+
+            // Interactive Detail Tooltip Box for Selected Year
+            val activePt = selectedIndex?.let { displayData.getOrNull(it) }
+            if (activePt != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.fillMaxWidth().testTag("net_worth_tooltip_box")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${activePt.year} (Age ${activePt.age})",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "Liquid: ${fmtCompact(activePt.portfolio)}",
+                                style = MaterialTheme.typography.bodySmall.copy(color = cTeal, fontWeight = FontWeight.SemiBold)
+                            )
+                            if (hasPension) {
+                                Text(
+                                    text = "Total: ${fmtCompact(activePt.totalPortfolio)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = cPurple, fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                            Text(
+                                text = "Target: ${fmtCompact(activePt.target)}",
+                                style = MaterialTheme.typography.bodySmall.copy(color = cGold, fontWeight = FontWeight.SemiBold)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -546,6 +620,7 @@ fun MonteCarloFanChart(
     val cTeal = BrandTeal
     val cGreen = GoodGreen
     val cRed = BadRed
+    val cGold = BrandGold
     val cCardSurface = MaterialTheme.colorScheme.surface
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
@@ -582,12 +657,39 @@ fun MonteCarloFanChart(
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "P95", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "P50", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(cRed, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "P5", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             val maxVal = ((realPoints.maxOfOrNull { maxOf(it.p95, it.target) } ?: 0.0) * 1.1).coerceAtLeast(100.0)
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
+            val paddingTop = 18f
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
@@ -624,15 +726,19 @@ fun MonteCarloFanChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
+                    val usableH = plotH - paddingTop
+                    if (plotW <= 0f || usableH <= 0f) return@Canvas
                     val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
+
+                    fun yPix(v: Double): Float =
+                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Draw Y-Axis lines and numeric labels
                     val ySteps = 4
 
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
+                        val y = yPix(valAtStep)
 
                         drawLine(
                             color = gridColor,
@@ -664,7 +770,7 @@ fun MonteCarloFanChart(
                         val textWidth = textPaint.measureText(labelText)
                         drawContext.canvas.nativeCanvas.drawText(
                             labelText,
-                            (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                            (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
                             plotH + 34f,
                             textPaint
                         )
@@ -672,19 +778,19 @@ fun MonteCarloFanChart(
 
                     // Clip plot area
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     // P95 -> P5 Area Shade
                     val fillPath = Path()
                     realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val yP95 = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
+                        val yP95 = yPix(pt.p95)
                         if (i == 0) fillPath.moveTo(x, yP95) else fillPath.lineTo(x, yP95)
                     }
                     realPoints.reversed().forEachIndexed { i, pt ->
                         val origIdx = realPoints.size - 1 - i
                         val x = paddingLeft + (origIdx * stepX)
-                        val yP5 = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
+                        val yP5 = yPix(pt.p5)
                         fillPath.lineTo(x, yP5)
                     }
                     fillPath.close()
@@ -698,7 +804,7 @@ fun MonteCarloFanChart(
                     val p95Path = Path()
                     realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val yP95 = plotH - (plotH * (pt.p95 / maxVal)).toFloat()
+                        val yP95 = yPix(pt.p95)
                         if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
                     }
                     drawPath(p95Path, cGreen, style = Stroke(width = 3f))
@@ -707,7 +813,7 @@ fun MonteCarloFanChart(
                     val p5Path = Path()
                     realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val yP5 = plotH - (plotH * (pt.p5 / maxVal)).toFloat()
+                        val yP5 = yPix(pt.p5)
                         if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
                     }
                     drawPath(p5Path, cRed, style = Stroke(width = 3f))
@@ -716,10 +822,26 @@ fun MonteCarloFanChart(
                     val p50Path = Path()
                     realPoints.forEachIndexed { i, pt ->
                         val x = paddingLeft + (i * stepX)
-                        val yP50 = plotH - (plotH * (pt.p50 / maxVal)).toFloat()
+                        val yP50 = yPix(pt.p50)
                         if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
                     }
                     drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+
+                    // FIRE Target Line (Gold Dashed)
+                    val targetPath = Path()
+                    realPoints.forEachIndexed { i, pt ->
+                        val x = paddingLeft + (i * stepX)
+                        val yTarget = yPix(pt.target)
+                        if (i == 0) targetPath.moveTo(x, yTarget) else targetPath.lineTo(x, yTarget)
+                    }
+                    drawPath(
+                        targetPath,
+                        cGold,
+                        style = Stroke(
+                            width = 3.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        )
+                    )
 
                     // Draw Current Position (Now / Start Year) Indicator Dot
                     if (realPoints.isNotEmpty()) {
@@ -741,6 +863,7 @@ fun MonteCarloFanChart(
                     selectedIndex?.let { idx ->
                         val sx = paddingLeft + (idx * stepX)
                         val sy = plotH - (plotH * (realPoints[idx].p50 / maxVal)).toFloat()
+                        val syTarget = plotH - (plotH * (realPoints[idx].target / maxVal)).toFloat()
                         drawLine(
                             color = cTeal.copy(alpha = 0.5f),
                             start = Offset(sx, 0f),
@@ -748,7 +871,8 @@ fun MonteCarloFanChart(
                             strokeWidth = 2f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
                         )
-                        drawCircle(color = cTeal, radius = 12f, center = Offset(sx, sy))
+                        drawCircle(color = cTeal, radius = 10f, center = Offset(sx, sy))
+                        drawCircle(color = cGold, radius = 6f, center = Offset(sx, syTarget))
                     }
 
                     drawContext.canvas.restore()
@@ -911,6 +1035,7 @@ fun CashFlowProjectionChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
+            val paddingTop = 18f
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
@@ -954,13 +1079,17 @@ fun CashFlowProjectionChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
+                    val usableH = plotH - paddingTop
+                    if (plotW <= 0f || usableH <= 0f) return@Canvas
+
+                    fun yPix(v: Double): Float =
+                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Y-Axis
                     val ySteps = 4
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
+                        val y = yPix(valAtStep)
 
                         drawLine(
                             color = gridColor,
@@ -996,7 +1125,7 @@ fun CashFlowProjectionChart(
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
-                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
                                 plotH + 34f,
                                 textPaint
                             )
@@ -1004,13 +1133,13 @@ fun CashFlowProjectionChart(
                     }
 
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     // Invested Annual path (Teal)
                     val addedPath = Path()
                     data.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        val y = plotH - (plotH * (pt.investedAnnual / maxVal)).toFloat()
+                        val y = yPix(pt.investedAnnual)
                         if (i == 0) addedPath.moveTo(x, y) else addedPath.lineTo(x, y)
                     }
                     drawPath(addedPath, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
@@ -1019,7 +1148,7 @@ fun CashFlowProjectionChart(
                     val reinvestedPath = Path()
                     data.forEachIndexed { i, pt ->
                         val x = paddingLeft + panOffsetX + (i * stepX)
-                        val y = plotH - (plotH * (pt.reinvestAnnual / maxVal)).toFloat()
+                        val y = yPix(pt.reinvestAnnual)
                         if (i == 0) reinvestedPath.moveTo(x, y) else reinvestedPath.lineTo(x, y)
                     }
                     drawPath(reinvestedPath, cGold, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f))))
@@ -1027,7 +1156,7 @@ fun CashFlowProjectionChart(
                     // Draw Current Position (Now / Start Year) Indicator Dot
                     if (data.isNotEmpty()) {
                         val curX = paddingLeft + panOffsetX + (0 * stepX)
-                        val curY = plotH - (plotH * (data[0].investedAnnual / maxVal)).toFloat()
+                        val curY = yPix(data[0].investedAnnual)
                         drawLine(
                             color = cTeal.copy(alpha = 0.35f),
                             start = Offset(curX, curY),
@@ -1173,6 +1302,7 @@ fun StressComparisonChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
+            val paddingTop = 18f
             val paddingLeft = 85f
             val paddingRight = 32f
             val paddingBottom = 50f
@@ -1200,13 +1330,17 @@ fun StressComparisonChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
+                    val usableH = plotH - paddingTop
+                    if (plotW <= 0f || usableH <= 0f) return@Canvas
+
+                    fun yPix(v: Double): Float =
+                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Y-Axis
                     val ySteps = 4
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
+                        val y = yPix(valAtStep)
 
                         drawLine(
                             color = gridColor,
@@ -1241,7 +1375,7 @@ fun StressComparisonChart(
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
-                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
                                 plotH + 34f,
                                 textPaint
                             )
@@ -1249,14 +1383,14 @@ fun StressComparisonChart(
                     }
 
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     scenarios.forEachIndexed { sIdx, scenario ->
                         val color = scenarioColors[sIdx % scenarioColors.size]
                         val path = Path()
                         scenario.trajectory.forEachIndexed { i, pt ->
                             val x = paddingLeft + (i * stepX)
-                            val y = plotH - (plotH * (pt.portfolio / maxVal)).toFloat()
+                            val y = yPix(pt.portfolio)
                             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                         }
                         drawPath(
@@ -1566,7 +1700,7 @@ fun DcaTrajectoryBarChart(
         var runningPrincipal = initialBal
         data.mapIndexed { idx, pt ->
             if (idx > 0) {
-                runningPrincipal += pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
+                runningPrincipal += pt.investedAnnual + pt.pensionInflowAnnual + pt.reinvestAnnual + pt.lumpSum
             }
             val gains = (pt.totalPortfolio - runningPrincipal).coerceAtLeast(0.0)
             Triple(pt, runningPrincipal, gains)
@@ -1753,7 +1887,7 @@ fun DcaTrajectoryBarChart(
 
             val maxVal = remember(data, viewMode, cumulativeData) {
                 if (viewMode == 0) {
-                    ((data.maxOfOrNull { it.investedAnnual + it.reinvestAnnual + it.lumpSum } ?: 100000.0) * 1.25).coerceAtLeast(100000.0)
+                    ((data.maxOfOrNull { it.investedAnnual + it.pensionInflowAnnual + it.reinvestAnnual + it.lumpSum } ?: 100000.0) * 1.25).coerceAtLeast(100000.0)
                 } else {
                     ((data.maxOfOrNull { it.totalPortfolio } ?: 1000000.0) * 1.15).coerceAtLeast(100000.0)
                 }
@@ -1762,6 +1896,7 @@ fun DcaTrajectoryBarChart(
             val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
 
+            val paddingTop = 18f
             val paddingLeft = 75f
             val paddingRight = 24f
             val paddingBottom = 45f
@@ -1805,13 +1940,17 @@ fun DcaTrajectoryBarChart(
                     val h = size.height
                     val plotW = w - paddingLeft - paddingRight
                     val plotH = h - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
+                    val usableH = plotH - paddingTop
+                    if (plotW <= 0f || usableH <= 0f) return@Canvas
+
+                    fun yPix(v: Double): Float =
+                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
 
                     // Y-Axis
                     val ySteps = 4
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
-                        val y = plotH - (plotH * i / ySteps)
+                        val y = yPix(valAtStep)
 
                         drawLine(
                             color = gridColor,
@@ -1848,7 +1987,7 @@ fun DcaTrajectoryBarChart(
                             val textWidth = textPaint.measureText(labelText)
                             drawContext.canvas.nativeCanvas.drawText(
                                 labelText,
-                                (x - textWidth / 2f).coerceIn(0f, w - textWidth),
+                                (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
                                 plotH + 30f,
                                 textPaint
                             )
@@ -1856,7 +1995,7 @@ fun DcaTrajectoryBarChart(
                     }
 
                     drawContext.canvas.save()
-                    drawContext.canvas.clipRect(paddingLeft, 0f, w - paddingRight, plotH)
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     // Draw Bars
                     data.forEachIndexed { i, pt ->
@@ -1867,9 +2006,9 @@ fun DcaTrajectoryBarChart(
                         if (right >= paddingLeft && left <= (w - paddingRight)) {
                             if (viewMode == 0) {
                                 // Annual Streams
-                                val hBase = (pt.investedAnnual / maxVal).toFloat() * plotH
-                                val hReinvest = (pt.reinvestAnnual / maxVal).toFloat() * plotH
-                                val hLump = (pt.lumpSum / maxVal).toFloat() * plotH
+                                val hBase = ((pt.investedAnnual + pt.pensionInflowAnnual) / maxVal).toFloat() * usableH
+                                val hReinvest = (pt.reinvestAnnual / maxVal).toFloat() * usableH
+                                val hLump = (pt.lumpSum / maxVal).toFloat() * usableH
 
                                 var currentY = plotH
 
@@ -1899,8 +2038,8 @@ fun DcaTrajectoryBarChart(
                             } else {
                                 // Principal vs Gains
                                 val (_, principal, gains) = cumulativeData[i]
-                                val hPrincipal = ((principal / maxVal).toFloat() * plotH).coerceAtLeast(0f)
-                                val hGains = ((gains / maxVal).toFloat() * plotH).coerceAtLeast(0f)
+                                val hPrincipal = ((principal / maxVal).toFloat() * usableH).coerceAtLeast(0f)
+                                val hGains = ((gains / maxVal).toFloat() * usableH).coerceAtLeast(0f)
 
                                 var currentY = plotH
                                 if (hPrincipal > 0) {
@@ -1924,7 +2063,7 @@ fun DcaTrajectoryBarChart(
                             if (selectedIndex == i) {
                                 drawLine(
                                     color = cTeal.copy(alpha = 0.6f),
-                                    start = Offset(x, 0f),
+                                    start = Offset(x, paddingTop),
                                     end = Offset(x, plotH),
                                     strokeWidth = 2f,
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
@@ -1943,7 +2082,7 @@ fun DcaTrajectoryBarChart(
                 val activeTriple = cumulativeData.getOrNull(activeIdx)
                 if (activeTriple != null) {
                     val (pt, principal, gains) = activeTriple
-                    val totalInflow = pt.investedAnnual + pt.reinvestAnnual + pt.lumpSum
+                    val totalInflow = pt.investedAnnual + pt.pensionInflowAnnual + pt.reinvestAnnual + pt.lumpSum
                     val gainsPct = if (pt.totalPortfolio > 0) (gains / pt.totalPortfolio * 100.0) else 0.0
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -1996,7 +2135,7 @@ fun DcaTrajectoryBarChart(
                             ) {
                                 ChartMetricPill(
                                     label = "Monthly DCA",
-                                    value = "${fmtCompact(pt.investedAnnual / 12.0)}/mo",
+                                    value = "${fmtCompact((pt.investedAnnual + pt.pensionInflowAnnual) / 12.0)}/mo",
                                     color = BrandTeal,
                                     modifier = Modifier.weight(1f)
                                 )

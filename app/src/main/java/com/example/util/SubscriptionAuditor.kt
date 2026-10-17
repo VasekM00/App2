@@ -143,8 +143,14 @@ object SubscriptionAuditor {
     private fun isVerifiedRecurringProvider(merchantKey: String, rawText: String): Boolean {
         val normKey = CzechMerchantCatalog.normalize(merchantKey)
         val normRaw = CzechMerchantCatalog.normalize(rawText)
+        val keyWords = normKey.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        val rawWords = normRaw.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         return VERIFIED_RECURRING_PROVIDERS.any { provider ->
-            normKey.contains(provider) || normRaw.contains(provider)
+            if (provider.length <= 4) {
+                keyWords.contains(provider) || rawWords.contains(provider)
+            } else {
+                normKey.contains(provider) || normRaw.contains(provider)
+            }
         }
     }
 

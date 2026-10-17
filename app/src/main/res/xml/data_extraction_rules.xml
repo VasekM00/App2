@@ -7,10 +7,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
-        <include domain="database" path="."/>
         <exclude domain="database" path="martinu_financials_db"/>
-        <exclude domain="database" path="martinu_financials_db-wal"/>
-        <exclude domain="database" path="martinu_financials_db-shm"/>
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="."/>

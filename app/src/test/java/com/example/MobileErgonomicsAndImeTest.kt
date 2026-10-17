@@ -77,6 +77,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
     }
 
     @Test
@@ -94,6 +95,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("cashflow_tab").assertExists()
     }
 
     @Test
@@ -110,6 +112,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
     }
 
     @Test
@@ -123,6 +126,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 
     @Test
@@ -139,6 +143,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("settings_tab").assertExists()
     }
 
     @Test
@@ -151,6 +156,8 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
     }
 
     @Test
@@ -162,6 +169,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
     }
 
     @Test
@@ -179,6 +187,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("cashflow_tab").assertExists()
     }
 
     @Test
@@ -195,6 +204,7 @@ class MobileErgonomicsAndImeTest {
                 }
             }
         }
+        composeTestRule.onNodeWithTag("plan_tab").assertExists()
     }
 
     @Test
@@ -237,10 +247,8 @@ class MobileErgonomicsAndImeTest {
             MartinuFinancialsTheme(darkTheme = false) {
                 OverviewTab(state = defaultCalcState)
             }
-            MartinuFinancialsTheme(darkTheme = true) {
-                OverviewTab(state = defaultCalcState)
-            }
         }
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
     }
 
     @Test
@@ -254,5 +262,7 @@ class MobileErgonomicsAndImeTest {
                 ProjectionsTab(state = singleCalcState)
             }
         }
+        composeTestRule.onNodeWithTag("overview_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 }

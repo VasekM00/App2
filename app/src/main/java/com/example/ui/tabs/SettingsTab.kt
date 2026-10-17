@@ -1700,19 +1700,33 @@ private fun NumberSettingField(
     var isFocused by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    fun commitCurrentText() {
+    fun commitCurrentText(forceClamp: Boolean = false) {
         if (readOnly) return
         val sanitized = textValue.replace(',', '.').trim()
-        val parsed = if (sanitized.isEmpty()) 0.0 else sanitized.toDoubleOrNull()
+        val parsed = sanitized.toDoubleOrNull()
         if (parsed != null) {
-            val clamped = if (maxValue != null) {
-                parsed.coerceIn(minValue, maxValue)
-            } else {
-                parsed.coerceAtLeast(minValue)
+            val isWithinBounds = parsed >= minValue && (maxValue == null || parsed <= maxValue)
+            if (isWithinBounds) {
+                if (parsed != value) {
+                    onValueChange(parsed)
+                }
+            } else if (forceClamp) {
+                val clamped = if (maxValue != null) {
+                    parsed.coerceIn(minValue, maxValue)
+                } else {
+                    parsed.coerceAtLeast(minValue)
+                }
+                if (clamped != value) {
+                    onValueChange(clamped)
+                }
+                textValue = formatVal(clamped)
             }
-            if (clamped != value) {
-                onValueChange(clamped)
+        } else if (forceClamp) {
+            val fallback = minValue
+            if (fallback != value) {
+                onValueChange(fallback)
             }
+            textValue = formatVal(fallback)
         }
     }
 
@@ -1727,8 +1741,8 @@ private fun NumberSettingField(
 
     LaunchedEffect(textValue) {
         if (isFocused) {
-            delay(400)
-            commitCurrentText()
+            delay(500)
+            commitCurrentText(forceClamp = false)
         }
     }
 
@@ -1788,7 +1802,7 @@ private fun NumberSettingField(
             },
             readOnly = readOnly,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { commitCurrentText() }),
+            keyboardActions = KeyboardActions(onDone = { commitCurrentText(forceClamp = true) }),
             trailingIcon = if (isFocused && textValue.isNotEmpty() && !readOnly) {
                 {
                     IconButton(
@@ -1813,7 +1827,7 @@ private fun NumberSettingField(
                 .width(140.dp)
                 .onFocusChanged {
                     if (isFocused && !it.isFocused) {
-                        commitCurrentText()
+                        commitCurrentText(forceClamp = true)
                     }
                     isFocused = it.isFocused
                 }
@@ -1895,16 +1909,26 @@ private fun YearMonthSettingField(
         }
     }
 
-    fun commit() {
-        val y = yearText.trim().toIntOrNull() ?: yearValue
-        val m = (monthText.trim().toIntOrNull() ?: monthValue).coerceIn(1, 12)
-        onValueChange(y, m)
+    fun commit(forceValidate: Boolean = false) {
+        val y = yearText.trim().toIntOrNull()
+        val m = monthText.trim().toIntOrNull()
+        if (forceValidate) {
+            val validY = (y ?: yearValue).coerceIn(1900, 2100)
+            val validM = (m ?: monthValue).coerceIn(1, 12)
+            yearText = validY.toString()
+            monthText = validM.toString()
+            onValueChange(validY, validM)
+        } else {
+            if (y != null && y in 1900..2100 && m != null && m in 1..12) {
+                onValueChange(y, m)
+            }
+        }
     }
 
     LaunchedEffect(yearText, monthText) {
         if (isYearFocused || isMonthFocused) {
-            delay(400)
-            commit()
+            delay(500)
+            commit(forceValidate = false)
         }
     }
 
@@ -1932,12 +1956,12 @@ private fun YearMonthSettingField(
                 },
                 placeholder = { Text("M", fontSize = 11.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { commit() }),
+                keyboardActions = KeyboardActions(onNext = { commit(forceValidate = true) }),
                 singleLine = true,
                 modifier = Modifier
                     .width(56.dp)
                     .onFocusChanged {
-                        if (isMonthFocused && !it.isFocused) commit()
+                        if (isMonthFocused && !it.isFocused) commit(forceValidate = true)
                         isMonthFocused = it.isFocused
                     },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center)
@@ -1957,12 +1981,12 @@ private fun YearMonthSettingField(
                 },
                 placeholder = { Text("YYYY", fontSize = 11.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { commit() }),
+                keyboardActions = KeyboardActions(onDone = { commit(forceValidate = true) }),
                 singleLine = true,
                 modifier = Modifier
                     .width(78.dp)
                     .onFocusChanged {
-                        if (isYearFocused && !it.isFocused) commit()
+                        if (isYearFocused && !it.isFocused) commit(forceValidate = true)
                         isYearFocused = it.isFocused
                     },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center)

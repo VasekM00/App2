@@ -109,7 +109,7 @@ fun FundsAllocatorCard(
     modifier: Modifier = Modifier
 ) {
     val s = state.settings
-    val reserveCurrent = s.emergencyReserveCurrent
+    val reserveCurrent = state.currentEmergencyReserve
     val reserveTarget = state.effectiveEmergencyReserveTargetToday
     val isReserveFilled = state.isEmergencyReserveFundedToday
 

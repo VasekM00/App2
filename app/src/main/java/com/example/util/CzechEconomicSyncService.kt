@@ -32,14 +32,13 @@ object CzechEconomicSyncService {
         val parsed = localDefaults()
 
         // 1. Fetch live ČNB exchange rates directly from official CNB API
-        try {
-            val fxRates = fetchCnbRates()
-            if (fxRates.first in 5.0..200.0) eurRate = fxRates.first
-            if (fxRates.second in 5.0..200.0) usdRate = fxRates.second
+        val fxRates = fetchCnbRates()
+        val cnbSuccess = (fxRates.first in 5.0..200.0) && (fxRates.second in 5.0..200.0)
+        if (cnbSuccess) {
+            eurRate = fxRates.first
+            usdRate = fxRates.second
             if (fxRates.third.isNotBlank()) rateDate = fxRates.third
             sourceDescription = "Official ČNB Daily API & Statutory Registry"
-        } catch (e: Exception) {
-            // Keep default robust fallback
         }
 
         parsed.copy(
@@ -208,6 +207,8 @@ object CzechEconomicSyncService {
                 dpsStandardSubsidyMaxMonthly = live.dpsStandardSubsidyMaxMonthly,
                 dpsYouthSubsidyMaxMonthly = live.dpsYouthSubsidyMaxMonthly,
                 dpsYouthAgeLimit = live.dpsYouthAgeLimit,
+                dpsSubsidyRateStandardPct = live.dpsSubsidyRateStandardPct,
+                dpsSubsidyRateYouthPct = live.dpsSubsidyRateYouthPct,
                 minWageMonthly = live.minWageMonthly,
                 dpsStatutoryFeeCapPct = live.dpsStatutoryFeeCapPct,
                 employerRetirementExemptionAnnual = live.employerRetirementExemptionAnnual,
@@ -227,47 +228,85 @@ object CzechEconomicSyncService {
         return updated
     }
 
-    private fun fetchCnbRates(): Triple<Double, Double, String> {
+    internal fun parseCnbRatesJson(jsonString: String): Triple<Double, Double, String> {
         var eur = 0.0
         var usd = 0.0
         var rateDate = ""
         try {
-            val content = fetchUrlContent(CNB_DAILY_RATES_URL, timeoutMs = 2500)
-            if (!content.isNullOrBlank()) {
-                val json = JSONObject(content)
-                val ratesArray = json.optJSONArray("rates")
-                if (ratesArray != null) {
-                    for (i in 0 until ratesArray.length()) {
-                        val item = ratesArray.getJSONObject(i)
-                        val code = item.optString("currencyCode", "")
-                        val rate = item.optDouble("rate", 0.0)
-                        val date = item.optString("validFor", "")
-                        if (date.isNotBlank() && rateDate.isBlank()) rateDate = date
-                        if (code.equals("EUR", ignoreCase = true)) eur = rate
-                        if (code.equals("USD", ignoreCase = true)) usd = rate
+            val json = JSONObject(jsonString)
+            val ratesArray = json.optJSONArray("rates")
+            if (ratesArray != null) {
+                for (i in 0 until ratesArray.length()) {
+                    val item = ratesArray.getJSONObject(i)
+                    val code = item.optString("currencyCode", "")
+                    val rate = item.optDouble("rate", 0.0)
+                    val date = item.optString("validFor", "")
+                    if (date.isNotBlank() && rateDate.isBlank()) rateDate = date
+                    if (code.equals("EUR", ignoreCase = true)) eur = rate
+                    if (code.equals("USD", ignoreCase = true)) usd = rate
+                }
+            }
+        } catch (_: Throwable) {
+            val eurMatch = Regex(""""currencyCode"\s*:\s*"EUR"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
+                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"EUR"""").find(jsonString)
+            val usdMatch = Regex(""""currencyCode"\s*:\s*"USD"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
+                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"USD"""").find(jsonString)
+            val dateMatch = Regex(""""validFor"\s*:\s*"([^"]+)"""").find(jsonString)
+            if (eurMatch != null) eur = eurMatch.groupValues[1].toDoubleOrNull() ?: 0.0
+            if (usdMatch != null) usd = usdMatch.groupValues[1].toDoubleOrNull() ?: 0.0
+            if (dateMatch != null) rateDate = dateMatch.groupValues[1]
+        }
+        if (eur == 0.0 || usd == 0.0) {
+            val eurMatch = Regex(""""currencyCode"\s*:\s*"EUR"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
+                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"EUR"""").find(jsonString)
+            val usdMatch = Regex(""""currencyCode"\s*:\s*"USD"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
+                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"USD"""").find(jsonString)
+            val dateMatch = Regex(""""validFor"\s*:\s*"([^"]+)"""").find(jsonString)
+            if (eur == 0.0 && eurMatch != null) eur = eurMatch.groupValues[1].toDoubleOrNull() ?: 0.0
+            if (usd == 0.0 && usdMatch != null) usd = usdMatch.groupValues[1].toDoubleOrNull() ?: 0.0
+            if (rateDate.isBlank() && dateMatch != null) rateDate = dateMatch.groupValues[1]
+        }
+        return Triple(eur, usd, rateDate)
+    }
+
+    internal fun parseCnbRatesTxt(txtString: String): Triple<Double, Double, String> {
+        var eur = 0.0
+        var usd = 0.0
+        var rateDate = ""
+        try {
+            val lines = txtString.lines()
+            if (lines.isNotEmpty() && lines[0].contains(".")) {
+                rateDate = lines[0].split(" ")[0].trim()
+            }
+            lines.forEach { line ->
+                val parts = line.split("|")
+                if (parts.size >= 5) {
+                    val amount = parts[2].trim().toDoubleOrNull() ?: 1.0
+                    val rawRate = parts[4].replace(",", ".").toDoubleOrNull()
+                    if (rawRate != null && amount > 0) {
+                        val unitRate = rawRate / amount
+                        if (parts[3] == "EUR") eur = unitRate
+                        if (parts[3] == "USD") usd = unitRate
                     }
                 }
             }
-        } catch (e: Exception) {
-            // Try txt fallback
-            try {
-                val txt = fetchUrlContent(CNB_TXT_FALLBACK_URL, timeoutMs = 2000)
-                if (!txt.isNullOrBlank()) {
-                    val lines = txt.lines()
-                    if (lines.isNotEmpty() && lines[0].contains(".")) {
-                        rateDate = lines[0].split(" ")[0].trim()
-                    }
-                    lines.forEach { line ->
-                        val parts = line.split("|")
-                        if (parts.size >= 5) {
-                            if (parts[3] == "EUR") eur = parts[4].replace(",", ".").toDoubleOrNull() ?: eur
-                            if (parts[3] == "USD") usd = parts[4].replace(",", ".").toDoubleOrNull() ?: usd
-                        }
-                    }
-                }
-            } catch (ignored: Exception) {}
-        }
+        } catch (_: Exception) {}
         return Triple(eur, usd, rateDate)
+    }
+
+    private fun fetchCnbRates(): Triple<Double, Double, String> {
+        val content = fetchUrlContent(CNB_DAILY_RATES_URL, timeoutMs = 2500)
+        if (!content.isNullOrBlank()) {
+            val parsed = parseCnbRatesJson(content)
+            if (parsed.first > 0.0 && parsed.second > 0.0) return parsed
+        }
+
+        val txt = fetchUrlContent(CNB_TXT_FALLBACK_URL, timeoutMs = 2000)
+        if (!txt.isNullOrBlank()) {
+            val parsed = parseCnbRatesTxt(txt)
+            if (parsed.first > 0.0 && parsed.second > 0.0) return parsed
+        }
+        return Triple(0.0, 0.0, "")
     }
 
     private fun fetchUrlContent(urlString: String, timeoutMs: Int = 3000): String? {

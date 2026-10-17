@@ -46,7 +46,6 @@ object CrossStatementReconciliationEngine {
         BankTransactionType.SERVICES_UTILITIES.name,
         BankTransactionType.HOUSING_RENT.name,
         BankTransactionType.CHARITY_DONATION.name,
-        BankTransactionType.GENERAL_EXPENSE.name,
         BankTransactionType.LIFESTYLE_LIVING.name,
         BankTransactionType.ATM_CASH.name,
         BankTransactionType.INVESTMENT_PORTU.name,
@@ -57,8 +56,7 @@ object CrossStatementReconciliationEngine {
     private val EXTERNAL_INCOME_CATEGORIES = setOf(
         BankTransactionType.SALARY_VACLAV.name,
         BankTransactionType.SALARY_ELEONORA.name,
-        BankTransactionType.PARENTAL_BENEFIT.name,
-        BankTransactionType.OTHER_INFLOW.name
+        BankTransactionType.PARENTAL_BENEFIT.name
     )
 
     fun computeFingerprint(
@@ -77,6 +75,18 @@ object CrossStatementReconciliationEngine {
         val cleanVs = variableSymbol.trim()
         val normBank = bankName.trim().uppercase(Locale.ROOT)
         return "$date|$normBank|$amtStr|$cleanAcc|$cleanName|$cleanMsg|$cleanVs"
+    }
+
+    fun computeFingerprint(tx: ImportedBankTransactionEntity): String {
+        return computeFingerprint(
+            date = tx.date,
+            bankName = tx.bankName,
+            amount = tx.amount,
+            counterpartyAccount = tx.counterpartyAccount,
+            counterpartyName = tx.counterpartyName,
+            message = tx.message,
+            variableSymbol = tx.variableSymbol
+        )
     }
 
     fun isSelfOrFamilyTransfer(
@@ -122,9 +132,12 @@ object CrossStatementReconciliationEngine {
             if (cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora")) return true
             if (msgLower.contains("prevod z uctu") || msgLower.contains("převod z účtu")) return true
         } else {
-            val mentionsVaclav = cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav") ||
+            val isPayerPrefix = cpLower.contains("příkazce:") || cpLower.contains("prikazce:") ||
+                    cpLower.contains("plátce:") || cpLower.contains("platce:") ||
+                    cpLower.contains("majitel:")
+            val mentionsVaclav = (!isPayerPrefix && (cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav"))) ||
                     msgLower.contains("pro vaclava") || msgLower.contains("pro václava") || msgLower.contains("prevod vaclavovi") || msgLower.contains("převod václavovi")
-            val mentionsEleonora = cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora") ||
+            val mentionsEleonora = (!isPayerPrefix && (cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora"))) ||
                     msgLower.contains("pro eleonoru") || msgLower.contains("prevod eleonore") || msgLower.contains("převod eleonoře")
             if (mentionsVaclav || mentionsEleonora) return true
         }
@@ -225,10 +238,8 @@ object CrossStatementReconciliationEngine {
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
         bankBalances: Map<String, Double> = emptyMap()
     ): ReconcileResult {
-        val workingList = transactions.distinctBy {
-            "${it.bankName}|${it.date}|${it.amount}|${it.counterpartyAccount}|${it.counterpartyName}|${it.message}|${it.variableSymbol}"
-        }.map { it.copy() }.toMutableList()
-        val workingBoundary = boundaryTransactions.map { it.copy() }.toMutableList()
+        val workingList = transactions.distinctBy { computeFingerprint(it) }.map { it.copy() }.toMutableList()
+        val workingBoundary = boundaryTransactions.distinctBy { computeFingerprint(it) }.map { it.copy() }.toMutableList()
 
         // 1. Initial pass: identify known self-transfers and family contributions
         for (i in workingList.indices) {
@@ -346,11 +357,10 @@ object CrossStatementReconciliationEngine {
         }
 
         // 2b. Cross-Month Boundary Pairing: match remaining unmatched debits in workingList against boundary credits in adjacent months
-        val boundaryCredits = workingBoundary.filter { it.amount > 0 && !it.isNetted }.toMutableList()
-        val remainingDebits = workingList.filter { debit ->
-            debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name &&
-            matchedPairs.none { it.debitTx.id == debit.id && it.debitTx.bankName == debit.bankName }
-        }
+        val boundaryCredits = workingBoundary.filter { it.amount > 0 && (!it.isNetted || !isConfirmedPair(it)) }.toMutableList()
+        val remainingDebits = workingList.withIndex().filter { (idx, debit) ->
+            idx !in pairedWorkingIndices && debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name
+        }.map { it.value }
 
         for (debit in remainingDebits) {
             val debitDate = parseDate(debit.date) ?: continue
@@ -413,11 +423,10 @@ object CrossStatementReconciliationEngine {
         }
 
         // 2c. Cross-Month Boundary Pairing: match remaining unmatched credits in workingList against boundary debits in adjacent months
-        val boundaryDebits = workingBoundary.filter { it.amount < 0 && !it.isNetted && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
-        val remainingCredits = workingList.filter { credit ->
-            credit.amount > 0 &&
-            matchedPairs.none { it.creditTx.id == credit.id && it.creditTx.bankName == credit.bankName }
-        }
+        val boundaryDebits = workingBoundary.filter { it.amount < 0 && (!it.isNetted || !isConfirmedPair(it)) && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
+        val remainingCredits = workingList.withIndex().filter { (idx, credit) ->
+            idx !in pairedWorkingIndices && credit.amount > 0
+        }.map { it.value }
 
         for (credit in remainingCredits) {
             val creditDate = parseDate(credit.date) ?: continue
@@ -501,7 +510,7 @@ object CrossStatementReconciliationEngine {
             tx.isNetted && idx !in pairedWorkingIndices
         }
 
-        val totalNetted = (matchedPairs.sumOf { it.amount } * 2.0) + singleSideTransfers.sumOf { abs(it.amount) }
+        val totalNetted = workingList.filter { it.isNetted }.sumOf { abs(it.amount) }
 
         var incVaclav = 0.0
         var incEleonora = 0.0
@@ -575,5 +584,10 @@ object CrossStatementReconciliationEngine {
 
         val updatedBoundaryTxs = workingBoundary.filter { it.isNetted }
         return ReconcileResult(workingList, updatedBoundaryTxs, auditReport)
+    }
+
+    private fun isConfirmedPair(tx: ImportedBankTransactionEntity): Boolean {
+        val reason = tx.nettingReason ?: return false
+        return reason.startsWith("Cross-account") || reason.startsWith("Cross-month")
     }
 }

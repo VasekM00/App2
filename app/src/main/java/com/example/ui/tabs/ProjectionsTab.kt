@@ -3,6 +3,7 @@ package com.example.ui.tabs
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -91,6 +92,7 @@ import java.util.Locale
 fun ProjectionsTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity> = emptyList(),
+    actionStates: Map<String, Boolean> = emptyMap(),
     onApplySettings: (SettingsEntity) -> Unit = {},
     initialSubTab: Int = 0,
     modifier: Modifier = Modifier
@@ -128,7 +130,13 @@ fun ProjectionsTab(
 
         when (selectedSubTab) {
             0 -> TrajectorySubTab(state = state, ledgerEntries = ledgerEntries, onShowInfo = { infoState.show(it) })
-            1 -> WhatIfSandboxSubTab(state = state, onApplySettings = onApplySettings, onShowInfo = { infoState.show(it) })
+            1 -> WhatIfSandboxSubTab(
+                state = state,
+                ledgerEntries = ledgerEntries,
+                actionStates = actionStates,
+                onApplySettings = onApplySettings,
+                onShowInfo = { infoState.show(it) }
+            )
             2 -> MonteCarloAndStressSubTab(state = state, onShowInfo = { infoState.show(it) })
         }
     }
@@ -381,14 +389,18 @@ private fun TrajectorySubTab(
 @Composable
 private fun WhatIfSandboxSubTab(
     state: FullCalculationState,
+    ledgerEntries: List<LedgerEntryEntity> = emptyList(),
+    actionStates: Map<String, Boolean> = emptyMap(),
     onApplySettings: (SettingsEntity) -> Unit,
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
 
-    var sandbox by remember { mutableStateOf(state.settings) }
-    var activePresetId by remember { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
-    val sandboxState = remember(sandbox) { FinancialEngine.calculate(sandbox, runMonteCarlo = false) }
+    var sandbox by remember(state.settings) { mutableStateOf(state.settings) }
+    var activePresetId by remember(state.settings) { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
+    val sandboxState = remember(sandbox, ledgerEntries, actionStates) {
+        FinancialEngine.calculate(sandbox, ledgerEntries = ledgerEntries, actionStates = actionStates, runMonteCarlo = false)
+    }
     val isDirty = sandbox != state.settings
 
     val sandboxInfo = MetricInfo(
@@ -503,6 +515,11 @@ private fun WhatIfSandboxSubTab(
                     badgeText = "LIVE",
                     accentColor = BrandBlue
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Compact live delta summary banner above sliders
+                SandboxLiveDeltaBar(state = state, sandboxState = sandboxState)
+
                 Spacer(modifier = Modifier.height(6.dp))
 
                 val sandboxTotalDca = sandbox.portuDcaMonthly + if (!sandbox.isSingleHousehold) sandbox.ePortuDcaMonthly else 0.0
@@ -621,6 +638,133 @@ private fun WhatIfSandboxSubTab(
 }
 
 @Composable
+private fun SandboxLiveDeltaBar(
+    state: FullCalculationState,
+    sandboxState: FullCalculationState
+) {
+    val isSingle = state.settings.isSingleHousehold
+    val targetDelta = sandboxState.fireBaseTargetToday - state.fireBaseTargetToday
+    val baseAge = (if (isSingle) state.fireSinglePoint else state.fireDualPoint)?.age
+    val scenarioAge = (if (isSingle) sandboxState.fireSinglePoint else sandboxState.fireDualPoint)?.age
+    val baseWealth = (if (isSingle) state.singleTrajectory else state.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
+    val scenarioWealth = (if (isSingle) sandboxState.singleTrajectory else sandboxState.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
+    val wealthDelta = scenarioWealth - baseWealth
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("sandbox_live_delta_bar"),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SandboxDeltaItem(
+                label = "FIRE TARGET",
+                valueText = when {
+                    kotlin.math.abs(targetDelta) < 1.0 -> "Unchanged"
+                    targetDelta > 0 -> "+${fmtCompact(targetDelta)}"
+                    else -> "-${fmtCompact(kotlin.math.abs(targetDelta))}"
+                },
+                color = when {
+                    kotlin.math.abs(targetDelta) < 1.0 -> MaterialTheme.colorScheme.onSurfaceVariant
+                    targetDelta < 0 -> GoodGreen
+                    else -> BadRed
+                },
+                modifier = Modifier.weight(1f)
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(26.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            )
+
+            val ageDelta = if (baseAge != null && scenarioAge != null) scenarioAge - baseAge else null
+            val ageText = when {
+                ageDelta == null -> if (scenarioAge != null) "Age $scenarioAge" else "N/A"
+                ageDelta == 0 -> "Unchanged"
+                ageDelta > 0 -> "+$ageDelta yr"
+                else -> "$ageDelta yr"
+            }
+            val ageColor = when {
+                ageDelta == null || ageDelta == 0 -> MaterialTheme.colorScheme.onSurfaceVariant
+                ageDelta < 0 -> GoodGreen
+                else -> BadRed
+            }
+            SandboxDeltaItem(
+                label = "FIRE AGE",
+                valueText = ageText,
+                color = ageColor,
+                modifier = Modifier.weight(1f)
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(26.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            )
+
+            SandboxDeltaItem(
+                label = "35Y WEALTH",
+                valueText = when {
+                    kotlin.math.abs(wealthDelta) < 1.0 -> "Unchanged"
+                    wealthDelta > 0 -> "+${fmtCompact(wealthDelta)}"
+                    else -> "-${fmtCompact(kotlin.math.abs(wealthDelta))}"
+                },
+                color = when {
+                    kotlin.math.abs(wealthDelta) < 1.0 -> MaterialTheme.colorScheme.onSurfaceVariant
+                    wealthDelta > 0 -> GoodGreen
+                    else -> BadRed
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SandboxDeltaItem(
+    label: String,
+    valueText: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.5.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = valueText,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            color = color,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
 private fun SandboxSliderRow(
     label: String,
     value: Double,
@@ -695,7 +839,7 @@ private fun SandboxComparison(
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
         SandboxComparisonRow(
-            label = "Wealth in 35 years",
+            label = "Wealth in 35 years (nominal)",
             baselineText = fmtCompact(baseWealth),
             scenarioText = fmtCompact(scenarioWealth),
             delta = scenarioWealth - baseWealth,

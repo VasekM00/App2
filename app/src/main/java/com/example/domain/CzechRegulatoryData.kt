@@ -43,6 +43,8 @@ data class CzechRegulatoryData(
     val dpsStandardSubsidyMaxMonthly: Double = 340.0, // 20% on 1,700 CZK
     val dpsYouthSubsidyMaxMonthly: Double = 340.0, // Statutory cap on state subsidy (340 CZK/mo)
     val dpsYouthAgeLimit: Int = 30,
+    val dpsSubsidyRateStandardPct: Double = 20.0,
+    val dpsSubsidyRateYouthPct: Double = 20.0,
     val dpsStatutoryFeeCapPct: Double = 0.5, // Maximum TER management fee cap
     val childBonusMinWageMultiplier: Double = 6.0, // ZDP § 35c(4) min wage multiplier
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)

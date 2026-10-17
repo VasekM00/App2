@@ -337,6 +337,8 @@ object PdfTextExtractor {
         var curY = 0.0
         var lineStartX = 0.0
         var lineStartY = 0.0
+        var tmScaleX = 1.0
+        var tmScaleY = 1.0
         var inText = false
         val numBuffer = mutableListOf<Double>()
         val pendingToken = StringBuilder()
@@ -352,6 +354,8 @@ object PdfTextExtractor {
                 curY = 0.0
                 lineStartX = 0.0
                 lineStartY = 0.0
+                tmScaleX = 1.0
+                tmScaleY = 1.0
                 numBuffer.clear()
                 pendingToken.setLength(0)
                 i += 2
@@ -462,8 +466,8 @@ object PdfTextExtractor {
                             when (tok) {
                                 "Td", "TD" -> {
                                     if (numBuffer.size >= 2) {
-                                        val tx = numBuffer[numBuffer.size - 2]
-                                        val ty = numBuffer[numBuffer.size - 1]
+                                        val tx = numBuffer[numBuffer.size - 2] * tmScaleX
+                                        val ty = numBuffer[numBuffer.size - 1] * tmScaleY
                                         lineStartX += tx
                                         lineStartY += ty
                                         curX = lineStartX
@@ -473,6 +477,10 @@ object PdfTextExtractor {
                                 }
                                 "Tm" -> {
                                     if (numBuffer.size >= 6) {
+                                        val a = numBuffer[numBuffer.size - 6]
+                                        val d = numBuffer[numBuffer.size - 3]
+                                        tmScaleX = if (kotlin.math.abs(a) > 0.001) kotlin.math.abs(a) else 1.0
+                                        tmScaleY = if (kotlin.math.abs(d) > 0.001) kotlin.math.abs(d) else 1.0
                                         val tx = numBuffer[numBuffer.size - 2]
                                         val ty = numBuffer[numBuffer.size - 1]
                                         lineStartX = tx
@@ -483,9 +491,17 @@ object PdfTextExtractor {
                                     numBuffer.clear()
                                 }
                                 "T*" -> {
-                                    lineStartY -= 12.0
+                                    lineStartY -= (12.0 * tmScaleY)
                                     curX = lineStartX
                                     curY = lineStartY
+                                    numBuffer.clear()
+                                }
+                                "Tf" -> {
+                                    val fontSize = numBuffer.lastOrNull() ?: 1.0
+                                    if (tmScaleY == 1.0 && fontSize > 1.0) {
+                                        tmScaleX = fontSize
+                                        tmScaleY = fontSize
+                                    }
                                     numBuffer.clear()
                                 }
                                 else -> {
@@ -697,7 +713,11 @@ object PdfTextExtractor {
                             mappedSb.append(mapped)
                             usedCmap = true
                         } else if (code16 != 0) {
-                            mappedSb.append(code16.toChar())
+                            if (code16 in 0x80..0xFF) {
+                                mappedSb.append(String(byteArrayOf(code16.toByte()), cp1250Charset))
+                            } else {
+                                mappedSb.append(code16.toChar())
+                            }
                         }
                     }
                     if (usedCmap) return mappedSb.toString()
@@ -713,7 +733,11 @@ object PdfTextExtractor {
                     mappedSb.append(mapped)
                     usedCmap = true
                 } else {
-                    mappedSb.append(unsignedCode.toChar())
+                    if (unsignedCode >= 0x80) {
+                        mappedSb.append(String(byteArrayOf(byteVal), cp1250Charset))
+                    } else {
+                        mappedSb.append(unsignedCode.toChar())
+                    }
                 }
             }
             if (usedCmap) return mappedSb.toString()
@@ -732,29 +756,48 @@ object PdfTextExtractor {
         if (hex.isBlank()) return ""
         val paddedHex = if (hex.length % 2 != 0) "${hex}0" else hex
 
-        // 1. Try CMap lookup with 4-hex digit codes (2 bytes) or 2-hex digit codes
-        if (cMap.isNotEmpty()) {
+        // 1. Try 2-byte CMap lookup if CMap defines multi-byte glyphs (> 255) and length is divisible by 4
+        val hasMultiByteCMap = cMap.isNotEmpty() && cMap.keys.any { it > 255 }
+        if (hasMultiByteCMap && paddedHex.length % 4 == 0) {
             val sb = StringBuilder()
-            if (paddedHex.length % 4 == 0) {
-                var k = 0
-                while (k + 4 <= paddedHex.length) {
-                    val code = paddedHex.substring(k, k + 4).toIntOrNull(16) ?: 0
-                    sb.append(cMap[code] ?: hexToUnicodeString(paddedHex.substring(k, k + 4)))
-                    k += 4
+            var allMapped = true
+            var k = 0
+            while (k + 4 <= paddedHex.length) {
+                val code = paddedHex.substring(k, k + 4).toIntOrNull(16) ?: 0
+                val mapped = cMap[code]
+                if (mapped != null) {
+                    sb.append(mapped)
+                } else {
+                    allMapped = false
+                    break
                 }
-                return sb.toString()
-            } else if (paddedHex.length % 2 == 0) {
-                var k = 0
-                while (k + 2 <= paddedHex.length) {
-                    val code = paddedHex.substring(k, k + 2).toIntOrNull(16) ?: 0
-                    sb.append(cMap[code] ?: hexToUnicodeString(paddedHex.substring(k, k + 2)))
-                    k += 2
-                }
-                return sb.toString()
+                k += 4
             }
+            if (allMapped) return sb.toString()
         }
 
-        // 2. Try UTF-16BE if begins with FEFF or alternate bytes are zero
+        // 2. Try 1-byte CMap lookup if CMap defines single-byte glyphs (<= 255)
+        if (cMap.isNotEmpty()) {
+            val sb = StringBuilder()
+            var k = 0
+            var anyMapped = false
+            while (k + 2 <= paddedHex.length) {
+                val code = paddedHex.substring(k, k + 2).toIntOrNull(16) ?: 0
+                val mapped = cMap[code]
+                if (mapped != null) {
+                    sb.append(mapped)
+                    anyMapped = true
+                } else {
+                    val b = code.toByte()
+                    val s = if (code >= 0x80) String(byteArrayOf(b), cp1250Charset) else code.toChar().toString()
+                    sb.append(s)
+                }
+                k += 2
+            }
+            if (anyMapped) return sb.toString()
+        }
+
+        // 3. Try UTF-16BE if begins with FEFF or alternate bytes are zero
         if (paddedHex.startsWith("FEFF", ignoreCase = true) || (paddedHex.length >= 4 && paddedHex.startsWith("00"))) {
             val bytes = ByteArray(paddedHex.length / 2)
             for (idx in bytes.indices) {
@@ -767,7 +810,7 @@ object PdfTextExtractor {
             }
         }
 
-        // 3. Single-byte hex decoded with Windows-1250 / ISO-8859-1
+        // 4. Single-byte hex decoded with Windows-1250 / UTF-8
         val bytes = ByteArray(paddedHex.length / 2)
         for (idx in bytes.indices) {
             bytes[idx] = paddedHex.substring(idx * 2, idx * 2 + 2).toInt(16).toByte()

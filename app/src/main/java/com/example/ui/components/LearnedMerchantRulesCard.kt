@@ -235,9 +235,10 @@ fun LearnedMerchantRulesCard(
                                         onClick = {
                                             val updated = rulesMap.toMutableMap().apply { remove(keyword) }
                                             MerchantCategoryManager.removeOverride(context, keyword)
+                                            MerchantCategoryManager.removeOverride(context, keyword.lowercase())
                                             onUpdateRulesJson(MerchantCategoryManager.serializeRulesToJson(updated))
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,

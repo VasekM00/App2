@@ -84,9 +84,11 @@ object CzechTaxEngine {
             settings.taxDeductionCeilingAnnual
         )
         val vGross = netToGrossAnnual(
-            FinancialEngine.vaclavSalaryMonthly(year, settings),
-            settings.taxpayerCreditAnnual,
-            settings.taxSecondBracketThresholdAnnual
+            netMonthly = FinancialEngine.vaclavSalaryMonthly(year, settings),
+            taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+            highBracketThresholdAnnual = settings.taxSecondBracketThresholdAnnual,
+            baseTaxRatePct = settings.taxRatePct,
+            highTaxRatePct = settings.taxRateSecondPct
         )
         val vSaved = singleEarnerRetirementTaxSaved(
             taxableGrossAnnual = vGross,
@@ -105,9 +107,11 @@ object CzechTaxEngine {
             val eSalary = FinancialEngine.eleonoraSalaryMonthly(year, settings)
             val eLec = FinancialEngine.eleonoraLecturingMonthly(year, settings)
             val eGross = netToGrossAnnual(
-                eSalary + eLec,
-                settings.taxpayerCreditAnnual,
-                settings.taxSecondBracketThresholdAnnual
+                netMonthly = eSalary + eLec,
+                taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+                highBracketThresholdAnnual = settings.taxSecondBracketThresholdAnnual,
+                baseTaxRatePct = settings.taxRatePct,
+                highTaxRatePct = settings.taxRateSecondPct
             )
             singleEarnerRetirementTaxSaved(
                 taxableGrossAnnual = eGross,
@@ -197,6 +201,16 @@ object CzechTaxEngine {
         val sal = FinancialEngine.eleonoraSalaryMonthly(year, settings)
         val lec = FinancialEngine.eleonoraLecturingMonthly(year, settings)
         val oth = settings.eOtherInflowsMonthly
-        return (sal + lec + oth) * 12.0
+        val earnedMonthly = sal + lec
+        val grossEarnedAnnual = if (earnedMonthly > 0.0) {
+            netToGrossAnnual(
+                netMonthly = earnedMonthly,
+                taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+                highBracketThresholdAnnual = settings.taxSecondBracketThresholdAnnual,
+                baseTaxRatePct = settings.taxRatePct,
+                highTaxRatePct = settings.taxRateSecondPct
+            )
+        } else 0.0
+        return grossEarnedAnnual + (oth * 12.0)
     }
 }

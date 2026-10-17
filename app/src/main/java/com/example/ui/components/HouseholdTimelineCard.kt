@@ -185,6 +185,10 @@ fun HouseholdTimelineCard(
                             append(" · Lecturing: ")
                             append(fmtCZK(income.lecturing))
                         }
+                        if (income.eleonoraOther > 0.0) {
+                            append(" · Other: ")
+                            append(fmtCZK(income.eleonoraOther))
+                        }
                     } else {
                         append("Net salary: ")
                         append(fmtCZK(income.eleonoraSalary))

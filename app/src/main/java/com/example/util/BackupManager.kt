@@ -151,7 +151,8 @@ object BackupManager {
 
     fun deserializeSettingsFromJson(jsonStr: String, fallback: SettingsEntity): SettingsEntity? {
         return try {
-            val json = JSONObject(jsonStr.trim())
+            val rawJson = JSONObject(jsonStr.trim())
+            val json = if (rawJson.has("settings")) rawJson.getJSONObject("settings") else rawJson
             val restored = fallback.copy(
                 baseYear = json.optInt("baseYear", fallback.baseYear),
                 primaryAge = json.optInt("primaryAge", fallback.primaryAge),
@@ -173,7 +174,7 @@ object BackupManager {
                 eLecturingMonthly = json.optDouble("eLecturingMonthly", fallback.eLecturingMonthly),
                 eIncludeLecturing = json.optBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
                 eOtherInflowsMonthly = json.optDouble("eOtherInflowsMonthly", fallback.eOtherInflowsMonthly),
-                vGiftsMonthly = json.optDouble("vGiftsMonthly", fallback.vGiftsMonthly),
+                vGiftsMonthly = json.optDouble("vGiftsMonthly", json.optDouble("familyGiftMonthly", fallback.vGiftsMonthly)),
                 eGiftsMonthly = json.optDouble("eGiftsMonthly", fallback.eGiftsMonthly),
                 familyGiftMonthly = json.optDouble("familyGiftMonthly", fallback.familyGiftMonthly),
                 lumpSumYear = json.optInt("lumpSumYear", fallback.lumpSumYear),
@@ -205,8 +206,20 @@ object BackupManager {
                 fireTargetOverride = json.optDouble("fireTargetOverride", fallback.fireTargetOverride),
                 vStatePensionAge = json.optInt("vStatePensionAge", json.optInt("statePensionAge", fallback.vStatePensionAge)),
                 eStatePensionAge = json.optInt("eStatePensionAge", json.optInt("statePensionAge", fallback.eStatePensionAge)),
-                vStatePensionMonthly = json.optDouble("vStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly)),
-                eStatePensionMonthly = json.optDouble("eStatePensionMonthly", json.optDouble("statePensionMonthly", fallback.eStatePensionMonthly)),
+                vStatePensionMonthly = if (json.has("vStatePensionMonthly")) {
+                    json.optDouble("vStatePensionMonthly", fallback.vStatePensionMonthly)
+                } else if (json.has("statePensionMonthly")) {
+                    json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly * 2.0) / 2.0
+                } else {
+                    fallback.vStatePensionMonthly
+                },
+                eStatePensionMonthly = if (json.has("eStatePensionMonthly")) {
+                    json.optDouble("eStatePensionMonthly", fallback.eStatePensionMonthly)
+                } else if (json.has("statePensionMonthly")) {
+                    json.optDouble("statePensionMonthly", fallback.eStatePensionMonthly * 2.0) / 2.0
+                } else {
+                    fallback.eStatePensionMonthly
+                },
                 lifestyleCostAtFireMonthly = json.optDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
 
                 rentMonthly = json.optDouble("rentMonthly", fallback.rentMonthly),
@@ -305,9 +318,12 @@ object BackupManager {
         }
         fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
+        fun swr(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.5..20.0) v else fallback
         fun growthPct(v: Double, fallback: Double): Double = if (v.isFinite() && v in -50.0..100.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
         return s.copy(
+            primaryName = s.primaryName.trim().ifEmpty { f.primaryName },
+            spouseName = s.spouseName.trim().ifEmpty { f.spouseName },
             primaryAge = if (s.primaryAge in 15..100) s.primaryAge else f.primaryAge,
             baseYear = year(s.baseYear, f.baseYear),
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
@@ -355,10 +371,10 @@ object BackupManager {
             eDipContributionMonthly = money(s.eDipContributionMonthly, f.eDipContributionMonthly),
             eEmployerRetirementMonthly = money(s.eEmployerRetirementMonthly, f.eEmployerRetirementMonthly),
             portfolioNominalReturnPct = growthPct(s.portfolioNominalReturnPct, f.portfolioNominalReturnPct),
-            dpsGrossReturnPct = pct(s.dpsGrossReturnPct, f.dpsGrossReturnPct),
+            dpsGrossReturnPct = growthPct(s.dpsGrossReturnPct, f.dpsGrossReturnPct),
             dpsAnnualFeePct = pct(s.dpsAnnualFeePct, f.dpsAnnualFeePct),
             cpiInflationPct = growthPct(s.cpiInflationPct, f.cpiInflationPct),
-            safeWithdrawalRatePct = pct(s.safeWithdrawalRatePct, f.safeWithdrawalRatePct),
+            safeWithdrawalRatePct = swr(s.safeWithdrawalRatePct, f.safeWithdrawalRatePct),
             safetyBufferPct = pct(s.safetyBufferPct, f.safetyBufferPct),
             rentGrowthPct = growthPct(s.rentGrowthPct, f.rentGrowthPct),
             dcaAnnualGrowthPct = growthPct(s.dcaAnnualGrowthPct, f.dcaAnnualGrowthPct),
@@ -413,5 +429,174 @@ object BackupManager {
             merchantRulesJson = cleanMerchantRules,
             emergencyReserveMode = if (s.emergencyReserveMode in setOf("3M", "6M", "9M", "12M", "Target")) s.emergencyReserveMode else f.emergencyReserveMode
         )
+    }
+
+    data class FullBackupPayload(
+        val settings: SettingsEntity,
+        val ledgerEntries: List<com.example.data.LedgerEntryEntity> = emptyList(),
+        val actionStates: List<com.example.data.ActionStateEntity> = emptyList(),
+        val importedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
+        val preferences: Map<String, String> = emptyMap()
+    )
+
+    fun serializeFullBackupToJson(payload: FullBackupPayload): String {
+        val json = JSONObject()
+        json.put("_format", "martinu-financials-full-backup")
+        json.put("_schema", 2)
+        json.put("settings", JSONObject(serializeSettingsToJson(payload.settings)))
+
+        val ledgerArr = org.json.JSONArray()
+        for (entry in payload.ledgerEntries) {
+            val o = JSONObject()
+            o.put("id", entry.id)
+            o.put("yearMonth", entry.yearMonth)
+            o.put("incVaclav", entry.incVaclav)
+            o.put("incEleonora", entry.incEleonora)
+            o.put("incUnforeseen", entry.incUnforeseen)
+            o.put("expRent", entry.expRent)
+            o.put("expGroceries", entry.expGroceries)
+            o.put("expOther", entry.expOther)
+            o.put("notes", entry.notes)
+            o.put("portfolioBalanceAtMonthEnd", entry.portfolioBalanceAtMonthEnd)
+            o.put("pensionBalanceAtMonthEnd", entry.pensionBalanceAtMonthEnd)
+            o.put("emergencyReserveAtMonthEnd", entry.emergencyReserveAtMonthEnd)
+            ledgerArr.put(o)
+        }
+        json.put("ledgerEntries", ledgerArr)
+
+        val actionArr = org.json.JSONArray()
+        for (action in payload.actionStates) {
+            val o = JSONObject()
+            o.put("actionKey", action.actionKey)
+            o.put("year", action.year)
+            o.put("actionId", action.actionId)
+            o.put("isDone", action.isDone)
+            actionArr.put(o)
+        }
+        json.put("actionStates", actionArr)
+
+        val txArr = org.json.JSONArray()
+        for (tx in payload.importedTransactions) {
+            val o = JSONObject()
+            o.put("id", tx.id)
+            o.put("yearMonth", tx.yearMonth)
+            o.put("bankName", tx.bankName)
+            o.put("date", tx.date)
+            o.put("amount", tx.amount)
+            o.put("counterpartyAccount", tx.counterpartyAccount)
+            o.put("counterpartyName", tx.counterpartyName)
+            o.put("message", tx.message)
+            o.put("variableSymbol", tx.variableSymbol)
+            o.put("category", tx.category)
+            o.put("isNetted", tx.isNetted)
+            o.put("nettingReason", tx.nettingReason)
+            if (tx.matchedTxId != null) o.put("matchedTxId", tx.matchedTxId)
+            txArr.put(o)
+        }
+        json.put("importedTransactions", txArr)
+
+        val prefObj = JSONObject()
+        for ((k, v) in payload.preferences) {
+            prefObj.put(k, v)
+        }
+        json.put("preferences", prefObj)
+
+        return json.toString()
+    }
+
+    fun deserializeFullBackupFromJson(jsonStr: String, fallback: SettingsEntity): FullBackupPayload? {
+        return try {
+            val root = JSONObject(jsonStr.trim())
+            if (!root.has("settings") && !root.has("schemaVersion")) {
+                return null
+            }
+            val settingsJson = if (root.has("settings")) root.getJSONObject("settings").toString() else root.toString()
+            val restoredSettings = deserializeSettingsFromJson(settingsJson, fallback) ?: return null
+
+            val ledgerList = mutableListOf<com.example.data.LedgerEntryEntity>()
+            if (root.has("ledgerEntries")) {
+                val arr = root.getJSONArray("ledgerEntries")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    ledgerList.add(
+                        com.example.data.LedgerEntryEntity(
+                            id = o.optLong("id", 0L),
+                            yearMonth = o.optString("yearMonth", ""),
+                            incVaclav = o.optDouble("incVaclav", 0.0),
+                            incEleonora = o.optDouble("incEleonora", 0.0),
+                            incUnforeseen = o.optDouble("incUnforeseen", 0.0),
+                            expRent = o.optDouble("expRent", 0.0),
+                            expGroceries = o.optDouble("expGroceries", 0.0),
+                            expOther = o.optDouble("expOther", 0.0),
+                            notes = o.optString("notes", ""),
+                            portfolioBalanceAtMonthEnd = o.optDouble("portfolioBalanceAtMonthEnd", 0.0),
+                            pensionBalanceAtMonthEnd = o.optDouble("pensionBalanceAtMonthEnd", 0.0),
+                            emergencyReserveAtMonthEnd = o.optDouble("emergencyReserveAtMonthEnd", 0.0)
+                        )
+                    )
+                }
+            }
+
+            val actionList = mutableListOf<com.example.data.ActionStateEntity>()
+            if (root.has("actionStates")) {
+                val arr = root.getJSONArray("actionStates")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    actionList.add(
+                        com.example.data.ActionStateEntity(
+                            actionKey = o.optString("actionKey", ""),
+                            year = o.optInt("year", 2026),
+                            actionId = o.optString("actionId", ""),
+                            isDone = o.optBoolean("isDone", false)
+                        )
+                    )
+                }
+            }
+
+            val txList = mutableListOf<com.example.data.ImportedBankTransactionEntity>()
+            if (root.has("importedTransactions")) {
+                val arr = root.getJSONArray("importedTransactions")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    txList.add(
+                        com.example.data.ImportedBankTransactionEntity(
+                            id = o.optLong("id", 0L),
+                            yearMonth = o.optString("yearMonth", ""),
+                            bankName = o.optString("bankName", "GENERIC"),
+                            date = o.optString("date", ""),
+                            amount = o.optDouble("amount", 0.0),
+                            counterpartyAccount = o.optString("counterpartyAccount", ""),
+                            counterpartyName = o.optString("counterpartyName", ""),
+                            message = o.optString("message", ""),
+                            variableSymbol = o.optString("variableSymbol", ""),
+                            category = o.optString("category", "LIFESTYLE_LIVING"),
+                            isNetted = o.optBoolean("isNetted", false),
+                            nettingReason = o.optString("nettingReason", ""),
+                            matchedTxId = if (o.has("matchedTxId")) o.optLong("matchedTxId") else null
+                        )
+                    )
+                }
+            }
+
+            val prefMap = mutableMapOf<String, String>()
+            if (root.has("preferences")) {
+                val obj = root.getJSONObject("preferences")
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    prefMap[k] = obj.optString(k, "")
+                }
+            }
+
+            FullBackupPayload(
+                settings = restoredSettings,
+                ledgerEntries = ledgerList,
+                actionStates = actionList,
+                importedTransactions = txList,
+                preferences = prefMap
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 }

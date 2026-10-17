@@ -10,6 +10,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Ignore
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -19,31 +22,50 @@ import java.io.File
  * - Tests 3.13 to 3.14: Security and privacy audit (HTTPS URL validation and User-Agent privacy format).
  * - Test 3.15: Built-in offline statutory and macroeconomic fallback data integrity.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class NetworkAndSyncResilienceTest {
 
     // =========================================================================
-    // 3.1 - 3.7: Live Network & Remote Fetch Tests (Skipped in Unit Test Scope)
+    // =========================================================================
+    // 3.1 - 3.7: Network & Remote Parser Resilience Tests
     // =========================================================================
 
     /**
-     * 3.1: Live ČNB daily rates REST API sync.
-     * SKIPPED: fetchLiveRegulatoryData requires active HTTP connectivity to api.cnb.cz,
-     * which is not guaranteed or hermetic in local/CI unit test environments.
+     * 3.1: ČNB daily rates REST API JSON parser verification.
      */
-    @Ignore("Skipped: fetchLiveRegulatoryData requires real HTTP connection to ČNB REST endpoint (https://api.cnb.cz).")
     @Test
     fun test3_1_liveCnbDailyRatesSync() {
-        // Skipped in unit test suite. Handled via mock/integration tests.
+        val sampleJson = """
+            {
+                "rates": [
+                    {"currencyCode": "EUR", "rate": 25.185, "validFor": "2026-10-17"},
+                    {"currencyCode": "USD", "rate": 23.250, "validFor": "2026-10-17"}
+                ]
+            }
+        """.trimIndent()
+        val result = CzechEconomicSyncService.parseCnbRatesJson(sampleJson)
+        assertEquals(25.185, result.first, 0.001)
+        assertEquals(23.250, result.second, 0.001)
+        assertEquals("2026-10-17", result.third)
     }
 
     /**
-     * 3.2: Live ČNB pipe-delimited text fallback parser sync.
-     * SKIPPED: Fetching from cnb.cz requires active external HTTP communication.
+     * 3.2: ČNB pipe-delimited text fallback parser verification with multiplier column.
      */
-    @Ignore("Skipped: fetchCnbRates text fallback requires real HTTP connection to www.cnb.cz.")
     @Test
     fun test3_2_liveCnbTxtFallbackSync() {
-        // Skipped in unit test suite.
+        val sampleTxt = """
+            17.10.2026 #203
+            země|měna|množství|kód|kurz
+            EMU|euro|1|EUR|25,185
+            USA|dolar|1|USD|23,250
+            Japonsko|jen|100|JPY|15,500
+        """.trimIndent()
+        val result = CzechEconomicSyncService.parseCnbRatesTxt(sampleTxt)
+        assertEquals(25.185, result.first, 0.001)
+        assertEquals(23.250, result.second, 0.001)
+        assertEquals("17.10.2026", result.third)
     }
 
     /**
@@ -59,43 +81,56 @@ class NetworkAndSyncResilienceTest {
     }
 
     /**
-     * 3.4: Connection timeout resilience under real degraded network conditions.
-     * SKIPPED: Simulating socket read/connect timeouts requires network proxy / mock server.
+     * 3.4: Connection timeout resilience with empty payloads.
      */
-    @Ignore("Skipped: Network timeout simulation requires dedicated mock web server / network proxy.")
     @Test
     fun test3_4_liveNetworkTimeoutResilience() {
-        // Skipped in unit test suite.
+        val emptyResult = CzechEconomicSyncService.parseCnbRatesJson("")
+        assertEquals(0.0, emptyResult.first, 0.001)
+        assertEquals(0.0, emptyResult.second, 0.001)
+
+        val emptyTxtResult = CzechEconomicSyncService.parseCnbRatesTxt("")
+        assertEquals(0.0, emptyTxtResult.first, 0.001)
+        assertEquals(0.0, emptyTxtResult.second, 0.001)
     }
 
     /**
-     * 3.5: HTTP non-200 status code recovery.
-     * SKIPPED: Live server response manipulation requires HTTP interceptors or mock servers.
+     * 3.5: HTTP non-200 status code recovery (e.g. gateway HTML error pages).
      */
-    @Ignore("Skipped: HTTP error code verification requires MockWebServer infrastructure.")
     @Test
     fun test3_5_httpErrorCodeRecovery() {
-        // Skipped in unit test suite.
+        val errorPageHtml = "<html><body>502 Bad Gateway</body></html>"
+        val jsonResult = CzechEconomicSyncService.parseCnbRatesJson(errorPageHtml)
+        assertEquals(0.0, jsonResult.first, 0.001)
+        assertEquals(0.0, jsonResult.second, 0.001)
+
+        val txtResult = CzechEconomicSyncService.parseCnbRatesTxt(errorPageHtml)
+        assertEquals(0.0, txtResult.first, 0.001)
+        assertEquals(0.0, txtResult.second, 0.001)
     }
 
     /**
      * 3.6: Malformed JSON remote payload recovery.
-     * SKIPPED: Requires injecting malformed responses into live network requests.
      */
-    @Ignore("Skipped: Corrupted payload testing requires MockWebServer or network interceptor.")
     @Test
     fun test3_6_malformedRemotePayloadRecovery() {
-        // Skipped in unit test suite.
+        val corruptedJson = """{"rates": [{"currencyCode": "EUR", "rate": "invalid_number"}"""
+        val result = CzechEconomicSyncService.parseCnbRatesJson(corruptedJson)
+        assertEquals(0.0, result.first, 0.001)
+        assertEquals(0.0, result.second, 0.001)
     }
 
     /**
-     * 3.7: Complete network failure / unreachable host graceful degradation.
-     * SKIPPED: End-to-end network disconnection behavior is validated via offline defaults.
+     * 3.7: Graceful degradation returning robust statutory fallbacks.
      */
-    @Ignore("Skipped: Live host unreachable testing requires network interface control.")
     @Test
-    fun test3_7_networkFailureGracefulDegradation() {
-        // Skipped in unit test suite.
+    fun test3_7_networkFailureGracefulDegradation() = kotlinx.coroutines.runBlocking {
+        val data = CzechEconomicSyncService.fetchLiveRegulatoryData()
+        assertNotNull(data)
+        assertTrue(data.taxpayerCreditAnnual > 0.0)
+        assertTrue(data.eurCzkRate in 15.0..40.0)
+        assertTrue(data.usdCzkRate in 15.0..40.0)
+        assertTrue(data.sourceName.isNotBlank())
     }
 
     // =========================================================================

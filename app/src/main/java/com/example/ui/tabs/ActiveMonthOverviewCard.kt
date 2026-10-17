@@ -81,7 +81,7 @@ internal fun ActiveMonthOverviewCard(
     val totalInc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
     val totalExp = entry.expRent + entry.expGroceries + entry.expOther
     val netFlow = totalInc - totalExp
-    val savingsRate = if (totalInc > 0) (netFlow.coerceAtLeast(0.0) / totalInc) * 100.0 else 0.0
+    val savingsRate = if (totalInc > 0) ((netFlow / totalInc) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
     val expDiff = totalExp - baselineExp
     val incDiff = totalInc - baselineInc

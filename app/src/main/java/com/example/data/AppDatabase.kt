@@ -24,15 +24,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun recreateAppSettingsTable(db: SupportSQLiteDatabase) {
             try {
-                val cursor = db.query("PRAGMA table_info(app_settings)")
                 val columns = mutableSetOf<String>()
-                while (cursor.moveToNext()) {
-                    val idx = cursor.getColumnIndex("name")
-                    if (idx != -1) {
-                        columns.add(cursor.getString(idx))
+                db.query("PRAGMA table_info(app_settings)").use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val idx = cursor.getColumnIndex("name")
+                        if (idx != -1) {
+                            columns.add(cursor.getString(idx))
+                        }
                     }
                 }
-                cursor.close()
 
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS app_settings_new (
@@ -466,7 +466,7 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN dividendYieldPct REAL NOT NULL DEFAULT 1.8")
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN dividendTaxRatePct REAL NOT NULL DEFAULT 15.0")
-                db.execSQL("ALTER TABLE app_settings ADD COLUMN useHistoricalBootstrap INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN useHistoricalBootstrap INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsEnabled INTEGER NOT NULL DEFAULT 0")
             }
         }
@@ -496,6 +496,7 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN vGiftsMonthly REAL NOT NULL DEFAULT 16000.0")
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN eGiftsMonthly REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("UPDATE app_settings SET vGiftsMonthly = familyGiftMonthly WHERE familyGiftMonthly IS NOT NULL")
             }
         }
 

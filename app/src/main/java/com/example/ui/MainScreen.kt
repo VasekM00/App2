@@ -20,15 +20,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -116,6 +121,7 @@ fun MainScreen(
     var targetSettingsSubTab by rememberSaveable { mutableIntStateOf(0) }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportReportDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -219,60 +225,124 @@ fun MainScreen(
                 .padding(innerPadding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top Search Bar & Header
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    HeroHeader(
-                        state = state,
-                        isDarkTheme = isDarkTheme,
-                        onToggleDarkTheme = onToggleDarkTheme,
-                        onOpenExportReportDialog = { showExportReportDialog = true },
-                        onOpenSettings = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedTab = 4
-                        },
-                        onNavigateToNetWorth = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedTab = 2
-                            targetProjectionsSubTab = 0
-                        },
-                        onNavigateToEmergencyReserve = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedTab = 0
-                        },
-                        onNavigateToSavingsRate = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedTab = 1
-                            targetCashFlowSubTab = 0
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Streamlined Compact Search Input
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search metrics, tabs, settings", fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
+                // Top App Bar & Collapsible Search Toggle (UX-01)
+                if (isSearchExpanded || searchQuery.isNotEmpty()) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("search_input_field")
-                    )
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search metrics, tabs, settings", fontSize = 13.sp) },
+                            leadingIcon = {
+                                IconButton(onClick = {
+                                    isSearchExpanded = false
+                                    searchQuery = ""
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Close search",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("search_input_field")
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = tabs[selectedTab].title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isSyncing) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    isSearchExpanded = true
+                                },
+                                modifier = Modifier.testTag("action_toggle_search")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (selectedTab != 0) {
+                                IconButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onToggleDarkTheme()
+                                    },
+                                    modifier = Modifier.testTag("action_toggle_theme")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                        contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        showExportReportDialog = true
+                                    },
+                                    modifier = Modifier.testTag("action_export_report")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = "Export Financial Report",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Search Results Dropdown Overlay or Main Tab Content
@@ -348,6 +418,27 @@ fun MainScreen(
                                 },
                                 onUpdateSettings = { newSettings ->
                                     viewModel.updateSettings(newSettings)
+                                },
+                                isDarkTheme = isDarkTheme,
+                                onToggleDarkTheme = onToggleDarkTheme,
+                                onOpenExportReportDialog = { showExportReportDialog = true },
+                                onOpenSettings = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = 4
+                                },
+                                onNavigateToNetWorth = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = 2
+                                    targetProjectionsSubTab = 0
+                                },
+                                onNavigateToEmergencyReserve = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = 0
+                                },
+                                onNavigateToSavingsRate = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = 1
+                                    targetCashFlowSubTab = 0
                                 }
                             )
                             1 -> CashFlowTab(
@@ -385,6 +476,7 @@ fun MainScreen(
                             2 -> ProjectionsTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
+                                actionStates = actionStates,
                                 onApplySettings = { viewModel.updateSettings(it) },
                                 initialSubTab = targetProjectionsSubTab
                             )

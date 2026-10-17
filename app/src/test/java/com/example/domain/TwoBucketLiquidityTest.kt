@@ -34,8 +34,8 @@ class TwoBucketLiquidityTest {
         val fullState = FinancialEngine.calculate(settings)
         val annualLiving = fullState.totalLivingCostMonthly * 12.0
         val yearsTo60 = 20
-        val rReal = (settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0 // 0.05
-        val expectedPv = annualLiving * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+        val rReal = FinancialEngine.netRealReturnRate(settings)
+        val expectedPv = annualLiving * FinancialEngine.annuityFactor(rReal, yearsTo60)
 
         assertEquals(expectedPv, fullState.liquidBridgeTo60RequiredToday, 1.0)
         // Liquid portfolio is 2M, expected Pv is ~7.4M, so liquid bridge is not funded
@@ -208,6 +208,7 @@ class TwoBucketLiquidityTest {
             child2Enabled = false,
             portfolioNominalReturnPct = 8.0,
             cpiInflationPct = 3.0,
+            rentGrowthPct = 0.0,
             isSingleHousehold = true
         )
 
@@ -221,8 +222,8 @@ class TwoBucketLiquidityTest {
         val yearsElapsed = p5.year - settings.baseYear // 5 years
         val inflationFactor = (1.0 + settings.cpiInflationPct / 100.0).pow(yearsElapsed)
         val expectedLivingAtP5 = FinancialEngine.totalLivingCostMonthly(settings, p5.year) * 12.0 * inflationFactor
-        val rReal = (settings.portfolioNominalReturnPct - settings.cpiInflationPct) / 100.0
-        val expectedPv = expectedLivingAtP5 * ((1.0 - (1.0 + rReal).pow(-yearsTo60)) / rReal)
+        val rReal = FinancialEngine.netRealReturnRate(settings)
+        val expectedPv = expectedLivingAtP5 * FinancialEngine.annuityFactor(rReal, yearsTo60)
 
         assertEquals(expectedPv, p5.liquidBridgeTo60Required, 1.0)
         assertTrue(p5.liquidBridgeTo60Required > 0.0)

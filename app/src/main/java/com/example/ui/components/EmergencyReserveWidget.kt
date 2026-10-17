@@ -72,7 +72,7 @@ fun EmergencyReserveWidget(
     }
 
     val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
-    val currentLiquidCash = state.settings.emergencyReserveCurrent
+    val currentLiquidCash = state.currentEmergencyReserve
 
     val targetAmount = if (selectedTargetMode == state.settings.emergencyReserveMode) {
         state.effectiveEmergencyReserveTargetToday

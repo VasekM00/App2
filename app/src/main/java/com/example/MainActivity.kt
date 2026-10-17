@@ -31,7 +31,9 @@ class MainActivity : ComponentActivity() {
             )
         }
         enableEdgeToEdge()
-        handleIncomingIntent(intent)
+        if (savedInstanceState == null) {
+            handleIncomingIntent(intent)
+        }
 
         val prefs = getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
         val initialDarkTheme = if (prefs.contains("is_dark_theme")) prefs.getBoolean("is_dark_theme", false) else null

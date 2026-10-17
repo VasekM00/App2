@@ -55,8 +55,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.ui.theme.BadRedDark
 import com.example.ui.theme.BrandGold
+import com.example.ui.theme.BrandGoldDarkTheme
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.BrandTealDark
+import com.example.ui.theme.GoodGreenDark
+import com.example.ui.theme.SurfaceDark
 import com.example.util.Formatters
 
 /**
@@ -103,7 +108,17 @@ fun MetricInfoDialog(
     onDismiss: () -> Unit
 ) {
     if (info == null) return
-    val effectiveAccent = info.accentColor ?: BrandTeal
+    val isDark = MaterialTheme.colorScheme.surface == SurfaceDark
+    val rawAccent = info.accentColor ?: BrandTeal
+    val effectiveAccent = if (isDark) {
+        when (rawAccent) {
+            Color(0xFF0F766E) -> BrandTealDark
+            Color(0xFFD97706), Color(0xFFB45309) -> BrandGoldDarkTheme
+            Color(0xFF16A34A) -> GoodGreenDark
+            Color(0xFFDC2626) -> BadRedDark
+            else -> rawAccent
+        }
+    } else rawAccent
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
     Dialog(

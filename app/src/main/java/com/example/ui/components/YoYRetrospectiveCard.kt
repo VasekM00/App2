@@ -64,7 +64,7 @@ fun YoYRetrospectiveCard(
             val totalIn = entries.sumOf { it.incVaclav + it.incEleonora + it.incUnforeseen }
             val totalExp = entries.sumOf { it.expRent + it.expGroceries + it.expOther }
             val surplus = totalIn - totalExp
-            val sr = if (totalIn > 0) (surplus / totalIn) * 100.0 else 0.0
+            val sr = if (totalIn > 0) ((surplus / totalIn) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
             val entriesWithNw = entries.filter { it.totalNetWorthAtMonthEnd > 0 }
             val prevYearEndNw = allSortedWithNw.lastOrNull { (it.yearMonth.take(4).toIntOrNull() ?: 0) < yr }?.totalNetWorthAtMonthEnd

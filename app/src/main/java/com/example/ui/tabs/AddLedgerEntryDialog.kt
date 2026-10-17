@@ -108,9 +108,14 @@ internal fun AddLedgerEntryDialog(
 ) {
     val defaultRent = state.settings.rentMonthly.toInt().toString()
     val baselineLiving = (state.totalLivingCostMonthly - state.settings.rentMonthly).coerceAtLeast(0.0).toInt().toString()
-    val defaultVaclav = state.currentIncome.vaclavNet.toInt().toString()
-    val defaultEleonora = if (state.settings.isSingleHousehold) "0" else (state.currentIncome.eleonoraSalary.takeIf { it > 0 }?.toInt()?.toString()
-        ?: state.currentIncome.benefit.toInt().toString())
+    val isSingle = state.settings.isSingleHousehold
+    val budgetedIncV = (state.currentIncome.vaclavNet + state.currentIncome.vouchers + state.settings.vGiftsMonthly).toInt().toString()
+    val budgetedIncE = if (isSingle) "0" else {
+        val base = state.currentIncome.eleonoraSalary.takeIf { it > 0 } ?: state.currentIncome.benefit
+        val lect = if (state.settings.eIncludeLecturing) state.currentIncome.lecturing else 0.0
+        val gift = state.settings.eGiftsMonthly
+        (base + lect + gift).toInt().toString()
+    }
 
     val sourceEntry = initialEntry ?: duplicateFrom
     val defaultYm = if (duplicateFrom != null) {
@@ -123,8 +128,8 @@ internal fun AddLedgerEntryDialog(
     }
 
     var ym by remember(sourceEntry) { mutableStateOf(defaultYm) }
-    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: defaultVaclav) }
-    var incE by remember(sourceEntry) { mutableStateOf(sourceEntry?.incEleonora?.toInt()?.toString() ?: defaultEleonora) }
+    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: budgetedIncV) }
+    var incE by remember(sourceEntry) { mutableStateOf(if (isSingle) "0" else (sourceEntry?.incEleonora?.toInt()?.toString() ?: budgetedIncE)) }
     var incU by remember(sourceEntry) { mutableStateOf(sourceEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
     var expR by remember(sourceEntry) { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
     var expL by remember(sourceEntry) { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: baselineLiving) }
@@ -135,8 +140,7 @@ internal fun AddLedgerEntryDialog(
 
     val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
     val primaryName = state.settings.primaryName.ifBlank { "Primary Earner" }
-    val spouseName = state.settings.spouseName.ifBlank { "Spouse / Partner" }
-    val isSingle = state.settings.isSingleHousehold
+    val spouseName = state.settings.spouseName.ifBlank { "Partner" }
 
     // Live calculations
     val valIncV = incV.toDoubleOrNull() ?: 0.0
@@ -287,8 +291,8 @@ internal fun AddLedgerEntryDialog(
                             }
                             AssistChip(
                                 onClick = {
-                                    incV = defaultVaclav
-                                    incE = defaultEleonora
+                                    incV = budgetedIncV
+                                    incE = budgetedIncE
                                     incU = "0"
                                     expR = defaultRent
                                     expL = baselineLiving
@@ -660,7 +664,7 @@ internal fun AddLedgerEntryDialog(
                     onSave(
                         ym,
                         incV.toDoubleOrNull() ?: 0.0,
-                        incE.toDoubleOrNull() ?: 0.0,
+                        if (isSingle) 0.0 else (incE.toDoubleOrNull() ?: 0.0),
                         incU.toDoubleOrNull() ?: 0.0,
                         expR.toDoubleOrNull() ?: 0.0,
                         expL.toDoubleOrNull() ?: 0.0,

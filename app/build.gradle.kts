@@ -46,15 +46,10 @@ android {
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
-      val debugKeystore = file("${rootDir}/debug.keystore")
       signingConfig = if (releaseKeystore.exists()) {
         signingConfigs.getByName("release")
-      } else if (debugKeystore.exists()) {
-        logger.warn("WARNING: no release keystore found - the release build will be signed with the debug keystore. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_PASSWORD for a production release.")
-        signingConfigs.getByName("debugConfig")
       } else {
-        logger.warn("WARNING: no release keystore found - the release build will be signed with the default debug keystore. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_PASSWORD for a production release.")
-        signingConfigs.getByName("debug")
+        null
       }
     }
     debug {

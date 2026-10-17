@@ -466,8 +466,10 @@ class FinancialEngineExhaustiveAuditTest {
 
         val dps5700 = dps.scenarios.first { it.monthly == 5700.0 }
         assertEquals(340.0, dps5700.monthlySubsidy, 0.001)
-        assertEquals(7200.0, dps5700.annualTaxSaved, 0.001)
-        assertEquals(11280.0, dps5700.totalAnnualBenefit, 0.001)
+        // With default dipContributionMonthly = 1700 (20 400/yr), remaining headroom is 48 000 - 20 400 = 27 600.
+        // Tax saved = 27 600 * 15% = 4 140.0. Total = 4080 + 4140 = 8 220.0.
+        assertEquals(4140.0, dps5700.annualTaxSaved, 0.001)
+        assertEquals(8220.0, dps5700.totalAnnualBenefit, 0.001)
         assertEquals("DPS + DIP MAX", dps5700.badgeLabel)
 
         // 3. Dynamic Custom Level Inclusion (e.g. 3200 DPS above subsidy cap)

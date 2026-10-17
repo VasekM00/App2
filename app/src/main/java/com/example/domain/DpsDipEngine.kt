@@ -23,7 +23,7 @@ object DpsDipEngine {
         val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
         val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
 
-        val annualRateETF = max(-0.99, settings.portfolioNominalReturnPct / 100.0)
+        val annualRateETF = max(-0.99, FinancialEngine.netTaxableNominalReturnPct(settings) / 100.0)
         val monthlyRateETF = (1.0 + annualRateETF).pow(1.0 / 12.0) - 1.0
 
         val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
@@ -31,7 +31,10 @@ object DpsDipEngine {
         val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
 
         val own = settings.dpsOwnContributionMonthly + eDpsOwn
-        val emp = settings.employerRetirementMonthly + eEmp
+        val empCap = settings.employerRetirementExemptionAnnual / 12.0
+        val vEmp = min(settings.employerRetirementMonthly, empCap)
+        val eEmpEffective = min(eEmp, empCap)
+        val emp = vEmp + eEmpEffective
 
         var dpsBal = settings.dpsBalanceCurrent + eDpsBal
         var etfBal = settings.dpsBalanceCurrent + eDpsBal
@@ -43,7 +46,7 @@ object DpsDipEngine {
         for (m in 0 until totalMonths) {
             val currentYear = settings.baseYear + (m / 12)
             val currentAge = settings.primaryAge + (m / 12)
-            val eAgeCurrent = (settings.baseYear - ELEONORA_BIRTH_YEAR) + (m / 12)
+            val eAgeCurrent = (currentYear - FinancialEngine.partnerBirthYear(settings))
             val subV = CzechTaxEngine.dpsSubsidy(settings.dpsOwnContributionMonthly, currentAge, settings, currentYear)
             val subE = if (!settings.isSingleHousehold) CzechTaxEngine.dpsSubsidy(settings.eDpsOwnContributionMonthly, eAgeCurrent, settings, currentYear) else 0.0
             val sub = subV + subE
@@ -59,7 +62,7 @@ object DpsDipEngine {
         // Statutory one-third early withdrawal under Lepší penzijko:
         // Evaluated per individual contract based on individual age and 10-year saving requirement
         val vAge0 = settings.primaryAge
-        val eAge0 = settings.baseYear - ELEONORA_BIRTH_YEAR
+        val eAge0 = settings.baseYear - FinancialEngine.partnerBirthYear(settings)
         val vMonthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - vAge0) * 12)
         val eMonthsTo36 = max(0, (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - eAge0) * 12)
 
@@ -88,8 +91,19 @@ object DpsDipEngine {
             }
         }
 
-        val vTenYearMet = vAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10
-        val eTenYearMet = !settings.isSingleHousehold && (eAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10)
+        val vPastYears = if (settings.dpsBalanceCurrent > 0.0) {
+            min(10.0, settings.dpsBalanceCurrent / max(6000.0, (settings.dpsOwnContributionMonthly + vEmp) * 12.0))
+        } else 0.0
+        val vTenYearMet = (vAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10) ||
+                (vAge0 < RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE && (vPastYears + (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - vAge0) >= 10.0))
+
+        val ePastYears = if (!settings.isSingleHousehold && eDpsBal > 0.0) {
+            min(10.0, eDpsBal / max(6000.0, (settings.eDpsOwnContributionMonthly + eEmpEffective) * 12.0))
+        } else 0.0
+        val eTenYearMet = !settings.isSingleHousehold && (
+                (eAge0 <= RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - 10) ||
+                (eAge0 < RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE && (ePastYears + (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE - eAge0) >= 10.0))
+        )
         val vEarlyLimit = if (vTenYearMet) vOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
         val eEarlyLimit = if (eTenYearMet) eOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
         val earlyWithdrawalLimitAt36 = vEarlyLimit + eEarlyLimit
@@ -109,16 +123,13 @@ object DpsDipEngine {
             val subAnnual = subMonthly * 12.0
             val dpsAboveThreshold = max(0.0, monthly - settings.dpsDeductionThresholdMonthly)
             val dpsDeductionBase = dpsAboveThreshold * 12.0
-            val effectiveDpsDeduction = if (abs(monthly - 5700.0) < 1.0) {
-                // Combined maximum tier: 1 700 DPS max subsidy + 4 000 DIP max tax shield
-                settings.taxDeductionCeilingAnnual
-            } else {
-                min(dpsDeductionBase, remainingTaxHeadroom)
-            }
+            val effectiveDpsDeduction = min(dpsDeductionBase, remainingTaxHeadroom)
             val vTaxableGross = CzechTaxEngine.netToGrossAnnual(
-                FinancialEngine.vaclavSalaryMonthly(settings.baseYear, settings),
-                settings.taxpayerCreditAnnual,
-                settings.taxSecondBracketThresholdAnnual
+                netMonthly = FinancialEngine.vaclavSalaryMonthly(settings.baseYear, settings),
+                taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+                highBracketThresholdAnnual = settings.taxSecondBracketThresholdAnnual,
+                baseTaxRatePct = settings.taxRatePct,
+                highTaxRatePct = settings.taxRateSecondPct
             )
             val taxSavedAnnual = CzechTaxEngine.singleEarnerRetirementTaxSaved(
                 taxableGrossAnnual = vTaxableGross,

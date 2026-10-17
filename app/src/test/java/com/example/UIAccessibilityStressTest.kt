@@ -184,7 +184,6 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.onNodeWithTag("plan_tab").assertExists()
-        assertTrue(true)
     }
 
     @Test

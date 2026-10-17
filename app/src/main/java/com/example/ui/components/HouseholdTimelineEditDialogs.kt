@@ -37,7 +37,7 @@ fun EditPrimaryEarnerDialog(
     var netSalaryStr by rememberSaveable { mutableStateOf(settings.vSalary.toInt().toString()) }
     var salaryGrowthStr by rememberSaveable { mutableStateOf(settings.vSalaryGrowthPct.toString()) }
     var vouchersStr by rememberSaveable { mutableStateOf(settings.vMealVouchersMonthly.toInt().toString()) }
-    var giftStr by rememberSaveable { mutableStateOf(settings.familyGiftMonthly.toInt().toString()) }
+    var giftStr by rememberSaveable { mutableStateOf(settings.vGiftsMonthly.toInt().toString()) }
     var otherInflowsStr by rememberSaveable { mutableStateOf(settings.vOtherInflowsMonthly.toInt().toString()) }
     var pensionAgeStr by rememberSaveable { mutableStateOf(settings.vStatePensionAge.toString()) }
 
@@ -125,8 +125,8 @@ fun EditPrimaryEarnerDialog(
                             vSalary = salary.coerceAtLeast(0.0),
                             vSalaryGrowthPct = growth.coerceAtLeast(0.0),
                             vMealVouchersMonthly = vouchers.coerceAtLeast(0.0),
-                            familyGiftMonthly = gift.coerceAtLeast(0.0),
                             vGiftsMonthly = gift.coerceAtLeast(0.0),
+                            familyGiftMonthly = gift.coerceAtLeast(0.0) + settings.eGiftsMonthly,
                             vOtherInflowsMonthly = other.coerceAtLeast(0.0),
                             vStatePensionAge = pensionAge.coerceIn(55, 75)
                         )

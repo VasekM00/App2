@@ -64,8 +64,9 @@ fun ExportReportDialog(
         appendLine()
         appendLine("EXECUTIVE SUMMARY")
         appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal)}")
-        val snapReserve = if (state.totalLivingCostMonthly > 0.0) state.emergencyCoverageMonths * state.totalLivingCostMonthly else state.settings.emergencyReserveCurrent
-        appendLine("• Emergency Reserve: ${fmtCZK(snapReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
+        appendLine("• Liquid Investments: ${fmtCZK(state.currentLiquidPortfolio)}")
+        appendLine("• Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
+        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio)}")
         appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
         if (state.settings.isSingleHousehold) {
@@ -75,32 +76,34 @@ fun ExportReportDialog(
             appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
         }
         appendLine()
+        val pName = state.settings.primaryName.ifBlank { "Václav" }
+        val sName = state.settings.spouseName.ifBlank { "Eleonora" }
         appendLine("MONTHLY CASH FLOW")
-        appendLine("• Václav Net Income: ${fmtCZK(state.currentIncome.vaclavNet)}")
+        appendLine("• $pName Net Income: ${fmtCZK(state.currentIncome.vaclavNet)}")
         if (state.currentIncome.vaclavOther > 0.0) {
-            appendLine("• Václav Other Inflows: ${fmtCZK(state.currentIncome.vaclavOther)}")
+            appendLine("• $pName Other Inflows: ${fmtCZK(state.currentIncome.vaclavOther)}")
         }
         if (state.currentIncome.vaclavGifts > 0.0) {
-            appendLine("• Václav Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.vaclavGifts)}")
+            appendLine("• $pName Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.vaclavGifts)}")
         }
         if (!state.settings.isSingleHousehold) {
             if (state.currentIncome.eleonoraSalary > 0.0) {
-                appendLine("• Eleonora Net Salary: ${fmtCZK(state.currentIncome.eleonoraSalary)}")
+                appendLine("• $sName Net Salary: ${fmtCZK(state.currentIncome.eleonoraSalary)}")
             }
             if (state.currentIncome.benefit > 0.0) {
-                appendLine("• Eleonora Parental Allowance: ${fmtCZK(state.currentIncome.benefit)}")
+                appendLine("• $sName Parental Allowance: ${fmtCZK(state.currentIncome.benefit)}")
             }
             if (state.currentIncome.lecturing > 0.0) {
-                appendLine("• Eleonora Lecturing: ${fmtCZK(state.currentIncome.lecturing)}")
+                appendLine("• $sName Lecturing: ${fmtCZK(state.currentIncome.lecturing)}")
             }
             if (state.currentIncome.eleonoraOther > 0.0) {
-                appendLine("• Eleonora Other Inflows: ${fmtCZK(state.currentIncome.eleonoraOther)}")
+                appendLine("• $sName Other Inflows: ${fmtCZK(state.currentIncome.eleonoraOther)}")
             }
             if (state.currentIncome.eleonoraGifts > 0.0) {
-                appendLine("• Eleonora Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.eleonoraGifts)}")
+                appendLine("• $sName Tax-Exempt Gifts: ${fmtCZK(state.currentIncome.eleonoraGifts)}")
             }
         }
-        appendLine("• Meal Vouchers (Václav): ${fmtCZK(state.currentIncome.vouchers)}")
+        appendLine("• Meal Vouchers ($pName): ${fmtCZK(state.currentIncome.vouchers)}")
         if (state.currentIncome.lumpSumMonthly > 0.0) {
             appendLine("• Lump Sums / Bonuses: ${fmtCZK(state.currentIncome.lumpSumMonthly)}")
         }
@@ -110,7 +113,7 @@ fun ExportReportDialog(
         appendLine("CZECH TAX & PENSION REFORM")
         appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")
         appendLine("• DIP Annual Tax Saved: ${fmtCZK(state.taxReturnHelper.dipSaving)}")
-        appendLine("• DPS Pension Balance: ${fmtCZK(state.settings.dpsBalanceCurrent + if (!state.settings.isSingleHousehold) state.settings.eDpsBalanceCurrent else 0.0)}")
+        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio)}")
         appendLine("• DPS Statutory Fee Cap: ${String.format(java.util.Locale.ROOT, "%.1f", state.settings.dpsAnnualFeePct)}% p.a.")
         appendLine()
         appendLine("MONTE CARLO STRESS TEST")

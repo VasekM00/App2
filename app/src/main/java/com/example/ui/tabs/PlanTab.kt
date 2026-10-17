@@ -359,10 +359,6 @@ private fun FireRoadmapSubTab(
 
     val primaryProgress = if (targetWorth > 0) ((investableNetWorth / targetWorth) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
-    // Filter modes: 0 -> Milestones & Phases, 1 -> Action Checklist
-    var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionLabels = listOf("Milestones & Phases", "Action Checklist")
-
     val completedActionsCount = remember(actionStates, currentYear) {
         ActionMeta.items.count { meta ->
             actionStates["${currentYear}_${meta.id}"] == true
@@ -528,51 +524,18 @@ private fun FireRoadmapSubTab(
             }
         }
 
-        // Section Filter Chips (Pill Bar)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            sectionLabels.forEachIndexed { index, label ->
-                val isSelected = selectedSection == index
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { selectedSection = index }
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                            fontSize = 11.sp
-                        ),
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            }
-        }
+        // 2. FIRE Milestones Hierarchy & Two-Bucket Liquidity
+        FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
+        TwoBucketLiquidityBridgeCard(state = state, onShowInfo = onShowInfo)
 
-        // 2. Section 1: FIRE Milestones Hierarchy & Two-Bucket Liquidity
-        if (selectedSection == 0) {
-            FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
-            TwoBucketLiquidityBridgeCard(state = state, onShowInfo = onShowInfo)
-        }
-
-        // 3. Section 2: High-Leverage Execution Checklist
-        if (selectedSection == 1) {
-            ActionChecklistCard(
-                currentYear = currentYear,
-                actionStates = actionStates,
-                completedCount = completedActionsCount,
-                state = state,
-                onToggleAction = onToggleAction
-            )
-        }
+        // 3. High-Leverage Execution Checklist
+        ActionChecklistCard(
+            currentYear = currentYear,
+            actionStates = actionStates,
+            completedCount = completedActionsCount,
+            state = state,
+            onToggleAction = onToggleAction
+        )
     }
 }
 
@@ -1006,8 +969,9 @@ private fun PensionSubTab(
         ((if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0) + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)) * (s.taxRatePct / 100.0)
 
     val yearlyTaxSaved = state.taxReturnHelper.totalIncrementalValue
+    val pensionTaxSaved = state.dip.taxSavedYear
     val totalSubsidyAnnual = (vSubsidy + eSubsidy) * 12.0
-    val totalGovBenefitAnnual = totalSubsidyAnnual + yearlyTaxSaved
+    val totalGovBenefitAnnual = totalSubsidyAnnual + pensionTaxSaved
 
     Column(
         modifier = Modifier
@@ -1139,7 +1103,7 @@ private fun PensionSubTab(
                             )
                             Text(
                                 text = "+${fmtCZK(vSubsidy + eSubsidy)}/mo cash",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             )
                         }
                     }
@@ -1157,12 +1121,12 @@ private fun PensionSubTab(
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "+${fmtCZK(yearlyTaxSaved)}",
+                                text = "+${fmtCZK(pensionTaxSaved)}",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
                             )
                             Text(
                                 text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% tax relief",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             )
                         }
                     }
@@ -1185,7 +1149,7 @@ private fun PensionSubTab(
                             )
                             Text(
                                 text = "Annual net benefit",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             )
                         }
                     }
@@ -1264,8 +1228,6 @@ private fun PensionSubTab(
         }
 
         FundsAllocatorCard(state = state, onShowInfo = onShowInfo)
-
-        TwoBucketLiquidityBridgeCard(state = state, onShowInfo = onShowInfo)
 
         DipOptimizationMatrixCard(state = state)
 

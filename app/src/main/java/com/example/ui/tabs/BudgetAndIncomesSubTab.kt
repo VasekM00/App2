@@ -532,11 +532,12 @@ private fun IncomeSubTab(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                val primaryName = s.primaryName.ifBlank { "Václav" }
+                val spouseName = s.spouseName.ifBlank { "Eleonora" }
 
-                // Section 1: Václav
+                // Section 1: Primary Earner
                 Text(
-                    text = "VÁCLAV'S INFLOWS",
+                    text = "${primaryName.uppercase(java.util.Locale.ROOT)}'S INFLOWS",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
@@ -546,7 +547,7 @@ private fun IncomeSubTab(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 EditableIncomeRow(
-                    label = "Václav's Net Salary",
+                    label = "$primaryName's Net Salary",
                     value = fmtCZK(inc.vaclavNet),
                     info = CashFlowMetricInfos.vaclavSalary,
                     onShowInfo = onShowInfo,
@@ -554,8 +555,8 @@ private fun IncomeSubTab(
                         {
                             editFieldText = s.vSalary.toInt().toString()
                             editFieldData = EditIncomeFieldData(
-                                title = "Edit Václav's Net Salary",
-                                description = "Update baseline monthly net take-home salary. Recalculates projections, savings rate, and cash flows across the app.",
+                                title = "Edit $primaryName's Net Salary",
+                                description = "Update baseline monthly net take-home salary for $primaryName. Recalculates projections, savings rate, and cash flows across the app.",
                                 currentValue = s.vSalary,
                                 onConfirm = { onUpdateSettings(s.copy(vSalary = it)) }
                             )
@@ -566,14 +567,14 @@ private fun IncomeSubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 EditableIncomeRow(
-                    label = "Václav's Other Inflows",
+                    label = "$primaryName's Other Inflows",
                     value = fmtCZK(inc.vaclavOther),
                     onEdit = if (onUpdateSettings != null) {
                         {
                             editFieldText = s.vOtherInflowsMonthly.toInt().toString()
                             editFieldData = EditIncomeFieldData(
-                                title = "Edit Václav's Other Inflows",
-                                description = "Update monthly side-hustle, freelance, or other recurring personal inflows for Václav.",
+                                title = "Edit $primaryName's Other Inflows",
+                                description = "Update monthly side-hustle, freelance, or other recurring personal inflows for $primaryName.",
                                 currentValue = s.vOtherInflowsMonthly,
                                 onConfirm = { onUpdateSettings(s.copy(vOtherInflowsMonthly = it)) }
                             )
@@ -584,7 +585,7 @@ private fun IncomeSubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 EditableIncomeRow(
-                    label = "Václav's Gifts",
+                    label = "$primaryName's Gifts",
                     value = fmtCZK(inc.vaclavGifts),
                     badgeText = "EXEMPT",
                     info = CashFlowMetricInfos.vaclavGifts,
@@ -593,8 +594,8 @@ private fun IncomeSubTab(
                         {
                             editFieldText = s.vGiftsMonthly.toInt().toString()
                             editFieldData = EditIncomeFieldData(
-                                title = "Edit Václav's Gifts",
-                                description = "Update monthly tax-exempt family gifts received by Václav (§ 10 odst. 3 písm. c ZDP). Completely tax-free and exempt from income taxes.",
+                                title = "Edit $primaryName's Gifts",
+                                description = "Update monthly tax-exempt family gifts received by $primaryName (§ 10 odst. 3 písm. c ZDP). Completely tax-free and exempt from income taxes.",
                                 currentValue = s.vGiftsMonthly,
                                 onConfirm = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) }
                             )
@@ -607,9 +608,9 @@ private fun IncomeSubTab(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Section 2: Eleonora
+                    // Section 2: Partner
                     Text(
-                        text = "ELEONORA'S INFLOWS",
+                        text = "${spouseName.uppercase(java.util.Locale.ROOT)}'S INFLOWS",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,
@@ -619,7 +620,7 @@ private fun IncomeSubTab(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     EditableIncomeRow(
-                        label = "Eleonora's Net Salary",
+                        label = "$spouseName's Net Salary",
                         value = fmtCZK(inc.eleonoraSalary),
                         info = CashFlowMetricInfos.eleonoraSalary,
                         onShowInfo = onShowInfo,
@@ -627,8 +628,8 @@ private fun IncomeSubTab(
                             {
                                 editFieldText = s.eStartingSalary.toInt().toString()
                                 editFieldData = EditIncomeFieldData(
-                                    title = "Edit Eleonora's Net Salary",
-                                    description = "Update baseline monthly net take-home salary for Eleonora.",
+                                    title = "Edit $spouseName's Net Salary",
+                                    description = "Update baseline monthly net take-home salary for $spouseName.",
                                     currentValue = s.eStartingSalary,
                                     onConfirm = { onUpdateSettings(s.copy(eStartingSalary = it)) }
                                 )
@@ -639,7 +640,7 @@ private fun IncomeSubTab(
 
                     if (inc.benefit > 0.0) {
                         EditableIncomeRow(
-                            label = "Eleonora's Parental Allowance",
+                            label = "$spouseName's Parental Allowance",
                             value = fmtCZK(inc.benefit),
                             badgeText = "EXEMPT",
                             info = CashFlowMetricInfos.parentalBenefit,
@@ -648,8 +649,8 @@ private fun IncomeSubTab(
                                 {
                                     editFieldText = s.eParentalAllowanceMonthly.toInt().toString()
                                     editFieldData = EditIncomeFieldData(
-                                        title = "Edit Eleonora's Parental Allowance",
-                                        description = "Update state parental allowance (rodičovský příspěvek). Tax-exempt and excluded from the 68,000 CZK spouse income test.",
+                                        title = "Edit $spouseName's Parental Allowance",
+                                        description = "Update state parental allowance (rodičovský příspěvek). Tax-exempt and excluded from the 68,000 CZK partner income test.",
                                         currentValue = s.eParentalAllowanceMonthly,
                                         onConfirm = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) }
                                     )
@@ -661,7 +662,7 @@ private fun IncomeSubTab(
 
                     if (inc.lecturing > 0.0) {
                         EditableIncomeRow(
-                            label = "Eleonora's Lecturing",
+                            label = "$spouseName's Lecturing",
                             value = fmtCZK(inc.lecturing),
                             info = CashFlowMetricInfos.lecturing,
                             onShowInfo = onShowInfo,
@@ -669,7 +670,7 @@ private fun IncomeSubTab(
                                 {
                                     editFieldText = s.eLecturingMonthly.toInt().toString()
                                     editFieldData = EditIncomeFieldData(
-                                        title = "Edit Eleonora's Lecturing Income",
+                                        title = "Edit $spouseName's Lecturing Income",
                                         description = "Update monthly part-time academic lecturing income.",
                                         currentValue = s.eLecturingMonthly,
                                         onConfirm = { onUpdateSettings(s.copy(eLecturingMonthly = it)) }
@@ -681,14 +682,14 @@ private fun IncomeSubTab(
                     }
 
                     EditableIncomeRow(
-                        label = "Eleonora's Other Inflows",
+                        label = "$spouseName's Other Inflows",
                         value = fmtCZK(inc.eleonoraOther),
                         onEdit = if (onUpdateSettings != null) {
                             {
                                 editFieldText = s.eOtherInflowsMonthly.toInt().toString()
                                 editFieldData = EditIncomeFieldData(
-                                    title = "Edit Eleonora's Other Inflows",
-                                    description = "Update monthly side-hustle or other recurring inflows for Eleonora.",
+                                    title = "Edit $spouseName's Other Inflows",
+                                    description = "Update monthly side-hustle or other recurring inflows for $spouseName.",
                                     currentValue = s.eOtherInflowsMonthly,
                                     onConfirm = { onUpdateSettings(s.copy(eOtherInflowsMonthly = it)) }
                                 )
@@ -699,7 +700,7 @@ private fun IncomeSubTab(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                     EditableIncomeRow(
-                        label = "Eleonora's Gifts",
+                        label = "$spouseName's Gifts",
                         value = fmtCZK(inc.eleonoraGifts),
                         badgeText = "EXEMPT",
                         info = CashFlowMetricInfos.eleonoraGifts,
@@ -708,8 +709,8 @@ private fun IncomeSubTab(
                             {
                                 editFieldText = s.eGiftsMonthly.toInt().toString()
                                 editFieldData = EditIncomeFieldData(
-                                    title = "Edit Eleonora's Gifts",
-                                    description = "Update monthly tax-exempt family gifts received by Eleonora (§ 10 odst. 3 písm. c ZDP). 100% tax-free and excluded from spouse income ceiling.",
+                                    title = "Edit $spouseName's Gifts",
+                                    description = "Update monthly tax-exempt family gifts received by $spouseName (§ 10 odst. 3 písm. c ZDP). 100% tax-free and excluded from partner income ceiling.",
                                     currentValue = s.eGiftsMonthly,
                                     onConfirm = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) }
                                 )
@@ -734,7 +735,7 @@ private fun IncomeSubTab(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 EditableIncomeRow(
-                    label = "Meal Vouchers (Václav)",
+                    label = "Meal Vouchers ($primaryName)",
                     value = fmtCZK(inc.vouchers),
                     badgeText = "EXEMPT",
                     info = CashFlowMetricInfos.mealVouchers,
