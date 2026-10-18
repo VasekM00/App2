@@ -106,7 +106,7 @@ fun HeroHeader(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -116,7 +116,7 @@ fun HeroHeader(
                     Text(
                         text = "Financial Dashboard",
                         style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 20.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         ),
@@ -125,75 +125,41 @@ fun HeroHeader(
                         modifier = Modifier.weight(1f)
                     )
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (onToggleSearch != null) {
-                            IconButton(
+                            HeroActionButton(
                                 onClick = onToggleSearch,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.15f))
-                                    .testTag("hero_search_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                                icon = Icons.Default.Search,
+                                contentDescription = "Search",
+                                testTag = "hero_search_button"
+                            )
                         }
 
-                        IconButton(
+                        HeroActionButton(
                             onClick = onOpenExportReportDialog,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .testTag("export_report_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Description,
-                                contentDescription = "Export Summary Report",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            icon = Icons.Default.Description,
+                            contentDescription = "Export Summary Report",
+                            testTag = "export_report_button"
+                        )
 
-                        IconButton(
+                        HeroActionButton(
                             onClick = onToggleDarkTheme,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .testTag("theme_toggle_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                contentDescription = "Toggle Dark Mode",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            icon = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Toggle Dark Mode",
+                            testTag = "theme_toggle_button"
+                        )
 
-                        IconButton(
+                        HeroActionButton(
                             onClick = onOpenSettings,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .testTag("open_settings_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            icon = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            testTag = "open_settings_button"
+                        )
                     }
                 }
 
@@ -254,6 +220,36 @@ fun HeroHeader(
         PerpetualFireMultiplierDialog(
             state = state,
             onDismiss = { showMultiplierDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun HeroActionButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    testTag: String? = null
+) {
+    val haptic = LocalHapticFeedback.current
+    Box(
+        modifier = modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.15f))
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(17.dp)
         )
     }
 }

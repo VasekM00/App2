@@ -287,64 +287,6 @@ private fun SummarySubTab(
                 )
                 Spacer(modifier = Modifier.height(14.dp))
 
-                var isFirstRow = true
-
-                if (s.portuDcaMonthly > 0) {
-                    IncomeRow(label = "Brokerage / ETF (${s.primaryName})", value = fmtCZK(s.portuDcaMonthly))
-                    isFirstRow = false
-                }
-                if (!s.isSingleHousehold && s.ePortuDcaMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Brokerage / ETF (${s.spouseName})", value = fmtCZK(s.ePortuDcaMonthly))
-                    isFirstRow = false
-                }
-                if (s.dipContributionMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "DIP Retirement (${s.primaryName})", value = fmtCZK(s.dipContributionMonthly))
-                    isFirstRow = false
-                }
-                if (!s.isSingleHousehold && s.eDipContributionMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "DIP Retirement (${s.spouseName})", value = fmtCZK(s.eDipContributionMonthly))
-                    isFirstRow = false
-                }
-                if (s.dpsOwnContributionMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "DPS Pension (${s.primaryName})", value = fmtCZK(s.dpsOwnContributionMonthly))
-                    isFirstRow = false
-                }
-                if (!s.isSingleHousehold && s.eDpsOwnContributionMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "DPS Pension (${s.spouseName})", value = fmtCZK(s.eDpsOwnContributionMonthly))
-                    isFirstRow = false
-                }
-                val vEmpMonthly = min(s.employerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0)
-                if (vEmpMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Employer Pension Match (${s.primaryName})", value = fmtCZK(vEmpMonthly))
-                    isFirstRow = false
-                }
-                val eEmpMonthly = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0) else 0.0
-                if (eEmpMonthly > 0) {
-                    if (!isFirstRow) HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    IncomeRow(label = "Employer Pension Match (${s.spouseName})", value = fmtCZK(eEmpMonthly))
-                    isFirstRow = false
-                }
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 2.dp,
-                    color = BrandTeal
-                )
-
-                IncomeRow(
-                    label = "TOTAL MONTHLY ALLOCATIONS",
-                    value = fmtCZK(investmentsMonthly),
-                    isBold = true
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
                 DcaAllocationBreakdownBar(settings = state.settings)
             }
         }
