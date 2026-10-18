@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -1051,7 +1052,11 @@ private fun PensionOptimizationSection(
                 KpiCard(
                     title = "Monthly Deposit",
                     value = fmtCZK(totalMonthlyRetirement),
-                    hint = if (s.isSingleHousehold) "DIP: ${fmtCompact(vDipMonthly)} · DPS: ${fmtCompact(s.dpsOwnContributionMonthly)}" else "V: ${fmtCompact(vTotalRetirement)} · E: ${fmtCompact(eTotalRetirement)}",
+                    hint = if (s.isSingleHousehold) {
+                        "DIP: ${fmtCompact(vDipMonthly)} · DPS: ${fmtCompact(s.dpsOwnContributionMonthly)}"
+                    } else {
+                        "${if (s.primaryName.isNotBlank()) s.primaryName else "Primary"}: ${fmtCompact(vTotalRetirement)} · ${if (s.spouseName.isNotBlank()) s.spouseName else "Partner"}: ${fmtCompact(eTotalRetirement)}"
+                    },
                     accentColor = BrandTeal,
                     modifier = Modifier.weight(1f),
                     info = PlanMetricInfos.dipDeduction,
@@ -1064,13 +1069,9 @@ private fun PensionOptimizationSection(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 KpiCard(
-                    title = "State Subsidy Match",
-                    value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
-                    hint = if (dps.youthSubsidyActive) {
-                        "${fmtCZK(totalSubsidyMonthly)}/mo on ${fmtCompact(dpsTotalDeposit)}"
-                    } else {
-                        "${fmtCZK(totalSubsidyMonthly)}/mo (40% in 2027)"
-                    },
+                    title = "State Cash Match",
+                    value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}/yr",
+                    hint = "${fmtCZK(totalSubsidyMonthly)}/mo · ${if (dps.youthSubsidyActive) "40% youth match" else "20% statutory match"}",
                     accentColor = BrandGold,
                     modifier = Modifier.weight(1f),
                     info = PlanMetricInfos.dpsLepsiPenzijko,
@@ -1103,7 +1104,9 @@ private fun PensionOptimizationSection(
                 CardHeaderPill(
                     title = "Retirement Optimization (DIP & DPS)",
                     subtitle = "Two-stage optimization: state cash match & personal tax shield",
+                    icon = Icons.Default.AccountBalance,
                     badgeText = "OPTIMIZATION",
+                    badgeColor = GoodGreen,
                     accentColor = GoodGreen,
                     trailingContent = {
                         IconButton(
@@ -1122,9 +1125,10 @@ private fun PensionOptimizationSection(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Two-Stage Optimization Bar: Primary (Václav)
-                PensionOptimizationBar(
+                // Primary Earner Optimization Card
+                EarnerOptimizationCard(
                     name = if (s.primaryName.isNotBlank()) s.primaryName else "Václav",
+                    roleSubtitle = "Primary Earner",
                     dpsMonthly = s.dpsOwnContributionMonthly,
                     dipMonthly = vDipMonthly,
                     subsidyMonthly = vSubsidy,
@@ -1132,14 +1136,16 @@ private fun PensionOptimizationSection(
                     taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
                     taxRatePct = s.taxRatePct,
                     hasTaxableIncome = vHasIncome,
-                    maxSubsidyAnnual = vSubsidyMaxAnnual
+                    maxSubsidyAnnual = vSubsidyMaxAnnual,
+                    accentColor = BrandTeal
                 )
 
-                // Two-Stage Optimization Bar: Partner (Eleonora) — visible in dual-income mode
+                // Partner Optimization Card — visible in dual-income mode
                 if (!s.isSingleHousehold) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    PensionOptimizationBar(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    EarnerOptimizationCard(
                         name = if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora",
+                        roleSubtitle = "Partner",
                         dpsMonthly = s.eDpsOwnContributionMonthly,
                         dipMonthly = eDipMonthly,
                         subsidyMonthly = eSubsidy,
@@ -1147,47 +1153,235 @@ private fun PensionOptimizationSection(
                         taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
                         taxRatePct = s.taxRatePct,
                         hasTaxableIncome = eHasIncome,
-                        maxSubsidyAnnual = eSubsidyMaxAnnual
+                        maxSubsidyAnnual = eSubsidyMaxAnnual,
+                        accentColor = BrandGold
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // Optimal Statutory Strategy Banner (Structured Blueprint)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = GoodGreen.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = GoodGreen,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = if (s.isSingleHousehold) {
-                            "Optimal annual deposit: ${fmtCZK(vOptimalDepositAnnual)} (20 400 Kč DPS + 48 000 Kč DIP) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
-                        } else if (!eHasIncome) {
-                            "Household optimal deposit: ${fmtCZK(totalOptimalDepositAnnual)} (40 800 Kč DPS + 48 000 Kč DIP for ${if (s.primaryName.isNotBlank()) s.primaryName else "Václav"}) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
-                        } else {
-                            "Dual-earner optimal deposit: ${fmtCZK(totalOptimalDepositAnnual)} (40 800 Kč DPS + 96 000 Kč DIP) · Max benefit: +${fmtCZK(maxCombinedBenefit)}"
-                        },
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                }
-                if (!s.isSingleHousehold && !eHasIncome) {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = "${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax deduction is inactive during parental leave (deductions are personal and non-transferable); DPS subsidies apply to both.",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            fontSize = 10.sp
-                        ),
-                        modifier = Modifier.padding(start = 20.dp)
-                    )
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(GoodGreen.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = GoodGreen,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Statutory Maximum Strategy",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoodGreen,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            }
+
+                            ColorPill(
+                                text = "MAX RETURN",
+                                color = GoodGreen,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                horizontalPadding = 6.dp,
+                                verticalPadding = 2.dp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 3 Key Metric Tiles: Optimal Deposit / Combined Return / Statutory ROI
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "OPTIMAL DEPOSIT",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "${fmtCompact(totalOptimalDepositAnnual / 12.0)}/mo",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                    Text(
+                                        text = "${fmtCompact(totalOptimalDepositAnnual)}/yr",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 9.5.sp
+                                        )
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "COMBINED RETURN",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = GoodGreen,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "+${fmtCompact(maxCombinedBenefit)}/yr",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoodGreen,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                    Text(
+                                        text = "Cash + Tax relief",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 9.5.sp
+                                        )
+                                    )
+                                }
+                            }
+
+                            val roiPct = if (totalOptimalDepositAnnual > 0.0) (maxCombinedBenefit / totalOptimalDepositAnnual) * 100.0 else 0.0
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "STATUTORY ROI",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = BrandTeal,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "+${String.format(java.util.Locale.getDefault(), "%.1f", roiPct)}%",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = BrandTeal,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                    Text(
+                                        text = "Instant guaranteed",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 9.5.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 2 Structured Step Tiles
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(BrandGold)
+                                )
+                                Text(
+                                    text = "Step 1 (DPS): 1 700 Kč/mo ${if (s.isSingleHousehold) "" else "per partner "}locks full ${fmtCZK(if (s.isSingleHousehold) vSubsidyMaxAnnual else (vSubsidyMaxAnnual + eSubsidyMaxAnnual))}/yr in state cash match.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 11.5.sp
+                                    )
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(GoodGreen)
+                                )
+                                val workingText = if (s.isSingleHousehold) "" else if (!eHasIncome) "for ${if (s.primaryName.isNotBlank()) s.primaryName else "Václav"} " else "per earner "
+                                Text(
+                                    text = "Step 2 (DIP): 4 000 Kč/mo ${workingText}maximizes the 48 000 Kč personal tax deduction (§ 15a ZDP).",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 11.5.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        if (!s.isSingleHousehold && !eHasIncome) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(color = GoodGreen.copy(alpha = 0.2f))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Statutory Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax shield is paused during parental leave (personal tax deduction under § 15a ZDP requires taxable income and cannot be transferred). DPS state subsidies remain 100% active and claimable.",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.5.sp,
+                                    lineHeight = 14.sp
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1203,6 +1397,7 @@ private fun PensionOptimizationSection(
                 CardHeaderPill(
                     title = "Statutory Framework Limits",
                     subtitle = "Official Czech Republic tax law ceilings (ZDP & ZPS)",
+                    icon = Icons.Default.Shield,
                     badgeText = "REGULATION",
                     accentColor = BrandTeal
                 )
@@ -1215,81 +1410,132 @@ private fun PensionOptimizationSection(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        color = GoodGreen.copy(alpha = 0.06f),
+                        border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.25f)),
                         modifier = Modifier.weight(1f)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "DIP Deduction",
+                                text = "DIP DEDUCTION",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = GoodGreen,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "48 000 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                text = "48 000 Kč/yr",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 13.5.sp
+                                )
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "per person / year",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                text = "§ 15a ZDP · Per earner",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.5.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Saves up to ${fmtCZK(s.taxDeductionCeilingAnnual * (s.taxRatePct / 100.0))} tax",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = GoodGreen,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
                         }
                     }
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        color = BrandGold.copy(alpha = 0.06f),
+                        border = BorderStroke(0.5.dp, BrandGold.copy(alpha = 0.25f)),
                         modifier = Modifier.weight(1f)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "DPS Subsidy",
+                                text = "DPS SUBSIDY",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = BrandGold,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "340 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                                text = "4 080 Kč/yr",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 13.5.sp
+                                )
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "max match / month",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                text = "Act 427/2011 · 340 Kč/mo",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.5.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "20% direct state cash match",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = BrandGold,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
                         }
                     }
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        color = BrandTeal.copy(alpha = 0.06f),
+                        border = BorderStroke(0.5.dp, BrandTeal.copy(alpha = 0.25f)),
                         modifier = Modifier.weight(1f)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Employer Match",
+                                text = "EMPLOYER EXEMPT",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = BrandTeal,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "50 000 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = GoodGreen)
+                                text = "50 000 Kč/yr",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 13.5.sp
+                                )
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "100% tax exempt",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                                text = "§ 6/9 ZDP · Per employee",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.5.sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "100% exempt from levies",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = BrandTeal,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
                         }
                     }
@@ -1389,8 +1635,9 @@ private fun PensionDepositTiersSection(
 }
 
 @Composable
-private fun PensionOptimizationBar(
+private fun EarnerOptimizationCard(
     name: String,
+    roleSubtitle: String,
     dpsMonthly: Double,
     dipMonthly: Double,
     subsidyMonthly: Double,
@@ -1399,6 +1646,7 @@ private fun PensionOptimizationBar(
     taxRatePct: Double = 15.0,
     hasTaxableIncome: Boolean = true,
     maxSubsidyAnnual: Double = 4080.0,
+    accentColor: Color = BrandTeal,
     modifier: Modifier = Modifier
 ) {
     val effectiveTaxShieldCapAnnual = if (hasTaxableIncome) taxShieldCapAnnual else 0.0
@@ -1422,162 +1670,348 @@ private fun PensionOptimizationBar(
     val annualSubsidy = subsidyMonthly * 12.0
     val annualTaxSaved = if (hasTaxableIncome) taxShieldDeposit * 12.0 * (taxRatePct / 100.0) else 0.0
     val totalAnnualBenefit = annualSubsidy + annualTaxSaved
-    val maxPotentialBenefit = maxSubsidyAnnual + (if (hasTaxableIncome) taxShieldCapAnnual * (taxRatePct / 100.0) else 0.0)
+    val headroomMonthly = max(0.0, totalTargetMonthly - totalOptimizedMonthly)
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            if (isActive) {
-                ColorPill(
-                    text = if (isMaxed) "100% MAXED" else "${fmtCZK(totalOptimizedMonthly)} / ${fmtCompact(totalTargetMonthly)}/mo",
-                    color = if (isMaxed) GoodGreen else BrandTeal,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    horizontalPadding = 6.dp,
-                    verticalPadding = 2.dp
-                )
-            } else {
-                ColorPill(
-                    text = "0 / ${fmtCompact(totalTargetMonthly)} — UNUSED",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    horizontalPadding = 6.dp,
-                    verticalPadding = 2.dp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Dual Stage Segmented Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Stage 1: DPS Subsidy Stage (0 - 1,700 CZK)
-            Box(
-                modifier = Modifier
-                    .weight(17f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topStart = 5.dp, bottomStart = 5.dp, topEnd = 2.dp, bottomEnd = 2.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header: Monogram Avatar + Name + Role and Status Pill
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (subsidyRatio > 0f) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(subsidyRatio)
-                            .fillMaxHeight()
-                            .background(BrandGold)
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = name.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor
+                            )
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = roleSubtitle,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.5.sp
+                            )
+                        )
+                    }
+                }
+
+                if (isActive) {
+                    ColorPill(
+                        text = if (isMaxed) {
+                            if (!hasTaxableIncome) "DPS OPTIMIZED" else "100% OPTIMIZED"
+                        } else {
+                            "${fmtCZK(totalOptimizedMonthly)} / ${fmtCZK(totalTargetMonthly)}"
+                        },
+                        color = if (isMaxed) GoodGreen else BrandTeal,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp
+                    )
+                } else {
+                    ColorPill(
+                        text = if (!hasTaxableIncome) "0 / 1 700 Kč · PARENTAL" else "0 / ${fmtCZK(totalTargetMonthly)} · UNUSED",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp
                     )
                 }
             }
 
-            // Stage 2: Tax Shield Stage (+4,000 CZK)
-            Box(
-                modifier = Modifier
-                    .weight(40f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 5.dp, bottomEnd = 5.dp))
-                    .background(
-                        if (hasTaxableIncome) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
-                    )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Two Symmetrical Stage Cards: DPS Subsidy & DIP Tax Shield
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (taxShieldRatio > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(taxShieldRatio)
-                            .fillMaxHeight()
-                            .background(GoodGreen)
+                // Stage 1: DPS State Subsidy
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandGold.copy(alpha = 0.08f),
+                    border = BorderStroke(0.5.dp, BrandGold.copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "STAGE 1: DPS MATCH",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = BrandGold,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Text(
+                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", subsidyRatio * 100)}%",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = BrandGold,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                text = fmtCZK(subsidyDeposit),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                            Text(
+                                text = "/ ${fmtCZK(subsidyCapMonthly)}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Progress Bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(BrandGold.copy(alpha = 0.2f))
+                        ) {
+                            if (subsidyRatio > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(subsidyRatio)
+                                        .fillMaxHeight()
+                                        .background(BrandGold)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "State match",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.5.sp
+                                )
+                            )
+                            Text(
+                                text = "+${fmtCZK(subsidyMonthly)}/mo",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = BrandGold,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                    }
+                }
+
+                // Stage 2: DIP Tax Shield
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (hasTaxableIncome) GoodGreen.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                    border = BorderStroke(0.5.dp, if (hasTaxableIncome) GoodGreen.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "STAGE 2: TAX SHIELD",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            if (hasTaxableIncome) {
+                                Text(
+                                    text = "${String.format(java.util.Locale.getDefault(), "%.0f", taxShieldRatio * 100)}%",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = GoodGreen,
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        if (hasTaxableIncome) {
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(
+                                    text = fmtCZK(taxShieldDeposit),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                )
+                                Text(
+                                    text = "/ ${fmtCZK(taxShieldCapMonthly)}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "0 Kč (Paused)",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Progress Bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (hasTaxableIncome) GoodGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                        ) {
+                            if (hasTaxableIncome && taxShieldRatio > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(taxShieldRatio)
+                                        .fillMaxHeight()
+                                        .background(GoodGreen)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (hasTaxableIncome) "Tax relief" else "Parental leave",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.5.sp
+                                )
+                            )
+                            Text(
+                                text = if (hasTaxableIncome) "+${fmtCZK(annualTaxSaved / 12.0)}/mo" else "No tax base",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = if (hasTaxableIncome) FontWeight.Bold else FontWeight.Normal
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Earner Footer Row: Annual Benefit & Headroom in dedicated mini surface
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Annual Benefit:",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.5.sp
+                            )
+                        )
+                        Text(
+                            text = "+${fmtCZK(totalAnnualBenefit)}/yr",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (totalAnnualBenefit > 0.0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.5.sp
+                            )
+                        )
+                    }
+                    Text(
+                        text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}/mo",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (headroomMonthly <= 0.5) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (headroomMonthly <= 0.5) FontWeight.SemiBold else FontWeight.Normal,
+                            fontSize = 10.5.sp
+                        )
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Stage breakdown indicators
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(BrandGold)
-                )
-                Text(
-                    text = "DPS: ${fmtCZK(subsidyDeposit)} / 1 700",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp
-                    )
-                )
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.outlineVariant)
-                )
-                Text(
-                    text = if (hasTaxableIncome) {
-                        "Deduction: ${fmtCZK(taxShieldDeposit)} / 4 000"
-                    } else {
-                        "Deduction: Inactive (no tax base)"
-                    },
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp
-                    )
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = if (isActive) "Annual benefit: +${fmtCZK(totalAnnualBenefit)}" else "Max benefit: +${fmtCZK(maxPotentialBenefit)}",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = if (isActive) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 10.sp
-                )
-            )
-            val headroomMonthly = max(0.0, totalTargetMonthly - totalOptimizedMonthly)
-            Text(
-                text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}/mo",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp
-                )
-            )
         }
     }
 }

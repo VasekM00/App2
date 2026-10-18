@@ -168,17 +168,25 @@ fun CardHeaderPill(
             }
         }
 
-        if (badgeText != null) {
-            ColorPill(
-                text = badgeText,
-                color = badgeColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                horizontalPadding = 8.dp,
-                verticalPadding = 4.dp
-            )
-        } else if (trailingContent != null) {
-            trailingContent()
+        if (badgeText != null || trailingContent != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (badgeText != null) {
+                    ColorPill(
+                        text = badgeText,
+                        color = badgeColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 4.dp
+                    )
+                }
+                if (trailingContent != null) {
+                    trailingContent()
+                }
+            }
         }
     }
 }
