@@ -558,7 +558,7 @@ private fun IncomeSubTab(
                             editFieldText = s.vGiftsMonthly.toInt().toString()
                             editFieldData = EditIncomeFieldData(
                                 title = "Edit $primaryName's Gifts",
-                                description = "Update monthly tax-exempt family gifts received by $primaryName (§ 10 odst. 3 písm. c ZDP). Completely tax-free and exempt from income taxes.",
+                                description = "Update monthly tax-exempt family gifts received by $primaryName. Completely tax-free and exempt from income taxes.",
                                 currentValue = s.vGiftsMonthly,
                                 onConfirm = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) }
                             )
@@ -673,7 +673,7 @@ private fun IncomeSubTab(
                                 editFieldText = s.eGiftsMonthly.toInt().toString()
                                 editFieldData = EditIncomeFieldData(
                                     title = "Edit $spouseName's Gifts",
-                                    description = "Update monthly tax-exempt family gifts received by $spouseName (§ 10 odst. 3 písm. c ZDP). 100% tax-free and excluded from partner income ceiling.",
+                                    description = "Update monthly tax-exempt family gifts received by $spouseName. 100% tax-free and excluded from partner income ceiling.",
                                     currentValue = s.eGiftsMonthly,
                                     onConfirm = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) }
                                 )

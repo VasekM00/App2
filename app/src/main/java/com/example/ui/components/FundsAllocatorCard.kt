@@ -192,7 +192,7 @@ fun FundsAllocatorCard(
                 currentAlloc = "${fmtCZK(vDps + eDps)} / month",
                 statusText = if (isDpsMaxed) "MAX SUBSIDY" else "OPTIMIZE TO 1,700",
                 statusColor = if (isDpsMaxed) GoodGreen else BrandGold,
-                recommendation = "Deposit 1,700 Kč/mo for the max 20% state match (340 Kč/mo). Above 1,700 Kč, route savings to DIP for lower ETF fees.",
+                recommendation = "Deposit 1 700 Kč monthly for the max 20% state match (340 Kč). Above 1 700 Kč, route savings to DIP for lower ETF fees.",
                 info = WaterfallMetricInfos.dpsSubsidy,
                 onShowInfo = onShowInfo
             )
@@ -204,9 +204,9 @@ fun FundsAllocatorCard(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
                 currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
-                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}/yr",
+                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
-                recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč/mo.",
+                recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč.",
                 info = WaterfallMetricInfos.dipTaxShield,
                 onShowInfo = onShowInfo
             )
@@ -432,7 +432,7 @@ fun DipOptimizationMatrixCard(
                             ) {
                                 val monthlySaved = sc.annualTaxSaved / 12.0
                                 Text(
-                                    text = "+${fmtCZK(monthlySaved)}/mo",
+                                    text = "+${fmtCZK(monthlySaved)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
@@ -574,7 +574,7 @@ fun DpsOptimizationMatrixCard(
                             ) {
                                 val monthlyBenefit = sc.totalAnnualBenefit / 12.0
                                 Text(
-                                    text = "+${fmtCZK(monthlyBenefit)}/mo",
+                                    text = "+${fmtCZK(monthlyBenefit)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,

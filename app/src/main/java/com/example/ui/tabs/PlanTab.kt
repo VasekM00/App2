@@ -1070,8 +1070,8 @@ private fun PensionOptimizationSection(
             ) {
                 KpiCard(
                     title = "State Cash Match",
-                    value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}/yr",
-                    hint = "${fmtCZK(totalSubsidyMonthly)}/mo · ${if (dps.youthSubsidyActive) "40% youth match" else "20% statutory match"}",
+                    value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}",
+                    hint = "${fmtCZK(totalSubsidyMonthly)} monthly · ${if (dps.youthSubsidyActive) "40% youth match" else "20% statutory match"}",
                     accentColor = BrandGold,
                     modifier = Modifier.weight(1f),
                     info = PlanMetricInfos.dpsLepsiPenzijko,
@@ -1226,7 +1226,7 @@ private fun PensionOptimizationSection(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(
-                                        text = "OPTIMAL DEPOSIT",
+                                        text = "OPTIMAL MONTHLY",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 8.5.sp,
@@ -1235,7 +1235,7 @@ private fun PensionOptimizationSection(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${fmtCompact(totalOptimalDepositAnnual / 12.0)}/mo",
+                                        text = fmtCompact(totalOptimalDepositAnnual / 12.0),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface,
@@ -1243,7 +1243,7 @@ private fun PensionOptimizationSection(
                                         )
                                     )
                                     Text(
-                                        text = "${fmtCompact(totalOptimalDepositAnnual)}/yr",
+                                        text = "${fmtCompact(totalOptimalDepositAnnual)} annual",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 9.5.sp
@@ -1260,7 +1260,7 @@ private fun PensionOptimizationSection(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(
-                                        text = "COMBINED RETURN",
+                                        text = "ANNUAL BENEFIT",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = GoodGreen,
                                             fontSize = 8.5.sp,
@@ -1269,7 +1269,7 @@ private fun PensionOptimizationSection(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "+${fmtCompact(maxCombinedBenefit)}/yr",
+                                        text = "+${fmtCompact(maxCombinedBenefit)}",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = GoodGreen,
@@ -1277,7 +1277,7 @@ private fun PensionOptimizationSection(
                                         )
                                     )
                                     Text(
-                                        text = "Cash + Tax relief",
+                                        text = "Cash & Tax relief",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 9.5.sp
@@ -1340,7 +1340,7 @@ private fun PensionOptimizationSection(
                                         .background(BrandGold)
                                 )
                                 Text(
-                                    text = "Step 1 (DPS): 1 700 Kč/mo ${if (s.isSingleHousehold) "" else "per partner "}locks full ${fmtCZK(if (s.isSingleHousehold) vSubsidyMaxAnnual else (vSubsidyMaxAnnual + eSubsidyMaxAnnual))}/yr in state cash match.",
+                                    text = "Step 1 (DPS): Deposit 1 700 Kč ${if (s.isSingleHousehold) "" else "per partner "}to lock full ${fmtCZK(if (s.isSingleHousehold) vSubsidyMaxAnnual else (vSubsidyMaxAnnual + eSubsidyMaxAnnual))} annual state cash match.",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 11.5.sp
@@ -1359,7 +1359,7 @@ private fun PensionOptimizationSection(
                                 )
                                 val workingText = if (s.isSingleHousehold) "" else if (!eHasIncome) "for ${if (s.primaryName.isNotBlank()) s.primaryName else "Václav"} " else "per earner "
                                 Text(
-                                    text = "Step 2 (DIP): 4 000 Kč/mo ${workingText}maximizes the 48 000 Kč personal tax deduction (§ 15a ZDP).",
+                                    text = "Step 2 (DIP): Deposit 4 000 Kč ${workingText}to maximize the 48 000 Kč personal tax deduction.",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 11.5.sp
@@ -1373,7 +1373,7 @@ private fun PensionOptimizationSection(
                             HorizontalDivider(color = GoodGreen.copy(alpha = 0.2f))
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Statutory Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax shield is paused during parental leave (personal tax deduction under § 15a ZDP requires taxable income and cannot be transferred). DPS state subsidies remain 100% active and claimable.",
+                                text = "Statutory Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax shield is paused during parental leave because personal tax deductions require taxable income and cannot be transferred. DPS state subsidies remain 100% active and claimable.",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp,
@@ -1396,7 +1396,7 @@ private fun PensionOptimizationSection(
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
                     title = "Statutory Framework Limits",
-                    subtitle = "Official Czech Republic tax law ceilings (ZDP & ZPS)",
+                    subtitle = "Official annual ceilings for retirement products",
                     icon = Icons.Default.Shield,
                     badgeText = "REGULATION",
                     accentColor = BrandTeal
@@ -1425,7 +1425,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "48 000 Kč/yr",
+                                text = "48 000 Kč",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -1434,7 +1434,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "§ 15a ZDP · Per earner",
+                                text = "Personal tax deduction",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.5.sp
@@ -1469,7 +1469,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "4 080 Kč/yr",
+                                text = "4 080 Kč",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -1478,7 +1478,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Act 427/2011 · 340 Kč/mo",
+                                text = "Maximum state match",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.5.sp
@@ -1513,7 +1513,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "50 000 Kč/yr",
+                                text = "50 000 Kč",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -1522,7 +1522,7 @@ private fun PensionOptimizationSection(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "§ 6/9 ZDP · Per employee",
+                                text = "Company contribution",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.5.sp
@@ -1572,63 +1572,16 @@ private fun PensionDepositTiersSection(
     state: FullCalculationState
 ) {
     val scrollState = rememberScrollState()
-    var selectedTierType by rememberSaveable { mutableIntStateOf(0) }
-    val tierTypes = listOf("DIP (Global ETFs)", "DPS (Pension Funds)", "All Scenarios")
-    val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Toggle Pills
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            tierTypes.forEachIndexed { index, title ->
-                val isSelected = selectedTierType == index
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedTierType = index
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .testTag("tier_type_$index")
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 11.sp
-                            ),
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-        }
-
-        when (selectedTierType) {
-            0 -> DipOptimizationMatrixCard(state = state)
-            1 -> DpsOptimizationMatrixCard(state = state)
-            2 -> {
-                DipOptimizationMatrixCard(state = state)
-                DpsOptimizationMatrixCard(state = state)
-            }
-        }
+        DipOptimizationMatrixCard(state = state)
+        DpsOptimizationMatrixCard(state = state)
 
         Spacer(modifier = Modifier.height(80.dp))
     }
@@ -1841,7 +1794,7 @@ private fun EarnerOptimizationCard(
                                 )
                             )
                             Text(
-                                text = "+${fmtCZK(subsidyMonthly)}/mo",
+                                text = "+${fmtCZK(subsidyMonthly)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = BrandGold,
                                     fontSize = 10.5.sp,
@@ -1954,7 +1907,7 @@ private fun EarnerOptimizationCard(
                                 )
                             )
                             Text(
-                                text = if (hasTaxableIncome) "+${fmtCZK(annualTaxSaved / 12.0)}/mo" else "No tax base",
+                                text = if (hasTaxableIncome) "+${fmtCZK(annualTaxSaved / 12.0)}" else "No tax base",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp,
@@ -1994,7 +1947,7 @@ private fun EarnerOptimizationCard(
                             )
                         )
                         Text(
-                            text = "+${fmtCZK(totalAnnualBenefit)}/yr",
+                            text = "+${fmtCZK(totalAnnualBenefit)}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = if (totalAnnualBenefit > 0.0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
@@ -2003,7 +1956,7 @@ private fun EarnerOptimizationCard(
                         )
                     }
                     Text(
-                        text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}/mo",
+                        text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = if (headroomMonthly <= 0.5) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (headroomMonthly <= 0.5) FontWeight.SemiBold else FontWeight.Normal,
