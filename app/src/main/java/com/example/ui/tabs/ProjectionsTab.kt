@@ -46,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1400,9 +1399,11 @@ private fun ProjectionMetricRow(
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
             style = if (isBold) MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
                 color = highlightColor ?: MaterialTheme.colorScheme.onSurface
-            ) else MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+            ) else MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = highlightColor ?: MaterialTheme.colorScheme.onSurface
+            )
         )
     }
 }

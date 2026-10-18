@@ -335,8 +335,7 @@ fun SettingsTab(
                             text = subLabel,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 color = if (isSelected) BrandTeal.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                                 textAlign = TextAlign.Center
                             ),
@@ -1744,7 +1743,6 @@ private fun TaxSummaryRow(
             color = pillColor ?: if (isGood) GoodGreen else BadRed,
             fontSize = 10.5.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
             horizontalPadding = 7.dp,
             verticalPadding = 2.5.dp
         )

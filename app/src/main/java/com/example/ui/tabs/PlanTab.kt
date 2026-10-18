@@ -72,7 +72,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
@@ -427,7 +426,6 @@ private fun FireRoadmapSubTab(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = BrandTeal,
-                                fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp
                             ),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -475,7 +473,6 @@ private fun FireRoadmapSubTab(
                             text = fmtCZK(investableNetWorth),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
                             ),
                             maxLines = 1,
@@ -493,7 +490,6 @@ private fun FireRoadmapSubTab(
                             text = fmtCZK(targetWorth),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp,
                                 color = BrandTeal
                             ),
@@ -512,7 +508,6 @@ private fun FireRoadmapSubTab(
                             text = fmtCZK(monthlyPassiveIncome),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp,
                                 color = GoodGreen
                             ),
@@ -1101,7 +1096,7 @@ private fun PensionSubTab(
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = "+${fmtCZK(totalSubsidyAnnual)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold, fontSize = 14.sp)
                             )
                             Text(
                                 text = "+${fmtCZK(vSubsidy + eSubsidy)}/mo cash",
@@ -1124,7 +1119,7 @@ private fun PensionSubTab(
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = "+${fmtCZK(pensionTaxSaved)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontSize = 14.sp)
                             )
                             Text(
                                 text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% tax relief",
@@ -1147,7 +1142,7 @@ private fun PensionSubTab(
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = "+${fmtCZK(totalGovBenefitAnnual)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal, fontSize = 14.sp)
                             )
                             Text(
                                 text = "Annual net benefit",
@@ -1291,7 +1286,6 @@ private fun PensionOptimizationBar(
                     color = if (isMaxed) GoodGreen else BrandTeal,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     horizontalPadding = 6.dp,
                     verticalPadding = 2.dp
                 )
@@ -1301,7 +1295,6 @@ private fun PensionOptimizationBar(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     horizontalPadding = 6.dp,
                     verticalPadding = 2.dp
                 )
@@ -1576,7 +1569,7 @@ private fun FireMilestonesComparisonCard(
                         text = "Net: ${fmtCompact(investableNetWorth)}",
                         color = BrandTeal,
                         fontSize = 10.5.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
                         horizontalPadding = 7.dp,
                         verticalPadding = 2.dp
                     )
@@ -1701,7 +1694,6 @@ private fun FireMilestonesComparisonCard(
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
                                 fontSize = 11.5.sp
                             ),
                             maxLines = 1,
@@ -1713,8 +1705,7 @@ private fun FireMilestonesComparisonCard(
                             text = fmtCompact(roundedSWR),
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.5.sp,
                                 color = config.accentColor
                             ),
@@ -1813,7 +1804,6 @@ private fun FireMilestonesComparisonCard(
                                 text = "${fmtCompact(activeGap)} gap",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
@@ -1861,7 +1851,6 @@ private fun FireMilestonesComparisonCard(
                                 text = fmtCZK(activeTarget),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 12.5.sp
                                 ),
                                 maxLines = 1,
@@ -1882,7 +1871,6 @@ private fun FireMilestonesComparisonCard(
                                 text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 12.5.sp,
                                     color = activeConfig.accentColor
                                 ),
@@ -1904,7 +1892,6 @@ private fun FireMilestonesComparisonCard(
                                 text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
                                     fontSize = 12.5.sp,
                                     color = if (activeM.isAchieved) GoodGreen else MaterialTheme.colorScheme.onSurface
                                 ),
