@@ -98,7 +98,7 @@ fun SubscriptionAuditorCard(
                         text = if (audit.items.isEmpty()) {
                             "Recurring debits & perpetual FIRE capital requirement"
                         } else {
-                            "${audit.items.size} detected recurring subscriptions (${fmtCZK(audit.totalMonthlyBurn)}/mo)"
+                            "${audit.items.size} detected recurring subscriptions (${fmtCZK(audit.totalMonthlyBurn)} monthly)"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -195,7 +195,7 @@ fun SubscriptionAuditorCard(
                                     color = BrandGold
                                 )
                                 Text(
-                                    text = "${fmtCZK(audit.annualizedBurn)}/yr",
+                                    text = "${fmtCZK(audit.annualizedBurn)} annual",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -315,9 +315,9 @@ fun SubscriptionAuditorCard(
                                                 val isNonMonthly = item.billingCadence != "MONTHLY"
                                                 Text(
                                                     text = if (isNonMonthly) {
-                                                        "${fmtCZK(item.normalizedMonthlyAmount)}/mo"
+                                                        fmtCZK(item.normalizedMonthlyAmount)
                                                     } else {
-                                                        "${fmtCZK(item.latestMonthlyAmount)}/mo"
+                                                        fmtCZK(item.latestMonthlyAmount)
                                                     },
                                                     style = MaterialTheme.typography.bodyMedium.copy(
                                                         fontWeight = FontWeight.Bold,
@@ -325,9 +325,9 @@ fun SubscriptionAuditorCard(
                                                     )
                                                 )
                                                 val cadenceSubtitle = when (item.billingCadence) {
-                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/yr · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)}/qtr · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/half-yr · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)} annual · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)} quarterly · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)} semi-annual · FIRE: ${fmtCZK(itemFireCapital)}"
                                                     else -> "FIRE: ${fmtCZK(itemFireCapital)}"
                                                 }
                                                 Text(

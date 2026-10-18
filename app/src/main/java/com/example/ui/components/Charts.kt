@@ -2278,7 +2278,7 @@ fun DcaTrajectoryBarChart(
                             ) {
                                 ChartMetricPill(
                                     label = "Monthly DCA",
-                                    value = "${fmtCompact((pt.investedAnnual + pt.pensionInflowAnnual) / 12.0)}/mo",
+                                    value = fmtCompact((pt.investedAnnual + pt.pensionInflowAnnual) / 12.0),
                                     color = BrandTeal,
                                     modifier = Modifier.weight(1f)
                                 )

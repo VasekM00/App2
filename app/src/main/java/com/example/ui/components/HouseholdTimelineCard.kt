@@ -138,7 +138,7 @@ fun HouseholdTimelineCard(
                     modifier = Modifier.testTag("household_total_income_banner")
                 ) {
                     Text(
-                        text = "Total: ${fmtCZK(totalHouseholdNet)} net/mo",
+                        text = "Total: ${fmtCZK(totalHouseholdNet)} net",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
@@ -269,7 +269,7 @@ fun HouseholdTimelineCard(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "net/mo",
+                                text = "net",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = BrandTeal
@@ -431,7 +431,7 @@ private fun MemberSummaryRow(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "net/mo",
+                        text = "net",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = BrandTeal

@@ -363,7 +363,7 @@ fun OverviewTab(
                     ) {
                         StrategicMetricTile(
                             label = "Annual Tax Relief",
-                            value = "+${fmtCZK(taxRefundTotal)}/yr",
+                            value = "+${fmtCZK(taxRefundTotal)}",
                             subLabel = "Spring statutory cash rebate",
                             accentColor = GoodGreen,
                             badgeText = "TAX ALPHA",

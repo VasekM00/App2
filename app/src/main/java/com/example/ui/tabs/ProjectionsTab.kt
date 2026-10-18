@@ -368,7 +368,7 @@ private fun TrajectorySubTab(
                 val totalStatePension = state.settings.vStatePensionMonthly + state.settings.eStatePensionMonthly
                 ProjectionMetricRow(
                     label = "Combined State Pension",
-                    value = fmtCZK(totalStatePension) + "/mo",
+                    value = fmtCZK(totalStatePension),
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )

@@ -666,11 +666,11 @@ private fun LifeGoalsSimulatorSubTab(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Req: ${fmtCZK(totalRequiredMonthlyGoals)}/mo",
+                        text = "Monthly Need: ${fmtCZK(totalRequiredMonthlyGoals)}",
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Net Surplus: ${fmtCZK(monthlyNetSurplus)}/mo",
+                        text = "Net Surplus: ${fmtCZK(monthlyNetSurplus)}",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
@@ -809,7 +809,7 @@ private fun LifeGoalsSimulatorSubTab(
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            text = "Need: ${fmtCZK(requiredMonthly)}/mo",
+                            text = "Need: ${fmtCZK(requiredMonthly)}",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                         )
                     }
@@ -1071,7 +1071,7 @@ private fun PensionOptimizationSection(
                 KpiCard(
                     title = "State Cash Match",
                     value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}",
-                    hint = "${fmtCZK(totalSubsidyMonthly)} monthly · ${if (dps.youthSubsidyActive) "40% youth match" else "20% statutory match"}",
+                    hint = "${fmtCZK(totalSubsidyMonthly)} monthly · ${if (dps.youthSubsidyActive) "40% youth match" else "20% state match"}",
                     accentColor = BrandGold,
                     modifier = Modifier.weight(1f),
                     info = PlanMetricInfos.dpsLepsiPenzijko,
@@ -1192,7 +1192,7 @@ private fun PensionOptimizationSection(
                                     )
                                 }
                                 Text(
-                                    text = "Statutory Maximum Strategy",
+                                    text = "Maximum Optimization Strategy",
                                     style = MaterialTheme.typography.titleSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = GoodGreen,
@@ -1295,7 +1295,7 @@ private fun PensionOptimizationSection(
                             ) {
                                 Column(modifier = Modifier.padding(8.dp)) {
                                     Text(
-                                        text = "STATUTORY ROI",
+                                        text = "DIRECT ROI",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = BrandTeal,
                                             fontSize = 8.5.sp,
@@ -1373,7 +1373,7 @@ private fun PensionOptimizationSection(
                             HorizontalDivider(color = GoodGreen.copy(alpha = 0.2f))
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Statutory Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax shield is paused during parental leave because personal tax deductions require taxable income and cannot be transferred. DPS state subsidies remain 100% active and claimable.",
+                                text = "Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Eleonora"}'s tax shield is paused during parental leave because personal tax deductions require taxable income and cannot be transferred. DPS state subsidies remain 100% active and claimable.",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp,
@@ -1386,162 +1386,7 @@ private fun PensionOptimizationSection(
             }
         }
 
-        // 3. Symmetrical Statutory Framework Reference Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                CardHeaderPill(
-                    title = "Statutory Framework Limits",
-                    subtitle = "Official annual ceilings for retirement products",
-                    icon = Icons.Default.Shield,
-                    badgeText = "REGULATION",
-                    accentColor = BrandTeal
-                )
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = GoodGreen.copy(alpha = 0.06f),
-                        border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "DIP DEDUCTION",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = GoodGreen,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "48 000 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 13.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Personal tax deduction",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Saves up to ${fmtCZK(s.taxDeductionCeilingAnnual * (s.taxRatePct / 100.0))} tax",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = GoodGreen,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BrandGold.copy(alpha = 0.06f),
-                        border = BorderStroke(0.5.dp, BrandGold.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "DPS SUBSIDY",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = BrandGold,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "4 080 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 13.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Maximum state match",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "20% direct state cash match",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = BrandGold,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BrandTeal.copy(alpha = 0.06f),
-                        border = BorderStroke(0.5.dp, BrandTeal.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "EMPLOYER EXEMPT",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = BrandTeal,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "50 000 Kč",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 13.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Company contribution",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.5.sp
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "100% exempt from levies",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = BrandTeal,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(80.dp))
     }

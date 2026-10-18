@@ -144,7 +144,7 @@ private object SettingsMetricInfos {
     )
 
     val partnerCredit = MetricInfo(
-        title = "Partner Tax Credit (§ 35ba ZDP)",
+        title = "Partner Tax Credit",
         category = "Czech Tax Code",
         formulaOrRule = "24,840 CZK/yr deduction if partner's own income <= 68,000 CZK",
         explanation = "Annual tax credit claimed when caring for a child under 3 years old and partner's own annual gross income does not exceed 68,000 CZK. Crucially, state parental allowance (rodičovský příspěvek) is legally excluded from this income ceiling.",
@@ -357,7 +357,7 @@ fun SettingsTab(
             item {
                 val (hubSummaryTitle, hubSummaryDetail) = when (selectedTab) {
                     0 -> "Household Budget & Demographics" to "Inflows ${fmtCZK(state.currentIncome.totalMonthly)} · Burn ${fmtCZK(state.totalLivingCostMonthly)} · Savings ${fmtPct(state.savingsRatePct, 1)}"
-                    1 -> "Portfolio, DCA & Statutory Tax Parameters" to "Net Worth ${fmtCZK(state.netWorthTotal)} · DCA ${fmtCZK(state.investMonthlyTotal)}/mo · Return ${fmtPct(s.portfolioNominalReturnPct)}"
+                    1 -> "Portfolio, DCA & Tax Parameters" to "Net Worth ${fmtCZK(state.netWorthTotal)} · DCA ${fmtCZK(state.investMonthlyTotal)} · Return ${fmtPct(s.portfolioNominalReturnPct)}"
                     else -> "Regulatory Data, Backups & Categorization" to "Base Year ${s.baseYear} · ${if (s.isSingleHousehold) "Single Earner" else "Dual Earner"} · Portable JSON & ČNB Sync"
                 }
                 Surface(
@@ -1125,22 +1125,22 @@ fun SettingsTab(
                                     }
                                     TaxSummaryRow(
                                         label = "Child 1 Tax Bonus",
-                                        status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)}/yr (${fmtCZK(s.child1TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                        status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)} (${fmtCZK(s.child1TaxBonusAnnual / 12)} monthly)" else "Disabled",
                                         isGood = s.child1Enabled
                                     )
                                     TaxSummaryRow(
                                         label = "Child 2 Tax Bonus",
-                                        status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)}/yr (${fmtCZK(s.child2TaxBonusAnnual / 12)}/mo)" else "Disabled",
+                                        status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)} (${fmtCZK(s.child2TaxBonusAnnual / 12)} monthly)" else "Disabled",
                                         isGood = s.child2Enabled
                                     )
                                     TaxSummaryRow(
                                         label = "Total Child Tax Bonus",
-                                        status = "+${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
+                                        status = "+${fmtCZK(state.taxReturnHelper.childBonus)}",
                                         isGood = true
                                     )
                                     TaxSummaryRow(
                                         label = "DIP Annual Tax Saving",
-                                        status = "+${fmtCZK(state.taxReturnHelper.dipSaving)}/yr",
+                                        status = "+${fmtCZK(state.taxReturnHelper.dipSaving)}",
                                         isGood = true
                                     )
                                 }

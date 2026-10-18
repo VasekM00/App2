@@ -1208,11 +1208,12 @@ private fun SpendingSubTab(
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                val surplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
                 IncomeRow(
                     label = "NET MONTHLY SURPLUS",
-                    value = fmtCZK(state.currentIncome.totalMonthly - state.totalLivingCostMonthly),
+                    value = fmtCZK(surplus),
                     isBold = true,
-                    valueColor = GoodGreen,
+                    valueColor = if (surplus >= 0.0) GoodGreen else BadRed,
                     info = CashFlowMetricInfos.surplus,
                     onShowInfo = onShowInfo
                 )
