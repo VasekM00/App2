@@ -1,9 +1,11 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,28 +14,49 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.LedgerEntryEntity
+import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.EmergencyReserveWidget
+import com.example.ui.components.HeroHeader
 import com.example.ui.components.KpiCard
+import com.example.ui.components.MetricInfo
+import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.NetWorthChart
+import com.example.ui.components.infoTapHold
+import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
@@ -42,15 +65,6 @@ import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
-
-import com.example.ui.components.EmergencyReserveWidget
-import com.example.ui.components.HeroHeader
-import com.example.ui.components.MetricInfo
-import com.example.ui.components.MetricInfoDialog
-import com.example.ui.components.infoTapHold
-import com.example.ui.components.rememberMetricInfoState
-import com.example.data.LedgerEntryEntity
-import com.example.data.SettingsEntity
 
 @Composable
 fun OverviewTab(
@@ -231,7 +245,7 @@ fun OverviewTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Quick Highlights
+        // 5. Strategic Highlights (Executive 2x3 Readiness & Milestones Grid)
         val surplusVal = monthlySurplus
         val surplusInfo = MetricInfo(
             title = "Monthly Capital Surplus",
@@ -240,6 +254,125 @@ fun OverviewTab(
             explanation = "Represents the total difference between household net income and living expenses (${fmtCZK(surplusVal)}/mo, or ${fmtPct(surplusRatePct, 1)} of income). Out of this surplus, ${fmtCZK(state.investMonthlyTotal)}/mo (${fmtPct(state.savingsRatePct, 1)} of income) is actively invested via automated DCA.",
             practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
             accentColor = BrandTeal
+        )
+
+        val actualBurn = state.trailingBurnRate3mMonthly
+        val budgetedCost = state.totalLivingCostMonthly
+        val variancePct = if (actualBurn != null && budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
+        val burnInfo = MetricInfo(
+            title = "Trailing Actual Living Burn",
+            category = "Empirical Cash Flow Feedback Loop",
+            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
+            explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
+            practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
+            accentColor = if (variancePct <= 0.0) GoodGreen else BadRed
+        )
+
+        val liquidBridgeInfo = MetricInfo(
+            title = "Pre-60 Liquid Bridge",
+            category = "Two-Bucket Liquidity Architecture",
+            formulaOrRule = "Required Bridge = Annual Living Cost × Years from FIRE to Age 60",
+            explanation = "In the Czech Republic, DIP and DPS tax-advantaged accounts cannot be accessed without penalty before age 60. Therefore, retiring early requires sufficient liquid taxable investments (Portu / brokerage) to bridge spending until age 60.",
+            statutoryReference = "§ 15a Act No. 586/1992 Coll. (ZDP) & Act No. 427/2011 Coll.",
+            practicalImplication = if (state.isLiquidBridgeFundedToday) "Your liquid Portu balance is already sufficient to bridge early retirement to age 60 without tapping locked pension accounts." else "Focus contributions on liquid taxable brokerage to ensure pre-60 cash needs are covered.",
+            accentColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+        )
+
+        val coastMilestone = state.fireMilestones.coastFire
+        val baristaMilestone = state.fireMilestones.baristaFire
+        val leanMilestone = state.fireMilestones.leanFire
+        val standardMilestone = state.fireMilestones.standardFire
+
+        val (nextMilestoneTitle, nextMilestoneValue, nextMilestoneSub, nextMilestoneColor, nextMilestoneInfo) = when {
+            !coastMilestone.isAchieved -> {
+                MilestoneDisplayData(
+                    "Coast FIRE",
+                    "${fmtPct(coastMilestone.progressPct, 0)} reached",
+                    "Target: ${fmtCompact(coastMilestone.targetAmountToday)}",
+                    BrandGold,
+                    MetricInfo(
+                        title = "Coast FIRE Milestone",
+                        category = "Financial Independence Milestones",
+                        formulaOrRule = "Coast Target = FIRE Target / (1 + Real CAGR)^(Years to 65)",
+                        explanation = "The portfolio size where compounding alone — with zero further contributions — reaches your full target by age 65.",
+                        practicalImplication = "Once achieved, ongoing savings become optional. Active earnings only need to cover current living expenses.",
+                        accentColor = BrandGold
+                    )
+                )
+            }
+            baristaMilestone != null && !baristaMilestone.isAchieved -> {
+                MilestoneDisplayData(
+                    "Barista FIRE",
+                    "${fmtPct(baristaMilestone.progressPct, 0)} reached",
+                    "Target: ${fmtCompact(baristaMilestone.targetAmountToday)}",
+                    BrandGold,
+                    MetricInfo(
+                        title = "Barista FIRE Milestone",
+                        category = "Financial Independence Milestones",
+                        formulaOrRule = "Barista Target = 50% of Full FIRE Target",
+                        explanation = "Portfolio capital covers 50% of living burn indefinitely. Only part-time or low-stress work is needed for the remainder.",
+                        practicalImplication = "Enables transitioning to part-time or passion work decades before traditional retirement.",
+                        accentColor = BrandGold
+                    )
+                )
+            }
+            !leanMilestone.isAchieved -> {
+                MilestoneDisplayData(
+                    "Lean FIRE",
+                    "${fmtPct(leanMilestone.progressPct, 0)} reached",
+                    "Target: ${fmtCompact(leanMilestone.targetAmountToday)}",
+                    BrandGold,
+                    MetricInfo(
+                        title = "Lean FIRE Milestone",
+                        category = "Financial Independence Milestones",
+                        formulaOrRule = "Lean Target = Essential Living Expenses / SWR",
+                        explanation = "Invested assets cover strictly essential survival living costs (housing, groceries, utilities) indefinitely.",
+                        practicalImplication = "Guarantees complete existential independence from employment under baseline living conditions.",
+                        accentColor = BrandGold
+                    )
+                )
+            }
+            !standardMilestone.isAchieved -> {
+                MilestoneDisplayData(
+                    "Standard FIRE",
+                    "${fmtPct(standardMilestone.progressPct, 0)} reached",
+                    "Target: ${fmtCompact(standardMilestone.targetAmountToday)}",
+                    BrandTeal,
+                    MetricInfo(
+                        title = "Standard FIRE Milestone",
+                        category = "Financial Independence Milestones",
+                        formulaOrRule = "Standard Target = Full Lifestyle Expenses / SWR",
+                        explanation = "Portfolio capital fully finances your baseline lifestyle with zero dependence on active earned income.",
+                        practicalImplication = "Complete financial freedom with no spending compromises.",
+                        accentColor = BrandTeal
+                    )
+                )
+            }
+            else -> {
+                MilestoneDisplayData(
+                    "Full FIRE",
+                    "Target Achieved",
+                    "All milestones crossed",
+                    GoodGreen,
+                    MetricInfo(
+                        title = "Financial Independence Achieved",
+                        category = "Financial Independence Milestones",
+                        explanation = "Your invested capital covers your entire household lifestyle sustainably.",
+                        accentColor = GoodGreen
+                    )
+                )
+            }
+        }
+
+        val survivalRate = state.historicalRetirementSurvival.successRatePct
+        val survivalInfo = MetricInfo(
+            title = "Historical Survival Probability",
+            category = "Actuarial Longevity & Sequence Risk",
+            formulaOrRule = "Survival Rate = Non-depleted Paths / Total Simulated Historical Market Paths",
+            explanation = "Tests your decumulation strategy through 100+ years of historical market cycles and drawdown periods (including the Great Depression, 1970s stagflation, 2000 dot-com bust, and 2008 GFC) with sequence-of-returns risk.",
+            statutoryReference = "Historical Block-Bootstrap Simulation",
+            practicalImplication = "A rate above 90% provides strong actuarial confidence that your portfolio will outlive you without depleting principal.",
+            accentColor = if (survivalRate >= 95.0) GoodGreen else BrandTeal
         )
 
         val taxRefundInfo = MetricInfo(
@@ -253,119 +386,125 @@ fun OverviewTab(
         )
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("strategic_highlights_card"),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
                     title = "Strategic Highlights",
-                    subtitle = "Monthly dynamics & tax efficiency (Tap for deep insight)",
-                    badgeText = "KEY STATS",
-                    accentColor = BrandTeal
+                    subtitle = "Executive financial health, readiness & milestones (Tap for info)",
+                    badgeText = "HEALTH CHECK",
+                    accentColor = BrandTeal,
+                    icon = Icons.Default.AutoAwesome
                 )
+
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // Symmetric 2x3 Strategic Metric Grid
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    SummaryRow(
-                        label = "Monthly surplus (inc - exp)",
-                        value = fmtCZK(surplusVal),
-                        valueColor = if (surplusVal < 0) BadRed else GoodGreen,
-                        info = surplusInfo,
-                        onShowInfo = { infoState.show(it) }
-                    )
-                    if (state.trailingBurnRate3mMonthly != null) {
-                        val actualBurn = state.trailingBurnRate3mMonthly
-                        val budgetedCost = state.totalLivingCostMonthly
-                        val variancePct = if (budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
-                        val varianceNote = if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
-                        SummaryRow(
-                            label = "Trailing 3m actual burn",
-                            value = "${fmtCZK(actualBurn)} ($varianceNote)",
-                            valueColor = if (variancePct <= 0.0) GoodGreen else BrandGold,
-                            info = MetricInfo(
-                                title = "Trailing Actual Living Burn",
-                                category = "Empirical Cash Flow Feedback Loop",
-                                formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing 3 active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
-                                explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
-                                practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
-                                accentColor = BrandTeal
-                            ),
-                            onShowInfo = { infoState.show(it) }
+                    // Row 1: Net Cash Surplus + Trailing Actual Burn
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        StrategicMetricTile(
+                            label = "Net Cash Surplus",
+                            value = fmtCZK(surplusVal),
+                            subLabel = "${fmtPct(surplusRatePct, 1)} of income unspent",
+                            accentColor = if (surplusVal >= 0) BrandTeal else BadRed,
+                            icon = Icons.Default.AccountBalanceWallet,
+                            info = surplusInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_surplus")
+                        )
+
+                        val burnLabel = if (actualBurn != null) "Trailing 3M Burn" else "Living Budget"
+                        val burnValue = if (actualBurn != null) fmtCZK(actualBurn) else fmtCZK(budgetedCost)
+                        val burnSub = if (actualBurn != null) {
+                            if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
+                        } else "Baseline living costs"
+                        val burnColor = if (actualBurn != null) {
+                            if (variancePct <= 0.0) GoodGreen else BadRed
+                        } else BrandBlue
+
+                        StrategicMetricTile(
+                            label = burnLabel,
+                            value = burnValue,
+                            subLabel = burnSub,
+                            accentColor = burnColor,
+                            icon = Icons.Default.Assessment,
+                            info = burnInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_burn")
                         )
                     }
-                    SummaryRow(
-                        label = "Monthly invested (DCA)",
-                        value = "${fmtCZK(state.investMonthlyTotal)} (${fmtPct(state.savingsRatePct, 1)})",
-                        info = MetricInfo(
-                            title = "Monthly Investment Rate",
-                            category = "Wealth Accumulation Velocity",
-                            formulaOrRule = "Investment Rate = Automated Monthly Investments (${fmtCZK(state.investMonthlyTotal)}) / Total Net Inflows (${fmtCZK(state.currentIncome.totalMonthly)})",
-                            explanation = "Measures the percentage of total household net income channeled directly into automated wealth-building vehicles (Brokerage/ETF, DIP, and DPS).",
-                            practicalImplication = "Elevating investment rate accelerates FIRE milestones by boosting compounding capital while curbing lifestyle creep.",
-                            accentColor = BrandTeal
-                        ),
-                        onShowInfo = { infoState.show(it) }
-                    )
-                    val coastMilestone = state.fireMilestones.coastFire
-                    SummaryRow(
-                        label = if (coastMilestone.isAchieved) "Coast FIRE achieved" else "Coast FIRE progress",
-                        value = if (coastMilestone.isAchieved) {
-                            "Age ${coastMilestone.estimatedAge ?: "—"}"
-                        } else {
-                            fmtPct(coastMilestone.progressPct, 0)
-                        },
-                        valueColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold,
-                        info = MetricInfo(
-                            title = "Coast FIRE",
-                            category = "Financial Independence Milestones",
-                            formulaOrRule = "Coast FIRE Target = FIRE Target / (1 + Real Return)^(Years to Age 65)",
-                            explanation = "Coast FIRE is the portfolio size at which compound growth alone — with zero further contributions — will reach your full FIRE target by traditional retirement age. Once reached, you could theoretically stop saving entirely and still retire on time.",
-                            practicalImplication = if (coastMilestone.isAchieved) {
-                                "You have crossed the Coast FIRE threshold. Every additional contribution now accelerates your FIRE date beyond the baseline."
-                            } else {
-                                "You are ${fmtPct(coastMilestone.progressPct, 0)} of the way to Coast FIRE (target: ${fmtCompact(coastMilestone.targetAmountToday)}). Keep contributing to reach this milestone."
-                            },
-                            accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
-                        ),
-                        onShowInfo = { infoState.show(it) }
-                    )
-                    val baristaMilestone = state.fireMilestones.baristaFire
-                    if (baristaMilestone != null) {
-                        SummaryRow(
-                            label = if (baristaMilestone.isAchieved) "Barista FIRE achieved" else "Barista FIRE progress",
-                            value = if (baristaMilestone.isAchieved) {
-                                "Age ${baristaMilestone.estimatedAge ?: "—"}"
-                            } else {
-                                fmtPct(baristaMilestone.progressPct, 0)
-                            },
-                            valueColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold,
-                            info = MetricInfo(
-                                title = "Barista FIRE",
-                                category = "Financial Independence Milestones",
-                                formulaOrRule = "Barista FIRE Target = 50% of Full FIRE Target",
-                                explanation = "Barista FIRE means your portfolio covers 50% of your household expenses indefinitely. You only need part-time, freelance, or low-stress work to cover the other half.",
-                                practicalImplication = if (baristaMilestone.isAchieved) {
-                                    "You have reached Barista FIRE. Your invested capital covers 50% of baseline living expenses."
-                                } else {
-                                    "You are ${fmtPct(baristaMilestone.progressPct, 0)} of the way to Barista FIRE (target: ${fmtCompact(baristaMilestone.targetAmountToday)})."
-                                },
-                                accentColor = if (baristaMilestone.isAchieved) GoodGreen else BrandGold
-                            ),
-                            onShowInfo = { infoState.show(it) }
+
+                    // Row 2: Pre-60 Liquid Bridge + Next FIRE Milestone
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val bridgeValue = if (state.isLiquidBridgeFundedToday) "100% Funded" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
+                        val bridgeSub = if (state.isLiquidBridgeFundedToday) "Portu covers pre-60 gap" else "Taxable capital needed"
+                        val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+
+                        StrategicMetricTile(
+                            label = "Pre-60 Liquid Bridge",
+                            value = bridgeValue,
+                            subLabel = bridgeSub,
+                            accentColor = bridgeColor,
+                            icon = Icons.Default.Shield,
+                            info = liquidBridgeInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_bridge")
+                        )
+
+                        StrategicMetricTile(
+                            label = "Next: $nextMilestoneTitle",
+                            value = nextMilestoneValue,
+                            subLabel = nextMilestoneSub,
+                            accentColor = nextMilestoneColor,
+                            icon = Icons.Default.Star,
+                            info = nextMilestoneInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_milestone")
                         )
                     }
-                    val totalRetirementTaxSavings = state.taxReturnHelper.totalIncrementalValue
-                    if (totalRetirementTaxSavings > 0) {
-                        SummaryRow(
-                            label = "Annual tax refund",
-                            value = fmtCZK(totalRetirementTaxSavings),
-                            valueColor = GoodGreen,
+
+                    // Row 3: Historical Survival + Annual Tax Refund
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
+                        StrategicMetricTile(
+                            label = "Portfolio Survival",
+                            value = "${survivalRate.toInt()}% Success",
+                            subLabel = "Historical stress test",
+                            accentColor = survivalColor,
+                            icon = Icons.Default.CheckCircle,
+                            info = survivalInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_survival")
+                        )
+
+                        val taxRefundTotal = state.taxReturnHelper.totalIncrementalValue
+                        StrategicMetricTile(
+                            label = "Annual Tax Refund",
+                            value = "+${fmtCZK(taxRefundTotal)}",
+                            subLabel = "Spring cash rebate",
+                            accentColor = GoodGreen,
+                            icon = Icons.Default.AccountBalance,
                             info = taxRefundInfo,
-                            onShowInfo = { infoState.show(it) }
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_tax_refund")
                         )
                     }
                 }
@@ -382,51 +521,106 @@ fun OverviewTab(
     )
 }
 
+private data class MilestoneDisplayData(
+    val title: String,
+    val value: String,
+    val subtitle: String,
+    val color: Color,
+    val info: MetricInfo
+)
+
 @Composable
-private fun SummaryRow(
+private fun StrategicMetricTile(
     label: String,
     value: String,
-    info: MetricInfo? = null,
-    onShowInfo: ((MetricInfo) -> Unit)? = null,
-    valueColor: androidx.compose.ui.graphics.Color = BrandTeal
+    subLabel: String,
+    accentColor: Color,
+    icon: ImageVector,
+    info: MetricInfo,
+    onShowInfo: (MetricInfo) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val clickModifier = if (info != null && onShowInfo != null) {
-        Modifier
-            .clip(RoundedCornerShape(8.dp))
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
             .infoTapHold(info, onShowInfo)
-    } else Modifier
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(clickModifier)
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f).padding(end = 8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = "• $label:",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            if (info != null) {
-                Spacer(modifier = Modifier.width(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Info available",
-                    tint = BrandTeal.copy(alpha = 0.5f),
-                    modifier = Modifier.size(13.dp)
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Info",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                    modifier = Modifier.size(12.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = accentColor,
+                    fontSize = 14.5.sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = subLabel,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.5.sp
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            color = valueColor,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
-        )
     }
 }

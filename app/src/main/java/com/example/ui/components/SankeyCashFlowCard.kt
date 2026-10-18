@@ -1148,54 +1148,6 @@ fun SankeyCashFlowCard(
                         }
                     }
                 }
-            } else {
-                // In 3-Pillar Mode: Sleek Multi-segment allocation pill
-                Spacer(modifier = Modifier.height(10.dp))
-                val burnPct = (totalExpenses / totalInflows * 100.0).coerceIn(0.0, 100.0)
-                val dcaPct = (totalInvest / totalInflows * 100.0).coerceIn(0.0, 100.0)
-                val bufferPct = (unallocatedSurplus / totalInflows * 100.0).coerceIn(0.0, 100.0)
-
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Box(modifier = Modifier.weight((burnPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cRed))
-                                Box(modifier = Modifier.weight((dcaPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cTeal))
-                                Box(modifier = Modifier.weight((bufferPct.toFloat() / 100f).coerceAtLeast(0.001f)).fillMaxHeight().background(cGold))
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cRed))
-                                Text("Living ${fmtPct(burnPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cTeal))
-                                Text("Invested ${fmtPct(dcaPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(cGold))
-                                Text("Buffer ${fmtPct(bufferPct, 0)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant))
-                            }
-                        }
-                    }
-                }
             }
         }
     }
