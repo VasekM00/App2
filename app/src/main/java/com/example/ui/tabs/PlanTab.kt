@@ -914,6 +914,68 @@ private fun PensionSubTab(
     state: FullCalculationState,
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
+    var selectedSection by rememberSaveable { mutableIntStateOf(0) }
+    val sections = listOf("Optimization", "Priority Waterfall", "Deposit Tiers")
+    val haptic = LocalHapticFeedback.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("pension_subtab")
+    ) {
+        // Section Navigation Pills
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            sections.forEachIndexed { index, name ->
+                val isSelected = selectedSection == index
+                Surface(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedSection = index
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .testTag("pension_section_$index")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.5.sp
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+        when (selectedSection) {
+            0 -> PensionOptimizationSection(state, onShowInfo)
+            1 -> PensionWaterfallSection(state, onShowInfo)
+            2 -> PensionDepositTiersSection(state)
+        }
+    }
+}
+
+@Composable
+private fun PensionOptimizationSection(
+    state: FullCalculationState,
+    onShowInfo: (MetricInfo) -> Unit
+) {
     val scrollState = rememberScrollState()
     val s = state.settings
     val dps = state.dps
@@ -922,23 +984,11 @@ private fun PensionSubTab(
 
     val vDipMonthly = s.dipContributionMonthly
     val eDipMonthly = s.eDipContributionMonthly
-    val totalMonthlyDip = vDipMonthly + eDipMonthly
-    val totalAnnualDip = totalMonthlyDip * 12.0
 
     val vAge = s.primaryAge
     val vSubsidy = FinancialEngine.dpsSubsidy(s.dpsOwnContributionMonthly, vAge, s, s.baseYear)
     val eAge = s.baseYear - ELEONORA_BIRTH_YEAR
     val eSubsidy = if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0
-
-    val vDpsAbove = max(0.0, s.dpsOwnContributionMonthly - s.dpsDeductionThresholdMonthly)
-    val eDpsAbove = max(0.0, s.eDpsOwnContributionMonthly - s.dpsDeductionThresholdMonthly)
-
-    val vDeductionAnnual = min((vDipMonthly + vDpsAbove) * 12.0, s.taxDeductionCeilingAnnual)
-    val eDeductionAnnual = min((eDipMonthly + eDpsAbove) * 12.0, s.taxDeductionCeilingAnnual)
-    val totalDeductionAnnual = vDeductionAnnual + eDeductionAnnual
-
-    val vHeadroom = max(0.0, s.taxDeductionCeilingAnnual - (vDipMonthly + vDpsAbove) * 12.0)
-    val eHeadroom = max(0.0, s.taxDeductionCeilingAnnual - (eDipMonthly + eDpsAbove) * 12.0)
 
     val vHasIncome = FinancialEngine.vaclavSalaryMonthly(s.baseYear, s) > 0.0
     val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
@@ -966,9 +1016,12 @@ private fun PensionSubTab(
         ((if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0) + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)) * (s.taxRatePct / 100.0)
 
     val yearlyTaxSaved = state.taxReturnHelper.totalIncrementalValue
-    val pensionTaxSaved = state.dip.taxSavedYear
-    val totalSubsidyAnnual = (vSubsidy + eSubsidy) * 12.0
-    val totalGovBenefitAnnual = totalSubsidyAnnual + pensionTaxSaved
+    val totalMonthlyRetirement = vDipMonthly + (if (!s.isSingleHousehold) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
+    val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
+    val eTotalRetirement = if (!s.isSingleHousehold) eDipMonthly + s.eDpsOwnContributionMonthly else 0.0
+    val totalSubsidyMonthly = currentSubsidy + (if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0)
+    val dpsTotalDeposit = s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
+    val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
 
     Column(
         modifier = Modifier
@@ -995,10 +1048,6 @@ private fun PensionSubTab(
                     info = PlanMetricInfos.dipDeduction,
                     onShowInfo = onShowInfo
                 )
-                val isSingle = s.isSingleHousehold
-                val totalMonthlyRetirement = vDipMonthly + (if (!isSingle) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!isSingle) s.eDpsOwnContributionMonthly else 0.0)
-                val vTotalRetirement = vDipMonthly + s.dpsOwnContributionMonthly
-                val eTotalRetirement = if (!isSingle) eDipMonthly + s.eDpsOwnContributionMonthly else 0.0
                 KpiCard(
                     title = "Monthly Deposit",
                     value = fmtCZK(totalMonthlyRetirement),
@@ -1014,9 +1063,6 @@ private fun PensionSubTab(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                val eAge = s.baseYear - ELEONORA_BIRTH_YEAR
-                val totalSubsidyMonthly = currentSubsidy + (if (!s.isSingleHousehold) FinancialEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear) else 0.0)
-                val dpsTotalDeposit = s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
                 KpiCard(
                     title = "State Subsidy Match",
                     value = if (dps.youthSubsidyActive) "40% (Youth)" else "20% Standard",
@@ -1030,7 +1076,6 @@ private fun PensionSubTab(
                     info = PlanMetricInfos.dpsLepsiPenzijko,
                     onShowInfo = onShowInfo
                 )
-                val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
                 KpiCard(
                     title = "DIP + DPS at Age 60",
                     value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
@@ -1074,83 +1119,6 @@ private fun PensionSubTab(
                         }
                     }
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 3 Symmetrical Metric Boxes: Subsidy, Tax Refund, Total Benefit
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BrandGold.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "State Subsidy",
-                                style = MaterialTheme.typography.labelSmall.copy(color = BrandGold, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "+${fmtCZK(totalSubsidyAnnual)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandGold, fontSize = 14.sp)
-                            )
-                            Text(
-                                text = "+${fmtCZK(vSubsidy + eSubsidy)}/mo cash",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = GoodGreen.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "Tax Refund",
-                                style = MaterialTheme.typography.labelSmall.copy(color = GoodGreen, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "+${fmtCZK(pensionTaxSaved)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = GoodGreen, fontSize = 14.sp)
-                            )
-                            Text(
-                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% tax relief",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BrandTeal.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = "Total Benefit",
-                                style = MaterialTheme.typography.labelSmall.copy(color = BrandTeal, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "+${fmtCZK(totalGovBenefitAnnual)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = BrandTeal, fontSize = 14.sp)
-                            )
-                            Text(
-                                text = "Annual net benefit",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                            )
-                        }
-                    }
-                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -1224,11 +1192,197 @@ private fun PensionSubTab(
             }
         }
 
+        // 3. Symmetrical Statutory Framework Reference Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                CardHeaderPill(
+                    title = "Statutory Framework Limits",
+                    subtitle = "Official Czech Republic tax law ceilings (ZDP & ZPS)",
+                    badgeText = "REGULATION",
+                    accentColor = BrandTeal
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "DIP Deduction",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "48 000 Kč",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            )
+                            Text(
+                                text = "per person / year",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "DPS Subsidy",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "340 Kč",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                            )
+                            Text(
+                                text = "max match / month",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "Employer Match",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "50 000 Kč",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = GoodGreen)
+                            )
+                            Text(
+                                text = "100% tax exempt",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.5.sp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(80.dp))
+    }
+}
+
+@Composable
+private fun PensionWaterfallSection(
+    state: FullCalculationState,
+    onShowInfo: (MetricInfo) -> Unit
+) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         FundsAllocatorCard(state = state, onShowInfo = onShowInfo)
 
-        DipOptimizationMatrixCard(state = state)
+        Spacer(modifier = Modifier.height(80.dp))
+    }
+}
 
-        DpsOptimizationMatrixCard(state = state)
+@Composable
+private fun PensionDepositTiersSection(
+    state: FullCalculationState
+) {
+    val scrollState = rememberScrollState()
+    var selectedTierType by rememberSaveable { mutableIntStateOf(0) }
+    val tierTypes = listOf("DIP (Global ETFs)", "DPS (Pension Funds)", "All Scenarios")
+    val haptic = LocalHapticFeedback.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Toggle Pills
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            tierTypes.forEachIndexed { index, title ->
+                val isSelected = selectedTierType == index
+                Surface(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        selectedTierType = index
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .testTag("tier_type_$index")
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.sp
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+        when (selectedTierType) {
+            0 -> DipOptimizationMatrixCard(state = state)
+            1 -> DpsOptimizationMatrixCard(state = state)
+            2 -> {
+                DipOptimizationMatrixCard(state = state)
+                DpsOptimizationMatrixCard(state = state)
+            }
+        }
 
         Spacer(modifier = Modifier.height(80.dp))
     }

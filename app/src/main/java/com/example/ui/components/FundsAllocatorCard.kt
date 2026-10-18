@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -308,8 +307,7 @@ private fun WaterfallStepRow(
             Text(
                 text = currentAlloc,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -330,6 +328,9 @@ fun DipOptimizationMatrixCard(
     val dip = state.dip
     val vDipMonthly = s.dipContributionMonthly
     val eDipMonthly = s.eDipContributionMonthly
+    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "VÁCLAV"
+    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "ELEONORA"
+    val bothLabel = "${primaryLabel.take(1)} & ${spouseLabel.take(1)} CURRENT"
 
     Card(
         modifier = modifier
@@ -349,7 +350,35 @@ fun DipOptimizationMatrixCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Column Headers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "MONTHLY DEPOSIT",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                Text(
+                    text = "TAX SHIELD SAVING",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 dip.scenarios.forEach { sc ->
                     val isVaclav = abs(sc.monthly - vDipMonthly) < 1.0
                     val isEleonora = !s.isSingleHousehold && abs(sc.monthly - eDipMonthly) < 1.0
@@ -357,18 +386,18 @@ fun DipOptimizationMatrixCard(
                     val isHighlighted = isVaclav || isEleonora
 
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isHighlighted) BrandTeal.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isHighlighted) BrandTeal.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                         border = BorderStroke(
                             1.dp,
-                            if (isHighlighted) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                            if (isHighlighted) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -380,7 +409,7 @@ fun DipOptimizationMatrixCard(
                                     text = fmtCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                        fontSize = 13.sp
                                     )
                                 )
                                 if (s.isSingleHousehold) {
@@ -389,10 +418,10 @@ fun DipOptimizationMatrixCard(
                                     }
                                 } else {
                                     if (isBoth) {
-                                        ColorPill(text = "V & E CURRENT", color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        ColorPill(text = bothLabel, color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
                                     } else {
-                                        if (isVaclav) ColorPill(text = "VÁCLAV", color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
-                                        if (isEleonora) ColorPill(text = "ELEONORA", color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        if (isVaclav) ColorPill(text = primaryLabel, color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        if (isEleonora) ColorPill(text = spouseLabel, color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
                                     }
                                 }
                             }
@@ -403,7 +432,7 @@ fun DipOptimizationMatrixCard(
                             ) {
                                 val monthlySaved = sc.annualTaxSaved / 12.0
                                 Text(
-                                    text = "+${fmtCZK(monthlySaved)}",
+                                    text = "+${fmtCZK(monthlySaved)}/mo",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
@@ -441,6 +470,9 @@ fun DpsOptimizationMatrixCard(
     val dps = state.dps
     val vDpsMonthly = s.dpsOwnContributionMonthly
     val eDpsMonthly = s.eDpsOwnContributionMonthly
+    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "VÁCLAV"
+    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "ELEONORA"
+    val bothLabel = "${primaryLabel.take(1)} & ${spouseLabel.take(1)} CURRENT"
 
     Card(
         modifier = modifier
@@ -460,7 +492,35 @@ fun DpsOptimizationMatrixCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Column Headers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "MONTHLY DEPOSIT",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                Text(
+                    text = "STATE CASH BENEFIT",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 dps.scenarios.forEach { sc ->
                     val isVaclav = abs(sc.monthly - vDpsMonthly) < 1.0
                     val isEleonora = !s.isSingleHousehold && abs(sc.monthly - eDpsMonthly) < 1.0
@@ -468,18 +528,18 @@ fun DpsOptimizationMatrixCard(
                     val isHighlighted = isVaclav || isEleonora
 
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isHighlighted) BrandGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isHighlighted) BrandGold.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                         border = BorderStroke(
                             1.dp,
-                            if (isHighlighted) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                            if (isHighlighted) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -491,7 +551,7 @@ fun DpsOptimizationMatrixCard(
                                     text = fmtCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                        fontSize = 13.sp
                                     )
                                 )
                                 if (s.isSingleHousehold) {
@@ -500,10 +560,10 @@ fun DpsOptimizationMatrixCard(
                                     }
                                 } else {
                                     if (isBoth) {
-                                        ColorPill(text = "V & E CURRENT", color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        ColorPill(text = bothLabel, color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
                                     } else {
-                                        if (isVaclav) ColorPill(text = "VÁCLAV", color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
-                                        if (isEleonora) ColorPill(text = "ELEONORA", color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        if (isVaclav) ColorPill(text = primaryLabel, color = BrandTeal, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
+                                        if (isEleonora) ColorPill(text = spouseLabel, color = BrandGold, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, horizontalPadding = 5.dp, verticalPadding = 1.5.dp)
                                     }
                                 }
                             }
@@ -514,7 +574,7 @@ fun DpsOptimizationMatrixCard(
                             ) {
                                 val monthlyBenefit = sc.totalAnnualBenefit / 12.0
                                 Text(
-                                    text = "+${fmtCZK(monthlyBenefit)}",
+                                    text = "+${fmtCZK(monthlyBenefit)}/mo",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
