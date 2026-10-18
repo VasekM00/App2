@@ -136,7 +136,7 @@ internal fun LedgerChart(
         modifier = modifier
             .fillMaxWidth()
             .semantics { contentDescription = "6-Month Cash Flow Trend chart showing monthly income and expense history." },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {

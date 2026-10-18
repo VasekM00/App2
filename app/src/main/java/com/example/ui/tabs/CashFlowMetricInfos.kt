@@ -74,9 +74,9 @@ internal object CashFlowMetricInfos {
         title = "State Parental Allowance",
         category = "State Social Support",
         formulaOrRule = "350,000 CZK total entitlement · 100% tax exempt",
-        explanation = "State family benefit for parents caring full-time for the youngest child. Fully tax-exempt under § 4(1)(j) ZDP. Crucially, parental allowance does NOT count into the 68,000 CZK/year spouse own income limit for the spouse tax credit (§ 35ba(1)(b)).",
+        explanation = "State family benefit for parents caring full-time for the youngest child. Fully tax-exempt under § 4(1)(j) ZDP. Crucially, parental allowance does NOT count into the 68,000 CZK/year partner own income limit for the partner tax credit (§ 35ba(1)(b)).",
         statutoryReference = "Act No. 117/1995 Coll. & § 4 odst. 1 písm. j) ZDP",
-        practicalImplication = "Because parental allowance is excluded from the 68k CZK income ceiling, Václav can claim the full 24,840 CZK/yr spouse tax credit while Eleonora is on leave (for children under 3).",
+        practicalImplication = "Because parental allowance is excluded from the 68k CZK income ceiling, Václav can claim the full 24,840 CZK/yr partner tax credit while Eleonora is on leave (for children under 3).",
         accentColor = Color(0xFFD97706)
     )
 
@@ -84,7 +84,7 @@ internal object CashFlowMetricInfos {
         title = "Eleonora's Lecturing Income",
         category = "Academic & Side Income",
         formulaOrRule = "Independent lecturing, teaching & advisory inflows",
-        explanation = "Part-time academic lecturing income. Note that lecturing income counts toward the 68,000 CZK annual spouse income ceiling for tax credit eligibility.",
+        explanation = "Part-time academic lecturing income. Note that lecturing income counts toward the 68,000 CZK annual partner income ceiling for tax credit eligibility.",
         statutoryReference = "§ 35ba odst. 1 písm. b) ZDP",
         accentColor = Color(0xFFD97706)
     )
@@ -93,7 +93,7 @@ internal object CashFlowMetricInfos {
         title = "Family Support Gift",
         category = "Tax Exemption",
         formulaOrRule = "§ 10 odst. 3 písm. c) ZDP · Direct Lineage Exemption",
-        explanation = "Gifts and financial contributions between direct-line relatives (parents, children, grandparents) and spouses are completely exempt from Czech personal income tax without monetary ceiling.",
+        explanation = "Gifts and financial contributions between direct-line relatives (parents, children, grandparents) and partners are completely exempt from Czech personal income tax without monetary ceiling.",
         statutoryReference = "§ 10 odst. 3 písm. c) Act No. 586/1992 Coll.",
         practicalImplication = "Family gifts directly supplement monthly DCA investment flows with 0% tax liability.",
         accentColor = Color(0xFF0F766E)
@@ -113,9 +113,9 @@ internal object CashFlowMetricInfos {
         title = "Eleonora's Family Gifts",
         category = "Czech Tax Exemption",
         formulaOrRule = "§ 10 odst. 3 písm. c) ZDP · Tax Exempt & Excluded from 68k Limit",
-        explanation = "Gifts from relatives are 100% tax-free and crucially do not count toward the 68,000 CZK annual spouse income ceiling (§ 35ba(1)(b) ZDP).",
+        explanation = "Gifts from relatives are 100% tax-free and crucially do not count toward the 68,000 CZK annual partner income ceiling (§ 35ba(1)(b) ZDP).",
         statutoryReference = "§ 10 odst. 3 písm. c) & § 35ba odst. 1 písm. b) ZDP",
-        practicalImplication = "Eleonora can receive family gifts without jeopardizing the household's 24,840 CZK spouse tax credit.",
+        practicalImplication = "Eleonora can receive family gifts without jeopardizing the household's 24,840 CZK partner tax credit.",
         accentColor = Color(0xFF16A34A)
     )
 

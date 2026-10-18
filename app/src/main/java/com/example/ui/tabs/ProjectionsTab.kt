@@ -417,7 +417,7 @@ private fun WhatIfSandboxSubTab(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Header + Apply / Reset
         Card(
@@ -966,8 +966,8 @@ private fun PortfolioAccountsView(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
@@ -1000,8 +1000,8 @@ private fun PortfolioAccountsView(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
@@ -1278,12 +1278,12 @@ private fun MonteCarloAndStressSubTab(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
                     .testTag("stress_scenario_card_${scenario.id}"),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (scenario.id == "baseline") MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                     else MaterialTheme.colorScheme.surfaceVariant
                 ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(

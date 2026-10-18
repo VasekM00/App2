@@ -234,18 +234,6 @@ private fun SummarySubTab(
                             .fillMaxHeight()
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Visual Cash Allocation Bar
-                CashAllocationBar(
-                    totalIncome = totalInc,
-                    expenses = totalExp,
-                    investments = personalInvestMonthly,
-                    unallocated = unallocatedSurplus
-                )
             }
         }
 
@@ -459,7 +447,8 @@ private fun IncomeSubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
@@ -807,7 +796,8 @@ private fun SpendingSubTab(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
@@ -1025,174 +1015,6 @@ private fun MetricStatBox(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.5.sp,
                     color = valueColor
-                ),
-                maxLines = 1,
-                softWrap = false
-            )
-        }
-    }
-}
-
-@Composable
-private fun CashAllocationBar(
-    totalIncome: Double,
-    expenses: Double,
-    investments: Double,
-    unallocated: Double
-) {
-    val totalSpend = expenses + investments
-    val normalizer = if (totalIncome > 0) maxOf(totalIncome, totalSpend) else 1.0
-    val expRatio = (expenses / normalizer).coerceIn(0.0, 1.0).toFloat()
-    val invRatio = (investments / normalizer).coerceIn(0.0, 1.0).toFloat()
-    val unallocRatio = (unallocated.coerceAtLeast(0.0) / normalizer).coerceIn(0.0, 1.0).toFloat()
-
-    val expColor = BadRed
-    val invColor = BrandTeal
-    val unallocColor = WarnAmber
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ColorPill(
-                text = "INCOME ALLOCATION",
-                color = BrandTeal,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                horizontalPadding = 6.dp,
-                verticalPadding = 2.dp,
-                cornerRadius = 6.dp
-            )
-            ColorPill(
-                text = "${fmtCompact(totalIncome)} Total",
-                color = BrandTeal,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                horizontalPadding = 8.dp,
-                verticalPadding = 2.5.dp,
-                cornerRadius = 8.dp
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(16.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(8.dp)
-                )
-                .padding(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (expRatio > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(expRatio)
-                        .fillMaxHeight()
-                        .background(expColor, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
-                )
-            }
-            if (invRatio > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(invRatio)
-                        .fillMaxHeight()
-                        .background(invColor)
-                )
-            }
-            if (unallocRatio > 0f) {
-                Box(
-                    modifier = Modifier
-                        .weight(unallocRatio)
-                        .fillMaxHeight()
-                        .background(unallocColor, RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            AllocationPillBox(
-                label = "Living Costs",
-                amount = expenses,
-                ratio = expRatio,
-                color = expColor
-            )
-            AllocationPillBox(
-                label = "DCA & Investing",
-                amount = investments,
-                ratio = invRatio,
-                color = invColor
-            )
-            if (unallocated > 0) {
-                AllocationPillBox(
-                    label = "Surplus Buffer",
-                    amount = unallocated,
-                    ratio = unallocRatio,
-                    color = unallocColor
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AllocationPillBox(
-    label: String,
-    amount: Double,
-    ratio: Float,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = color.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.22f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(color, CircleShape)
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-            Text(
-                text = "${fmtCZK(amount)} · ${(ratio * 100).toInt()}%",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.5.sp,
-                    color = color
                 ),
                 maxLines = 1,
                 softWrap = false

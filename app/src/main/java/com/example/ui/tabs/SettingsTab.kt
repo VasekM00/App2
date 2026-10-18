@@ -143,11 +143,11 @@ private object SettingsMetricInfos {
         accentColor = Color(0xFFD97706)
     )
 
-    val spouseCredit = MetricInfo(
-        title = "Spouse Tax Credit",
+    val partnerCredit = MetricInfo(
+        title = "Partner Tax Credit (§ 35ba ZDP)",
         category = "Czech Tax Code",
-        formulaOrRule = "24,840 CZK/yr deduction if spouse's own income < 68,000 CZK",
-        explanation = "Annual tax credit claimed by one spouse when the other has own annual gross income not exceeding 68,000 CZK and takes care of a child under 3 years old. Crucially, state parental allowance (rodičovský příspěvek) is legally excluded from this income ceiling.",
+        formulaOrRule = "24,840 CZK/yr deduction if partner's own income <= 68,000 CZK",
+        explanation = "Annual tax credit claimed when caring for a child under 3 years old and partner's own annual gross income does not exceed 68,000 CZK. Crucially, state parental allowance (rodičovský příspěvek) is legally excluded from this income ceiling.",
         statutoryReference = "§ 35ba odst. 1 písm. b) Act No. 586/1992 Coll.",
         practicalImplication = "Directly reduces personal income tax liability by up to 24,840 CZK per year (2,070 CZK/month).",
         accentColor = Color(0xFF16A34A)
@@ -1083,7 +1083,7 @@ fun SettingsTab(
                             initiallyExpanded = false,
                             badgeText = "ADVANCED",
                             badgeColor = BrandGold,
-                            info = SettingsMetricInfos.spouseCredit,
+                            info = SettingsMetricInfos.partnerCredit,
                             onShowInfo = { infoState.show(it) },
                             externalExpandTrigger = expandTrigger,
                             externalExpandState = expandTargetState

@@ -152,9 +152,10 @@ internal fun ActiveMonthOverviewCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("active_ledger_card_${entry.id}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header row with YearMonth, Savings Pill & Actions

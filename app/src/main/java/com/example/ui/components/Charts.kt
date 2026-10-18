@@ -147,9 +147,10 @@ fun NetWorthChart(
                 contentDescription =
                     "Net worth trajectory chart showing projected portfolio growth and FIRE target over ${data.size} years."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header & Controls
@@ -752,9 +753,10 @@ fun MonteCarloFanChart(
                 contentDescription =
                     "Monte Carlo simulation fan chart showing the 5th, 50th and 95th percentile portfolio outcomes and the FIRE target over ${realPoints.size} years, inflation-adjusted to today's purchasing power."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             ColorPill(
@@ -1108,9 +1110,10 @@ fun CashFlowProjectionChart(
             .semantics {
                 contentDescription = "Cash flow projection chart comparing monthly income and expenses over the planning horizon."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1383,9 +1386,10 @@ fun StressComparisonChart(
             .semantics {
                 contentDescription = "Stress scenario comparison chart showing portfolio trajectories under baseline, bull, stagflation, crash and high inflation regimes."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             ColorPill(
@@ -1852,9 +1856,10 @@ fun DcaTrajectoryBarChart(
             .semantics {
                 contentDescription = "DCA trajectory bar chart visualizing annual contribution streams, growth rates, and compound market gains."
             },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header

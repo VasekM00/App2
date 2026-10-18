@@ -144,7 +144,7 @@ fun FundsAllocatorCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("funds_allocator_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
@@ -335,7 +335,7 @@ fun DipOptimizationMatrixCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("dip_optimization_matrix_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
@@ -446,7 +446,7 @@ fun DpsOptimizationMatrixCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("dps_optimization_matrix_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {

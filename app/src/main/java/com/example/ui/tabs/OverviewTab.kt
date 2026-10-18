@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
@@ -49,6 +50,7 @@ import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.ColorPill
 import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.components.KpiCard
@@ -213,9 +215,9 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Savings Rate",
-                value = fmtPct(state.savingsRatePct),
-                hint = "${fmtCompact(state.investMonthlyTotal)}/mo invested",
+                title = "Monthly DCA Firepower",
+                value = fmtCZK(state.investMonthlyTotal),
+                hint = "${fmtPct(state.savingsRatePct, 1)} savings rate",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f),
                 testTagStr = "kpi_savings_rate",
@@ -245,29 +247,7 @@ fun OverviewTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 5. Strategic Highlights (Executive 2x3 Readiness & Milestones Grid)
-        val surplusVal = monthlySurplus
-        val surplusInfo = MetricInfo(
-            title = "Monthly Capital Surplus",
-            category = "Cash Flow & DCA Engine",
-            formulaOrRule = "Surplus = Total Net Monthly Inflows (${fmtCZK(state.currentIncome.totalMonthly)}) - Living Expenses (${fmtCZK(state.totalLivingCostMonthly)})",
-            explanation = "Represents the total difference between household net income and living expenses (${fmtCZK(surplusVal)}/mo, or ${fmtPct(surplusRatePct, 1)} of income). Out of this surplus, ${fmtCZK(state.investMonthlyTotal)}/mo (${fmtPct(state.savingsRatePct, 1)} of income) is actively invested via automated DCA.",
-            practicalImplication = "Directing surplus automatically on pay-day into index ETFs and DIP eliminates lifestyle creep and enforces paying yourself first.",
-            accentColor = BrandTeal
-        )
-
-        val actualBurn = state.trailingBurnRate3mMonthly
-        val budgetedCost = state.totalLivingCostMonthly
-        val variancePct = if (actualBurn != null && budgetedCost > 0.0) ((actualBurn - budgetedCost) / budgetedCost) * 100.0 else 0.0
-        val burnInfo = MetricInfo(
-            title = "Trailing Actual Living Burn",
-            category = "Empirical Cash Flow Feedback Loop",
-            formulaOrRule = "Actual Burn = Average(Rent + Groceries + Other Expenses) over trailing active ledger months vs Monthly Budget (${fmtCZK(budgetedCost)})",
-            explanation = "Computed directly from your reconciled bank statement ledger entries rather than static budget assumptions, providing a real-world reality check against budget drift.",
-            practicalImplication = if (variancePct <= 0.0) "Your actual household spending is running below your baseline budget, expanding surplus capital available for investments." else "Actual spending exceeds your baseline budget by ${fmtPct(variancePct, 1)}, which may delay FIRE milestones if sustained.",
-            accentColor = if (variancePct <= 0.0) GoodGreen else BadRed
-        )
-
+        // 5. Strategic Highlights (Executive 2x2 Strategic Readiness Matrix)
         val liquidBridgeInfo = MetricInfo(
             title = "Pre-60 Liquid Bridge",
             category = "Two-Bucket Liquidity Architecture",
@@ -279,90 +259,14 @@ fun OverviewTab(
         )
 
         val coastMilestone = state.fireMilestones.coastFire
-        val baristaMilestone = state.fireMilestones.baristaFire
-        val leanMilestone = state.fireMilestones.leanFire
-        val standardMilestone = state.fireMilestones.standardFire
-
-        val (nextMilestoneTitle, nextMilestoneValue, nextMilestoneSub, nextMilestoneColor, nextMilestoneInfo) = when {
-            !coastMilestone.isAchieved -> {
-                MilestoneDisplayData(
-                    "Coast FIRE",
-                    "${fmtPct(coastMilestone.progressPct, 0)} reached",
-                    "Target: ${fmtCompact(coastMilestone.targetAmountToday)}",
-                    BrandGold,
-                    MetricInfo(
-                        title = "Coast FIRE Milestone",
-                        category = "Financial Independence Milestones",
-                        formulaOrRule = "Coast Target = FIRE Target / (1 + Real CAGR)^(Years to 65)",
-                        explanation = "The portfolio size where compounding alone — with zero further contributions — reaches your full target by age 65.",
-                        practicalImplication = "Once achieved, ongoing savings become optional. Active earnings only need to cover current living expenses.",
-                        accentColor = BrandGold
-                    )
-                )
-            }
-            baristaMilestone != null && !baristaMilestone.isAchieved -> {
-                MilestoneDisplayData(
-                    "Barista FIRE",
-                    "${fmtPct(baristaMilestone.progressPct, 0)} reached",
-                    "Target: ${fmtCompact(baristaMilestone.targetAmountToday)}",
-                    BrandGold,
-                    MetricInfo(
-                        title = "Barista FIRE Milestone",
-                        category = "Financial Independence Milestones",
-                        formulaOrRule = "Barista Target = 50% of Full FIRE Target",
-                        explanation = "Portfolio capital covers 50% of living burn indefinitely. Only part-time or low-stress work is needed for the remainder.",
-                        practicalImplication = "Enables transitioning to part-time or passion work decades before traditional retirement.",
-                        accentColor = BrandGold
-                    )
-                )
-            }
-            !leanMilestone.isAchieved -> {
-                MilestoneDisplayData(
-                    "Lean FIRE",
-                    "${fmtPct(leanMilestone.progressPct, 0)} reached",
-                    "Target: ${fmtCompact(leanMilestone.targetAmountToday)}",
-                    BrandGold,
-                    MetricInfo(
-                        title = "Lean FIRE Milestone",
-                        category = "Financial Independence Milestones",
-                        formulaOrRule = "Lean Target = Essential Living Expenses / SWR",
-                        explanation = "Invested assets cover strictly essential survival living costs (housing, groceries, utilities) indefinitely.",
-                        practicalImplication = "Guarantees complete existential independence from employment under baseline living conditions.",
-                        accentColor = BrandGold
-                    )
-                )
-            }
-            !standardMilestone.isAchieved -> {
-                MilestoneDisplayData(
-                    "Standard FIRE",
-                    "${fmtPct(standardMilestone.progressPct, 0)} reached",
-                    "Target: ${fmtCompact(standardMilestone.targetAmountToday)}",
-                    BrandTeal,
-                    MetricInfo(
-                        title = "Standard FIRE Milestone",
-                        category = "Financial Independence Milestones",
-                        formulaOrRule = "Standard Target = Full Lifestyle Expenses / SWR",
-                        explanation = "Portfolio capital fully finances your baseline lifestyle with zero dependence on active earned income.",
-                        practicalImplication = "Complete financial freedom with no spending compromises.",
-                        accentColor = BrandTeal
-                    )
-                )
-            }
-            else -> {
-                MilestoneDisplayData(
-                    "Full FIRE",
-                    "Target Achieved",
-                    "All milestones crossed",
-                    GoodGreen,
-                    MetricInfo(
-                        title = "Financial Independence Achieved",
-                        category = "Financial Independence Milestones",
-                        explanation = "Your invested capital covers your entire household lifestyle sustainably.",
-                        accentColor = GoodGreen
-                    )
-                )
-            }
-        }
+        val coastFireInfo = MetricInfo(
+            title = "Coast FIRE Milestone",
+            category = "Financial Independence Milestones",
+            formulaOrRule = "Coast Target = FIRE Target / (1 + Real CAGR)^(Years to 65)",
+            explanation = "The portfolio size where compounding alone — with zero further contributions — will grow to your full target by age 65.",
+            practicalImplication = if (coastMilestone.isAchieved) "You have already secured traditional retirement at 65 through past savings! Further contributions simply accelerate early retirement." else "Focus DCA contributions until Coast FIRE is reached to secure a lifelong financial safety net.",
+            accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
+        )
 
         val survivalRate = state.historicalRetirementSurvival.successRatePct
         val survivalInfo = MetricInfo(
@@ -375,6 +279,7 @@ fun OverviewTab(
             accentColor = if (survivalRate >= 95.0) GoodGreen else BrandTeal
         )
 
+        val taxRefundTotal = state.taxReturnHelper.totalIncrementalValue
         val taxRefundInfo = MetricInfo(
             title = "Annual Tax Refund & Relief",
             category = "Czech Tax Optimization",
@@ -396,63 +301,27 @@ fun OverviewTab(
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
                     title = "Strategic Highlights",
-                    subtitle = "Executive financial health, readiness & milestones (Tap for info)",
-                    badgeText = "HEALTH CHECK",
+                    subtitle = "Executive financial readiness, bridge & resilience · Tap for info",
+                    badgeText = "STRATEGY",
                     accentColor = BrandTeal,
                     icon = Icons.Default.AutoAwesome
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Symmetric 2x3 Strategic Metric Grid
+                // Symmetric 2x2 Strategic Metric Grid
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Row 1: Net Cash Surplus + Trailing Actual Burn
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        StrategicMetricTile(
-                            label = "Net Cash Surplus",
-                            value = fmtCZK(surplusVal),
-                            subLabel = "${fmtPct(surplusRatePct, 1)} of income unspent",
-                            accentColor = if (surplusVal >= 0) BrandTeal else BadRed,
-                            icon = Icons.Default.AccountBalanceWallet,
-                            info = surplusInfo,
-                            onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_surplus")
-                        )
-
-                        val burnLabel = if (actualBurn != null) "Trailing 3M Burn" else "Living Budget"
-                        val burnValue = if (actualBurn != null) fmtCZK(actualBurn) else fmtCZK(budgetedCost)
-                        val burnSub = if (actualBurn != null) {
-                            if (variancePct <= 0.0) "${fmtPct(-variancePct, 0)} under budget" else "${fmtPct(variancePct, 0)} over budget"
-                        } else "Baseline living costs"
-                        val burnColor = if (actualBurn != null) {
-                            if (variancePct <= 0.0) GoodGreen else BadRed
-                        } else BrandBlue
-
-                        StrategicMetricTile(
-                            label = burnLabel,
-                            value = burnValue,
-                            subLabel = burnSub,
-                            accentColor = burnColor,
-                            icon = Icons.Default.Assessment,
-                            info = burnInfo,
-                            onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_burn")
-                        )
-                    }
-
-                    // Row 2: Pre-60 Liquid Bridge + Next FIRE Milestone
+                    // Row 1: Pre-60 Liquid Bridge + Coast FIRE
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         val bridgeValue = if (state.isLiquidBridgeFundedToday) "100% Funded" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
                         val bridgeSub = if (state.isLiquidBridgeFundedToday) "Portu covers pre-60 gap" else "Taxable capital needed"
+                        val bridgeBadge = if (state.isLiquidBridgeFundedToday) "FUNDED" else "BRIDGE GAP"
                         val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
 
                         StrategicMetricTile(
@@ -460,51 +329,64 @@ fun OverviewTab(
                             value = bridgeValue,
                             subLabel = bridgeSub,
                             accentColor = bridgeColor,
+                            badgeText = bridgeBadge,
+                            badgeColor = bridgeColor,
                             icon = Icons.Default.Shield,
                             info = liquidBridgeInfo,
                             onShowInfo = { infoState.show(it) },
                             modifier = Modifier.weight(1f).testTag("strategic_tile_bridge")
                         )
 
+                        val coastValue = if (coastMilestone.isAchieved) "Achieved (100%)" else "${fmtPct(coastMilestone.progressPct, 0)} reached"
+                        val coastSub = if (coastMilestone.isAchieved) "Compounding carries to 65" else "Target: ${fmtCompact(coastMilestone.targetAmountToday)}"
+                        val coastBadge = if (coastMilestone.isAchieved) "SECURED" else "IN PROGRESS"
+                        val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
+
                         StrategicMetricTile(
-                            label = "Next: $nextMilestoneTitle",
-                            value = nextMilestoneValue,
-                            subLabel = nextMilestoneSub,
-                            accentColor = nextMilestoneColor,
+                            label = "Coast FIRE Milestone",
+                            value = coastValue,
+                            subLabel = coastSub,
+                            accentColor = coastColor,
+                            badgeText = coastBadge,
+                            badgeColor = coastColor,
                             icon = Icons.Default.Star,
-                            info = nextMilestoneInfo,
+                            info = coastFireInfo,
                             onShowInfo = { infoState.show(it) },
                             modifier = Modifier.weight(1f).testTag("strategic_tile_milestone")
                         )
                     }
 
-                    // Row 3: Historical Survival + Annual Tax Refund
+                    // Row 2: Annual Tax Relief + Historical Survival
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
                         StrategicMetricTile(
-                            label = "Portfolio Survival",
-                            value = "${survivalRate.toInt()}% Success",
-                            subLabel = "Historical stress test",
-                            accentColor = survivalColor,
-                            icon = Icons.Default.CheckCircle,
-                            info = survivalInfo,
-                            onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_survival")
-                        )
-
-                        val taxRefundTotal = state.taxReturnHelper.totalIncrementalValue
-                        StrategicMetricTile(
-                            label = "Annual Tax Refund",
-                            value = "+${fmtCZK(taxRefundTotal)}",
-                            subLabel = "Spring cash rebate",
+                            label = "Annual Tax Relief",
+                            value = "+${fmtCZK(taxRefundTotal)}/yr",
+                            subLabel = "Spring statutory cash rebate",
                             accentColor = GoodGreen,
+                            badgeText = "TAX ALPHA",
+                            badgeColor = GoodGreen,
                             icon = Icons.Default.AccountBalance,
                             info = taxRefundInfo,
                             onShowInfo = { infoState.show(it) },
                             modifier = Modifier.weight(1f).testTag("strategic_tile_tax_refund")
+                        )
+
+                        val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
+                        val survivalBadge = if (survivalRate >= 95.0) "ROBUST" else "MODERATE"
+                        StrategicMetricTile(
+                            label = "100-Yr Resilience",
+                            value = "${survivalRate.toInt()}% Survival",
+                            subLabel = "Sequence risk stress tested",
+                            accentColor = survivalColor,
+                            badgeText = survivalBadge,
+                            badgeColor = survivalColor,
+                            icon = Icons.Default.CheckCircle,
+                            info = survivalInfo,
+                            onShowInfo = { infoState.show(it) },
+                            modifier = Modifier.weight(1f).testTag("strategic_tile_survival")
                         )
                     }
                 }
@@ -521,14 +403,6 @@ fun OverviewTab(
     )
 }
 
-private data class MilestoneDisplayData(
-    val title: String,
-    val value: String,
-    val subtitle: String,
-    val color: Color,
-    val info: MetricInfo
-)
-
 @Composable
 private fun StrategicMetricTile(
     label: String,
@@ -538,12 +412,14 @@ private fun StrategicMetricTile(
     icon: ImageVector,
     info: MetricInfo,
     onShowInfo: (MetricInfo) -> Unit,
+    badgeText: String? = null,
+    badgeColor: Color = accentColor,
     modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .infoTapHold(info, onShowInfo)
@@ -551,7 +427,7 @@ private fun StrategicMetricTile(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -565,7 +441,7 @@ private fun StrategicMetricTile(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
+                            .size(24.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
@@ -588,12 +464,16 @@ private fun StrategicMetricTile(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "Info",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                    modifier = Modifier.size(12.dp)
-                )
+                if (badgeText != null) {
+                    ColorPill(
+                        text = badgeText,
+                        color = badgeColor,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        horizontalPadding = 5.dp,
+                        verticalPadding = 1.5.dp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -602,9 +482,8 @@ private fun StrategicMetricTile(
                 text = value,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
                     color = accentColor,
-                    fontSize = 14.5.sp
+                    fontSize = 15.sp
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

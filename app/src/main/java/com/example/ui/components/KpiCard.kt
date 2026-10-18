@@ -47,7 +47,7 @@ fun KpiCard(
 
     val clickModifier = if (onClick != null && info != null && onShowInfo != null) {
         Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .combinedClickable(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -60,14 +60,14 @@ fun KpiCard(
             )
     } else if (onClick != null) {
         Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
             }
     } else if (info != null && onShowInfo != null) {
         Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .infoTapHold(info, onShowInfo)
     } else Modifier
 
@@ -76,12 +76,12 @@ fun KpiCard(
             .fillMaxWidth()
             .then(if (testTagStr.isNotEmpty()) Modifier.testTag(testTagStr) else Modifier)
             .then(clickModifier),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             Box(

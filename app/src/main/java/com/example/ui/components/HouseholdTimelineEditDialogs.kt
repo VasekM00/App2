@@ -165,7 +165,7 @@ fun EditSpouseEarnerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Secondary Earner (${settings.spouseName})", fontWeight = FontWeight.Bold) },
+        title = { Text("Edit Partner (${settings.spouseName.ifBlank { "Eleonora" }})", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier

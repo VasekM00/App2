@@ -167,7 +167,7 @@ private object PlanMetricInfos {
                 "• 2 000 CZK/mo (24 000 CZK) → Saves 3 600 CZK (15%)\n" +
                 "• 3 000 CZK/mo (36 000 CZK) → Saves 5 400 CZK (15%)\n" +
                 "• 4 000 CZK/mo (48 000 CZK) → Max 7 200 CZK (15%) / 11 040 CZK (23%)\n\n" +
-                "In two-income households, both partners can independently claim up to 48 000 CZK each (saving up to 14 400 CZK combined annually). Note: Deductions require personal taxable income (§ 15 ZDP) and cannot be transferred between spouses.",
+                "In two-income households, both partners can independently claim up to 48 000 CZK each (saving up to 14 400 CZK combined annually). Note: Deductions require personal taxable income (§ 15 ZDP) and cannot be transferred between partners.",
         statutoryReference = "§ 15a Act No. 586/1992 Coll. (Income Tax Act)",
         practicalImplication = "Requires maintaining the contract for at least 120 months (10 years) and withdrawing only after age 60 for tax-free maturity without clawbacks.",
         accentColor = Color(0xFF16A34A)
@@ -377,7 +377,7 @@ private fun FireRoadmapSubTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("fire_roadmap_hero_card"),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
@@ -580,13 +580,14 @@ private fun LifeGoalsSimulatorSubTab(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Summary & Feasibility Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -731,8 +732,9 @@ private fun LifeGoalsSimulatorSubTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("life_goal_card_$index"),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -1050,10 +1052,10 @@ private fun PensionSubTab(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .infoTapHold(PlanMetricInfos.dipDeduction, onShowInfo)
                 .testTag("dip_summary_card"),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
@@ -1170,7 +1172,7 @@ private fun PensionSubTab(
                     maxSubsidyAnnual = vSubsidyMaxAnnual
                 )
 
-                // Two-Stage Optimization Bar: Spouse (Eleonora) — visible in dual-income mode
+                // Two-Stage Optimization Bar: Partner (Eleonora) — visible in dual-income mode
                 if (!s.isSingleHousehold) {
                     Spacer(modifier = Modifier.height(14.dp))
                     PensionOptimizationBar(
@@ -1516,7 +1518,7 @@ private fun FireMilestonesComparisonCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("fire_milestones_card"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
