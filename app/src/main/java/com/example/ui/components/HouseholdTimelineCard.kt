@@ -138,7 +138,7 @@ fun HouseholdTimelineCard(
                     modifier = Modifier.testTag("household_total_income_banner")
                 ) {
                     Text(
-                        text = "Total: ${fmtCZK(totalHouseholdNet)} net",
+                        text = "Household Net Total: ${fmtCZK(totalHouseholdNet)}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
@@ -151,7 +151,7 @@ fun HouseholdTimelineCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             val primarySubtitle = buildString {
-                append("Net salary: ")
+                append("Salary: ")
                 append(fmtCZK(income.vaclavNet))
                 if (income.vouchers > 0.0) {
                     append(" · Vouchers: ")
@@ -190,7 +190,7 @@ fun HouseholdTimelineCard(
                             append(fmtCZK(income.eleonoraOther))
                         }
                     } else {
-                        append("Net salary: ")
+                        append("Salary: ")
                         append(fmtCZK(income.eleonoraSalary))
                         if (income.eleonoraOther > 0.0) {
                             append(" · Other: ")
@@ -257,24 +257,14 @@ fun HouseholdTimelineCard(
                             )
                         }
 
-                        Column(
-                            horizontalAlignment = Alignment.End,
+                        Text(
+                            text = fmtCZK(income.lumpSumMonthly),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 4.dp)
-                        ) {
-                            Text(
-                                text = fmtCZK(income.lumpSumMonthly),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "net",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BrandTeal
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -419,24 +409,14 @@ private fun MemberSummaryRow(
             }
 
             if (monthlyNetTotal > 0.0) {
-                Column(
-                    horizontalAlignment = Alignment.End,
+                Text(
+                    text = fmtCZK(monthlyNetTotal),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(start = 6.dp)
-                ) {
-                    Text(
-                        text = fmtCZK(monthlyNetTotal),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "net",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = BrandTeal
-                    )
-                }
+                )
             } else if (member.role == HouseholdRole.DEPENDENT_CHILD) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),

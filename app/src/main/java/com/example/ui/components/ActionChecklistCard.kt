@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,9 +56,11 @@ fun ActionChecklistCard(
     completedCount: Int,
     state: FullCalculationState,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val tealColor = BrandTeal
     var filterMode by rememberSaveable { mutableStateOf("ALL") } // "ALL", "PENDING", "COMPLETED"
 
     Card(
@@ -104,13 +108,35 @@ fun ActionChecklistCard(
                                 verticalPadding = 2.dp
                             )
                         }
-                        Text(
-                            text = "High-impact tax & optimization moves for this year",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Annual action items",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
-                        )
+                            if (onShowInfo != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Checklist Info",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier
+                                        .size(13.dp)
+                                        .clickable {
+                                            onShowInfo(
+                                                MetricInfo(
+                                                    title = "Annual Execution Checklist",
+                                                    category = "Strategy Roadmap",
+                                                    explanation = "High-impact tax and optimization actions for Year $currentYear to accelerate your path to financial independence.",
+                                                    practicalImplication = "Checking off actions tracks completed statutory deadlines and portfolio contributions."
+                                                )
+                                            )
+                                        }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -240,14 +266,7 @@ fun ActionChecklistCard(
                                         fontWeight = FontWeight.Bold,
                                         textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
                                         color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 13.sp
-                                    )
-                                )
-                                Text(
-                                    text = meta.description,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp
+                                        fontSize = 12.5.sp
                                     )
                                 )
                             }
@@ -265,6 +284,31 @@ fun ActionChecklistCard(
                                         fontFamily = FontFamily.Monospace,
                                         color = GoodGreen,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            if (onShowInfo != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = {
+                                        onShowInfo(
+                                            MetricInfo(
+                                                title = meta.title,
+                                                category = "Execution Task",
+                                                explanation = meta.description,
+                                                practicalImplication = if (impact > 0.0) "Estimated annual value: +${fmtCompact(impact)}" else null,
+                                                accentColor = tealColor
+                                            )
+                                        )
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Details for ${meta.title}",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }

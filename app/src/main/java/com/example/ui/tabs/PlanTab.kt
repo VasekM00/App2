@@ -215,7 +215,7 @@ fun PlanTab(
     modifier: Modifier = Modifier
 ) {
     var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
-    val subTabs = listOf("Tax & Pension (DIP/DPS)", "Roadmap & Life Goals")
+    val subTabs = listOf("Tax & Pension (DIP/DPS)", "Roadmap & Timeline")
     val infoState = rememberMetricInfoState()
 
     val haptic = LocalHapticFeedback.current
@@ -270,8 +270,8 @@ private fun RoadmapAndGoalsSubTab(
     onUpdateSettings: ((SettingsEntity) -> Unit)?,
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
-    var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Household Timeline, 2 = Life Goals Simulator
-    val views = listOf("Action & Tasks", "Household Timeline", "Life Goals")
+    var selectedView by remember { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Household Timeline & Goals
+    val views = listOf("Action & Tasks", "Household Timeline")
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -316,8 +316,7 @@ private fun RoadmapAndGoalsSubTab(
 
         when (selectedView) {
             0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = onShowInfo)
-            1 -> HouseholdTimelineSubTab(state, onUpdateSettings)
-            2 -> LifeGoalsSimulatorSubTab(state, onUpdateSettings)
+            1 -> HouseholdTimelineSubTab(state, onUpdateSettings, onShowInfo = onShowInfo)
         }
     }
 }
@@ -325,7 +324,8 @@ private fun RoadmapAndGoalsSubTab(
 @Composable
 private fun HouseholdTimelineSubTab(
     state: FullCalculationState,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -337,6 +337,7 @@ private fun HouseholdTimelineSubTab(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         com.example.ui.components.HouseholdTimelineCard(settings = state.settings, state = state, onUpdateSettings = onUpdateSettings)
+        LifeGoalsSimulatorCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -530,17 +531,18 @@ private fun FireRoadmapSubTab(
             actionStates = actionStates,
             completedCount = completedActionsCount,
             state = state,
-            onToggleAction = onToggleAction
+            onToggleAction = onToggleAction,
+            onShowInfo = onShowInfo
         )
     }
 }
 
 @Composable
-private fun LifeGoalsSimulatorSubTab(
+private fun LifeGoalsSimulatorCard(
     state: FullCalculationState,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    onShowInfo: (MetricInfo) -> Unit = {}
 ) {
-    val scrollState = rememberScrollState()
     val baseYear = state.settings.baseYear
 
     val customGoalsList = remember(state.settings.customGoalsJson) {
@@ -570,17 +572,35 @@ private fun LifeGoalsSimulatorSubTab(
         else -> 0.0
     }
     val isOverBudget = surplusAfterGoals < 0
+    val tealColor = BrandTeal
+    val goldColor = BrandGold
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
+    val lifeGoalInfo = MetricInfo(
+        title = "Life Event & Goal Simulator",
+        category = "Milestone Planning",
+        explanation = "Simulate non-FIRE financial milestones (home purchase, education, sabbatical). Evaluates cash flow feasibility against your monthly net income surplus and projects the opportunity cost delay on your primary FIRE target.",
+        formulaOrRule = "Monthly Need: ${fmtCZK(totalRequiredMonthlyGoals)} · Surplus: ${fmtCZK(monthlyNetSurplus)}",
+        accentColor = tealColor
+    )
+
+    val delayInfo = MetricInfo(
+        title = "FIRE Goal Delay Impact",
+        category = "Opportunity Cost",
+        explanation = if (monthlyInvest > 0) {
+            "Funding these milestones requires ${fmtCZK(totalRemainingCapitalNeeded)} in capital. Based on your current monthly investment flow of ${fmtCZK(monthlyInvest)}, this delays your primary FIRE target date by approximately ${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} years."
+        } else {
+            "No active monthly investment flow (DCA) detected. Capital delay cannot be projected until monthly surplus is invested."
+        },
+        formulaOrRule = "Remaining Capital / (Monthly DCA × 12)",
+        accentColor = goldColor
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // Summary & Feasibility Card
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("life_goals_simulator_card"),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
@@ -591,7 +611,12 @@ private fun LifeGoalsSimulatorSubTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onShowInfo(lifeGoalInfo) }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Psychology,
                             contentDescription = null,
@@ -602,6 +627,13 @@ private fun LifeGoalsSimulatorSubTab(
                             text = "Life Event & Goal Simulator",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Details",
+                            tint = BrandTeal.copy(alpha = 0.7f),
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                     IconButton(
                         onClick = { showAddGoalDialog = true },
@@ -610,11 +642,6 @@ private fun LifeGoalsSimulatorSubTab(
                         Icon(imageVector = Icons.Default.Add, contentDescription = "Add Life Goal", tint = BrandTeal)
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Simulate non-FIRE financial milestones. Evaluates cash flow feasibility against your monthly net income surplus.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
@@ -677,31 +704,46 @@ private fun LifeGoalsSimulatorSubTab(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // FIRE Impact Metric
-                Box(
+                // FIRE Impact Metric (info-on-touch)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandGold.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(BrandGold.copy(alpha = 0.12f))
-                        .padding(10.dp)
+                        .clickable { onShowInfo(delayInfo) }
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                            contentDescription = null,
-                            tint = BrandGold,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = if (monthlyInvest > 0) {
-                                "Combined Goals Impact: Delays primary FIRE target by ~${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} years."
-                            } else {
-                                "Combined Goals Impact: No DCA flow — delay cannot be estimated."
-                            },
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                contentDescription = null,
+                                tint = BrandGold,
+                                modifier = Modifier.size(16.dp)
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (monthlyInvest > 0) {
+                                    "FIRE Delay: ~${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} yrs"
+                                } else {
+                                    "FIRE Delay: N/A (no DCA flow)"
+                                },
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Delay Details",
+                            tint = BrandGold.copy(alpha = 0.75f),
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
@@ -827,8 +869,6 @@ private fun LifeGoalsSimulatorSubTab(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(96.dp))
     }
 
     if (showAddGoalDialog) {
@@ -1102,11 +1142,10 @@ private fun PensionOptimizationSection(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 CardHeaderPill(
-                    title = "Retirement Optimization (DIP & DPS)",
-                    subtitle = "Two-stage optimization: state cash match & personal tax shield",
+                    title = "Retirement Optimization",
+                    subtitle = "DIP & DPS state match and tax shield",
                     icon = Icons.Default.AccountBalance,
-                    badgeText = "OPTIMIZATION",
-                    badgeColor = GoodGreen,
+                    badgeText = null,
                     accentColor = GoodGreen,
                     trailingContent = {
                         IconButton(
@@ -2287,29 +2326,58 @@ private fun FireMilestonesComparisonCard(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    val milestoneDetailInfo = MetricInfo(
+                        title = "${activeM.name} Strategy & Rules",
+                        category = "FIRE Milestone",
+                        explanation = "${activeM.description}\n\n${
+                            if (activeM.id == "coast") "Compound interest alone turns current capital into full financial independence without future savings."
+                            else if (activeM.isAchieved) "Milestone unlocked! Your current portfolio exceeds this threshold."
+                            else "At ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR, reaching ${fmtCZK(activeTarget)} generates sustainable passive cash flow of ${fmtCZK(roundTo1k(activeM.monthlyPassiveIncome))} / month."
+                        }",
+                        formulaOrRule = "${fmtCZK(activeTarget)} @ ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR",
+                        accentColor = activeConfig.accentColor
+                    )
 
-                    Text(
-                        text = activeM.description,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (activeM.id == "coast") {
-                            "• Compound interest alone turns current capital into full financial independence without future savings."
-                        } else if (activeM.isAchieved) {
-                            "• Milestone unlocked! Your current portfolio exceeds this threshold."
-                        } else {
-                            "• At ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR, reaching ${fmtCZK(activeTarget)} generates sustainable passive cash flow of ${fmtCZK(roundTo1k(activeM.monthlyPassiveIncome))} / month."
-                        },
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 10.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = activeConfig.accentColor.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, activeConfig.accentColor.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onShowInfo?.invoke(milestoneDetailInfo) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Milestone Strategy Details",
+                                    tint = activeConfig.accentColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Tap to view milestone strategy & rules",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = activeConfig.accentColor
+                                    ),
+                                    maxLines = 1
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                                contentDescription = null,
+                                tint = activeConfig.accentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
 
                     if (onUpdateSettings != null && activeM.id != "coast") {
                         val hasManualOverride = state.settings.fireTargetOverride > 0

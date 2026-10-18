@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,10 @@ fun TwoBucketLiquidityBridgeCard(
     val bridgeRequired = state.liquidBridgeTo60RequiredToday
     val bridgeDeficit = state.liquidBridgeDeficitToday
 
+    val tealColor = BrandTeal
+    val greenColor = GoodGreen
+    val goldColor = BrandGold
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -92,6 +97,18 @@ fun TwoBucketLiquidityBridgeCard(
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            onShowInfo?.invoke(
+                                MetricInfo(
+                                    title = "Bucket 1: Liquid Brokerage (Portu)",
+                                    category = "Two-Bucket Bridge",
+                                    explanation = "Unrestricted early retirement bridge to age 60. Tax-exempt under 3-year time test. Funds all living expenses prior to statutory pension access.",
+                                    formulaOrRule = "Current Balance: ${fmtCZK(liquidBal)}",
+                                    accentColor = greenColor
+                                )
+                            )
+                        }
                         .testTag("bucket_1_liquid_card")
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -132,14 +149,24 @@ fun TwoBucketLiquidityBridgeCard(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Text(
-                            text = "Unrestricted early retirement bridge to age 60. Tax-exempt under 3-year time test.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 14.sp
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Details",
+                                tint = GoodGreen.copy(alpha = 0.85f),
+                                modifier = Modifier.size(13.dp)
                             )
-                        )
+                            Text(
+                                text = "Tax-exempt bridge",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -150,6 +177,18 @@ fun TwoBucketLiquidityBridgeCard(
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            onShowInfo?.invoke(
+                                MetricInfo(
+                                    title = "Bucket 2: Statutory Pension (DIP & DPS)",
+                                    category = "Two-Bucket Bridge",
+                                    explanation = "Statutory capital locked to age 60 under Rule 60+10. Early exit triggers 15% tax clawback of deductions.",
+                                    formulaOrRule = "Current Balance: ${fmtCZK(pensionBal)}",
+                                    accentColor = goldColor
+                                )
+                            )
+                        }
                         .testTag("bucket_2_pension_card")
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -190,30 +229,57 @@ fun TwoBucketLiquidityBridgeCard(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Text(
-                            text = "Statutory capital locked to age 60. Early exit triggers 15% tax clawback of deductions.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 14.sp
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Details",
+                                tint = BrandGold.copy(alpha = 0.85f),
+                                modifier = Modifier.size(13.dp)
                             )
-                        )
+                            Text(
+                                text = "Locked to age 60",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val bridgeInfo = MetricInfo(
+                title = "Age 60 Bridge Solvency",
+                category = "Actuarial Bridge",
+                explanation = if (yearsTo60 == 0) {
+                    "Primary earner has reached age 60. Both Bucket 1 (Portu) and Bucket 2 (DIP & DPS) are fully unlocked and liquid."
+                } else if (bridgeFunded) {
+                    "Current liquid Portu capital (${fmtCZK(liquidBal)}) exceeds the ${fmtCZK(bridgeRequired)} required to fund all household living burn across the next $yearsTo60 years to age 60 at real return."
+                } else {
+                    "Bridging the next $yearsTo60 years of living burn to age 60 requires ${fmtCZK(bridgeRequired)} in liquid capital. Total net worth satisfies overall FIRE targets, but early retirement requires accumulating an additional ${fmtCZK(bridgeDeficit)} in liquid Portu to prevent premature DIP/DPS liquidation."
+                },
+                formulaOrRule = "Required: ${fmtCZK(bridgeRequired)} · Current: ${fmtCZK(liquidBal)}",
+                accentColor = if (bridgeFunded) GoodGreen else BrandGold
+            )
+
             // Actuarial Bridge Solvency Banner
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = if (bridgeFunded) GoodGreen.copy(alpha = 0.08f) else BrandGold.copy(alpha = 0.10f),
                 border = BorderStroke(1.dp, if (bridgeFunded) GoodGreen.copy(alpha = 0.35f) else BrandGold.copy(alpha = 0.35f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onShowInfo?.invoke(bridgeInfo) }
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.Top,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
@@ -246,22 +312,22 @@ fun TwoBucketLiquidityBridgeCard(
                                 fontSize = 12.sp
                             )
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (yearsTo60 == 0) {
-                                "Primary earner has reached age 60. Both Bucket 1 (Portu) and Bucket 2 (DIP & DPS) are fully unlocked and liquid."
-                            } else if (bridgeFunded) {
-                                "Current liquid Portu capital (${fmtCZK(liquidBal)}) exceeds the ${fmtCZK(bridgeRequired)} required to fund all household living burn across the next $yearsTo60 years to age 60 at real return."
-                            } else {
-                                "Bridging the next $yearsTo60 years of living burn to age 60 requires ${fmtCZK(bridgeRequired)} in liquid capital. Total net worth satisfies overall FIRE targets, but early retirement requires accumulating an additional ${fmtCZK(bridgeDeficit)} in liquid Portu to prevent premature DIP/DPS liquidation."
-                            },
+                            text = if (yearsTo60 == 0) "Capital fully unlocked" else "Required liquid: ${fmtCZK(bridgeRequired)} · Tap for details",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 15.sp
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
                     }
+
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Bridge Details",
+                        tint = if (bridgeFunded) GoodGreen.copy(alpha = 0.7f) else BrandGold.copy(alpha = 0.7f),
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 
@@ -269,47 +335,48 @@ fun TwoBucketLiquidityBridgeCard(
             val bridgePoint = state.fireLiquidBridgePoint
             val targetPoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
             if (bridgePoint != null) {
+                val viableInfo = MetricInfo(
+                    title = "Actuarially Viable Full FIRE",
+                    category = "Two-Bucket Bridge",
+                    explanation = if (targetPoint != null && targetPoint.year < bridgePoint.year) {
+                        "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} yrs) for the liquid bridge to fully fund burn to age 60."
+                    } else {
+                        "Your liquid bridge to age 60 and overall retirement capital both unlock simultaneously in Year ${bridgePoint.year} (Age ${bridgePoint.age})."
+                    },
+                    formulaOrRule = "Year ${bridgePoint.year} (Age ${bridgePoint.age})",
+                    accentColor = BrandTeal
+                )
+
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onShowInfo?.invoke(viableInfo) }
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Actuarially Viable Full FIRE:",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Viable Full FIRE: Year ${bridgePoint.year} (Age ${bridgePoint.age})",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = BrandTeal
                             )
-                            Text(
-                                text = "Year ${bridgePoint.year} (Age ${bridgePoint.age})",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = BrandTeal,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            )
-                        }
-
-                        if (targetPoint != null && targetPoint.year < bridgePoint.year) {
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} yrs) for the liquid bridge to fully fund burn to age 60.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 10.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = 14.sp
-                                )
-                            )
-                        }
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Details",
+                            tint = BrandTeal.copy(alpha = 0.7f),
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }
