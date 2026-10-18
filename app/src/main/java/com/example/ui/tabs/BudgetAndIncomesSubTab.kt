@@ -283,7 +283,7 @@ private fun SummarySubTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(96.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -309,8 +309,8 @@ private fun EditableCashFlowRow(
         Modifier
             .clip(RoundedCornerShape(6.dp))
             .infoTapHold(info, onShowInfo)
-            .padding(vertical = 2.dp)
-    } else Modifier.padding(vertical = 2.dp)
+            .padding(vertical = 1.dp)
+    } else Modifier.padding(vertical = 1.dp)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -359,13 +359,13 @@ private fun EditableCashFlowRow(
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
                     onClick = onEdit,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit $label",
                         tint = BrandTeal,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                 }
             }
@@ -466,7 +466,7 @@ private fun IncomeSubTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -474,7 +474,7 @@ private fun IncomeSubTab(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                 CardHeaderPill(
                     title = "Monthly Income Breakdown",
                     subtitle = "Combined household inflows · Tap row to edit or info",
@@ -483,17 +483,19 @@ private fun IncomeSubTab(
                 )
 
                 if (activeLedger != null && (activeLedger.incVaclav > 0.0 || activeLedger.incEleonora > 0.0 || activeLedger.incUnforeseen > 0.0)) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     ColorPill(
                         text = "SYNCED WITH LEDGER (${activeLedger.yearMonth})",
                         color = BrandTeal,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         horizontalPadding = 6.dp,
-                        verticalPadding = 2.dp,
+                        verticalPadding = 1.5.dp,
                         cornerRadius = 6.dp
                     )
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 val primaryName = s.primaryName.ifBlank { "Václav" }
                 val spouseName = s.spouseName.ifBlank { "Eleonora" }
@@ -507,7 +509,7 @@ private fun IncomeSubTab(
                         color = BrandTeal
                     )
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 EditableIncomeRow(
                     label = "$primaryName's Net Salary",
@@ -527,7 +529,7 @@ private fun IncomeSubTab(
                     } else null
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
 
                 EditableIncomeRow(
                     label = "$primaryName's Other Inflows",
@@ -545,7 +547,7 @@ private fun IncomeSubTab(
                     } else null
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
 
                 EditableIncomeRow(
                     label = "$primaryName's Gifts",
@@ -567,9 +569,9 @@ private fun IncomeSubTab(
                 )
 
                 if (!s.isSingleHousehold) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(5.dp))
 
                     // Section 2: Partner
                     Text(
@@ -580,7 +582,7 @@ private fun IncomeSubTab(
                             color = BrandGold
                         )
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
 
                     EditableIncomeRow(
                         label = "$spouseName's Net Salary",
@@ -599,7 +601,7 @@ private fun IncomeSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
 
                     if (inc.benefit > 0.0) {
                         EditableIncomeRow(
@@ -620,7 +622,7 @@ private fun IncomeSubTab(
                                 }
                             } else null
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                     }
 
                     if (inc.lecturing > 0.0) {
@@ -641,7 +643,7 @@ private fun IncomeSubTab(
                                 }
                             } else null
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                     }
 
                     EditableIncomeRow(
@@ -660,7 +662,7 @@ private fun IncomeSubTab(
                         } else null
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
 
                     EditableIncomeRow(
                         label = "$spouseName's Gifts",
@@ -682,9 +684,9 @@ private fun IncomeSubTab(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(5.dp))
 
                 // Section 3: Benefits & Bonuses
                 Text(
@@ -692,10 +694,10 @@ private fun IncomeSubTab(
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = BrandTeal
                     )
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 EditableIncomeRow(
                     label = "Meal Vouchers ($primaryName)",
@@ -710,7 +712,7 @@ private fun IncomeSubTab(
                         val displayAmt = if (scheduledLumpSumTotal > 0.0) {
                             item.amount * (effectiveScheduledLumpTotal / scheduledLumpSumTotal)
                         } else item.amount
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                         IncomeRow(
                             label = "${item.name} (${activeMonth}/$activeYear Bonus)",
                             value = fmtCZK(displayAmt),
@@ -720,7 +722,7 @@ private fun IncomeSubTab(
                 }
 
                 if (unforeseenLump > 0.0) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                     IncomeRow(
                         label = "Unforeseen Inflow (${activeMonth}/$activeYear Ledger)",
                         value = fmtCZK(unforeseenLump),
@@ -729,8 +731,8 @@ private fun IncomeSubTab(
                 }
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 2.dp,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    thickness = 1.5.dp,
                     color = BrandTeal
                 )
 
@@ -741,7 +743,7 @@ private fun IncomeSubTab(
                     info = CashFlowMetricInfos.totalIncome,
                     onShowInfo = onShowInfo
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 val surplus = inc.totalMonthly - state.totalLivingCostMonthly
                 IncomeRow(
                     label = "NET MONTHLY SURPLUS",
@@ -753,7 +755,7 @@ private fun IncomeSubTab(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(96.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
@@ -770,8 +772,8 @@ private fun IncomeRow(
         Modifier
             .clip(RoundedCornerShape(6.dp))
             .infoTapHold(info, onShowInfo)
-            .padding(vertical = if (isBold) 2.dp else 1.dp)
-    } else Modifier.padding(vertical = if (isBold) 2.dp else 1.dp)
+            .padding(vertical = if (isBold) 1.5.dp else 1.dp)
+    } else Modifier.padding(vertical = if (isBold) 1.5.dp else 1.dp)
 
     Row(
         modifier = Modifier
@@ -882,7 +884,7 @@ private fun SpendingSubTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -890,7 +892,7 @@ private fun SpendingSubTab(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                 CardHeaderPill(
                     title = "Monthly Expense Breakdown",
                     subtitle = "Combined household living costs · Tap row to edit or info",
@@ -899,19 +901,19 @@ private fun SpendingSubTab(
                 )
 
                 if (activeLedger != null && (activeLedger.expRent > 0.0 || activeLedger.expGroceries > 0.0 || activeLedger.expOther > 0.0)) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     ColorPill(
                         text = "SYNCED WITH LEDGER (${activeLedger.yearMonth})",
                         color = BrandTeal,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         horizontalPadding = 6.dp,
-                        verticalPadding = 2.dp,
+                        verticalPadding = 1.5.dp,
                         cornerRadius = 6.dp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Section 1: Housing & Essentials
                 Text(
@@ -922,7 +924,7 @@ private fun SpendingSubTab(
                         color = BrandTeal
                     )
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 if (!deletedSet.contains("rent")) {
                     EditableCashFlowRow(
@@ -944,7 +946,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("groceries")) {
@@ -965,7 +967,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("transport")) {
@@ -986,9 +988,9 @@ private fun SpendingSubTab(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(5.dp))
 
                 // Section 2: Lifestyle & Discretionary
                 Text(
@@ -999,7 +1001,7 @@ private fun SpendingSubTab(
                         color = BrandGold
                     )
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 if (!deletedSet.contains("cafes")) {
                     EditableCashFlowRow(
@@ -1017,7 +1019,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("entertainment")) {
@@ -1036,7 +1038,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("therapy")) {
@@ -1055,7 +1057,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("subscriptions")) {
@@ -1074,7 +1076,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("charity")) {
@@ -1093,7 +1095,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (!deletedSet.contains("other_discretionary") && s.otherDiscretionaryMonthly > 0.0) {
@@ -1112,7 +1114,7 @@ private fun SpendingSubTab(
                             }
                         } else null
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 }
 
                 if (customCategories.isNotEmpty()) {
@@ -1137,7 +1139,7 @@ private fun SpendingSubTab(
                                 }
                             } else null
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                     }
                 }
 
@@ -1145,9 +1147,9 @@ private fun SpendingSubTab(
                     val child1Label = s.child1Name.ifBlank { "Child 1" }
                     val child2Label = s.child2Name.ifBlank { "Child 2" }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(5.dp))
 
                     // Section 3: Children & Family
                     Text(
@@ -1155,10 +1157,10 @@ private fun SpendingSubTab(
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = BrandTeal
                         )
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
 
                     if (s.child1Enabled) {
                         val isEmbedded1 = s.currentChildCostsInBaseline && s.child1BirthYear <= s.baseYear
@@ -1173,7 +1175,7 @@ private fun SpendingSubTab(
                                 onShowInfo = onShowInfo
                             )
                             if (s.child2Enabled) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                             }
                         }
                     }
@@ -1195,8 +1197,8 @@ private fun SpendingSubTab(
                 }
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 2.dp,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    thickness = 1.5.dp,
                     color = BadRed
                 )
 
@@ -1207,7 +1209,7 @@ private fun SpendingSubTab(
                     info = CashFlowMetricInfos.livingExpenses,
                     onShowInfo = onShowInfo
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.5.dp))
                 val surplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
                 IncomeRow(
                     label = "NET MONTHLY SURPLUS",
@@ -1220,7 +1222,7 @@ private fun SpendingSubTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(96.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
