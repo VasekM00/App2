@@ -584,7 +584,11 @@ fun SankeyCashFlowCard(
                         .clipToBounds()
                         .pointerInput(inflowNodes, outflowNodes, viewMode) {
                             detectTapGestures { offset ->
-                                val clicked = layoutNodesCache.firstOrNull { it.bounds.contains(offset) }
+                                val padX = 20.dp.toPx()
+                                val clicked = layoutNodesCache.firstOrNull { node ->
+                                    offset.x in (node.bounds.left - padX)..(node.bounds.right + padX) &&
+                                        offset.y in node.bounds.top..node.bounds.bottom
+                                }
                                 if (clicked != null) {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     selectedNodeId = if (selectedNodeId == clicked.node.id) null else clicked.node.id
@@ -597,18 +601,28 @@ fun SankeyCashFlowCard(
                     val w = size.width
                     val h = size.height
 
+                    val is3Pillar = viewMode == 0
+
                     val paddingTop = 14.dp.toPx()
                     val paddingBottom = 22.dp.toPx()
                     val nodeWidth = 8.5f.dp.toPx()
                     val cornerR = 4.dp.toPx()
-                    val labelMargin = 82.dp.toPx()
 
-                    val xInflow = labelMargin
-                    val xCenter = (w - nodeWidth) / 2f
-                    val xOutflow = w - labelMargin - nodeWidth
+                    // Right margin: 3-Pillar mode requires room for up to 18 chars ("Living Burn (55%)").
+                    // 118.dp ensures 112.dp for text, preventing right clipping.
+                    val leftMargin = if (is3Pillar) 68.dp.toPx() else 74.dp.toPx()
+                    val rightMargin = if (is3Pillar) 118.dp.toPx() else 96.dp.toPx()
+
+                    val xInflow = leftMargin
+                    val xOutflow = w - rightMargin - nodeWidth
+
+                    // In Granular mode, center POOL node exactly between inflow and outflow bars
+                    val ribbonStart = xInflow + nodeWidth
+                    val ribbonEnd = xOutflow
+                    val xCenter = (ribbonStart + ribbonEnd - nodeWidth) / 2f
 
                     val availableH = h - paddingTop - paddingBottom
-                    val gap = if (viewMode == 0) 10.dp.toPx() else 4.dp.toPx()
+                    val gap = if (is3Pillar) 10.dp.toPx() else 4.dp.toPx()
 
                     // 1. Layout Inflow Nodes
                     val totalInflowGap = (inflowNodes.size - 1) * gap
@@ -616,12 +630,12 @@ fun SankeyCashFlowCard(
                     val inflowLayouts = mutableListOf<LayoutNode>()
                     var currentY = paddingTop
 
-                    val minNodeH = if (viewMode == 0) 36.dp.toPx() else 15.dp.toPx()
+                    val minNodeH = if (is3Pillar) 36.dp.toPx() else 15.dp.toPx()
                     val extraInflowH = (usableInflowH - (inflowNodes.size * minNodeH)).coerceAtLeast(0f)
 
                     inflowNodes.forEach { node ->
                         val fraction = (node.amount / sumInflows).toFloat()
-                        val nodeH = if (viewMode == 0) {
+                        val nodeH = if (is3Pillar) {
                             usableInflowH
                         } else {
                             minNodeH + (fraction * extraInflowH)
@@ -637,7 +651,7 @@ fun SankeyCashFlowCard(
                         currentY += nodeH + gap
                     }
 
-                    // 2. Layout Central Hub Node
+                    // 2. Layout Central Hub Node (used in Granular Streams mode)
                     val hubTop = paddingTop
                     val hubBottom = h - paddingBottom
                     val hubBounds = RoundRect(
@@ -672,102 +686,166 @@ fun SankeyCashFlowCard(
                         currentOutY += nodeH + gap
                     }
 
-                    layoutNodesCache = inflowLayouts + hubLayout + outflowLayouts
-
-                    // 4. Draw Inflow-to-Center Ribbons with Smooth Tangents & Crisp Edge Strokes
-                    var hubInY = hubTop
-                    val hubUsableH = hubBottom - hubTop
-
-                    inflowLayouts.forEach { inLayout ->
-                        val ribbonH = ((inLayout.node.amount / sumInflows) * hubUsableH).toFloat()
-                        val hubTargetTop = hubInY
-                        val hubTargetBottom = hubInY + ribbonH
-                        hubInY += ribbonH
-
-                        val isHighlighted = selectedNodeId == null || selectedNodeId == inLayout.node.id || selectedNodeId == centralHubNode.id
-                        val fillAlpha = if (isHighlighted) 0.42f else 0.08f
-                        val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
-                        val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
-
-                        val x1 = inLayout.bounds.right
-                        val x2 = xCenter
-                        val cX = (x2 - x1) * 0.52f
-
-                        val ribbonPath = Path().apply {
-                            moveTo(x1, inLayout.yTop)
-                            cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
-                            lineTo(x2, hubTargetBottom)
-                            cubicTo(x2 - cX, hubTargetBottom, x1 + cX, inLayout.yBottom, x1, inLayout.yBottom)
-                            close()
-                        }
-
-                        drawPath(
-                            path = ribbonPath,
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(inLayout.node.color.copy(alpha = fillAlpha), cTeal.copy(alpha = fillAlpha)),
-                                startX = x1,
-                                endX = x2
-                            )
-                        )
-
-                        // Top & Bottom boundary stroke
-                        val topEdge = Path().apply {
-                            moveTo(x1, inLayout.yTop)
-                            cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
-                        }
-                        val bottomEdge = Path().apply {
-                            moveTo(x1, inLayout.yBottom)
-                            cubicTo(x1 + cX, inLayout.yBottom, x2 - cX, hubTargetBottom, x2, hubTargetBottom)
-                        }
-                        drawPath(topEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
-                        drawPath(bottomEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                    layoutNodesCache = if (is3Pillar) {
+                        inflowLayouts + outflowLayouts
+                    } else {
+                        inflowLayouts + hubLayout + outflowLayouts
                     }
 
-                    // 5. Draw Center-to-Outflow Ribbons with Smooth Tangents & Crisp Edge Strokes
-                    var hubOutY = hubTop
+                    if (is3Pillar) {
+                        // Direct 2-Column Cascade: Flow directly from single Inflow bar to the 3 Outflow Pillars
+                        val inLayout = inflowLayouts.firstOrNull()
+                        if (inLayout != null) {
+                            val inUsableH = inLayout.yBottom - inLayout.yTop
+                            var currentSourceY = inLayout.yTop
 
-                    outflowLayouts.forEach { outLayout ->
-                        val ribbonH = ((outLayout.node.amount / sumOutflows) * hubUsableH).toFloat()
-                        val hubSourceTop = hubOutY
-                        val hubSourceBottom = hubOutY + ribbonH
-                        hubOutY += ribbonH
+                            outflowLayouts.forEach { outLayout ->
+                                val fraction = (outLayout.node.amount / sumOutflows).toFloat()
+                                val sliceH = fraction * inUsableH
+                                val sourceTop = currentSourceY
+                                val sourceBottom = currentSourceY + sliceH
+                                currentSourceY += sliceH
 
-                        val isHighlighted = selectedNodeId == null || selectedNodeId == outLayout.node.id || selectedNodeId == centralHubNode.id
-                        val fillAlpha = if (isHighlighted) 0.42f else 0.08f
-                        val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
-                        val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
+                                val isHighlighted = selectedNodeId == null ||
+                                    selectedNodeId == inLayout.node.id ||
+                                    selectedNodeId == outLayout.node.id
+                                val fillAlpha = if (isHighlighted) 0.44f else 0.08f
+                                val strokeAlpha = if (isHighlighted) 0.75f else 0.18f
+                                val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
 
-                        val x1 = xCenter + nodeWidth
-                        val x2 = outLayout.bounds.left
-                        val cX = (x2 - x1) * 0.52f
+                                val x1 = inLayout.bounds.right
+                                val x2 = outLayout.bounds.left
+                                val cX = (x2 - x1) * 0.52f
 
-                        val ribbonPath = Path().apply {
-                            moveTo(x1, hubSourceTop)
-                            cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
-                            lineTo(x2, outLayout.yBottom)
-                            cubicTo(x2 - cX, outLayout.yBottom, x1 + cX, hubSourceBottom, x1, hubSourceBottom)
-                            close()
+                                val ribbonPath = Path().apply {
+                                    moveTo(x1, sourceTop)
+                                    cubicTo(x1 + cX, sourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                                    lineTo(x2, outLayout.yBottom)
+                                    cubicTo(x2 - cX, outLayout.yBottom, x1 + cX, sourceBottom, x1, sourceBottom)
+                                    close()
+                                }
+
+                                drawPath(
+                                    path = ribbonPath,
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            inLayout.node.color.copy(alpha = fillAlpha),
+                                            outLayout.node.color.copy(alpha = fillAlpha)
+                                        ),
+                                        startX = x1,
+                                        endX = x2
+                                    )
+                                )
+
+                                // Top & Bottom boundary stroke
+                                val topEdge = Path().apply {
+                                    moveTo(x1, sourceTop)
+                                    cubicTo(x1 + cX, sourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                                }
+                                val bottomEdge = Path().apply {
+                                    moveTo(x1, sourceBottom)
+                                    cubicTo(x1 + cX, sourceBottom, x2 - cX, outLayout.yBottom, x2, outLayout.yBottom)
+                                }
+                                drawPath(topEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                                drawPath(bottomEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                            }
                         }
+                    } else {
+                        // 4. Draw Inflow-to-Center Ribbons with Smooth Tangents & Crisp Edge Strokes
+                        var hubInY = hubTop
+                        val hubUsableH = hubBottom - hubTop
 
-                        drawPath(
-                            path = ribbonPath,
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(cTeal.copy(alpha = fillAlpha), outLayout.node.color.copy(alpha = fillAlpha)),
-                                startX = x1,
-                                endX = x2
+                        inflowLayouts.forEach { inLayout ->
+                            val ribbonH = ((inLayout.node.amount / sumInflows) * hubUsableH).toFloat()
+                            val hubTargetTop = hubInY
+                            val hubTargetBottom = hubInY + ribbonH
+                            hubInY += ribbonH
+
+                            val isHighlighted = selectedNodeId == null || selectedNodeId == inLayout.node.id || selectedNodeId == centralHubNode.id
+                            val fillAlpha = if (isHighlighted) 0.42f else 0.08f
+                            val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
+                            val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
+
+                            val x1 = inLayout.bounds.right
+                            val x2 = xCenter
+                            val cX = (x2 - x1) * 0.52f
+
+                            val ribbonPath = Path().apply {
+                                moveTo(x1, inLayout.yTop)
+                                cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
+                                lineTo(x2, hubTargetBottom)
+                                cubicTo(x2 - cX, hubTargetBottom, x1 + cX, inLayout.yBottom, x1, inLayout.yBottom)
+                                close()
+                            }
+
+                            drawPath(
+                                path = ribbonPath,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(inLayout.node.color.copy(alpha = fillAlpha), cTeal.copy(alpha = fillAlpha)),
+                                    startX = x1,
+                                    endX = x2
+                                )
                             )
-                        )
 
-                        val topEdge = Path().apply {
-                            moveTo(x1, hubSourceTop)
-                            cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                            // Top & Bottom boundary stroke
+                            val topEdge = Path().apply {
+                                moveTo(x1, inLayout.yTop)
+                                cubicTo(x1 + cX, inLayout.yTop, x2 - cX, hubTargetTop, x2, hubTargetTop)
+                            }
+                            val bottomEdge = Path().apply {
+                                moveTo(x1, inLayout.yBottom)
+                                cubicTo(x1 + cX, inLayout.yBottom, x2 - cX, hubTargetBottom, x2, hubTargetBottom)
+                            }
+                            drawPath(topEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                            drawPath(bottomEdge, color = inLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
                         }
-                        val bottomEdge = Path().apply {
-                            moveTo(x1, hubSourceBottom)
-                            cubicTo(x1 + cX, hubSourceBottom, x2 - cX, outLayout.yBottom, x2, outLayout.yBottom)
+
+                        // 5. Draw Center-to-Outflow Ribbons with Smooth Tangents & Crisp Edge Strokes
+                        var hubOutY = hubTop
+
+                        outflowLayouts.forEach { outLayout ->
+                            val ribbonH = ((outLayout.node.amount / sumOutflows) * hubUsableH).toFloat()
+                            val hubSourceTop = hubOutY
+                            val hubSourceBottom = hubOutY + ribbonH
+                            hubOutY += ribbonH
+
+                            val isHighlighted = selectedNodeId == null || selectedNodeId == outLayout.node.id || selectedNodeId == centralHubNode.id
+                            val fillAlpha = if (isHighlighted) 0.42f else 0.08f
+                            val strokeAlpha = if (isHighlighted) 0.75f else 0.20f
+                            val strokeW = if (isHighlighted) 1.5.dp.toPx() else 0.75.dp.toPx()
+
+                            val x1 = xCenter + nodeWidth
+                            val x2 = outLayout.bounds.left
+                            val cX = (x2 - x1) * 0.52f
+
+                            val ribbonPath = Path().apply {
+                                moveTo(x1, hubSourceTop)
+                                cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                                lineTo(x2, outLayout.yBottom)
+                                cubicTo(x2 - cX, outLayout.yBottom, x1 + cX, hubSourceBottom, x1, hubSourceBottom)
+                                close()
+                            }
+
+                            drawPath(
+                                path = ribbonPath,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(cTeal.copy(alpha = fillAlpha), outLayout.node.color.copy(alpha = fillAlpha)),
+                                    startX = x1,
+                                    endX = x2
+                                )
+                            )
+
+                            val topEdge = Path().apply {
+                                moveTo(x1, hubSourceTop)
+                                cubicTo(x1 + cX, hubSourceTop, x2 - cX, outLayout.yTop, x2, outLayout.yTop)
+                            }
+                            val bottomEdge = Path().apply {
+                                moveTo(x1, hubSourceBottom)
+                                cubicTo(x1 + cX, hubSourceBottom, x2 - cX, outLayout.yBottom, x2, outLayout.yBottom)
+                            }
+                            drawPath(topEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                            drawPath(bottomEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
                         }
-                        drawPath(topEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
-                        drawPath(bottomEdge, color = outLayout.node.color.copy(alpha = strokeAlpha), style = Stroke(strokeW))
                     }
 
                     // 6. Draw Inflow Nodes & Margin Labels (Never overlapping ribbons!)
@@ -794,45 +872,64 @@ fun SankeyCashFlowCard(
                         boldPaint.textAlign = Paint.Align.RIGHT
                         val xLabel = layout.bounds.left - 6.dp.toPx()
                         val yCenter = (layout.yTop + layout.yBottom) / 2f
+                        val maxLeftW = (xLabel - 4.dp.toPx()).coerceAtLeast(10f)
+
+                        val labelText = layout.node.shortLabel
+                        val originalBoldSize = boldPaint.textSize
+                        val measuredBoldW = boldPaint.measureText(labelText)
+                        if (measuredBoldW > maxLeftW) {
+                            boldPaint.textSize = (originalBoldSize * (maxLeftW / measuredBoldW)).coerceAtLeast(7f)
+                        }
                         drawContext.canvas.nativeCanvas.drawText(
-                            layout.node.shortLabel,
+                            labelText,
                             xLabel,
                             yCenter - 2.dp.toPx(),
                             boldPaint
                         )
+                        boldPaint.textSize = originalBoldSize
+
+                        val amountText = fmtCompact(layout.node.amount)
+                        val originalLabelSize = labelPaint.textSize
+                        val measuredLabelW = labelPaint.measureText(amountText)
+                        if (measuredLabelW > maxLeftW) {
+                            labelPaint.textSize = (originalLabelSize * (maxLeftW / measuredLabelW)).coerceAtLeast(7f)
+                        }
                         labelPaint.color = layout.node.color.toArgb()
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(layout.node.amount),
+                            amountText,
                             xLabel,
                             yCenter + 9.dp.toPx(),
                             labelPaint
                         )
+                        labelPaint.textSize = originalLabelSize
                         labelPaint.color = textColor
                     }
 
-                    // Draw Central Hub Node
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(listOf(cTeal, cGreen)),
-                        topLeft = Offset(hubBounds.left, hubBounds.top),
-                        size = Size(hubBounds.width, hubBounds.height),
-                        cornerRadius = CornerRadius(cornerR, cornerR)
-                    )
-                    if (selectedNodeId == centralHubNode.id) {
+                    if (!is3Pillar) {
+                        // Draw Central Hub Node ONLY in Granular mode
                         drawRoundRect(
-                            color = Color.White,
-                            topLeft = Offset(hubBounds.left - 2f, hubBounds.top - 2f),
-                            size = Size(hubBounds.width + 4f, hubBounds.height + 4f),
-                            cornerRadius = CornerRadius(cornerR + 2f, cornerR + 2f),
-                            style = Stroke(width = 2.5f)
+                            brush = Brush.verticalGradient(listOf(cTeal, cGreen)),
+                            topLeft = Offset(hubBounds.left, hubBounds.top),
+                            size = Size(hubBounds.width, hubBounds.height),
+                            cornerRadius = CornerRadius(cornerR, cornerR)
+                        )
+                        if (selectedNodeId == centralHubNode.id) {
+                            drawRoundRect(
+                                color = Color.White,
+                                topLeft = Offset(hubBounds.left - 2f, hubBounds.top - 2f),
+                                size = Size(hubBounds.width + 4f, hubBounds.height + 4f),
+                                cornerRadius = CornerRadius(cornerR + 2f, cornerR + 2f),
+                                style = Stroke(width = 2.5f)
+                            )
+                        }
+                        poolLabelPaint.textAlign = Paint.Align.CENTER
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "POOL",
+                            xCenter + (nodeWidth / 2f),
+                            hubTop - 5.dp.toPx(),
+                            poolLabelPaint
                         )
                     }
-                    poolLabelPaint.textAlign = Paint.Align.CENTER
-                    drawContext.canvas.nativeCanvas.drawText(
-                        "POOL",
-                        xCenter + (nodeWidth / 2f),
-                        hubTop - 5.dp.toPx(),
-                        poolLabelPaint
-                    )
 
                     // 7. Draw Outflow Nodes & Margin Labels (Never overlapping ribbons!)
                     outflowLayouts.forEach { layout ->
@@ -860,19 +957,36 @@ fun SankeyCashFlowCard(
                         val yCenter = (layout.yTop + layout.yBottom) / 2f
                         val pct = (layout.node.amount / sumInflows * 100.0).coerceIn(0.0, 100.0)
 
+                        val maxRightW = (w - xLabel - 4.dp.toPx()).coerceAtLeast(10f)
+
+                        val titleText = "${layout.node.shortLabel} (${fmtPct(pct, 0)})"
+                        val originalBoldSize = boldPaint.textSize
+                        val measuredBoldW = boldPaint.measureText(titleText)
+                        if (measuredBoldW > maxRightW) {
+                            boldPaint.textSize = (originalBoldSize * (maxRightW / measuredBoldW)).coerceAtLeast(7f)
+                        }
                         drawContext.canvas.nativeCanvas.drawText(
-                            "${layout.node.shortLabel} (${fmtPct(pct, 0)})",
+                            titleText,
                             xLabel,
                             yCenter - 2.dp.toPx(),
                             boldPaint
                         )
+                        boldPaint.textSize = originalBoldSize
+
+                        val amountText = fmtCompact(layout.node.amount)
+                        val originalLabelSize = labelPaint.textSize
+                        val measuredLabelW = labelPaint.measureText(amountText)
+                        if (measuredLabelW > maxRightW) {
+                            labelPaint.textSize = (originalLabelSize * (maxRightW / measuredLabelW)).coerceAtLeast(7f)
+                        }
                         labelPaint.color = layout.node.color.toArgb()
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(layout.node.amount),
+                            amountText,
                             xLabel,
                             yCenter + 9.dp.toPx(),
                             labelPaint
                         )
+                        labelPaint.textSize = originalLabelSize
                         labelPaint.color = textColor
                     }
                 }
