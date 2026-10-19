@@ -480,7 +480,6 @@ fun SankeyCashFlowCard(
                 CardHeaderPill(
                     title = "Cash Flow Waterfall",
                     subtitle = "Interactive inflow-to-asset cascade",
-                    badgeText = "SANKEY",
                     accentColor = cTeal
                 )
             }

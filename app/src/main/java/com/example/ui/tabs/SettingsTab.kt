@@ -390,7 +390,7 @@ fun SettingsTab(
                                 )
                             )
                         }
-                        val nextExpand = !(expandTargetState ?: true)
+                        val nextExpand = !(expandTargetState ?: false)
                         OutlinedButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -430,7 +430,7 @@ fun SettingsTab(
                             } else {
                                 "Václav ${fmtCZK(s.vSalary)}/mo · Eleonora ${fmtCZK(s.eStartingSalary)}/mo · Return ${s.eReturnMonth}/${s.eReturnYear}"
                             },
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.currentIncome.totalMonthly) + "/mo",
                             badgeColor = GoodGreen,
                             externalExpandTrigger = expandTrigger,
@@ -818,7 +818,7 @@ fun SettingsTab(
                         SettingsGroupCard(
                             title = "Current Asset Balances & Cash Reserve",
                             subtitle = "Liquid ${fmtCompact(s.liquidPortfolioCurrent + if (s.isSingleHousehold) 0.0 else s.eLiquidPortfolioCurrent)} · Pension ${fmtCompact(s.dipBalanceCurrent + s.dpsBalanceCurrent + if (s.isSingleHousehold) 0.0 else (s.eDipBalanceCurrent + s.eDpsBalanceCurrent))} · Cash ${fmtCompact(s.emergencyReserveCurrent)}",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.netWorthTotal),
                             badgeColor = BrandTeal,
                             externalExpandTrigger = expandTrigger,
@@ -944,7 +944,7 @@ fun SettingsTab(
                         SettingsGroupCard(
                             title = "Monthly Investment Flows (DCA)",
                             subtitle = "ETF ${fmtCZK(s.portuDcaMonthly + if (s.isSingleHousehold) 0.0 else s.ePortuDcaMonthly)} · DIP/DPS ${fmtCZK(s.dipContributionMonthly + s.dpsOwnContributionMonthly + if (s.isSingleHousehold) 0.0 else (s.eDipContributionMonthly + s.eDpsOwnContributionMonthly))} · Growth ${fmtPct(s.dcaAnnualGrowthPct)}/yr",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = fmtCZK(state.investMonthlyTotal) + "/mo",
                             badgeColor = GoodGreen,
                             externalExpandTrigger = expandTrigger,
@@ -1205,7 +1205,7 @@ fun SettingsTab(
                         SettingsGroupCard(
                             title = "Live Czech Economic & Regulatory Sync",
                             subtitle = liveDataSubtitle(liveRegulatoryData),
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = if (liveRegulatoryData != null) "SYNCED" else "OFFLINE",
                             badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold,
                             externalExpandTrigger = expandTrigger,
@@ -1269,7 +1269,7 @@ fun SettingsTab(
                         SettingsGroupCard(
                             title = "Backup & Share Settings",
                             subtitle = "Portable JSON export/import and clipboard snapshot",
-                            initiallyExpanded = true,
+                            initiallyExpanded = false,
                             badgeText = "JSON",
                             badgeColor = BrandTeal,
                             externalExpandTrigger = expandTrigger,

@@ -159,16 +159,6 @@ fun NetWorthChart(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    ColorPill(
-                        text = if (effectiveIsReal) "TODAY'S PURCHASING POWER" else "GROWTH TRAJECTORY",
-                        color = cTeal,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        horizontalPadding = 6.dp,
-                        verticalPadding = 2.dp,
-                        cornerRadius = 6.dp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Net Worth Trajectory",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
