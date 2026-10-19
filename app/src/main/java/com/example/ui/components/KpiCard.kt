@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BrandTeal
@@ -107,7 +108,10 @@ fun KpiCard(
                     fontWeight = FontWeight.Bold,
                     horizontalPadding = 6.dp,
                     verticalPadding = 2.dp,
-                    cornerRadius = 6.dp
+                    cornerRadius = 6.dp,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -115,11 +119,12 @@ fun KpiCard(
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 18.sp,
+                        fontSize = 17.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -129,7 +134,8 @@ fun KpiCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     ),
                     maxLines = 2,
-                    softWrap = true
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

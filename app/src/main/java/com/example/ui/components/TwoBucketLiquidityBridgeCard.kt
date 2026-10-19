@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -87,7 +89,9 @@ fun TwoBucketLiquidityBridgeCard(
 
             // Two Buckets Side-by-Side
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Bucket 1: Liquid Brokerage (Portu)
@@ -97,6 +101,7 @@ fun TwoBucketLiquidityBridgeCard(
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
+                        .fillMaxHeight()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             onShowInfo?.invoke(
@@ -117,23 +122,42 @@ fun TwoBucketLiquidityBridgeCard(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Bucket 1: Liquid",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoodGreen,
-                                    fontSize = 11.5.sp
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(GoodGreen.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalance,
+                                    contentDescription = null,
+                                    tint = GoodGreen,
+                                    modifier = Modifier.size(13.dp)
                                 )
-                            )
+                            }
                             ColorPill(
                                 text = "PORTU",
                                 color = GoodGreen,
-                                fontSize = 9.sp,
+                                fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                horizontalPadding = 4.dp,
-                                verticalPadding = 1.dp
+                                horizontalPadding = 5.dp,
+                                verticalPadding = 1.5.dp
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Bucket 1: Liquid",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = GoodGreen,
+                                fontSize = 12.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = true
+                        )
 
                         Spacer(modifier = Modifier.height(6.dp))
 
@@ -177,6 +201,7 @@ fun TwoBucketLiquidityBridgeCard(
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
+                        .fillMaxHeight()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             onShowInfo?.invoke(
@@ -197,23 +222,42 @@ fun TwoBucketLiquidityBridgeCard(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Bucket 2: Pension",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = BrandGold,
-                                    fontSize = 11.5.sp
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandGold.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = BrandGold,
+                                    modifier = Modifier.size(13.dp)
                                 )
-                            )
+                            }
                             ColorPill(
                                 text = "RULE 60+10",
                                 color = BrandGold,
-                                fontSize = 9.sp,
+                                fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                horizontalPadding = 4.dp,
-                                verticalPadding = 1.dp
+                                horizontalPadding = 5.dp,
+                                verticalPadding = 1.5.dp
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Bucket 2: Pension",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = BrandGold,
+                                fontSize = 12.sp
+                            ),
+                            maxLines = 1,
+                            softWrap = true
+                        )
 
                         Spacer(modifier = Modifier.height(6.dp))
 

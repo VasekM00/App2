@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -165,7 +167,9 @@ fun OverviewTab(
 
         // 4 Interactive KPI Cards (Symmetric 2x2 Grid, Tap / Hold for deep insight)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
@@ -173,7 +177,7 @@ fun OverviewTab(
                 value = fmtCZK(state.currentIncome.totalMonthly),
                 hint = "Combined family income",
                 accentColor = BrandTeal,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_family_net",
                 info = incomeInfo,
                 onShowInfo = { infoState.show(it) },
@@ -185,7 +189,7 @@ fun OverviewTab(
                 value = fmtCompact(state.fireBaseTargetToday),
                 hint = "Today's purchasing power",
                 accentColor = BrandGold,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_fire_target",
                 info = fireTargetInfo,
                 onShowInfo = { infoState.show(it) },
@@ -196,7 +200,9 @@ fun OverviewTab(
         Spacer(modifier = Modifier.height(12.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
@@ -207,7 +213,7 @@ fun OverviewTab(
                     if (yearsAway == 0) "Target reached" else "In $yearsAway years"
                 } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_fire_age",
                 info = fireAgeInfo,
                 onShowInfo = { infoState.show(it) },
@@ -219,7 +225,7 @@ fun OverviewTab(
                 value = fmtCZK(state.investMonthlyTotal),
                 hint = "${fmtPct(state.savingsRatePct, 1)} savings rate",
                 accentColor = GoodGreen,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_savings_rate",
                 info = savingsRateInfo,
                 onShowInfo = { infoState.show(it) },
@@ -316,7 +322,9 @@ fun OverviewTab(
                 ) {
                     // Row 1: Pre-60 Liquid Bridge + Coast FIRE
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         val bridgeValue = if (state.isLiquidBridgeFundedToday) "100% Funded" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
@@ -334,7 +342,7 @@ fun OverviewTab(
                             icon = Icons.Default.Shield,
                             info = liquidBridgeInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_bridge")
+                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_bridge")
                         )
 
                         val coastValue = if (coastMilestone.isAchieved) "Achieved (100%)" else "${fmtPct(coastMilestone.progressPct, 0)} reached"
@@ -352,13 +360,15 @@ fun OverviewTab(
                             icon = Icons.Default.Star,
                             info = coastFireInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_milestone")
+                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_milestone")
                         )
                     }
 
                     // Row 2: Annual Tax Relief + Historical Survival
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         StrategicMetricTile(
@@ -371,7 +381,7 @@ fun OverviewTab(
                             icon = Icons.Default.AccountBalance,
                             info = taxRefundInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_tax_refund")
+                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_tax_refund")
                         )
 
                         val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
@@ -386,7 +396,7 @@ fun OverviewTab(
                             icon = Icons.Default.CheckCircle,
                             info = survivalInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).testTag("strategic_tile_survival")
+                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_survival")
                         )
                     }
                 }
@@ -429,39 +439,24 @@ private fun StrategicMetricTile(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
+            // Header Row: Icon circle on left, Status Badge on right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp)
                     )
                 }
                 if (badgeText != null) {
@@ -470,13 +465,29 @@ private fun StrategicMetricTile(
                         color = badgeColor,
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.Bold,
-                        horizontalPadding = 5.dp,
-                        verticalPadding = 1.5.dp
+                        horizontalPadding = 6.dp,
+                        verticalPadding = 2.dp
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Dedicated full-width Title: 2 lines allowed, softWrap = true, NO clipping!
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    lineHeight = 15.sp
+                ),
+                maxLines = 2,
+                softWrap = true,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = value,
@@ -494,10 +505,12 @@ private fun StrategicMetricTile(
             Text(
                 text = subLabel,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.5.sp
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    fontSize = 10.5.sp,
+                    lineHeight = 14.sp
                 ),
-                maxLines = 1,
+                maxLines = 2,
+                softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )
         }

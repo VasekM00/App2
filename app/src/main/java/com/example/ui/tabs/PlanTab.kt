@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -468,8 +469,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Investable Capital",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(investableNetWorth),
@@ -485,8 +486,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Target Capital",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(targetWorth),
@@ -503,8 +504,8 @@ private fun FireRoadmapSubTab(
                         Text(
                             text = "Monthly SWR",
                             style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true
                         )
                         Text(
                             text = fmtCZK(monthlyPassiveIncome),
@@ -1077,7 +1078,9 @@ private fun PensionOptimizationSection(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 KpiCard(
@@ -1085,7 +1088,7 @@ private fun PensionOptimizationSection(
                     value = "+${fmtCZK(yearlyTaxSaved)}",
                     hint = "${String.format(java.util.Locale.getDefault(), "%.0f", s.taxRatePct)}% relief via tax return",
                     accentColor = GoodGreen,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     info = PlanMetricInfos.dipDeduction,
                     onShowInfo = onShowInfo
                 )
@@ -1098,14 +1101,16 @@ private fun PensionOptimizationSection(
                         "${if (s.primaryName.isNotBlank()) s.primaryName else "Primary"}: ${fmtCompact(vTotalRetirement)} · ${if (s.spouseName.isNotBlank()) s.spouseName else "Partner"}: ${fmtCompact(eTotalRetirement)}"
                     },
                     accentColor = BrandTeal,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     info = PlanMetricInfos.dipDeduction,
                     onShowInfo = onShowInfo
                 )
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 KpiCard(
@@ -1113,7 +1118,7 @@ private fun PensionOptimizationSection(
                     value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}",
                     hint = "${fmtCZK(totalSubsidyMonthly)} monthly · ${if (dps.youthSubsidyActive) "40% youth match" else "20% state match"}",
                     accentColor = BrandGold,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     info = PlanMetricInfos.dpsLepsiPenzijko,
                     onShowInfo = onShowInfo
                 )
@@ -1122,7 +1127,7 @@ private fun PensionOptimizationSection(
                     value = fmtCompact(dip.dipBalanceAt60 + dps.dpsBalance),
                     hint = "DIP ${String.format(java.util.Locale.getDefault(), "%.1f", s.portfolioNominalReturnPct)}% · DPS ${String.format(java.util.Locale.getDefault(), "%.1f", dpsNetReturnPct)}% net",
                     accentColor = BrandBlue,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     info = PlanMetricInfos.dpsAge36,
                     onShowInfo = onShowInfo
                 )
@@ -2269,8 +2274,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = fmtCZK(activeTarget),
@@ -2289,8 +2294,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
@@ -2310,8 +2315,8 @@ private fun FireMilestonesComparisonCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp
                                 ),
-                                maxLines = 1,
-                                softWrap = false
+                                maxLines = 2,
+                                softWrap = true
                             )
                             Text(
                                 text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),

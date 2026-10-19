@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -50,6 +51,9 @@ fun ColorPill(
     cornerRadius: Dp = 8.dp,
     alpha: Float = 0.12f,
     borderAlpha: Float = 0.28f,
+    maxLines: Int = 1,
+    softWrap: Boolean = false,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
     info: MetricInfo? = null,
     onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
@@ -92,8 +96,9 @@ fun ColorPill(
                     color = color,
                     letterSpacing = 0.3.sp
                 ),
-                maxLines = 1,
-                softWrap = false
+                maxLines = maxLines,
+                softWrap = softWrap,
+                overflow = overflow
             )
         }
     }

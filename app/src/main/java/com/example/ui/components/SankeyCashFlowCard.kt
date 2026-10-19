@@ -1147,12 +1147,13 @@ fun SankeyCashFlowCard(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = "Tap any stream to inspect statutory rules",
+                                text = "Tap any stream to inspect breakdown",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
-                                maxLines = 1,
+                                maxLines = 2,
+                                softWrap = true,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
