@@ -72,6 +72,7 @@ import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 data class NavTabItem(
     val title: String,
@@ -99,6 +100,8 @@ fun MainScreen(
     viewModel: MainViewModel,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
+    themeMode: String = "SYSTEM",
+    onChangeThemeMode: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.calculationState.collectAsState()
@@ -126,6 +129,7 @@ fun MainScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val overviewScrollState = androidx.compose.foundation.rememberScrollState()
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     val haptic = LocalHapticFeedback.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -151,7 +155,9 @@ fun MainScreen(
     val searchCatalog = remember {
         listOf(
             SearchIndexEntry("Emergency Cash Reserve & Runway", "Overview", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
-            SearchIndexEntry("FIRE Milestones & Targets", "Overview", 0, 0, listOf("milestone", "coast", "lean", "standard", "barista", "fat", "overview", "target")),
+            SearchIndexEntry("FIRE Milestones & Targets", "Strategy > Roadmap & Timeline", 3, 1, listOf("milestone", "coast", "lean", "standard", "barista", "fat", "overview", "target")),
+            SearchIndexEntry("Subscription & Fixed Debit Auditor", "Cash Flow > Budget & Incomes", 1, 0, listOf("subscription", "recurring", "fixed debit", "auditor", "netflix", "spotify", "dismissed")),
+            SearchIndexEntry("Learned Merchant Rules & Auto-Categorization", "Settings > Data & System", 4, 2, listOf("merchant", "rules", "learned", "category", "override", "keyword", "auto")),
             SearchIndexEntry("Monthly Budget & Surplus Summary", "Cash Flow > Budget & Incomes", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
             SearchIndexEntry("Sankey Cash Flow Waterfall & Asset Cascade", "Cash Flow > Budget & Incomes", 1, 0, listOf("sankey", "waterfall", "cash flow", "cascade", "inflow", "allocation", "stream", "journey", "leakage")),
             SearchIndexEntry("Live Czech Economic & Regulatory Sync", "Settings > Data & System", 4, 2, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp")),
@@ -438,6 +444,9 @@ fun MainScreen(
                                 onNavigateToEmergencyReserve = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 0
+                                    coroutineScope.launch {
+                                        overviewScrollState.animateScrollTo(420)
+                                    }
                                 },
                                 onNavigateToSavingsRate = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -464,18 +473,34 @@ fun MainScreen(
                                 onUpdateTransactionCategory = { idx, cat, remember ->
                                     viewModel.updatePendingTransactionCategory(idx, cat, remember)
                                 },
+                                onUpdateTransactionCategoryBulk = { idx, cat, remember, applyAll ->
+                                    viewModel.updatePendingTransactionCategory(idx, cat, remember, applyAll)
+                                },
+                                onToggleTransactionExcluded = { idx ->
+                                    viewModel.togglePendingTransactionExcluded(idx)
+                                },
+                                onBulkExcludeMerchant = { query ->
+                                    viewModel.bulkExcludeMerchant(query)
+                                },
                                 activeAuditReport = activeAuditReport,
                                 onShowAuditReport = { ym -> viewModel.loadAuditReportForMonth(ym) },
                                 onDismissAuditReport = { viewModel.clearAuditReport() },
                                 importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 lastImportTimestamp = lastImportTimestamp,
                                 allImportedTransactions = allImportedTransactions,
+                                onUpdateImportedTransactionCategory = { txId, cat, rem, applyAll ->
+                                    viewModel.updateImportedTransactionCategory(txId, cat, rem, applyAll)
+                                },
+                                onToggleImportedTransactionExcluded = { txId ->
+                                    viewModel.toggleImportedTransactionExcluded(txId)
+                                },
                                 dismissedSubscriptionMerchants = dismissedSubscriptionMerchants,
                                 onDismissSubscription = { viewModel.dismissSubscription(it) },
                                 onRestoreSubscription = { viewModel.restoreSubscription(it) },
                                 onClearAllDismissedSubscriptions = { viewModel.clearAllDismissedSubscriptions() },
                                 onDeleteImportedStatement = { ym, bank -> viewModel.deleteImportedStatement(ym, bank) },
                                 initialSubTab = targetCashFlowSubTab,
+                                onSubTabSelected = { targetCashFlowSubTab = it },
                                 onUpdateSettings = { viewModel.updateSettings(it) }
                             )
                             2 -> ProjectionsTab(
@@ -483,7 +508,8 @@ fun MainScreen(
                                 ledgerEntries = ledgerEntries,
                                 actionStates = actionStates,
                                 onApplySettings = { viewModel.updateSettings(it) },
-                                initialSubTab = targetProjectionsSubTab
+                                initialSubTab = targetProjectionsSubTab,
+                                onSubTabSelected = { targetProjectionsSubTab = it }
                             )
                             3 -> PlanTab(
                                 state = state,
@@ -492,7 +518,8 @@ fun MainScreen(
                                     viewModel.toggleAction(year, id, isDone)
                                 },
                                 onUpdateSettings = { viewModel.updateSettings(it) },
-                                initialSubTab = targetPlanSubTab
+                                initialSubTab = targetPlanSubTab,
+                                onSubTabSelected = { targetPlanSubTab = it }
                             )
                             4 -> SettingsTab(
                                 state = state,
@@ -503,7 +530,14 @@ fun MainScreen(
                                 isSyncing = isSyncing,
                                 onSyncLiveCzechData = { viewModel.syncLiveCzechData() },
                                 lastSyncTimestamp = lastCzechSyncTimestamp,
-                                initialSubTab = targetSettingsSubTab
+                                initialSubTab = targetSettingsSubTab,
+                                onSubTabSelected = { targetSettingsSubTab = it },
+                                ledgerEntries = ledgerEntries,
+                                actionStates = actionStates,
+                                importedTransactions = allImportedTransactions,
+                                onRestoreFullBackup = { viewModel.restoreFullBackup(it) },
+                                themeMode = themeMode,
+                                onChangeThemeMode = onChangeThemeMode
                             )
                         }
                     }

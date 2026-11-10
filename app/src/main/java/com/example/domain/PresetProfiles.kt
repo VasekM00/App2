@@ -64,12 +64,12 @@ object PresetProfiles {
         id = "stagflation",
         title = "Stagflation",
         badge = "STRESS",
-        description = "5% inflation with 5% rent growth, only 5.5% equity return and 3.5% SWR.",
+        description = "5% inflation with 6% rent growth, 4.5% equity return and 3.5% SWR.",
         transform = { s ->
             s.copy(
                 cpiInflationPct = 5.0,
-                rentGrowthPct = 5.0,
-                portfolioNominalReturnPct = 5.5,
+                rentGrowthPct = 6.0,
+                portfolioNominalReturnPct = 4.5,
                 safeWithdrawalRatePct = 3.5,
                 monteCarloVolatilityPct = 18.0
             )

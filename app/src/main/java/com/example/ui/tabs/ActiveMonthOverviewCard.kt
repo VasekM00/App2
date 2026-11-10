@@ -76,6 +76,7 @@ internal fun ActiveMonthOverviewCard(
     onShowAudit: (() -> Unit)? = null,
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     onDeleteImportedStatement: ((String, String?) -> Unit)? = null,
+    monthTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val totalInc = entry.incVaclav + entry.incEleonora + entry.incUnforeseen
@@ -115,17 +116,7 @@ internal fun ActiveMonthOverviewCard(
 
     if (bankToDelete != null) {
         val targetBank = bankToDelete!!
-        val friendlyName = when {
-            targetBank.contains("MONETA", ignoreCase = true) -> "Moneta"
-            targetBank.contains("CSOB", ignoreCase = true) || targetBank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-            targetBank.contains("MBANK", ignoreCase = true) -> "mBank"
-            targetBank.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
-            targetBank.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
-            targetBank.contains("FIO", ignoreCase = true) -> "Fio banka"
-            targetBank.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
-            targetBank.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
-            else -> targetBank
-        }
+        val friendlyName = friendlyBankName(targetBank)
         AlertDialog(
             onDismissRequest = { bankToDelete = null },
             title = { Text("Delete Imported Statement") },
@@ -235,21 +226,7 @@ internal fun ActiveMonthOverviewCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     activeBanks.sorted().forEach { bank ->
-                        val displayName = when {
-                            bank.contains("MONETA", ignoreCase = true) -> "Moneta"
-                            bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-                            bank.contains("MBANK", ignoreCase = true) -> "mBank"
-                            bank.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
-                            bank.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
-                            bank.contains("FIO", ignoreCase = true) -> "Fio banka"
-                            bank.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
-                            bank.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
-                            bank.contains("UNICREDIT", ignoreCase = true) -> "UniCredit"
-                            bank.contains("CREDITAS", ignoreCase = true) -> "Banka Creditas"
-                            bank.contains("REVOLUT", ignoreCase = true) -> "Revolut"
-                            bank.contains("WISE", ignoreCase = true) -> "Wise"
-                            else -> bank
-                        }
+                        val displayName = friendlyBankName(bank)
                         ColorPill(
                             text = "$displayName ×",
                             color = bankBadgeColor(bank),
@@ -477,12 +454,33 @@ internal fun ActiveMonthOverviewCard(
                 }
             }
 
-            // DCA Investment Flow tracking row
-            if (entry.notes.contains("Invested:", ignoreCase = true)) {
+            // DCA Investment Flow tracking row (live from imported transactions, fallback to notes)
+            val liveAgg = remember(monthTransactions) {
+                if (monthTransactions.isNotEmpty()) {
+                    com.example.util.StatementImportCoordinator.aggregateMonthTransactions(monthTransactions)
+                } else null
+            }
+            val hasLiveInvestments = (liveAgg?.totalInvested ?: 0.0) > 0.0
+            val hasNoteInvestments = entry.notes.contains("Invested:", ignoreCase = true)
+
+            if (hasLiveInvestments || hasNoteInvestments) {
                 Spacer(modifier = Modifier.height(8.dp))
-                val invFull = entry.notes.substringAfter("Invested: ").substringBefore(" |")
-                val invTotalStr = invFull.substringBefore(" (").trim()
-                val invBreakdown = invFull.substringAfter("(", "").substringBefore(")")
+                val invTotalStr = if (hasLiveInvestments && liveAgg != null) {
+                    fmtCompact(liveAgg.totalInvested)
+                } else {
+                    val invFull = entry.notes.substringAfter("Invested: ").substringBefore(" |")
+                    invFull.substringBefore(" (").trim()
+                }
+                val invBreakdown = if (hasLiveInvestments && liveAgg != null) {
+                    buildList {
+                        if (liveAgg.invPortu > 0) add("Portu: ${fmtCompact(liveAgg.invPortu)}")
+                        if (liveAgg.invDip > 0) add("DIP: ${fmtCompact(liveAgg.invDip)}")
+                        if (liveAgg.invDps > 0) add("DPS: ${fmtCompact(liveAgg.invDps)}")
+                    }.joinToString(", ")
+                } else {
+                    val invFull = entry.notes.substringAfter("Invested: ").substringBefore(" |")
+                    invFull.substringAfter("(", "").substringBefore(")")
+                }
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -649,9 +647,12 @@ internal fun ActiveMonthOverviewCard(
                 }
             }
 
-            if (entry.notes.isNotBlank()) {
+            if (entry.notes.isNotBlank() || activeBanks.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                val isBankImport = entry.notes.contains("Imported from", ignoreCase = true)
+                val isBankImport = entry.notes.contains("Imported from", ignoreCase = true) || activeBanks.isNotEmpty()
+                val displayNote = entry.notes.ifBlank {
+                    "Imported from ${activeBanks.sorted().joinToString(" + ") { friendlyBankName(it) }}"
+                }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = if (isBankImport) BrandTeal.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -689,7 +690,7 @@ internal fun ActiveMonthOverviewCard(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = entry.notes,
+                                text = displayNote,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (isBankImport) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp,

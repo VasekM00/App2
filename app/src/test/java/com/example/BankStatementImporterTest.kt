@@ -3,7 +3,10 @@ package com.example
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.BankType
+import com.example.util.ParsedBankTransaction
+import com.example.util.StatementParseSummary
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -531,5 +534,84 @@ class BankStatementImporterTest {
         assertEquals(75000.0, summary.incVaclav, 0.01)
         assertEquals(1540.0, summary.expGroceries, 0.01)
         assertEquals(1540.0, summary.totalExpenses, 0.01)
+    }
+
+    @Test
+    fun testNormalizeDate_handlesTimestampAndVariedFormats() {
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("15.09.2026 14:32:00"))
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("2026-09-15 14:32"))
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("15. 9. 2026"))
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("2026-09-15T14:32:00.000Z"))
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("15/09/2026"))
+        assertEquals("2026-09-15", BankStatementImporter.normalizeDate("15.09.26"))
+        assertEquals("", BankStatementImporter.normalizeDate("31.02.2026")) // Invalid calendar day rejected
+    }
+
+    @Test
+    fun testDecodeStatementText_windows1250AccentsPreserved() {
+        val sampleCzech = "Měsíční poplatek za vedení účtu: Příliš žluťoučký kůň úpěl ďábelské ódy"
+        val cp1250Charset = java.nio.charset.Charset.forName("windows-1250")
+        val cp1250Bytes = sampleCzech.toByteArray(cp1250Charset)
+
+        val decoded = BankStatementImporter.decodeStatementText(cp1250Bytes)
+        assertEquals(sampleCzech, decoded)
+        assertFalse(decoded.contains('\uFFFD'))
+        assertTrue(decoded.contains("Měsíční"))
+        assertTrue(decoded.contains("žluťoučký"))
+    }
+
+    @Test
+    fun testExcludedTransactions_skippedFromSummaryTotals() {
+        val tx1 = ParsedBankTransaction(
+            date = "2026-09-15",
+            amount = -500.0,
+            category = BankTransactionType.GROCERIES,
+            isExcluded = false
+        )
+        val tx2 = ParsedBankTransaction(
+            date = "2026-09-15",
+            amount = -250.0,
+            category = BankTransactionType.DINING_RESTAURANT,
+            isExcluded = true // Excluded reimbursed expense
+        )
+        val tx3 = ParsedBankTransaction(
+            date = "2026-09-15",
+            amount = 75000.0,
+            category = BankTransactionType.SALARY_VACLAV,
+            isExcluded = false
+        )
+
+        val initialSummary = StatementParseSummary(
+            detectedBank = BankType.MONETA,
+            yearMonth = "2026-09",
+            totalInflows = 0.0,
+            incVaclav = 0.0,
+            incEleonora = 0.0,
+            incOther = 0.0,
+            totalExpenses = 0.0,
+            expRent = 0.0,
+            expGroceries = 0.0,
+            expOther = 0.0,
+            totalInvested = 0.0,
+            invPortu = 0.0,
+            invDip = 0.0,
+            invDps = 0.0,
+            internalTransfersCount = 0,
+            totalNettedAmount = 0.0,
+            monthEndBalance = null,
+            transactions = listOf<ParsedBankTransaction>(tx1, tx2, tx3),
+            isPdfSource = false
+        )
+
+        val recomputed = BankStatementImporter.recomputeSummary(initialSummary, listOf(tx1, tx2, tx3))
+        assertEquals(75000.0, recomputed.totalInflows, 0.01)
+        assertEquals(500.0, recomputed.expGroceries, 0.01)
+        assertEquals(0.0, recomputed.expOther, 0.01) // tx2 dining was excluded!
+        assertEquals(500.0, recomputed.totalExpenses, 0.01)
+
+        // Restore tx2
+        val restoredSummary = BankStatementImporter.recomputeSummary(recomputed, listOf(tx1, tx2.copy(isExcluded = false), tx3))
+        assertEquals(250.0, restoredSummary.expOther, 0.01)
+        assertEquals(750.0, restoredSummary.totalExpenses, 0.01)
     }
 }

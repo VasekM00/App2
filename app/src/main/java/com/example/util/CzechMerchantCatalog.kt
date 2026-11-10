@@ -26,7 +26,8 @@ object CzechMerchantCatalog {
 
         // Remove common Czech city names, corporate suffixes, and terminal noise
         val cleanTokens = alphanumeric.split(Regex("""\s+""")).filter { token ->
-            token !in CITY_NOISE && token !in CORPORATE_SUFFIXES && token.length > 1
+            token !in CITY_NOISE && token !in CORPORATE_SUFFIXES && token.length > 1 &&
+            !token.matches(Regex("""(praha|brno|ostrava|plzen|olomouc|liberec)\d+"""))
         }
 
         return cleanTokens.joinToString(" ").trim()
@@ -52,7 +53,8 @@ object CzechMerchantCatalog {
 
     private val CORPORATE_SUFFIXES = setOf(
         "sro", "as", "spol", "gmbh", "ltd", "corp", "inc", "od", "cz", "com", "eu",
-        "eshop", "shop", "cr", "czk", "mist", "misto", "terminal", "republika"
+        "eshop", "shop", "cr", "czk", "mist", "misto", "terminal", "republika",
+        "zs", "ops", "vos", "ks"
     )
 
     private const val MIN_OVERRIDE_PATTERN_LENGTH = 3
@@ -105,9 +107,12 @@ object CzechMerchantCatalog {
      */
     fun suggestMerchantSearchQuery(rawText: String): String {
         val clean = BankStatementImporter.cleanPaymentDescription(rawText)
-        return clean.replace(Regex("""\b(od|cz|com|s\.r\.o\.|a\.s\.|brno|praha)\b""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""\s+"""), " ")
-            .trim()
+        var result = clean.replace(Regex("""\b(od|cz|com|s\.r\.o\.|a\.s\.|z\.s\.|o\.p\.s\.|(?:brno|praha|ostrava|plzen|olomouc|liberec)\s*\d*)\b""", RegexOption.IGNORE_CASE), " ")
+        if (result.any { it.isLetter() }) {
+            result = result.replace(Regex("""\b\d{3,6}\b"""), " ")
+            result = result.replace(Regex("""\b\d{1,2}\b$"""), " ")
+        }
+        return result.replace(Regex("""\s+"""), " ").trim()
     }
 
     private data class MerchantRule(
@@ -122,12 +127,12 @@ object CzechMerchantCatalog {
             return keywords.any { kw ->
                 val normKw = normalizeSimple(kw)
                 if (kw.endsWith("*")) {
-                    val prefix = kw.removeSuffix("*")
+                    val prefix = normKw.removeSuffix("*")
                     tokens.any { it.startsWith(prefix) } || simpleTokens.any { it.startsWith(prefix) }
                 } else if (normKw.contains(" ")) {
                     padded.contains(" $normKw ") || simplePadded.contains(" $normKw ")
                 } else {
-                    tokens.contains(kw) || simpleTokens.contains(kw)
+                    tokens.contains(normKw) || simpleTokens.contains(normKw)
                 }
             }
         }

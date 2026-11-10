@@ -206,10 +206,10 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Projected FIRE Age",
-                value = firePoint?.let { "Age ${it.age}" } ?: "Age ${state.settings.primaryAge + 35}+",
+                title = "Projected FIRE Year",
+                value = firePoint?.let { "${it.year}" } ?: "${state.settings.baseYear + 35}+",
                 hint = firePoint?.let {
-                    val yearsAway = (it.age - state.settings.primaryAge).coerceAtLeast(0)
+                    val yearsAway = (it.year - state.settings.baseYear).coerceAtLeast(0)
                     if (yearsAway == 0) "Target reached" else "In $yearsAway years"
                 } ?: "Beyond 35y horizon",
                 accentColor = BrandBlue,
@@ -265,12 +265,13 @@ fun OverviewTab(
         )
 
         val coastMilestone = state.fireMilestones.coastFire
+        val coastTargetYear = state.settings.baseYear + (state.settings.vStatePensionAge - state.settings.primaryAge).coerceAtLeast(0)
         val coastFireInfo = MetricInfo(
             title = "Coast FIRE Milestone",
             category = "Financial Independence Milestones",
-            formulaOrRule = "Coast Target = FIRE Target / (1 + Real CAGR)^(Years to 65)",
-            explanation = "The portfolio size where compounding alone — with zero further contributions — will grow to your full target by age 65.",
-            practicalImplication = if (coastMilestone.isAchieved) "You have already secured traditional retirement at 65 through past savings! Further contributions simply accelerate early retirement." else "Focus DCA contributions until Coast FIRE is reached to secure a lifelong financial safety net.",
+            formulaOrRule = "Coast Target = FIRE Target / (1 + Real CAGR)^(Years to $coastTargetYear)",
+            explanation = "The portfolio size where compounding alone — with zero further contributions — will grow to your full target by $coastTargetYear.",
+            practicalImplication = if (coastMilestone.isAchieved) "You have already secured traditional retirement in $coastTargetYear through past savings! Further contributions simply accelerate early retirement." else "Focus DCA contributions until Coast FIRE is reached to secure a lifelong financial safety net.",
             accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
         )
 
@@ -346,7 +347,7 @@ fun OverviewTab(
                         )
 
                         val coastValue = if (coastMilestone.isAchieved) "Achieved (100%)" else "${fmtPct(coastMilestone.progressPct, 0)} reached"
-                        val coastSub = if (coastMilestone.isAchieved) "Compounding carries to 65" else "Target: ${fmtCompact(coastMilestone.targetAmountToday)}"
+                        val coastSub = if (coastMilestone.isAchieved) "Compounding carries to $coastTargetYear" else "Target: ${fmtCompact(coastMilestone.targetAmountToday)}"
                         val coastBadge = if (coastMilestone.isAchieved) "SECURED" else "IN PROGRESS"
                         val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
 

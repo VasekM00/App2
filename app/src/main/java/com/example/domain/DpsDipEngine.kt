@@ -19,20 +19,20 @@ object DpsDipEngine {
      */
     fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
         val years = max(0, 60 - settings.primaryAge)
-        val fee = min(settings.dpsAnnualFeePct, settings.dpsStatutoryFeeCapPct) // Statutory fee cap
+        val fee = min(max(0.0, settings.dpsAnnualFeePct), max(0.0, settings.dpsStatutoryFeeCapPct)) // Statutory fee cap
         val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct - fee) / 100.0)
         val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
 
         val annualRateETF = max(-0.99, FinancialEngine.netTaxableNominalReturnPct(settings) / 100.0)
         val monthlyRateETF = (1.0 + annualRateETF).pow(1.0 / 12.0) - 1.0
 
-        val eDpsOwn = if (!settings.isSingleHousehold) settings.eDpsOwnContributionMonthly else 0.0
-        val eDpsBal = if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent else 0.0
-        val eEmp = if (!settings.isSingleHousehold) settings.eEmployerRetirementMonthly else 0.0
+        val eDpsOwn = if (!settings.isSingleHousehold) max(0.0, settings.eDpsOwnContributionMonthly) else 0.0
+        val eDpsBal = if (!settings.isSingleHousehold) max(0.0, settings.eDpsBalanceCurrent) else 0.0
+        val eEmp = if (!settings.isSingleHousehold) max(0.0, settings.eEmployerRetirementMonthly) else 0.0
 
-        val own = settings.dpsOwnContributionMonthly + eDpsOwn
-        val empCap = settings.employerRetirementExemptionAnnual / 12.0
-        val vEmp = min(settings.employerRetirementMonthly, empCap)
+        val own = max(0.0, settings.dpsOwnContributionMonthly) + eDpsOwn
+        val empCap = max(0.0, settings.employerRetirementExemptionAnnual) / 12.0
+        val vEmp = min(max(0.0, settings.employerRetirementMonthly), empCap)
         val eEmpEffective = min(eEmp, empCap)
         val emp = vEmp + eEmpEffective
 
@@ -181,8 +181,8 @@ object DpsDipEngine {
         val tsCombined = CzechTaxEngine.dipTaxSavingYear(settings)
         val tsDpsOnly = CzechTaxEngine.dipTaxSavingYear(settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0))
         val tsYear = max(0.0, tsCombined - tsDpsOnly)
-        val vDipMonthly = settings.dipContributionMonthly
-        val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly else 0.0
+        val vDipMonthly = max(0.0, settings.dipContributionMonthly)
+        val eDipMonthly = if (!settings.isSingleHousehold) max(0.0, settings.eDipContributionMonthly) else 0.0
         val totalMonthlyDip = vDipMonthly + eDipMonthly
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly - settings.dpsDeductionThresholdMonthly) * 12.0
 

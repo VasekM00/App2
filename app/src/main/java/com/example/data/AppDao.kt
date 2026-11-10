@@ -72,6 +72,13 @@ interface ActionStateDao {
     @Query("UPDATE action_states SET isDone = NOT isDone WHERE actionKey = :key")
     suspend fun toggleActionState(key: String)
 
+    @Query("""
+        INSERT INTO action_states (actionKey, year, actionId, isDone)
+        VALUES (:key, :year, :actionId, 1)
+        ON CONFLICT(actionKey) DO UPDATE SET isDone = NOT isDone
+    """)
+    suspend fun toggleActionStateUpsert(key: String, year: Int, actionId: String)
+
     @Query("DELETE FROM action_states")
     suspend fun deleteAllActionStates()
 }
@@ -96,11 +103,17 @@ interface ImportedTransactionDao {
     @Query("SELECT * FROM imported_bank_transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC, id ASC")
     suspend fun getTransactionsInDateRangeDirect(startDate: String, endDate: String): List<ImportedBankTransactionEntity>
 
+    @Query("SELECT * FROM imported_bank_transactions WHERE id = :id LIMIT 1")
+    suspend fun getTransactionById(id: Long): ImportedBankTransactionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransactions(transactions: List<ImportedBankTransactionEntity>)
 
     @Update
     suspend fun updateTransactions(transactions: List<ImportedBankTransactionEntity>)
+
+    @Update
+    suspend fun updateTransaction(transaction: ImportedBankTransactionEntity)
 
     @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName")
     suspend fun deleteTransactionsForBankAndMonth(yearMonth: String, bankName: String)

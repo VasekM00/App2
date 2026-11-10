@@ -80,7 +80,8 @@ fun EmergencyReserveWidget(
         com.example.domain.FinancialEngine.effectiveEmergencyReserveTarget(state.settings.copy(emergencyReserveMode = selectedTargetMode))
     }
 
-    val progress = (currentLiquidCash / targetAmount).coerceIn(0.0, 1.0).toFloat()
+    val safeTarget = targetAmount.coerceAtLeast(1.0)
+    val progress = (currentLiquidCash / safeTarget).let { if (it.isNaN()) 0.0 else it }.coerceIn(0.0, 1.0).toFloat()
     val monthsCovered = if (monthlyExpense > 0.0) (currentLiquidCash / monthlyExpense).coerceAtLeast(0.0) else 0.0
 
     val cGreen = GoodGreen

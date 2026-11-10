@@ -22,35 +22,37 @@ class FinancialRepository(
         .map { list -> list.associate { it.actionKey to it.isDone } }
 
     suspend fun saveSettings(settings: SettingsEntity) = withContext(Dispatchers.IO) {
-        settingsDao.saveSettings(settings)
+        val clean = com.example.util.BackupManager.sanitizeSettings(settings, SettingsEntity.freshDefaults())
+        settingsDao.saveSettings(clean)
     }
 
     suspend fun updateSettingsAndSyncLedger(
         newSettings: SettingsEntity,
         currentYearMonth: String
     ) = withContext(Dispatchers.IO) {
+        val cleanSettings = com.example.util.BackupManager.sanitizeSettings(newSettings, SettingsEntity.freshDefaults())
         database.withTransaction {
-            settingsDao.saveSettings(newSettings)
+            settingsDao.saveSettings(cleanSettings)
             val currentEntry = ledgerDao.getEntryByYearMonth(currentYearMonth)
             if (currentEntry != null) {
                 if (currentEntry.notes.contains("Imported")) {
                     return@withTransaction
                 }
-                val updatedEleonora = if (newSettings.baseYear < newSettings.eReturnYear) {
-                    newSettings.eParentalAllowanceMonthly
+                val updatedEleonora = if (cleanSettings.baseYear < cleanSettings.eReturnYear) {
+                    cleanSettings.eParentalAllowanceMonthly
                 } else {
-                    newSettings.eStartingSalary
+                    cleanSettings.eStartingSalary
                 }
-                val updatedLiquid = newSettings.liquidPortfolioCurrent + if (!newSettings.isSingleHousehold) newSettings.eLiquidPortfolioCurrent else 0.0
-                val updatedPension = newSettings.dpsBalanceCurrent + newSettings.dipBalanceCurrent + if (!newSettings.isSingleHousehold) (newSettings.eDpsBalanceCurrent + newSettings.eDipBalanceCurrent) else 0.0
+                val updatedLiquid = cleanSettings.liquidPortfolioCurrent + if (!cleanSettings.isSingleHousehold) cleanSettings.eLiquidPortfolioCurrent else 0.0
+                val updatedPension = cleanSettings.dpsBalanceCurrent + cleanSettings.dipBalanceCurrent + if (!cleanSettings.isSingleHousehold) (cleanSettings.eDpsBalanceCurrent + cleanSettings.eDipBalanceCurrent) else 0.0
                 ledgerDao.updateEntry(
                     currentEntry.copy(
-                        incVaclav = newSettings.vSalary,
+                        incVaclav = cleanSettings.vSalary,
                         incEleonora = if (updatedEleonora > 0.0) updatedEleonora else currentEntry.incEleonora,
-                        expRent = if (newSettings.rentMonthly > 0.0) newSettings.rentMonthly else currentEntry.expRent,
+                        expRent = if (cleanSettings.rentMonthly > 0.0) cleanSettings.rentMonthly else currentEntry.expRent,
                         portfolioBalanceAtMonthEnd = if (updatedLiquid > 0.0) updatedLiquid else currentEntry.portfolioBalanceAtMonthEnd,
                         pensionBalanceAtMonthEnd = if (updatedPension > 0.0) updatedPension else currentEntry.pensionBalanceAtMonthEnd,
-                        emergencyReserveAtMonthEnd = if (newSettings.emergencyReserveCurrent > 0.0) newSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
+                        emergencyReserveAtMonthEnd = if (cleanSettings.emergencyReserveCurrent > 0.0) cleanSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
                     )
                 )
             }
@@ -127,13 +129,26 @@ class FinancialRepository(
     /**
      * One-time repair for databases written by older app versions that stored the employer
      * retirement contribution as 2800 (monthly) instead of the correct 233 CZK/month
-     * (2800 CZK/yr). Persists the correction so the value stops drifting between DB and UI.
+     * (2800 CZK/yr), plus automatic calendar-year rollover when the real Czech year advances.
      */
-    suspend fun repairLegacyEmployerContribution() = withContext(Dispatchers.IO) {
+    suspend fun repairLegacyEmployerContribution(
+        targetCalendarYear: Int = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
+    ) = withContext(Dispatchers.IO) {
         database.withTransaction {
             val current = settingsDao.getSettingsDirect() ?: return@withTransaction
-            if (current.employerRetirementMonthly >= 2795.0 && current.employerRetirementMonthly <= 2805.0) {
-                settingsDao.saveSettings(current.copy(employerRetirementMonthly = 233.0))
+            var updated = current
+            if (updated.employerRetirementMonthly >= 2795.0 && updated.employerRetirementMonthly <= 2805.0) {
+                updated = updated.copy(employerRetirementMonthly = 233.0)
+            }
+            if (updated.baseYear in 2026 until targetCalendarYear) {
+                val delta = targetCalendarYear - updated.baseYear
+                updated = updated.copy(
+                    baseYear = targetCalendarYear,
+                    primaryAge = (updated.primaryAge + delta).coerceIn(15, 100)
+                )
+            }
+            if (updated != current) {
+                settingsDao.saveSettings(updated)
             }
         }
     }
@@ -191,7 +206,7 @@ class FinancialRepository(
     }
 
     suspend fun toggleActionState(year: Int, actionId: String) = withContext(Dispatchers.IO) {
-        actionStateDao.toggleActionState("${year}_$actionId")
+        actionStateDao.toggleActionStateUpsert("${year}_$actionId", year, actionId)
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
@@ -216,6 +231,14 @@ class FinancialRepository(
 
     suspend fun updateImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
         importedTransactionDao.updateTransactions(transactions)
+    }
+
+    suspend fun updateImportedTransaction(transaction: ImportedBankTransactionEntity) = withContext(Dispatchers.IO) {
+        importedTransactionDao.updateTransaction(transaction)
+    }
+
+    suspend fun getImportedTransactionById(id: Long): ImportedBankTransactionEntity? = withContext(Dispatchers.IO) {
+        importedTransactionDao.getTransactionById(id)
     }
 
     suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
@@ -296,6 +319,9 @@ class FinancialRepository(
         transactions: List<ImportedBankTransactionEntity>
     ) = withContext(Dispatchers.IO) {
         database.withTransaction {
+            ledgerDao.deleteAllEntries()
+            actionStateDao.deleteAllActionStates()
+            importedTransactionDao.deleteAllTransactions()
             settingsDao.saveSettings(settings)
             if (ledgerEntries.isNotEmpty()) {
                 ledgerDao.insertEntries(ledgerEntries)

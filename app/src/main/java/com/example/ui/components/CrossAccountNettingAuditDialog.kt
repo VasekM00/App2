@@ -268,7 +268,10 @@ fun CrossAccountNettingAuditDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 1. Matched Cross-Account Pairs
-                        items(auditReport.matchedPairs) { pair ->
+                        items(
+                            items = auditReport.matchedPairs,
+                            key = { "${it.debitTx.id}_${it.creditTx.id}" }
+                        ) { pair ->
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -342,7 +345,10 @@ fun CrossAccountNettingAuditDialog(
                         }
 
                         // 2. Single-Side Self Transfers
-                        items(auditReport.singleSideNettedTransfers) { tx ->
+                        items(
+                            items = auditReport.singleSideNettedTransfers,
+                            key = { it.id }
+                        ) { tx ->
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),

@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-   Financial data is user-sensitive: the Room database is excluded from cloud backup.
+   Financial data is user-sensitive: the Room database and sensitive statement prefs are excluded from cloud backup.
    Device transfer intentionally includes the database so users keep their data
    when migrating to a new phone.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
+        <exclude domain="sharedpref" path="statement_import_prefs.xml"/>
+        <exclude domain="sharedpref" path="subscription_auditor_prefs.xml"/>
         <exclude domain="database" path="martinu_financials_db"/>
+        <exclude domain="database" path="martinu_financials_db-wal"/>
+        <exclude domain="database" path="martinu_financials_db-shm"/>
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="."/>

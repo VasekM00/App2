@@ -39,76 +39,45 @@ class MainViewModel(
     private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : AndroidViewModel(application) {
 
-    companion object {
-        private val OTHER_EXPENSE_TYPES = setOf(
-            "LIFESTYLE_LIVING", "DINING_RESTAURANT", "TRANSPORTATION", "SHOPPING_GOODS",
-            "HEALTH_DRUGSTORE", "SUBSCRIPTIONS_MEDIA", "SERVICES_UTILITIES", "ATM_CASH",
-            "CHARITY_DONATION", "GENERAL_EXPENSE"
-        )
-    }
-
-    private fun isGeneralExpense(cat: String, amount: Double): Boolean =
-        cat in OTHER_EXPENSE_TYPES || (cat == com.example.util.BankTransactionType.UNCATEGORIZED.name && amount < 0)
-
     // Architectural Note (F-018): Lightweight manual dependency injection.
     // Avoids annotation processor and code-gen overhead of Hilt/Dagger while maintaining clear separation.
     private val db = AppDatabase.getDatabase(application)
-    private val repository = FinancialRepository(
-        database = db,
-        settingsDao = db.settingsDao(),
-        ledgerDao = db.ledgerDao(),
-        actionStateDao = db.actionStateDao(),
-        importedTransactionDao = db.importedTransactionDao()
-    )
+    private val repository = FinancialRepository(db, db.settingsDao(), db.ledgerDao(), db.actionStateDao(), db.importedTransactionDao())
 
     private val _uiEvent = MutableSharedFlow<UiMessage>()
     val uiEvent: SharedFlow<UiMessage> = _uiEvent.asSharedFlow()
 
+    // Statement import recency tracking & synchronous fast-boot snapshot cache
+    private val importPrefs = application.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
+    private val bootCachePayload = runCatching {
+        importPrefs.getString("fast_boot_snapshot_v1", null)?.let { com.example.util.BackupManager.deserializeFullBackupFromJson(it, SettingsEntity.freshDefaults()) }
+    }.getOrNull()
+    private val initialSettings: SettingsEntity = bootCachePayload?.settings ?: SettingsEntity.freshDefaults()
+    private val initialLedger: List<LedgerEntryEntity> = bootCachePayload?.ledgerEntries ?: emptyList()
+    private val initialActions: Map<String, Boolean> = bootCachePayload?.actionStates?.associate { it.actionKey to it.isDone } ?: emptyMap()
+
     val ledgerEntries: StateFlow<List<LedgerEntryEntity>> = repository.ledgerFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialLedger)
 
     val actionStates: StateFlow<Map<String, Boolean>> = repository.actionStatesFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyMap()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialActions)
 
     val settingsState: StateFlow<SettingsEntity> = repository.settingsFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SettingsEntity()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialSettings)
 
     val importedBankSourcesByMonth: StateFlow<Map<String, Set<String>>> = repository.getAllImportedTransactions()
-        .map { txList ->
-            txList.groupBy { it.yearMonth }
-                .mapValues { (_, txs) -> txs.map { it.bankName }.filter { it.isNotBlank() }.toSet() }
-        }
+        .map { txList -> txList.groupBy { it.yearMonth }.mapValues { (_, txs) -> txs.map { it.bankName }.filter { it.isNotBlank() }.toSet() } }
         .flowOn(Dispatchers.Default)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyMap()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val allImportedTransactions: StateFlow<List<com.example.data.ImportedBankTransactionEntity>> = repository.getAllImportedTransactions()
         .flowOn(Dispatchers.Default)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Sensitivity slider override states
-    val sensitivityReturnOverride = MutableStateFlow<Double?>(null)
-    val sensitivityCpiOverride = MutableStateFlow<Double?>(null)
-    val sensitivitySwrOverride = MutableStateFlow<Double?>(null)
+    // Sensitivity slider override states backed by savedStateHandle
+    val sensitivityReturnOverride = MutableStateFlow<Double?>(savedStateHandle.get<Double?>("sensitivity_return_override"))
+    val sensitivityCpiOverride = MutableStateFlow<Double?>(savedStateHandle.get<Double?>("sensitivity_cpi_override"))
+    val sensitivitySwrOverride = MutableStateFlow<Double?>(savedStateHandle.get<Double?>("sensitivity_swr_override"))
 
     // Live Czech Economic & Regulatory Sync state
     val liveRegulatoryData = MutableStateFlow<com.example.domain.CzechRegulatoryData?>(null)
@@ -123,7 +92,6 @@ class MainViewModel(
     }
 
     // Statement import recency tracking
-    private val importPrefs = application.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
     private val _lastImportTimestamp = MutableStateFlow<Long?>(
         importPrefs.getLong("last_import_all", 0L).let { if (it > 0L) it else null }
     )
@@ -160,6 +128,21 @@ class MainViewModel(
                 }
                 importPrefs.edit().putBoolean("legacy_balances_backfilled", true).apply()
             }
+            if (!importPrefs.getBoolean("merchant_rules_unified_v1", false)) {
+                val curSettings = repository.settingsFlow.first()
+                val spRules = com.example.util.MerchantCategoryManager.getOverrides(application)
+                val dbRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(curSettings.merchantRulesJson)
+                if (spRules.isNotEmpty() || dbRules.isNotEmpty()) {
+                    val merged = spRules + dbRules
+                    val mergedJson = com.example.util.MerchantCategoryManager.serializeRulesToJson(merged)
+                    if (mergedJson != curSettings.merchantRulesJson) {
+                        repository.saveSettings(curSettings.copy(merchantRulesJson = mergedJson))
+                    }
+                    com.example.util.MerchantCategoryManager.clearOverrides(application)
+                    merged.forEach { (k, v) -> com.example.util.MerchantCategoryManager.saveOverride(application, k, v) }
+                }
+                importPrefs.edit().putBoolean("merchant_rules_unified_v1", true).apply()
+            }
         }
     }
 
@@ -184,24 +167,21 @@ class MainViewModel(
         }
     }
 
-    private data class SensitivityOverrides(
-        val retOver: Double?,
-        val cpiOver: Double?,
-        val swrOver: Double?
-    )
-
-    private val sensitivityOverrides = combine(
-        sensitivityReturnOverride,
-        sensitivityCpiOverride,
-        sensitivitySwrOverride
-    ) { ret, cpi, swr -> SensitivityOverrides(ret, cpi, swr) }
+    private data class SensitivityOverrides(val retOver: Double?, val cpiOver: Double?, val swrOver: Double?)
+    private val sensitivityOverrides = combine(sensitivityReturnOverride, sensitivityCpiOverride, sensitivitySwrOverride) { r, c, s -> SensitivityOverrides(r, c, s) }
 
     val calculationState: StateFlow<FullCalculationState> = combine(
-        settingsState,
-        actionStates,
-        ledgerEntries,
-        sensitivityOverrides
-    ) { settings, actions, ledger, overrides ->
+        repository.settingsFlow, repository.actionStatesFlow, repository.ledgerFlow, allImportedTransactions, sensitivityOverrides
+    ) { settings, actions, ledger, importedTxs, overrides ->
+        runCatching {
+            val actionEntities = actions.map { (k, done) ->
+                com.example.data.ActionStateEntity(k, k.substringBefore('_').toIntOrNull() ?: settings.baseYear, k.substringAfter('_', k), done)
+            }
+            val snapJson = com.example.util.BackupManager.serializeFullBackupToJson(
+                com.example.util.BackupManager.FullBackupPayload(settings = settings, ledgerEntries = ledger, actionStates = actionEntities)
+            )
+            importPrefs.edit().putString("fast_boot_snapshot_v1", snapJson).apply()
+        }
         var effectiveSettings = settings
         if (overrides.retOver != null) effectiveSettings = effectiveSettings.copy(portfolioNominalReturnPct = overrides.retOver)
         if (overrides.cpiOver != null) effectiveSettings = effectiveSettings.copy(cpiInflationPct = overrides.cpiOver)
@@ -209,27 +189,25 @@ class MainViewModel(
 
         val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
         val currentYm = now.toString()
-        val currentMonth = now.monthValue
         val activeEntry = ledger.find { it.yearMonth == currentYm } ?: ledger.maxByOrNull { it.yearMonth }
-
-        FinancialEngine.calculate(
-            settings = effectiveSettings,
-            actionStates = actions,
-            runMonteCarlo = true,
-            activeLedgerEntry = activeEntry,
-            activeMonth = currentMonth,
-            ledgerEntries = ledger
-        )
+        FinancialEngine.calculate(effectiveSettings, actions, runMonteCarlo = true, activeEntry, now.monthValue, ledger, importedTxs)
     }.flowOn(Dispatchers.Default).conflate().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = FinancialEngine.calculate(SettingsEntity(), runMonteCarlo = false)
+        initialValue = run {
+            val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
+            val activeEntry = initialLedger.find { it.yearMonth == now.toString() } ?: initialLedger.maxByOrNull { it.yearMonth }
+            FinancialEngine.calculate(initialSettings, initialActions, runMonteCarlo = false, activeEntry, now.monthValue, initialLedger)
+        }
     )
 
     fun updateSettings(newSettings: SettingsEntity, showSnackbar: Boolean = false) {
         viewModelScope.launch {
             val now = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
             repository.updateSettingsAndSyncLedger(newSettings, now)
+            val parsedRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(newSettings.merchantRulesJson)
+            com.example.util.MerchantCategoryManager.clearOverrides(getApplication())
+            parsedRules.forEach { (k, v) -> com.example.util.MerchantCategoryManager.saveOverride(getApplication(), k, v) }
             if (showSnackbar) {
                 _uiEvent.emit(UiMessage.ShowSnackbar("Settings saved successfully"))
             }
@@ -391,9 +369,11 @@ class MainViewModel(
                         }
                         activeAuditReport.value = null
                     } else {
-                        val storedBalances = getStoredBankBalancesForMonth(yearMonth)
+                        val storedBalances = importCoordinator.getStoredBankBalancesForMonth(yearMonth)
                         val (reconciledTxs, auditReport) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(
-                            transactions = remainingTxs.map { it.copy(isNetted = false, nettingReason = "") },
+                            transactions = remainingTxs.map {
+                                if (it.nettingReason.startsWith("Manually ")) it else it.copy(isNetted = false, nettingReason = "")
+                            },
                             yearMonth = yearMonth,
                             bankBalances = storedBalances
                         )
@@ -433,7 +413,7 @@ class MainViewModel(
 
                 // 1. Try bank statement parser first (batch or single)
                 val settingsRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson)
-                val overrides = if (settingsRules.isNotEmpty()) settingsRules else com.example.util.MerchantCategoryManager.getOverrides(getApplication())
+                val overrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication()) + settingsRules
                 val parsedSummaries = mutableListOf<com.example.util.StatementParseSummary>()
 
                 for (bytes in byteList) {
@@ -513,27 +493,7 @@ class MainViewModel(
     // Active Cross-Statement Audit Report for transparency
     val activeAuditReport = MutableStateFlow<com.example.util.CrossStatementAuditReport?>(null)
 
-    private fun List<com.example.data.ImportedBankTransactionEntity>.netOutflow(): Double =
-        (-sumOf { it.amount }).coerceAtLeast(0.0)
-
-    private fun getStoredBankBalancesForMonth(yearMonth: String): Map<String, Double> {
-        val prefix = "bank_bal_${yearMonth}_"
-        val map = mutableMapOf<String, Double>()
-        importPrefs.all.forEach { (key, value) ->
-            if (key.startsWith(prefix)) {
-                val bal = (value as? Number)?.toDouble() ?: (value as? String)?.toDoubleOrNull()
-                if (bal != null) map[key.removePrefix(prefix)] = bal
-            }
-        }
-        return map
-    }
-
-    private suspend fun fetchBoundaryTransactions(targetYm: String): List<ImportedBankTransactionEntity> {
-        val ym = try { YearMonth.parse(targetYm) } catch (_: Exception) { return emptyList() }
-        val prev = repository.getTransactionsInDateRangeDirect(ym.atDay(1).minusDays(5).toString(), ym.atDay(1).minusDays(1).toString())
-        val next = repository.getTransactionsInDateRangeDirect(ym.atEndOfMonth().plusDays(1).toString(), ym.atEndOfMonth().plusDays(5).toString())
-        return (prev + next).filter { !it.isNetted || !(it.nettingReason?.startsWith("Cross-") == true) }
-    }
+    private val importCoordinator by lazy { com.example.util.StatementImportCoordinator(getApplication(), repository, importPrefs) }
 
     fun loadAuditReportForMonth(yearMonth: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -564,8 +524,8 @@ class MainViewModel(
             }
 
             if (txsToUse.isNotEmpty()) {
-                val boundaryTxs = fetchBoundaryTransactions(yearMonth)
-                val storedBalances = getStoredBankBalancesForMonth(yearMonth)
+                val boundaryTxs = importCoordinator.fetchBoundaryTransactions(yearMonth)
+                val storedBalances = importCoordinator.getStoredBankBalancesForMonth(yearMonth)
                 val (_, report) = com.example.util.CrossStatementReconciliationEngine.reconcileTransactions(
                     transactions = txsToUse,
                     yearMonth = yearMonth,
@@ -584,48 +544,7 @@ class MainViewModel(
     }
 
     suspend fun recalculateMonthLedger(targetYm: String) {
-        val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
-        if (allMonthTxs.isEmpty()) return
-
-        val incVaclav = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
-        val incEleonora = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
-        val incOther = allMonthTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
-        val expRent = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.netOutflow()
-        val expGroceries = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.netOutflow()
-        val expOther = allMonthTxs.filter { !it.isNetted && isGeneralExpense(it.category, it.amount) }.netOutflow()
-
-        val invPortu = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.netOutflow()
-        val invDip = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.netOutflow()
-        val invDps = allMonthTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.netOutflow()
-        val totalInvested = invPortu + invDip + invDps
-
-        val existingEntry = repository.getLedgerEntryByYearMonth(targetYm)
-        val participatingBanks = allMonthTxs.map { it.bankName }.filter { it.isNotBlank() }.distinct().sorted()
-        val banksSummary = participatingBanks.joinToString(" + ")
-        val nettedCount = allMonthTxs.count { it.isNetted }
-        val nettingNote = if (nettedCount > 0) " | $nettedCount txs netted" else ""
-        val investNote = if (totalInvested > 0) {
-            val parts = mutableListOf<String>()
-            if (invPortu > 0) parts.add("Portu: ${com.example.util.Formatters.fmtCompact(invPortu)}")
-            if (invDip > 0) parts.add("DIP: ${com.example.util.Formatters.fmtCompact(invDip)}")
-            if (invDps > 0) parts.add("DPS: ${com.example.util.Formatters.fmtCompact(invDps)}")
-            " | Invested: ${com.example.util.Formatters.fmtCompact(totalInvested)} (${parts.joinToString(", ")})"
-        } else ""
-        val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
-
-        if (existingEntry != null) {
-            val updated = existingEntry.copy(
-                incVaclav = incVaclav,
-                incEleonora = incEleonora,
-                incUnforeseen = incOther,
-                expRent = expRent,
-                expGroceries = expGroceries,
-                expOther = expOther,
-                notes = autoNotes
-            )
-            repository.updateLedgerEntry(updated)
-            syncLedgerToSettingsIfCurrentMonth(targetYm, incVaclav, incEleonora, expRent, 0.0, 0.0, 0.0)
-        }
+        importCoordinator.recalculateMonthLedger(targetYm)
     }
 
     private val importMutex = kotlinx.coroutines.sync.Mutex()
@@ -633,158 +552,17 @@ class MainViewModel(
     fun confirmStatementImport(summary: com.example.util.StatementParseSummary) {
         viewModelScope.launch(Dispatchers.IO) {
             importMutex.withLock {
-                // Group transactions by calendar month (YYYY-MM)
-            val txsByMonth = summary.transactions.groupBy { tx ->
-                val ym = tx.date.take(7)
-                if (ym.matches(Regex("""\d{4}-\d{2}"""))) ym else summary.yearMonth
-            }
-
-            val latestMonth = txsByMonth.keys.maxOrNull() ?: summary.yearMonth
-            val affectedMonths = txsByMonth.keys.sorted()
-
-            repository.withTransaction {
-                for ((targetYm, monthTxs) in txsByMonth) {
-                // 1. Smart Fingerprint Merge: insert transactions grouped by bank
-                val byBank = monthTxs.groupBy { if (it.bankType != com.example.util.BankType.GENERIC) it.bankType.name else summary.detectedBank.name }
-                for ((bankName, bTxs) in byBank) {
-                    val txEntities = bTxs.map { tx ->
-                        com.example.data.ImportedBankTransactionEntity(
-                            yearMonth = targetYm,
-                            bankName = bankName,
-                            date = tx.date,
-                            amount = tx.amount,
-                            counterpartyAccount = tx.counterpartyAccount,
-                            counterpartyName = tx.counterpartyName,
-                            message = tx.message,
-                            variableSymbol = tx.variableSymbol,
-                            category = tx.category.name,
-                            isNetted = tx.isNetted,
-                            nettingReason = tx.nettingReason
-                        )
+                val result = importCoordinator.confirmStatementImport(summary)
+                if (result != null) {
+                    if (result.auditReport != null) {
+                        activeAuditReport.value = result.auditReport
                     }
-                    repository.saveImportedTransactionsSmartMerge(targetYm, bankName, txEntities)
+                    val now = System.currentTimeMillis()
+                    _lastImportTimestamp.value = now
+                    val monthsLabel = result.affectedMonths.joinToString(", ")
+                    _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${result.importedCount} txs from ${summary.detectedBank.name})"))
                 }
-
-                // 2. Fetch boundary transactions within ±5 days across month borders for cross-month pairing
-                val boundaryTxs = fetchBoundaryTransactions(targetYm)
-
-                if (summary.monthEndBalance != null && targetYm == latestMonth) {
-                    importPrefs.edit().putString("bank_bal_${targetYm}_${summary.detectedBank.name}", summary.monthEndBalance.toString()).apply()
-                }
-                val storedBalances = getStoredBankBalancesForMonth(targetYm)
-
-                // 3. Reconcile across all banks for targetYm including cross-month boundaries
-                val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
-                val reconcileResult = com.example.util.CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
-                    transactions = allMonthTxs,
-                    yearMonth = targetYm,
-                    boundaryTransactions = boundaryTxs,
-                    bankBalances = storedBalances
-                )
-                val reconciledTxs = reconcileResult.currentMonthTxs
-                val auditReport = reconcileResult.auditReport
-                repository.updateImportedTransactions(reconciledTxs)
-
-                // Persist updated adjacent boundary transactions and recalculate adjacent month ledgers
-                if (reconcileResult.updatedBoundaryTxs.isNotEmpty()) {
-                    repository.updateImportedTransactions(reconcileResult.updatedBoundaryTxs)
-                    val affectedAdjacentMonths = reconcileResult.updatedBoundaryTxs.map { it.yearMonth }.distinct().filter { it != targetYm }
-                    for (adjYm in affectedAdjacentMonths) {
-                        recalculateMonthLedger(adjYm)
-                    }
-                }
-
-                if (targetYm == latestMonth || targetYm == summary.yearMonth) {
-                    activeAuditReport.value = auditReport
-                }
-
-                // 4. Compute clean categorized sums and investment DCA flows
-                val incVaclav = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }
-                val incEleonora = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.SALARY_ELEONORA.name || it.category == com.example.util.BankTransactionType.PARENTAL_BENEFIT.name) }.sumOf { it.amount }
-                val incOther = reconciledTxs.filter { !it.isNetted && (it.category == com.example.util.BankTransactionType.OTHER_INFLOW.name || (it.category == com.example.util.BankTransactionType.UNCATEGORIZED.name && it.amount > 0)) }.sumOf { it.amount }
-                val expRent = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.HOUSING_RENT.name }.netOutflow()
-                val expGroceries = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.GROCERIES.name }.netOutflow()
-                val expOther = reconciledTxs.filter { !it.isNetted && isGeneralExpense(it.category, it.amount) }.netOutflow()
-
-                val invPortu = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_PORTU.name }.netOutflow()
-                val invDip = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DIP.name }.netOutflow()
-                val invDps = reconciledTxs.filter { !it.isNetted && it.category == com.example.util.BankTransactionType.INVESTMENT_DPS.name }.netOutflow()
-                val totalInvested = invPortu + invDip + invDps
-
-                // 5. Update or insert LedgerEntryEntity with true reconciled figures
-                val existingEntry = repository.getLedgerEntryByYearMonth(targetYm)
-                val banksSummary = auditReport.participatingBanks.joinToString(" + ")
-                val nettingNote = if (auditReport.totalNettedAmount > 0) " | ${auditReport.matchedPairs.size} cross-transfers netted (${com.example.util.Formatters.fmtCompact(auditReport.totalNettedAmount)})" else ""
-                val investNote = if (totalInvested > 0) {
-                    val parts = mutableListOf<String>()
-                    if (invPortu > 0) parts.add("Portu: ${com.example.util.Formatters.fmtCompact(invPortu)}")
-                    if (invDip > 0) parts.add("DIP: ${com.example.util.Formatters.fmtCompact(invDip)}")
-                    if (invDps > 0) parts.add("DPS: ${com.example.util.Formatters.fmtCompact(invDps)}")
-                    " | Invested: ${com.example.util.Formatters.fmtCompact(totalInvested)} (${parts.joinToString(", ")})"
-                } else ""
-                val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
-
-                // The closing balance belongs to the latest month of the statement, but it is the
-                // account's cash balance — NOT the dedicated emergency reserve — so it must not be
-                // written into emergencyReserveAtMonthEnd (that corrupted the actual net-worth line).
-                val cur = repository.settingsFlow.first()
-                val isSingle = cur.isSingleHousehold
-                val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
-                val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
-
-                if (existingEntry != null) {
-                    val updated = existingEntry.copy(
-                        incVaclav = incVaclav,
-                        incEleonora = incEleonora,
-                        incUnforeseen = incOther,
-                        expRent = expRent,
-                        expGroceries = expGroceries,
-                        expOther = expOther,
-                        notes = autoNotes,
-                        portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
-                        pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
-                        emergencyReserveAtMonthEnd = if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
-                    )
-                    repository.updateLedgerEntry(updated)
-                } else {
-                    val newEntry = com.example.data.LedgerEntryEntity(
-                        yearMonth = targetYm,
-                        incVaclav = incVaclav,
-                        incEleonora = incEleonora,
-                        incUnforeseen = incOther,
-                        expRent = expRent,
-                        expGroceries = expGroceries,
-                        expOther = expOther,
-                        notes = autoNotes,
-                        portfolioBalanceAtMonthEnd = snapLiquid,
-                        pensionBalanceAtMonthEnd = snapPension,
-                        emergencyReserveAtMonthEnd = cur.emergencyReserveCurrent
-                    )
-                    repository.addLedgerEntry(newEntry)
-                }
-
-                syncLedgerToSettingsIfCurrentMonth(
-                    yearMonth = targetYm,
-                    incVaclav = incVaclav,
-                    incEleonora = incEleonora,
-                    expRent = expRent,
-                    portfolioBalance = 0.0,
-                    pensionBalance = 0.0,
-                    emergencyReserve = 0.0
-                )
-            }
-            }
-
-            val now = System.currentTimeMillis()
-            importPrefs.edit {
-                putLong("last_import_all", now)
-                putLong("last_import_${summary.detectedBank.name}", now)
-            }
-            _lastImportTimestamp.value = now
-
-            val monthsLabel = affectedMonths.joinToString(", ")
-            _uiEvent.emit(UiMessage.ShowSnackbar("Imported and split statement into $monthsLabel (${summary.transactions.size} txs from ${summary.detectedBank.name})"))
-            setPendingStatementImport(null)
+                setPendingStatementImport(null)
             }
         }
     }
@@ -793,52 +571,122 @@ class MainViewModel(
         setPendingStatementImport(null)
     }
 
+    fun togglePendingTransactionExcluded(txIndex: Int) {
+        val current = _pendingStatementImport.value ?: return
+        setPendingStatementImport(importCoordinator.toggleTransactionExcluded(current, txIndex))
+    }
+
+    fun bulkExcludeMerchant(merchantQuery: String) {
+        val current = _pendingStatementImport.value ?: return
+        setPendingStatementImport(importCoordinator.bulkExcludeMerchant(current, merchantQuery))
+    }
+
     fun updatePendingTransactionCategory(
         txIndex: Int,
         newCategory: com.example.util.BankTransactionType,
-        rememberForMerchant: Boolean = false
+        rememberForMerchant: Boolean = false,
+        applyToAllMatching: Boolean = false
     ) {
-        val currentSummary = _pendingStatementImport.value ?: return
-        if (txIndex !in currentSummary.transactions.indices) return
+        val current = _pendingStatementImport.value ?: return
+        viewModelScope.launch {
+            val updated = importCoordinator.updateTransactionCategory(
+                summary = current,
+                txIndex = txIndex,
+                newCategory = newCategory,
+                rememberForMerchant = rememberForMerchant,
+                applyToAllMatching = applyToAllMatching
+            )
+            setPendingStatementImport(updated)
+        }
+    }
 
-        val targetTx = currentSummary.transactions[txIndex]
-        val updatedTransactions = currentSummary.transactions.toMutableList()
-        val isNetted = (newCategory == com.example.util.BankTransactionType.INTERNAL_TRANSFER)
-        val nettingReason = if (isNetted) com.example.util.BankStatementImporter.determineNettingReason(newCategory, targetTx.counterpartyName, targetTx.message) else ""
-        updatedTransactions[txIndex] = targetTx.copy(category = newCategory, isNetted = isNetted, nettingReason = nettingReason)
+    fun updateImportedTransactionCategory(
+        txId: Long,
+        newCategory: com.example.util.BankTransactionType,
+        rememberForMerchant: Boolean = false,
+        applyToAllMatchingInMonth: Boolean = false
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val target = repository.getImportedTransactionById(txId) ?: return@launch
+            val isNowInternal = (newCategory == com.example.util.BankTransactionType.INTERNAL_TRANSFER)
 
-        if (rememberForMerchant) {
-            val merchantName = targetTx.counterpartyName.ifBlank { targetTx.message }
-            val query = com.example.util.CzechMerchantCatalog.suggestMerchantSearchQuery(merchantName)
-            if (query.isNotBlank()) {
-                com.example.util.MerchantCategoryManager.saveOverride(getApplication(), query, newCategory)
-                viewModelScope.launch {
-                    val currentSettings = repository.settingsFlow.first()
-                    val currentRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(currentSettings.merchantRulesJson).toMutableMap()
-                    currentRules[query.trim().lowercase()] = newCategory
-                    repository.saveSettings(currentSettings.copy(merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson(currentRules)))
-                }
+            val newIsNetted = isNowInternal
+            val newNettingReason = if (isNowInternal) "Manually marked as internal transfer" else ""
 
-                val normQuery = com.example.util.CzechMerchantCatalog.normalize(query)
-                if (normQuery.isNotBlank()) {
-                    for (i in updatedTransactions.indices) {
-                        val otherTx = updatedTransactions[i]
-                        val otherNorm = com.example.util.CzechMerchantCatalog.normalize("${otherTx.counterpartyName} ${otherTx.message}")
-                        if (otherNorm.contains(normQuery)) {
-                            val otherReason = if (isNetted) com.example.util.BankStatementImporter.determineNettingReason(newCategory, otherTx.counterpartyName, otherTx.message) else ""
-                            updatedTransactions[i] = otherTx.copy(category = newCategory, isNetted = isNetted, nettingReason = otherReason)
-                        }
+            val updatedTarget = target.copy(
+                category = newCategory.name,
+                isNetted = newIsNetted,
+                nettingReason = newNettingReason
+            )
+
+            val txsToUpdate = mutableListOf(updatedTarget)
+
+            if (applyToAllMatchingInMonth) {
+                val monthTxs = repository.getImportedTransactionsDirect(target.yearMonth)
+                monthTxs.forEach { other ->
+                    if (other.id != target.id && com.example.util.StatementImportCoordinator.matchesMerchantInMonth(target, other)) {
+                        txsToUpdate.add(other.copy(
+                            category = newCategory.name,
+                            isNetted = newIsNetted,
+                            nettingReason = newNettingReason
+                        ))
                     }
                 }
             }
-        }
 
-        setPendingStatementImport(
-            com.example.util.BankStatementImporter.recomputeSummary(
-                currentSummary,
-                updatedTransactions
+            repository.updateImportedTransactions(txsToUpdate)
+
+            if (rememberForMerchant) {
+                val rawMerchant = target.counterpartyName.ifBlank { target.message }
+                val query = com.example.util.CzechMerchantCatalog.suggestMerchantSearchQuery(rawMerchant)
+                    .ifBlank { com.example.util.BankStatementImporter.cleanPaymentDescription(rawMerchant) }
+                if (query.isNotBlank()) {
+                    com.example.util.MerchantCategoryManager.saveOverride(getApplication(), query, newCategory)
+                    val currentSettings = repository.settingsFlow.first()
+                    val currentRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(currentSettings.merchantRulesJson).toMutableMap()
+                    currentRules[query.trim().lowercase()] = newCategory
+                    repository.saveSettings(
+                        currentSettings.copy(merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson(currentRules))
+                    )
+                }
+            }
+
+            importCoordinator.recalculateMonthLedger(target.yearMonth)
+            if (activeAuditReport.value?.yearMonth == target.yearMonth) {
+                loadAuditReportForMonth(target.yearMonth)
+            }
+            _uiEvent.emit(UiMessage.ShowSnackbar("Updated category to ${newCategory.name.replace('_', ' ')} (${txsToUpdate.size} txs updated)"))
+        }
+    }
+
+    fun toggleImportedTransactionExcluded(txId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val target = repository.getImportedTransactionById(txId) ?: return@launch
+            val willBeExcluded = !target.isNetted
+            val restoredCategory = if (!willBeExcluded && target.category == com.example.util.BankTransactionType.INTERNAL_TRANSFER.name) {
+                val settingsRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(settingsState.value.merchantRulesJson)
+                val overrides = com.example.util.MerchantCategoryManager.getOverrides(getApplication()) + settingsRules
+                val matched = com.example.util.CzechMerchantCatalog.matchCategory(
+                    "${target.counterpartyName} ${target.counterpartyAccount} ${target.message}",
+                    overrides
+                )
+                (matched ?: if (target.amount < 0) com.example.util.BankTransactionType.GENERAL_EXPENSE else com.example.util.BankTransactionType.OTHER_INFLOW).name
+            } else {
+                target.category
+            }
+            val updated = target.copy(
+                category = restoredCategory,
+                isNetted = willBeExcluded,
+                nettingReason = if (willBeExcluded) "Manually excluded from budget" else ""
             )
-        )
+            repository.updateImportedTransaction(updated)
+            importCoordinator.recalculateMonthLedger(target.yearMonth)
+            if (activeAuditReport.value?.yearMonth == target.yearMonth) {
+                loadAuditReportForMonth(target.yearMonth)
+            }
+            val actionLabel = if (willBeExcluded) "Excluded from budget" else "Restored to budget"
+            _uiEvent.emit(UiMessage.ShowSnackbar("$actionLabel: ${target.counterpartyName.ifBlank { target.message }}"))
+        }
     }
 
     fun toggleAction(year: Int, actionId: String, currentIsDone: Boolean) {
@@ -851,10 +699,45 @@ class MainViewModel(
         sensitivityReturnOverride.value = returnPct
         sensitivityCpiOverride.value = cpiPct
         sensitivitySwrOverride.value = swrPct
+        savedStateHandle["sensitivity_return_override"] = returnPct
+        savedStateHandle["sensitivity_cpi_override"] = cpiPct
+        savedStateHandle["sensitivity_swr_override"] = swrPct
+    }
+
+    fun restoreFullBackup(payload: com.example.util.BackupManager.FullBackupPayload) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.restoreFullBackupData(payload.settings, payload.ledgerEntries, payload.actionStates, payload.importedTransactions)
+            // Sync restored merchant rules to MerchantCategoryManager
+            val parsedRules = com.example.util.MerchantCategoryManager.parseRulesFromJson(payload.settings.merchantRulesJson)
+            com.example.util.MerchantCategoryManager.clearOverrides(getApplication())
+            parsedRules.forEach { (k, v) -> com.example.util.MerchantCategoryManager.saveOverride(getApplication(), k, v) }
+
+            // Restore auxiliary preferences (dismissed subscriptions, statement bank balances)
+            val dismissedRaw = payload.preferences["dismissed_merchants"]
+            val restoredSet = if (dismissedRaw != null) {
+                dismissedRaw.split("|").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            } else {
+                emptySet()
+            }
+            _dismissedSubscriptionMerchants.value = restoredSet
+            subscriptionPrefs.edit().putStringSet("dismissed_merchants", restoredSet).apply()
+
+            val balEditor = importPrefs.edit()
+            importPrefs.all.keys.filter { it.startsWith("bank_bal_") }.forEach { balEditor.remove(it) }
+            payload.preferences.forEach { (k, v) ->
+                if (k.startsWith("bank_bal_")) {
+                    balEditor.putString(k, v)
+                }
+            }
+            balEditor.apply()
+
+            _uiEvent.emit(UiMessage.ShowSnackbar("Full backup restored (${payload.ledgerEntries.size} months, ${payload.importedTransactions.size} txs)"))
+        }
     }
 
     fun resetSettingsToDefault() {
         viewModelScope.launch {
+            importPrefs.edit().remove("fast_boot_snapshot_v1").apply()
             repository.saveSettings(SettingsEntity.freshDefaults())
             com.example.util.MerchantCategoryManager.clearOverrides(getApplication())
             setSensitivityOverrides(null, null, null)

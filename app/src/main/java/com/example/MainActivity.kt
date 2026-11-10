@@ -36,22 +36,50 @@ class MainActivity : ComponentActivity() {
         }
 
         val prefs = getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
-        val initialDarkTheme = if (prefs.contains("is_dark_theme")) prefs.getBoolean("is_dark_theme", false) else null
+        val initialThemeMode = prefs.getString("theme_mode", null) ?: if (prefs.contains("is_dark_theme")) {
+            if (prefs.getBoolean("is_dark_theme", false)) "DARK" else "LIGHT"
+        } else "SYSTEM"
 
         setContent {
             val systemDark = isSystemInDarkTheme()
-            var isDarkTheme by remember {
-                mutableStateOf(initialDarkTheme ?: systemDark)
+            var themeMode by remember { mutableStateOf(initialThemeMode) }
+            val isDarkTheme = when (themeMode) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> systemDark
             }
 
             MartinuFinancialsTheme(darkTheme = isDarkTheme) {
                 MainScreen(
                     viewModel = viewModel,
                     isDarkTheme = isDarkTheme,
+                    themeMode = themeMode,
+                    onChangeThemeMode = { newMode ->
+                        themeMode = newMode
+                        prefs.edit {
+                            putString("theme_mode", newMode)
+                            putBoolean("is_dark_theme", when (newMode) {
+                                "LIGHT" -> false
+                                "DARK" -> true
+                                else -> systemDark
+                            })
+                        }
+                    },
                     onToggleDarkTheme = {
-                        val next = !isDarkTheme
-                        isDarkTheme = next
-                        prefs.edit { putBoolean("is_dark_theme", next) }
+                        val nextMode = when (themeMode) {
+                            "LIGHT" -> "DARK"
+                            "DARK" -> "SYSTEM"
+                            else -> if (systemDark) "LIGHT" else "DARK"
+                        }
+                        themeMode = nextMode
+                        prefs.edit {
+                            putString("theme_mode", nextMode)
+                            putBoolean("is_dark_theme", when (nextMode) {
+                                "LIGHT" -> false
+                                "DARK" -> true
+                                else -> systemDark
+                            })
+                        }
                     }
                 )
             }

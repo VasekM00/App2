@@ -1,5 +1,6 @@
 package com.example.ui.tabs
 
+import com.example.util.parseUserAmountOrNull
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -71,13 +72,7 @@ fun nextYearMonth(ym: String): String {
             }
         }
     }
-    val now = java.util.Calendar.getInstance()
-    return String.format(
-        Locale.ROOT,
-        "%04d-%02d",
-        now.get(java.util.Calendar.YEAR),
-        now.get(java.util.Calendar.MONTH) + 1
-    )
+    return java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
 }
 
 fun prevYearMonth(ym: String): String {
@@ -127,29 +122,34 @@ internal fun AddLedgerEntryDialog(
         if (latest != null) nextYearMonth(latest.yearMonth) else nextYearMonth("")
     }
 
+    fun fmtVal(v: Double?): String {
+        if (v == null || !v.isFinite() || v <= 0.0) return "0"
+        return if (v % 1.0 == 0.0) v.toLong().toString() else String.format(java.util.Locale.US, "%.2f", v)
+    }
+
     var ym by remember(sourceEntry) { mutableStateOf(defaultYm) }
-    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.toInt()?.toString() ?: budgetedIncV) }
-    var incE by remember(sourceEntry) { mutableStateOf(if (isSingle) "0" else (sourceEntry?.incEleonora?.toInt()?.toString() ?: budgetedIncE)) }
-    var incU by remember(sourceEntry) { mutableStateOf(sourceEntry?.incUnforeseen?.toInt()?.toString() ?: "0") }
-    var expR by remember(sourceEntry) { mutableStateOf(sourceEntry?.expRent?.toInt()?.toString() ?: defaultRent) }
-    var expL by remember(sourceEntry) { mutableStateOf(sourceEntry?.let { (it.expGroceries + it.expOther).toInt().toString() } ?: baselineLiving) }
+    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.let { fmtVal(it) } ?: budgetedIncV) }
+    var incE by remember(sourceEntry) { mutableStateOf(if (isSingle) "0" else (sourceEntry?.incEleonora?.let { fmtVal(it) } ?: budgetedIncE)) }
+    var incU by remember(sourceEntry) { mutableStateOf(sourceEntry?.incUnforeseen?.let { fmtVal(it) } ?: "0") }
+    var expR by remember(sourceEntry) { mutableStateOf(sourceEntry?.expRent?.let { fmtVal(it) } ?: defaultRent) }
+    var expL by remember(sourceEntry) { mutableStateOf(sourceEntry?.let { fmtVal(it.expGroceries + it.expOther) } ?: baselineLiving) }
     var notes by remember(sourceEntry) { mutableStateOf(sourceEntry?.notes ?: "") }
-    var balPortu by remember(sourceEntry) { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
-    var balPension by remember(sourceEntry) { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
-    var balReserve by remember(sourceEntry) { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
+    var balPortu by remember(sourceEntry) { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
+    var balPension by remember(sourceEntry) { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
+    var balReserve by remember(sourceEntry) { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
 
     val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
     val primaryName = state.settings.primaryName.ifBlank { "Primary Earner" }
     val spouseName = state.settings.spouseName.ifBlank { "Partner" }
 
     // Live calculations
-    val valIncV = incV.toDoubleOrNull() ?: 0.0
-    val valIncE = if (!isSingle) (incE.toDoubleOrNull() ?: 0.0) else 0.0
-    val valIncU = incU.toDoubleOrNull() ?: 0.0
+    val valIncV = incV.parseUserAmountOrNull() ?: 0.0
+    val valIncE = if (!isSingle) (incE.parseUserAmountOrNull() ?: 0.0) else 0.0
+    val valIncU = incU.parseUserAmountOrNull() ?: 0.0
     val totalInflows = valIncV + valIncE + valIncU
 
-    val valExpR = expR.toDoubleOrNull() ?: 0.0
-    val valExpL = expL.toDoubleOrNull() ?: 0.0
+    val valExpR = expR.parseUserAmountOrNull() ?: 0.0
+    val valExpL = expL.parseUserAmountOrNull() ?: 0.0
     val totalExpenses = valExpR + valExpL
 
     val netFlow = totalInflows - totalExpenses
@@ -560,9 +560,9 @@ internal fun AddLedgerEntryDialog(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val vPortu = balPortu.toDoubleOrNull() ?: 0.0
-                        val vPension = balPension.toDoubleOrNull() ?: 0.0
-                        val vReserve = balReserve.toDoubleOrNull() ?: 0.0
+                        val vPortu = balPortu.parseUserAmountOrNull() ?: 0.0
+                        val vPension = balPension.parseUserAmountOrNull() ?: 0.0
+                        val vReserve = balReserve.parseUserAmountOrNull() ?: 0.0
                         val vTotalNetWorth = vPortu + vPension + vReserve
 
                         Row(
@@ -663,15 +663,15 @@ internal fun AddLedgerEntryDialog(
                 onClick = {
                     onSave(
                         ym,
-                        incV.toDoubleOrNull() ?: 0.0,
-                        if (isSingle) 0.0 else (incE.toDoubleOrNull() ?: 0.0),
-                        incU.toDoubleOrNull() ?: 0.0,
-                        expR.toDoubleOrNull() ?: 0.0,
-                        expL.toDoubleOrNull() ?: 0.0,
+                        incV.parseUserAmountOrNull() ?: 0.0,
+                        if (isSingle) 0.0 else (incE.parseUserAmountOrNull() ?: 0.0),
+                        incU.parseUserAmountOrNull() ?: 0.0,
+                        expR.parseUserAmountOrNull() ?: 0.0,
+                        expL.parseUserAmountOrNull() ?: 0.0,
                         notes,
-                        balPortu.toDoubleOrNull() ?: 0.0,
-                        balPension.toDoubleOrNull() ?: 0.0,
-                        balReserve.toDoubleOrNull() ?: 0.0
+                        balPortu.parseUserAmountOrNull() ?: 0.0,
+                        balPension.parseUserAmountOrNull() ?: 0.0,
+                        balReserve.parseUserAmountOrNull() ?: 0.0
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),

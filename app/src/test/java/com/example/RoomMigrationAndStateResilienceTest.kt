@@ -161,7 +161,7 @@ class RoomMigrationAndStateResilienceTest {
     @Test
     fun test6_databaseVersion_matchesTarget30() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(34, version)
+        assertEquals(35, version)
     }
 
     @Test
@@ -300,5 +300,26 @@ class RoomMigrationAndStateResilienceTest {
 
         val allEntries = db.ledgerDao().getAllEntries().first()
         assertEquals(10, allEntries.size)
+    }
+
+    @Test
+    fun test11_migration_34_35_addsGuardrailsAndBaristaColumns() = runBlocking {
+        db.settingsDao().saveSettings(SettingsEntity.freshDefaults())
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA table_info(app_settings)")
+        val columns = mutableSetOf<String>()
+        while (cursor.moveToNext()) {
+            columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+        }
+        cursor.close()
+
+        assertTrue(columns.contains("guardrailsUpperThresholdPct"))
+        assertTrue(columns.contains("guardrailsLowerThresholdPct"))
+        assertTrue(columns.contains("guardrailsCutPct"))
+        assertTrue(columns.contains("guardrailsBoostPct"))
+        assertTrue(columns.contains("guardrailsFloorPct"))
+        assertTrue(columns.contains("baristaTransitionEnabled"))
+        assertTrue(columns.contains("baristaStartYear"))
+        assertTrue(columns.contains("baristaMonthlyIncome"))
+        assertTrue(columns.contains("baristaSavingsMonthly"))
     }
 }

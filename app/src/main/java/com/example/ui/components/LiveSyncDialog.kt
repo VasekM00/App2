@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -118,8 +119,10 @@ fun LiveSyncDialog(
                     )
                 }
             } else if (liveData != null) {
-                val differences = CzechEconomicSyncService.computeDifferences(currentSettings, liveData)
-                val diffCount = differences.count { it.isDifferent }
+                val differences = remember(currentSettings, liveData) {
+                    CzechEconomicSyncService.computeDifferences(currentSettings, liveData)
+                }
+                val diffCount = remember(differences) { differences.count { it.isDifferent } }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // FX & Macro Rates Banner

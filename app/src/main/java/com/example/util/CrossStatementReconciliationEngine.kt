@@ -238,8 +238,8 @@ object CrossStatementReconciliationEngine {
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
         bankBalances: Map<String, Double> = emptyMap()
     ): ReconcileResult {
-        val workingList = transactions.distinctBy { computeFingerprint(it) }.map { it.copy() }.toMutableList()
-        val workingBoundary = boundaryTransactions.distinctBy { computeFingerprint(it) }.map { it.copy() }.toMutableList()
+        val workingList = transactions.map { it.copy() }.toMutableList()
+        val workingBoundary = boundaryTransactions.map { it.copy() }.toMutableList()
 
         // 1. Initial pass: identify known self-transfers and family contributions
         for (i in workingList.indices) {
@@ -268,11 +268,11 @@ object CrossStatementReconciliationEngine {
             }
         }
 
-        // 2a. Cross-Statement Pairwise Matcher within current month: Pair debit on Account A with credit on Account B within ±5 days
+        // 2a. Cross-Statement Pairwise Matcher within current month: Pair debit on Account A with credit on Account B within clearing window
         val matchedPairs = mutableListOf<MatchedTransferPair>()
         val pairedWorkingIndices = mutableSetOf<Int>()
-        val debits = workingList.filter { it.amount < 0 && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
-        val credits = workingList.filter { it.amount > 0 }.toMutableList()
+        val debits = workingList.filter { it.amount < 0 && it.category != BankTransactionType.HOUSING_RENT.name && !it.nettingReason.startsWith("Manually ") }.toMutableList()
+        val credits = workingList.filter { it.amount > 0 && !it.nettingReason.startsWith("Manually ") }.toMutableList()
 
         for (debit in debits) {
             val debitDate = parseDate(debit.date) ?: continue
@@ -282,8 +282,9 @@ object CrossStatementReconciliationEngine {
             val candidateIndex = credits.indexOfFirst { credit ->
                 val creditDate = parseDate(credit.date) ?: return@indexOfFirst false
                 val amountMatches = abs(debitAbs - credit.amount) < 0.05
-                val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
-                if (!amountMatches || !within5Days) return@indexOfFirst false
+                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
+                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
+                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
 
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
                         isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
@@ -357,9 +358,9 @@ object CrossStatementReconciliationEngine {
         }
 
         // 2b. Cross-Month Boundary Pairing: match remaining unmatched debits in workingList against boundary credits in adjacent months
-        val boundaryCredits = workingBoundary.filter { it.amount > 0 && (!it.isNetted || !isConfirmedPair(it)) }.toMutableList()
+        val boundaryCredits = workingBoundary.filter { it.amount > 0 && (!it.isNetted || !isConfirmedPair(it)) && !it.nettingReason.startsWith("Manually ") }.toMutableList()
         val remainingDebits = workingList.withIndex().filter { (idx, debit) ->
-            idx !in pairedWorkingIndices && debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name
+            idx !in pairedWorkingIndices && debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name && !debit.nettingReason.startsWith("Manually ")
         }.map { it.value }
 
         for (debit in remainingDebits) {
@@ -369,8 +370,9 @@ object CrossStatementReconciliationEngine {
             val candidateIndex = boundaryCredits.indexOfFirst { credit ->
                 val creditDate = parseDate(credit.date) ?: return@indexOfFirst false
                 val amountMatches = abs(debitAbs - credit.amount) < 0.05
-                val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
-                if (!amountMatches || !within5Days) return@indexOfFirst false
+                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
+                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
+                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
 
                 val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
                         isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
@@ -381,7 +383,25 @@ object CrossStatementReconciliationEngine {
                 if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
 
                 val isCrossBank = credit.bankName != debit.bankName
-                isCrossBank || isFlaggedSelf
+                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
+                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
+                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
+                        !isFlaggedSelf &&
+                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
+
+                if (hasConflictingThirdParties) return@indexOfFirst false
+
+                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
+                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
+                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
+
+                if (isSelfOrExplicitTransfer) {
+                    true
+                } else if (isCrossBank && bothBlankCounterparties) {
+                    true
+                } else {
+                    false
+                }
             }
 
             if (candidateIndex != -1) {
@@ -423,9 +443,9 @@ object CrossStatementReconciliationEngine {
         }
 
         // 2c. Cross-Month Boundary Pairing: match remaining unmatched credits in workingList against boundary debits in adjacent months
-        val boundaryDebits = workingBoundary.filter { it.amount < 0 && (!it.isNetted || !isConfirmedPair(it)) && it.category != BankTransactionType.HOUSING_RENT.name }.toMutableList()
+        val boundaryDebits = workingBoundary.filter { it.amount < 0 && (!it.isNetted || !isConfirmedPair(it)) && it.category != BankTransactionType.HOUSING_RENT.name && !it.nettingReason.startsWith("Manually ") }.toMutableList()
         val remainingCredits = workingList.withIndex().filter { (idx, credit) ->
-            idx !in pairedWorkingIndices && credit.amount > 0
+            idx !in pairedWorkingIndices && credit.amount > 0 && !credit.nettingReason.startsWith("Manually ")
         }.map { it.value }
 
         for (credit in remainingCredits) {
@@ -435,8 +455,9 @@ object CrossStatementReconciliationEngine {
             val candidateIndex = boundaryDebits.indexOfFirst { debit ->
                 val debitDate = parseDate(debit.date) ?: return@indexOfFirst false
                 val amountMatches = abs(abs(debit.amount) - creditAmount) < 0.05
-                val within5Days = abs(ChronoUnit.DAYS.between(debitDate, creditDate)) <= CLEARING_WINDOW_DAYS
-                if (!amountMatches || !within5Days) return@indexOfFirst false
+                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
+                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
+                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
 
                 val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
                 val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
@@ -511,63 +532,9 @@ object CrossStatementReconciliationEngine {
         }
 
         val totalNetted = workingList.filter { it.isNetted }.sumOf { abs(it.amount) }
-
-        var incVaclav = 0.0
-        var incEleonora = 0.0
-        var incOther = 0.0
-        var expRent = 0.0
-        var expGroceries = 0.0
-        var expOther = 0.0
-
-        for (tx in workingList) {
-            if (tx.isNetted) continue
-            val amt = tx.amount
-            when (tx.category) {
-                BankTransactionType.SALARY_VACLAV.name -> incVaclav += amt
-                BankTransactionType.SALARY_ELEONORA.name -> incEleonora += amt
-                BankTransactionType.PARENTAL_BENEFIT.name -> incEleonora += amt
-                BankTransactionType.OTHER_INFLOW.name -> incOther += amt
-                BankTransactionType.HOUSING_RENT.name -> {
-                    if (amt < 0) expRent += -amt else expRent -= amt
-                }
-                BankTransactionType.GROCERIES.name -> {
-                    if (amt < 0) expGroceries += -amt else expGroceries -= amt
-                }
-                BankTransactionType.LIFESTYLE_LIVING.name,
-                BankTransactionType.DINING_RESTAURANT.name,
-                BankTransactionType.TRANSPORTATION.name,
-                BankTransactionType.SHOPPING_GOODS.name,
-                BankTransactionType.HEALTH_DRUGSTORE.name,
-                BankTransactionType.SUBSCRIPTIONS_MEDIA.name,
-                BankTransactionType.SERVICES_UTILITIES.name,
-                BankTransactionType.ATM_CASH.name,
-                BankTransactionType.CHARITY_DONATION.name,
-                BankTransactionType.GENERAL_EXPENSE.name -> {
-                    if (amt < 0) expOther += -amt else expOther -= amt
-                }
-                BankTransactionType.INVESTMENT_PORTU.name,
-                BankTransactionType.INVESTMENT_DIP.name,
-                BankTransactionType.INVESTMENT_DPS.name -> {
-                    // Investments tracked separately
-                }
-                else -> {
-                    if (amt > 0) incOther += amt else expOther += -amt
-                }
-            }
-        }
-
-        if (expRent < 0.0) {
-            incOther += -expRent
-            expRent = 0.0
-        }
-        if (expGroceries < 0.0) {
-            incOther += -expGroceries
-            expGroceries = 0.0
-        }
-        if (expOther < 0.0) {
-            incOther += -expOther
-            expOther = 0.0
-        }
+        val agg = StatementImportCoordinator.aggregateMonthTransactions(workingList)
+        val totalInflows = agg.incVaclav + agg.incEleonora + agg.incOther
+        val totalExpenses = agg.expRent + agg.expGroceries + agg.expOther
 
         val auditReport = CrossStatementAuditReport(
             yearMonth = yearMonth,
@@ -575,9 +542,9 @@ object CrossStatementReconciliationEngine {
             matchedPairs = matchedPairs,
             singleSideNettedTransfers = singleSideTransfers,
             participatingBanks = workingList.map { it.bankName }.distinct(),
-            reconciledInflows = incVaclav + incEleonora + incOther,
-            reconciledExpenses = expRent + expGroceries + expOther,
-            reconciledNetCashFlow = (incVaclav + incEleonora + incOther) - (expRent + expGroceries + expOther),
+            reconciledInflows = totalInflows,
+            reconciledExpenses = totalExpenses,
+            reconciledNetCashFlow = totalInflows - totalExpenses,
             combinedEmergencyReserve = if (bankBalances.isNotEmpty()) bankBalances.values.sum() else null,
             bankBalances = bankBalances
         )

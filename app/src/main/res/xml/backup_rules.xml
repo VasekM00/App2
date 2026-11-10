@@ -5,5 +5,9 @@
 -->
 <full-backup-content>
     <include domain="sharedpref" path="."/>
+    <exclude domain="sharedpref" path="statement_import_prefs.xml"/>
+    <exclude domain="sharedpref" path="subscription_auditor_prefs.xml"/>
     <exclude domain="database" path="martinu_financials_db"/>
+    <exclude domain="database" path="martinu_financials_db-wal"/>
+    <exclude domain="database" path="martinu_financials_db-shm"/>
 </full-backup-content>

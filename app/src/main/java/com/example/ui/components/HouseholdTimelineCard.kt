@@ -370,7 +370,11 @@ private fun MemberSummaryRow(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (currentAge >= 0) "Age $currentAge (${member.birthYear})" else "Planned (${member.birthYear})",
+                        text = when {
+                            currentAge < 0 -> "Planned (${member.birthYear})"
+                            member.role != HouseholdRole.DEPENDENT_CHILD && member.birthYear == 2000 -> "Born ${member.birthYear}"
+                            else -> "Age $currentAge (${member.birthYear})"
+                        },
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -19,7 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -69,41 +71,48 @@ import kotlinx.coroutines.launch
 @Composable
 fun CategoryPickerModal(
     tx: ParsedBankTransaction,
-    onSelectCategory: (BankTransactionType, Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onSelectCategory: (newCategory: BankTransactionType, rememberChoice: Boolean, applyToAllMatching: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    matchingMerchantCount: Int = 1,
+    onToggleExclude: (() -> Unit)? = null,
+    onBulkExcludeMerchant: (() -> Unit)? = null
 ) {
-    var selectedCategory by remember { mutableStateOf(tx.category) }
-    var rememberChoice by remember { mutableStateOf(true) }
+    var selectedCategory by remember(tx) { mutableStateOf(tx.category) }
+    var rememberChoice by remember(tx) { mutableStateOf(true) }
+    var applyToAllMatching by remember(tx, matchingMerchantCount) { mutableStateOf(matchingMerchantCount > 1) }
     val coroutineScope = rememberCoroutineScope()
 
-    var isSearchingOnline by remember { mutableStateOf(false) }
-    var onlineLookupResult by remember { mutableStateOf<MerchantLookupService.LookupResult?>(null) }
+    var isSearchingOnline by remember(tx) { mutableStateOf(false) }
+    var onlineLookupResult by remember(tx) { mutableStateOf<MerchantLookupService.LookupResult?>(null) }
 
     val rawTitle = if (tx.counterpartyName.isNotBlank()) tx.counterpartyName else tx.message.ifBlank { "Transaction" }
     val cleanTitle = BankStatementImporter.cleanPaymentDescription(rawTitle)
     val searchQuery = CzechMerchantCatalog.suggestMerchantSearchQuery(cleanTitle)
 
-    val availableCategories = listOf(
-        BankTransactionType.GROCERIES to "Groceries",
-        BankTransactionType.DINING_RESTAURANT to "Dining & Cafes",
-        BankTransactionType.SHOPPING_GOODS to "Shopping",
-        BankTransactionType.HEALTH_DRUGSTORE to "Health & Pharmacy",
-        BankTransactionType.TRANSPORTATION to "Transport & Fuel",
-        BankTransactionType.SUBSCRIPTIONS_MEDIA to "Subscriptions",
-        BankTransactionType.SERVICES_UTILITIES to "Utilities & Services",
-        BankTransactionType.CHARITY_DONATION to "Charity & Donations",
-        BankTransactionType.HOUSING_RENT to "Rent & Housing",
-        BankTransactionType.ATM_CASH to "Cash / ATM",
-        BankTransactionType.GENERAL_EXPENSE to "General Expense",
-        BankTransactionType.SALARY_VACLAV to "Salary (Václav)",
-        BankTransactionType.SALARY_ELEONORA to "Salary (Eleonora)",
-        BankTransactionType.PARENTAL_BENEFIT to "Parental Benefit",
-        BankTransactionType.OTHER_INFLOW to "Other Inflow",
-        BankTransactionType.INVESTMENT_PORTU to "Portu DCA",
-        BankTransactionType.INVESTMENT_DIP to "DIP Pension",
-        BankTransactionType.INVESTMENT_DPS to "DPS Pension",
-        BankTransactionType.INTERNAL_TRANSFER to "Internal Transfer (Netted)"
-    )
+    val availableCategories = remember {
+        listOf(
+            BankTransactionType.GROCERIES,
+            BankTransactionType.DINING_RESTAURANT,
+            BankTransactionType.SHOPPING_GOODS,
+            BankTransactionType.HEALTH_DRUGSTORE,
+            BankTransactionType.TRANSPORTATION,
+            BankTransactionType.SUBSCRIPTIONS_MEDIA,
+            BankTransactionType.SERVICES_UTILITIES,
+            BankTransactionType.CHARITY_DONATION,
+            BankTransactionType.HOUSING_RENT,
+            BankTransactionType.ATM_CASH,
+            BankTransactionType.GENERAL_EXPENSE,
+            BankTransactionType.LIFESTYLE_LIVING,
+            BankTransactionType.SALARY_VACLAV,
+            BankTransactionType.SALARY_ELEONORA,
+            BankTransactionType.PARENTAL_BENEFIT,
+            BankTransactionType.OTHER_INFLOW,
+            BankTransactionType.INVESTMENT_PORTU,
+            BankTransactionType.INVESTMENT_DIP,
+            BankTransactionType.INVESTMENT_DPS,
+            BankTransactionType.INTERNAL_TRANSFER
+        ).map { it to formatCategoryLabel(it) }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -380,6 +389,36 @@ fun CategoryPickerModal(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                // Bulk merchant match checkbox
+                if (matchingMerchantCount > 1 && searchQuery.isNotBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { applyToAllMatching = !applyToAllMatching }
+                            .padding(vertical = 2.dp)
+                    ) {
+                        Checkbox(
+                            checked = applyToAllMatching,
+                            onCheckedChange = { applyToAllMatching = it },
+                            colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Apply to all $matchingMerchantCount transactions from \"$searchQuery\"",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
                 // Remember for merchant checkbox
                 if (searchQuery.isNotBlank()) {
                     Row(
@@ -427,13 +466,63 @@ fun CategoryPickerModal(
 
                     Button(
                         onClick = {
-                            onSelectCategory(selectedCategory, rememberChoice)
+                            onSelectCategory(selectedCategory, rememberChoice, applyToAllMatching)
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
                         modifier = Modifier.weight(1.4f)
                     ) {
                         Text("Apply Category", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    }
+                }
+
+                if (onToggleExclude != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onToggleExclude()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (tx.isExcluded) GoodGreen else BadRed
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (tx.isExcluded) Icons.Default.CheckCircle else Icons.Default.Block,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (tx.isExcluded) "Include in Import" else "Exclude Transaction",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        if (matchingMerchantCount > 1 && onBulkExcludeMerchant != null && !tx.isExcluded) {
+                            OutlinedButton(
+                                onClick = {
+                                    onBulkExcludeMerchant()
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BadRed),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "Exclude All ($matchingMerchantCount)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -465,26 +554,4 @@ fun getCategoryColorValue(type: BankTransactionType): Color = when (type) {
     BankTransactionType.UNCATEGORIZED -> Color(0xFF94A3B8)
 }
 
-fun getCategoryDisplayName(type: BankTransactionType): String = when (type) {
-    BankTransactionType.SALARY_VACLAV -> "Salary (Václav)"
-    BankTransactionType.SALARY_ELEONORA -> "Salary (Eleonora)"
-    BankTransactionType.PARENTAL_BENEFIT -> "Parental Benefit"
-    BankTransactionType.OTHER_INFLOW -> "Other Inflow"
-    BankTransactionType.HOUSING_RENT -> "Rent & Housing"
-    BankTransactionType.GROCERIES -> "Groceries"
-    BankTransactionType.DINING_RESTAURANT -> "Dining & Cafes"
-    BankTransactionType.TRANSPORTATION -> "Transport & Fuel"
-    BankTransactionType.SHOPPING_GOODS -> "Shopping"
-    BankTransactionType.HEALTH_DRUGSTORE -> "Health & Pharmacy"
-    BankTransactionType.SUBSCRIPTIONS_MEDIA -> "Subscriptions"
-    BankTransactionType.SERVICES_UTILITIES -> "Utilities & Services"
-    BankTransactionType.ATM_CASH -> "Cash / ATM"
-    BankTransactionType.CHARITY_DONATION -> "Charity & Donations"
-    BankTransactionType.INVESTMENT_PORTU -> "Portu DCA"
-    BankTransactionType.INVESTMENT_DIP -> "DIP Pension"
-    BankTransactionType.INVESTMENT_DPS -> "DPS Pension"
-    BankTransactionType.INTERNAL_TRANSFER -> "Internal Transfer (Netted)"
-    BankTransactionType.GENERAL_EXPENSE -> "General Expense"
-    BankTransactionType.LIFESTYLE_LIVING -> "Lifestyle"
-    BankTransactionType.UNCATEGORIZED -> "General"
-}
+fun getCategoryDisplayName(type: BankTransactionType): String = formatCategoryLabel(type)

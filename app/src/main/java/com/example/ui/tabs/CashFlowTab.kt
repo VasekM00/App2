@@ -61,18 +61,24 @@ fun CashFlowTab(
     onConfirmStatementImport: (StatementParseSummary) -> Unit = {},
     onDismissStatementImport: () -> Unit = {},
     onUpdateTransactionCategory: ((Int, BankTransactionType, Boolean) -> Unit)? = null,
+    onUpdateTransactionCategoryBulk: ((Int, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
+    onToggleTransactionExcluded: ((Int) -> Unit)? = null,
+    onBulkExcludeMerchant: ((String) -> Unit)? = null,
     activeAuditReport: CrossStatementAuditReport? = null,
     onShowAuditReport: ((String) -> Unit)? = null,
     onDismissAuditReport: () -> Unit = {},
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     lastImportTimestamp: Long? = null,
     allImportedTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+    onUpdateImportedTransactionCategory: ((Long, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
+    onToggleImportedTransactionExcluded: ((Long) -> Unit)? = null,
     dismissedSubscriptionMerchants: Set<String> = emptySet(),
     onDismissSubscription: ((String) -> Unit)? = null,
     onRestoreSubscription: ((String) -> Unit)? = null,
     onClearAllDismissedSubscriptions: (() -> Unit)? = null,
     onDeleteImportedStatement: ((String, String?) -> Unit)? = null,
     initialSubTab: Int = 0,
+    onSubTabSelected: ((Int) -> Unit)? = null,
     onUpdateSettings: (SettingsEntity) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -117,6 +123,7 @@ fun CashFlowTab(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             selectedSubTab = index
+                            onSubTabSelected?.invoke(index)
                         },
                         text = {
                             Text(
@@ -163,7 +170,9 @@ fun CashFlowTab(
                     importedBankSourcesByMonth = importedBankSourcesByMonth,
                     lastImportTimestamp = lastImportTimestamp,
                     onDeleteImportedStatement = onDeleteImportedStatement,
-                    allImportedTransactions = allImportedTransactions
+                    allImportedTransactions = allImportedTransactions,
+                    onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,
+                    onToggleImportedTransactionExcluded = onToggleImportedTransactionExcluded
                 )
             }
         }
@@ -260,7 +269,10 @@ fun CashFlowTab(
             onShowNettingAudit = {
                 onShowAuditReport?.invoke(summary.yearMonth)
             },
-            onUpdateTransactionCategory = onUpdateTransactionCategory
+            onUpdateTransactionCategory = onUpdateTransactionCategory,
+            onUpdateTransactionCategoryBulk = onUpdateTransactionCategoryBulk,
+            onToggleTransactionExcluded = onToggleTransactionExcluded,
+            onBulkExcludeMerchant = onBulkExcludeMerchant
         )
     }
 

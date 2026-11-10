@@ -115,7 +115,7 @@ fun EditPrimaryEarnerDialog(
                     val salary = netSalaryStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.vSalary
                     val growth = salaryGrowthStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.vSalaryGrowthPct
                     val vouchers = vouchersStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.vMealVouchersMonthly
-                    val gift = giftStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.familyGiftMonthly
+                    val gift = giftStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.vGiftsMonthly
                     val other = otherInflowsStr.replace(',', '.').trim().toDoubleOrNull() ?: settings.vOtherInflowsMonthly
                     val pensionAge = pensionAgeStr.trim().toIntOrNull() ?: settings.vStatePensionAge
 
@@ -298,6 +298,7 @@ fun EditSpouseEarnerDialog(
                             eStartingSalary = startSalary.coerceAtLeast(0.0),
                             eSalaryGrowthPct = growth.coerceAtLeast(0.0),
                             eGiftsMonthly = gift.coerceAtLeast(0.0),
+                            familyGiftMonthly = settings.vGiftsMonthly + gift.coerceAtLeast(0.0),
                             eOtherInflowsMonthly = other.coerceAtLeast(0.0),
                             eStatePensionAge = pensionAge.coerceIn(55, 75)
                         )

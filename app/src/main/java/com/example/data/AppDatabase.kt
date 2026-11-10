@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 34,
+    version = 35,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +24,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun recreateAppSettingsTable(db: SupportSQLiteDatabase) {
             try {
+                db.execSQL("DROP TABLE IF EXISTS app_settings_new")
                 val columns = mutableSetOf<String>()
                 db.query("PRAGMA table_info(app_settings)").use { cursor ->
                     while (cursor.moveToNext()) {
@@ -149,13 +150,13 @@ abstract class AppDatabase : RoomDatabase() {
                 val vPensionAgeCol = when {
                     columns.contains("vStatePensionAge") -> "vStatePensionAge"
                     columns.contains("statePensionAge") -> "statePensionAge"
-                    else -> "65"
+                    else -> "67"
                 }
 
                 val ePensionAgeCol = when {
                     columns.contains("eStatePensionAge") -> "eStatePensionAge"
                     columns.contains("statePensionAge") -> "statePensionAge"
-                    else -> "65"
+                    else -> "67"
                 }
 
                 val vPensionMonthlyCol = when {
@@ -283,11 +284,11 @@ abstract class AppDatabase : RoomDatabase() {
                         ${colOr("minWageMonthly", "22400.0")},
                         ${colOr("dpsDeductionThresholdMonthly", "1700.0")},
                         ${colOr("dpsStandardSubsidyMaxMonthly", "340.0")},
-                        ${colOr("dpsYouthSubsidyMaxMonthly", "680.0")},
+                        ${colOr("dpsYouthSubsidyMaxMonthly", "340.0")},
                         ${colOr("dpsMinDepositForSubsidy", "500.0")},
                         ${colOr("dpsYouthAgeLimit", "30")},
                         ${colOr("dpsSubsidyRateStandardPct", "20.0")},
-                        ${colOr("dpsSubsidyRateYouthPct", "40.0")},
+                        ${colOr("dpsSubsidyRateYouthPct", "20.0")},
                         ${colOr("childExpensesEnabled", "1")},
                         ${colOr("child1Enabled", "1")},
                         ${colOr("child1BirthYear", "2024")},
@@ -521,9 +522,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsUpperThresholdPct REAL NOT NULL DEFAULT 20.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsLowerThresholdPct REAL NOT NULL DEFAULT 20.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsCutPct REAL NOT NULL DEFAULT 10.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsBoostPct REAL NOT NULL DEFAULT 10.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN guardrailsFloorPct REAL NOT NULL DEFAULT 70.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN baristaTransitionEnabled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN baristaStartYear INTEGER NOT NULL DEFAULT 2038")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN baristaMonthlyIncome REAL NOT NULL DEFAULT 35000.0")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN baristaSavingsMonthly REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+                INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "martinu_financials_db"
@@ -535,13 +550,12 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
                         MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28,
                         MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
-                        MIGRATION_32_33, MIGRATION_33_34
+                        MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35
                     )
                     .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
                     .fallbackToDestructiveMigrationOnDowngrade(true)
                     .build()
-                INSTANCE = instance
-                instance
+                    .also { INSTANCE = it }
             }
         }
     }

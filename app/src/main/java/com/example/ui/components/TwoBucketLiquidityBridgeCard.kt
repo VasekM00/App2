@@ -385,9 +385,9 @@ fun TwoBucketLiquidityBridgeCard(
                     explanation = if (targetPoint != null && targetPoint.year < bridgePoint.year) {
                         "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} yrs) for the liquid bridge to fully fund burn to age 60."
                     } else {
-                        "Your liquid bridge to age 60 and overall retirement capital both unlock simultaneously in Year ${bridgePoint.year} (Age ${bridgePoint.age})."
+                        "Your liquid bridge to age 60 and overall retirement capital both unlock simultaneously in Year ${bridgePoint.year}."
                     },
-                    formulaOrRule = "Year ${bridgePoint.year} (Age ${bridgePoint.age})",
+                    formulaOrRule = "Year ${bridgePoint.year}",
                     accentColor = BrandTeal
                 )
 
@@ -409,7 +409,7 @@ fun TwoBucketLiquidityBridgeCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Viable Full FIRE: Year ${bridgePoint.year} (Age ${bridgePoint.age})",
+                            text = "Viable Full FIRE: ${bridgePoint.year}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = BrandTeal

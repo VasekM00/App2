@@ -1,10 +1,8 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,24 +42,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +66,8 @@ import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtCZK
+import com.example.util.BankTransactionType
 
 @Composable
 internal fun bankBadgeColor(bankName: String): Color = when {
@@ -96,242 +86,36 @@ internal fun bankBadgeColor(bankName: String): Color = when {
     else -> BrandTeal
 }
 
-@Composable
-internal fun LedgerChart(
-    entries: List<LedgerEntryEntity>,
-    selectedYm: String = "",
-    onSelectMonth: (String) -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    if (entries.isEmpty()) return
-    val sorted = remember(entries) { entries.sortedBy { it.yearMonth }.takeLast(6) }
-    if (sorted.isEmpty()) return
+internal fun friendlyBankName(bankName: String): String = when {
+    bankName.contains("MONETA", ignoreCase = true) -> "Moneta"
+    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
+    bankName.contains("MBANK", ignoreCase = true) -> "mBank"
+    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
+    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
+    bankName.contains("FIO", ignoreCase = true) -> "Fio banka"
+    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
+    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
+    bankName.contains("UNICREDIT", ignoreCase = true) -> "UniCredit"
+    bankName.contains("CREDITAS", ignoreCase = true) -> "Banka Creditas"
+    bankName.contains("REVOLUT", ignoreCase = true) -> "Revolut"
+    bankName.contains("WISE", ignoreCase = true) -> "Wise"
+    else -> bankName
+}
 
-    val maxVal = remember(sorted) {
-        sorted.maxOf { maxOf(it.incVaclav + it.incEleonora + it.incUnforeseen, it.expRent + it.expGroceries + it.expOther) }.coerceAtLeast(100.0) * 1.15
-    }
-
-    val haptic = LocalHapticFeedback.current
-    val cTeal = BrandTeal
-    val cGreen = GoodGreen
-    val cRed = BadRed
-    val cSurface = MaterialTheme.colorScheme.surface
-    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-    val textPaintColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
-    val textPx = with(LocalDensity.current) { 10.sp.toPx() }
-    val textPaint = remember(textPaintColor, textPx) {
-        android.graphics.Paint().apply {
-            color = textPaintColor
-            textSize = textPx
-            isAntiAlias = true
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
-
-    val selectedEntry = remember(sorted, selectedYm) {
-        sorted.find { it.yearMonth == selectedYm } ?: sorted.lastOrNull()
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = "6-Month Cash Flow Trend chart showing monthly income and expense history." },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            // Header Row with Title & Legend
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "6-Month Trend",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                    )
-                    ColorPill(
-                        text = "FLOW",
-                        color = cTeal,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        horizontalPadding = 5.dp,
-                        verticalPadding = 2.dp
-                    )
-                }
-
-                // Legend
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
-                        Text("Incomes", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Box(modifier = Modifier.size(8.dp).background(cRed, CircleShape))
-                        Text("Expenses", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Chart Canvas
-            val paddingHorizontal = 36f
-            val paddingTop = 18f
-            val paddingBottom = 38f
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(130.dp)
-                    .semantics {
-                        contentDescription = "Monthly ledger trend chart showing income and expense history across ${sorted.size} months."
-                    }
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(sorted) {
-                            detectTapGestures { offset ->
-                                val plotW = size.width - (paddingHorizontal * 2)
-                                val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else plotW
-                                val clickX = (offset.x - paddingHorizontal).coerceAtLeast(0f)
-                                val tappedIdx = if (sorted.size > 1) {
-                                    (clickX / stepX + 0.5f).toInt().coerceIn(0, sorted.size - 1)
-                                } else 0
-                                val target = sorted[tappedIdx]
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSelectMonth(target.yearMonth)
-                            }
-                        }
-                ) {
-                    val w = size.width
-                    val h = size.height
-                    val plotW = w - (paddingHorizontal * 2)
-                    val plotH = h - paddingTop - paddingBottom
-                    if (plotW <= 0f || plotH <= 0f) return@Canvas
-                    val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else plotW
-
-                    // 1. Grid Lines (3 horizontal dotted lines)
-                    val gridSteps = 3
-                    for (i in 0..gridSteps) {
-                        val yPos = paddingTop + (plotH / gridSteps) * i
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(paddingHorizontal, yPos),
-                            end = Offset(w - paddingHorizontal, yPos),
-                            strokeWidth = 1f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                        )
-                    }
-
-                    // 2. Selected Month Vertical Accent Highlight
-                    selectedEntry?.let { entry ->
-                        val idx = sorted.indexOf(entry)
-                        if (idx >= 0) {
-                            val selX = paddingHorizontal + idx * stepX
-                            drawLine(
-                                color = cTeal.copy(alpha = 0.4f),
-                                start = Offset(selX, paddingTop),
-                                end = Offset(selX, h - paddingBottom),
-                                strokeWidth = 2f,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f)
-                            )
-                        }
-                    }
-
-                    // 3. Compute Coordinates
-                    val incPoints = mutableListOf<Offset>()
-                    val expPoints = mutableListOf<Offset>()
-
-                    sorted.forEachIndexed { index, e ->
-                        val x = paddingHorizontal + index * stepX
-                        val incVal = e.incVaclav + e.incEleonora + e.incUnforeseen
-                        val expVal = e.expRent + e.expGroceries + e.expOther
-
-                        val yInc = paddingTop + plotH - ((incVal / maxVal).coerceIn(0.0, 1.0) * plotH).toFloat()
-                        val yExp = paddingTop + plotH - ((expVal / maxVal).coerceIn(0.0, 1.0) * plotH).toFloat()
-
-                        incPoints.add(Offset(x, yInc))
-                        expPoints.add(Offset(x, yExp))
-                    }
-
-                    // 4. Draw Incomes Line
-                    val incPath = Path().apply {
-                        incPoints.forEachIndexed { i, pt ->
-                            if (i == 0) moveTo(pt.x, pt.y) else lineTo(pt.x, pt.y)
-                        }
-                    }
-                    drawPath(
-                        path = incPath,
-                        color = cGreen,
-                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                    )
-
-                    // 5. Draw Expenses Line
-                    val expPath = Path().apply {
-                        expPoints.forEachIndexed { i, pt ->
-                            if (i == 0) moveTo(pt.x, pt.y) else lineTo(pt.x, pt.y)
-                        }
-                    }
-                    drawPath(
-                        path = expPath,
-                        color = cRed,
-                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                    )
-
-                    // 6. Draw Points and X-Axis Labels
-                    sorted.forEachIndexed { index, e ->
-                        val incPt = incPoints[index]
-                        val expPt = expPoints[index]
-                        val isSelected = e.yearMonth == selectedEntry?.yearMonth
-
-                        // Incomes Node Dot
-                        drawCircle(
-                            color = cSurface,
-                            radius = if (isSelected) 5.dp.toPx() else 3.5.dp.toPx(),
-                            center = incPt
-                        )
-                        drawCircle(
-                            color = cGreen,
-                            radius = if (isSelected) 3.5.dp.toPx() else 2.5.dp.toPx(),
-                            center = incPt
-                        )
-
-                        // Expenses Node Dot
-                        drawCircle(
-                            color = cSurface,
-                            radius = if (isSelected) 5.dp.toPx() else 3.5.dp.toPx(),
-                            center = expPt
-                        )
-                        drawCircle(
-                            color = cRed,
-                            radius = if (isSelected) 3.5.dp.toPx() else 2.5.dp.toPx(),
-                            center = expPt
-                        )
-
-                        // Label formatting (e.g. "09/26" or "Sep")
-                        val label = try {
-                            val ym = e.yearMonth.split("-")
-                            "${ym.getOrNull(1)}/${ym.getOrNull(0)?.takeLast(2)}"
-                        } catch (ex: Exception) { e.yearMonth }
-
-                        drawContext.canvas.nativeCanvas.drawText(
-                            label,
-                            incPt.x,
-                            h - 8f,
-                            textPaint
-                        )
-                    }
-                }
-            }
-        }
-    }
+internal fun bankShortBadge(bankName: String): String = when {
+    bankName.contains("MONETA", ignoreCase = true) -> "MON"
+    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
+    bankName.contains("MBANK", ignoreCase = true) -> "mB"
+    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
+    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
+    bankName.contains("FIO", ignoreCase = true) -> "Fio"
+    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
+    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air"
+    bankName.contains("UNICREDIT", ignoreCase = true) -> "UC"
+    bankName.contains("CREDITAS", ignoreCase = true) -> "CR"
+    bankName.contains("REVOLUT", ignoreCase = true) -> "Rev"
+    bankName.contains("WISE", ignoreCase = true) -> "Wise"
+    else -> bankName.take(3).uppercase()
 }
 
 @Composable
@@ -348,13 +132,12 @@ internal fun LedgerSubTab(
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     lastImportTimestamp: Long? = null,
     onDeleteImportedStatement: ((String, String?) -> Unit)? = null,
-    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList()
+    allImportedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
+    onUpdateImportedTransactionCategory: ((Long, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
+    onToggleImportedTransactionExcluded: ((Long) -> Unit)? = null
 ) {
     val sortedEntries = remember(entries) {
         entries.sortedByDescending { it.yearMonth }
-    }
-    val latestEntry = remember(sortedEntries) {
-        sortedEntries.firstOrNull()
     }
 
     val daysSinceLastImport = remember(lastImportTimestamp, entries) {
@@ -376,13 +159,21 @@ internal fun LedgerSubTab(
     }
 
     // Interactive Month Carousel Selection
-    var selectedYm by remember(sortedEntries) {
-        mutableStateOf(sortedEntries.firstOrNull()?.yearMonth ?: "")
+    var selectedYm by rememberSaveable {
+        mutableStateOf("")
     }
     var showImportGuidanceDialog by remember { mutableStateOf(false) }
 
-    val activeEntry = remember(selectedYm, sortedEntries) {
-        sortedEntries.find { it.yearMonth == selectedYm } ?: sortedEntries.firstOrNull()
+    val effectiveSelectedYm = remember(selectedYm, sortedEntries) {
+        if (selectedYm.isNotEmpty() && sortedEntries.any { it.yearMonth == selectedYm }) {
+            selectedYm
+        } else {
+            sortedEntries.firstOrNull()?.yearMonth ?: ""
+        }
+    }
+
+    val activeEntry = remember(effectiveSelectedYm, sortedEntries) {
+        sortedEntries.find { it.yearMonth == effectiveSelectedYm } ?: sortedEntries.firstOrNull()
     }
 
     val baselineExp = state.totalLivingCostMonthly
@@ -741,23 +532,8 @@ internal fun LedgerSubTab(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         chipBanks.sorted().forEach { bank ->
-                                            val badgeText = when {
-                                                bank.contains("MONETA", ignoreCase = true) -> "MON"
-                                                bank.contains("CSOB", ignoreCase = true) || bank.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-                                                bank.contains("MBANK", ignoreCase = true) -> "mB"
-                                                bank.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
-                                                bank.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
-                                                bank.contains("FIO", ignoreCase = true) -> "Fio"
-                                                bank.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
-                                                bank.contains("AIR_BANK", ignoreCase = true) -> "Air"
-                                                bank.contains("UNICREDIT", ignoreCase = true) -> "UC"
-                                                bank.contains("CREDITAS", ignoreCase = true) -> "CR"
-                                                bank.contains("REVOLUT", ignoreCase = true) -> "Rev"
-                                                bank.contains("WISE", ignoreCase = true) -> "Wise"
-                                                else -> bank.take(3).uppercase()
-                                            }
                                             ColorPill(
-                                                text = badgeText,
+                                                text = bankShortBadge(bank),
                                                 color = if (isSelected) Color.White.copy(alpha = 0.9f) else bankBadgeColor(bank),
                                                 fontSize = 7.5.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -774,6 +550,9 @@ internal fun LedgerSubTab(
 
                 // Active Month Featured Showcase Card
                 if (activeEntry != null) {
+                    val monthTransactions = remember(allImportedTransactions, activeEntry.yearMonth) {
+                        allImportedTransactions.filter { it.yearMonth == activeEntry.yearMonth }
+                    }
                     ActiveMonthOverviewCard(
                         state = state,
                         entry = activeEntry,
@@ -787,16 +566,16 @@ internal fun LedgerSubTab(
                         onShowAudit = { onShowAuditReport?.invoke(activeEntry.yearMonth) },
                         importedBankSourcesByMonth = importedBankSourcesByMonth,
                         onDeleteImportedStatement = onDeleteImportedStatement,
+                        monthTransactions = monthTransactions,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
 
-                    val monthTransactions = remember(allImportedTransactions, activeEntry.yearMonth) {
-                        allImportedTransactions.filter { it.yearMonth == activeEntry.yearMonth }
-                    }
                     if (monthTransactions.isNotEmpty()) {
                         com.example.ui.components.MonthlyTransactionsCard(
                             yearMonth = activeEntry.yearMonth,
                             transactions = monthTransactions,
+                            onUpdateCategory = onUpdateImportedTransactionCategory,
+                            onToggleExcluded = onToggleImportedTransactionExcluded,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }

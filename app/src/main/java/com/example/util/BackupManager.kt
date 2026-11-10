@@ -143,6 +143,15 @@ object BackupManager {
         json.put("dividendTaxRatePct", s.dividendTaxRatePct)
         json.put("useHistoricalBootstrap", s.useHistoricalBootstrap)
         json.put("guardrailsEnabled", s.guardrailsEnabled)
+        json.put("guardrailsUpperThresholdPct", s.guardrailsUpperThresholdPct)
+        json.put("guardrailsLowerThresholdPct", s.guardrailsLowerThresholdPct)
+        json.put("guardrailsCutPct", s.guardrailsCutPct)
+        json.put("guardrailsBoostPct", s.guardrailsBoostPct)
+        json.put("guardrailsFloorPct", s.guardrailsFloorPct)
+        json.put("baristaTransitionEnabled", s.baristaTransitionEnabled)
+        json.put("baristaStartYear", s.baristaStartYear)
+        json.put("baristaMonthlyIncome", s.baristaMonthlyIncome)
+        json.put("baristaSavingsMonthly", s.baristaSavingsMonthly)
         json.put("merchantRulesJson", s.merchantRulesJson)
         json.put("emergencyReserveMode", s.emergencyReserveMode)
 
@@ -294,16 +303,25 @@ object BackupManager {
                 dividendTaxRatePct = json.optDouble("dividendTaxRatePct", fallback.dividendTaxRatePct),
                 useHistoricalBootstrap = json.optBoolean("useHistoricalBootstrap", fallback.useHistoricalBootstrap),
                 guardrailsEnabled = json.optBoolean("guardrailsEnabled", fallback.guardrailsEnabled),
+                guardrailsUpperThresholdPct = json.optDouble("guardrailsUpperThresholdPct", fallback.guardrailsUpperThresholdPct),
+                guardrailsLowerThresholdPct = json.optDouble("guardrailsLowerThresholdPct", fallback.guardrailsLowerThresholdPct),
+                guardrailsCutPct = json.optDouble("guardrailsCutPct", fallback.guardrailsCutPct),
+                guardrailsBoostPct = json.optDouble("guardrailsBoostPct", fallback.guardrailsBoostPct),
+                guardrailsFloorPct = json.optDouble("guardrailsFloorPct", fallback.guardrailsFloorPct),
+                baristaTransitionEnabled = json.optBoolean("baristaTransitionEnabled", fallback.baristaTransitionEnabled),
+                baristaStartYear = json.optInt("baristaStartYear", fallback.baristaStartYear),
+                baristaMonthlyIncome = json.optDouble("baristaMonthlyIncome", fallback.baristaMonthlyIncome),
+                baristaSavingsMonthly = json.optDouble("baristaSavingsMonthly", fallback.baristaSavingsMonthly),
                 merchantRulesJson = json.optString("merchantRulesJson", fallback.merchantRulesJson),
                 emergencyReserveMode = json.optString("emergencyReserveMode", fallback.emergencyReserveMode)
             )
-            sanitizeRestored(restored, fallback)
+            sanitizeSettings(restored, fallback)
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun sanitizeRestored(s: SettingsEntity, f: SettingsEntity): SettingsEntity {
+    fun sanitizeSettings(s: SettingsEntity, f: SettingsEntity = SettingsEntity.freshDefaults()): SettingsEntity {
         val cleanMerchantRules = try {
             JSONObject(s.merchantRulesJson)
             s.merchantRulesJson
@@ -338,7 +356,7 @@ object BackupManager {
             childSupportUntilAge = if (s.childSupportUntilAge in 18..35) s.childSupportUntilAge else f.childSupportUntilAge,
             prolongChildSupportInFire = s.prolongChildSupportInFire,
             dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
-            monteCarloN = if (s.monteCarloN in 100..1000) s.monteCarloN else f.monteCarloN,
+            monteCarloN = if (s.monteCarloN in 100..2000) s.monteCarloN else f.monteCarloN,
             retirementHorizonYears = if (s.retirementHorizonYears in 10..60) s.retirementHorizonYears else f.retirementHorizonYears,
             vSalary = money(s.vSalary, f.vSalary),
             vSalaryGrowthPct = growthPct(s.vSalaryGrowthPct, f.vSalaryGrowthPct),

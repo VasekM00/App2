@@ -227,9 +227,35 @@ object SubscriptionAuditor {
             val distinctMonths = txs.map { it.yearMonth }.distinct().sorted()
             val isVerifiedProvider = isVerifiedRecurringProvider(merchantKey, combinedRawText)
 
-            // Monthly debit aggregation: sum debits by yearMonth
-            val monthlySums = txs.groupBy { it.yearMonth }
-                .mapValues { (_, list) -> list.sumOf { abs(it.amount) } }
+            // Monthly debit aggregation: if a single month has 2 charges due to 1st/31st calendar-month drift
+            // (charges at opposite ends of the month, ~24+ days apart, with similar amounts <= 1.25x),
+            // use the per-charge amount so billing-date drift does not trigger a fake +100% price creep or double the monthly burn.
+            val txsByMonth = txs.groupBy { it.yearMonth }
+            val monthlySums = txsByMonth.mapValues { (_, list) ->
+                val rawSum = list.sumOf { abs(it.amount) }
+                if (list.size == 2) {
+                    val a0 = abs(list[0].amount)
+                    val a1 = abs(list[1].amount)
+                    val isSimilarAmount = a0 > 0.0 && a1 > 0.0 && (max(a0, a1) / kotlin.math.min(a0, a1)) <= 1.25
+                    val sortedDates = list.mapNotNull {
+                        try { java.time.LocalDate.parse(it.date) } catch (_: Exception) { null }
+                    }.sorted()
+                    val isDriftDates = if (sortedDates.size == 2) {
+                        val d0 = sortedDates[0]
+                        val d1 = sortedDates[1]
+                        val daysBetween = java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
+                        daysBetween >= 24 || (d0.dayOfMonth <= 5 && d1.dayOfMonth >= 25)
+                    } else false
+
+                    if (isSimilarAmount && isDriftDates) {
+                        a1 // Use latest single billing charge when 2 identical charges land in one calendar month
+                    } else {
+                        rawSum
+                    }
+                } else {
+                    rawSum
+                }
+            }
             val latestMonth = distinctMonths.last()
             val oldestMonth = distinctMonths.first()
             val latestAmount = monthlySums[latestMonth] ?: 0.0
@@ -246,19 +272,30 @@ object SubscriptionAuditor {
             var normalizedAmount = latestAmount
 
             val normRaw = CzechMerchantCatalog.normalize(combinedRawText)
-            val annualRegex = Regex("""\b(rok|roky|roku|ročně|rocne|annual|annually)\b""", RegexOption.IGNORE_CASE)
-            val quarterlyRegex = Regex("""\b(čtvrtletí|ctvrtleti|čtvrtlet|ctvrtlet|quarter|quarterly|kvartál|kvartal)\b""", RegexOption.IGNORE_CASE)
-            val hasAnnualHint = annualRegex.containsMatchIn(combinedRawText) || annualRegex.containsMatchIn(normRaw)
-            val hasQuarterlyHint = quarterlyRegex.containsMatchIn(combinedRawText) || quarterlyRegex.containsMatchIn(normRaw)
+            val annualRegex = Regex("""\b(rok|roky|roku|rocni|rocne|annual|annually|yearly)\b""", RegexOption.IGNORE_CASE)
+            val semiAnnualRegex = Regex("""\b(pololeti|pololetni|pololetne|semiannual|half-year)\b""", RegexOption.IGNORE_CASE)
+            val quarterlyRegex = Regex("""\b(ctvrtleti|ctvrtletni|ctvrtletne|ctvrtlet|quarter|quarterly|kvartal|kvartalni|kvartalne)\b""", RegexOption.IGNORE_CASE)
+            val hasAnnualHint = annualRegex.containsMatchIn(normRaw)
+            val hasSemiAnnualHint = semiAnnualRegex.containsMatchIn(normRaw)
+            val hasQuarterlyHint = quarterlyRegex.containsMatchIn(normRaw)
             val isTypicallyAnnualOnly = normRaw.contains("odpad") || normRaw.contains("poplatek za psa") || normRaw.contains("dalnicni znamk")
 
             if (distinctMonths.size == 1) {
-                if (hasAnnualHint || (isVerifiedProvider && isTypicallyAnnualOnly)) {
+                val isBroadMarketplace = normRaw.contains("google") || normRaw.contains("apple") || normRaw.contains("amazon") || normRaw.contains("steam") || normRaw.contains("playstation")
+                val hasExplicitSubKeyword = normRaw.contains("predplatne") || normRaw.contains("subscri") || normRaw.contains("recurring")
+
+                if ((hasAnnualHint || (isVerifiedProvider && isTypicallyAnnualOnly)) && latestAmount >= 1200.0) {
                     cadence = "ANNUAL"
                     normalizedAmount = latestAmount / 12.0
+                } else if (hasSemiAnnualHint) {
+                    cadence = "SEMI_ANNUAL"
+                    normalizedAmount = latestAmount / 6.0
                 } else if (hasQuarterlyHint) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
+                } else if (isBroadMarketplace && !hasExplicitSubKeyword && primaryCat != BankTransactionType.SUBSCRIPTIONS_MEDIA) {
+                    // Single one-off store/marketplace purchase: reject
+                    continue
                 } else if (isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) {
                     cadence = "MONTHLY"
                     normalizedAmount = latestAmount
@@ -302,7 +339,7 @@ object SubscriptionAuditor {
                 if (avgGapMonths in 2.4..3.6 || hasQuarterlyHint) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
-                } else if (avgGapMonths in 5.4..6.6) {
+                } else if (avgGapMonths in 5.4..6.6 || hasSemiAnnualHint) {
                     cadence = "SEMI_ANNUAL"
                     normalizedAmount = latestAmount / 6.0
                 } else if (avgGapMonths >= 10.0 || hasAnnualHint) {

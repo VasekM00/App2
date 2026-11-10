@@ -55,14 +55,15 @@ fun ExportReportDialog(
 
     val fiProgress = state.fireMilestones.standardFire.progressPct
 
-    val reportText = buildString {
-        appendLine("==============================================")
-        appendLine(" PERSONAL FINANCE TRACKER - FINANCIAL REPORT")
-        appendLine(" Country: Czech Republic")
-        appendLine(" Base Year: ${state.settings.baseYear}")
-        appendLine("==============================================")
-        appendLine()
-        appendLine("EXECUTIVE SUMMARY")
+    val reportText = remember(state) {
+        buildString {
+            appendLine("==============================================")
+            appendLine(" PERSONAL FINANCE TRACKER - FINANCIAL REPORT")
+            appendLine(" Country: Czech Republic")
+            appendLine(" Base Year: ${state.settings.baseYear}")
+            appendLine("==============================================")
+            appendLine()
+            appendLine("EXECUTIVE SUMMARY")
         appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal)}")
         appendLine("• Liquid Investments: ${fmtCZK(state.currentLiquidPortfolio)}")
         appendLine("• Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
@@ -70,10 +71,10 @@ fun ExportReportDialog(
         appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
         if (state.settings.isSingleHousehold) {
-            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35y"}")
         } else {
-            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
-            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year} (Age ${it.age})" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35y"}")
         }
         appendLine()
         val pName = state.settings.primaryName.ifBlank { "Václav" }
@@ -118,10 +119,11 @@ fun ExportReportDialog(
         appendLine()
         appendLine("MONTE CARLO STRESS TEST")
         appendLine("• FIRE Success Probability: ${String.format(java.util.Locale.ROOT, "%.1f%%", state.monteCarlo.successRatePct)}")
-        appendLine("• Median FIRE Age: ${state.monteCarlo.medianFireAge?.let { "Age $it" } ?: "N/A"}")
-        appendLine("• Fastest / Best-Case (5th percentile age): ${state.monteCarlo.bestCaseAge?.let { "Age $it" } ?: "N/A"}")
-        appendLine("• Conservative / Late (95th percentile age): ${state.monteCarlo.worstCaseAge?.let { "Age $it" } ?: "N/A"}")
+        appendLine("• Median FIRE Year: ${state.monteCarlo.medianFireAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
+        appendLine("• Fastest / Best-Case (5th percentile year): ${state.monteCarlo.bestCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
+        appendLine("• Conservative / Late (95th percentile year): ${state.monteCarlo.worstCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
         appendLine("==============================================")
+        }
     }
 
     var exportFormat by remember { mutableStateOf("Summary") } // "Summary" or "CSV"

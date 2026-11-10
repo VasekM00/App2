@@ -363,7 +363,7 @@ class CrossStatementReconciliationDeepTest {
     }
 
     @Test
-    fun test14_deduplication_identicalFingerprint_deduplicated() {
+    fun test14_preservesLegitimateSameDayDuplicateTransactions() {
         val tx1 = createTx(
             id = 1L,
             date = "2026-09-15",
@@ -387,7 +387,8 @@ class CrossStatementReconciliationDeepTest {
             boundaryTransactions = emptyList()
         )
 
-        assertEquals(1, result.currentMonthTxs.size)
+        assertEquals(2, result.currentMonthTxs.size)
+        assertEquals(1000.0, result.auditReport.reconciledExpenses, 0.01)
     }
 
     @Test

@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,6 +60,8 @@ import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.util.BankStatementImporter
+import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import java.util.Locale
@@ -67,6 +70,8 @@ import java.util.Locale
 fun MonthlyTransactionsCard(
     yearMonth: String,
     transactions: List<ImportedBankTransactionEntity>,
+    onUpdateCategory: ((txId: Long, newCategory: BankTransactionType, rememberMerchant: Boolean, applyToAllMatching: Boolean) -> Unit)? = null,
+    onToggleExcluded: ((txId: Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (transactions.isEmpty()) return
@@ -74,27 +79,36 @@ fun MonthlyTransactionsCard(
     var isExpanded by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
+    var showAllTransactions by remember(yearMonth) { mutableStateOf(false) }
+    var editingTx by remember { mutableStateOf<ImportedBankTransactionEntity?>(null) }
 
     val filterLabels = remember(transactions) {
         val inflowsCount = transactions.count { it.amount > 0 && !it.isNetted }
         val expensesCount = transactions.count { it.amount < 0 && !it.isNetted && !it.category.startsWith("INVESTMENT") }
-        val investmentsCount = transactions.count { it.category.startsWith("INVESTMENT") }
+        val investmentsCount = transactions.count { it.category.startsWith("INVESTMENT") && !it.isNetted }
         val nettedCount = transactions.count { it.isNetted }
-        listOf(
-            "All (${transactions.size})",
-            "Inflows ($inflowsCount)",
-            "Expenses ($expensesCount)",
-            "Investments ($investmentsCount)",
-            "Netted ($nettedCount)"
-        )
+        val uncategorizedCount = transactions.count { it.category == BankTransactionType.UNCATEGORIZED.name && !it.isNetted }
+        buildList {
+            add("All (${transactions.size})")
+            add("Inflows ($inflowsCount)")
+            add("Expenses ($expensesCount)")
+            add("Investments ($investmentsCount)")
+            add("Netted ($nettedCount)")
+            if (uncategorizedCount > 0) {
+                add("Uncategorized ($uncategorizedCount)")
+            }
+        }
     }
 
-    val filteredTransactions = remember(transactions, selectedFilterIndex, searchQuery) {
-        val base = when (selectedFilterIndex) {
+    val activeFilterIndex = if (selectedFilterIndex in filterLabels.indices) selectedFilterIndex else 0
+
+    val filteredTransactions = remember(transactions, activeFilterIndex, searchQuery) {
+        val base = when (activeFilterIndex) {
             1 -> transactions.filter { it.amount > 0 && !it.isNetted }
             2 -> transactions.filter { it.amount < 0 && !it.isNetted && !it.category.startsWith("INVESTMENT") }
-            3 -> transactions.filter { it.category.startsWith("INVESTMENT") }
+            3 -> transactions.filter { it.category.startsWith("INVESTMENT") && !it.isNetted }
             4 -> transactions.filter { it.isNetted }
+            5 -> transactions.filter { it.category == BankTransactionType.UNCATEGORIZED.name && !it.isNetted }
             else -> transactions
         }
         if (searchQuery.isBlank()) {
@@ -174,7 +188,7 @@ fun MonthlyTransactionsCard(
                             )
                         }
                         Text(
-                            text = "Itemized statement records for $yearMonth",
+                            text = "Itemized statement records for $yearMonth • Tap to edit",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.5.sp
@@ -252,7 +266,7 @@ fun MonthlyTransactionsCard(
                 ) {
                     filterLabels.forEachIndexed { index, label ->
                         FilterChip(
-                            selected = selectedFilterIndex == index,
+                            selected = activeFilterIndex == index,
                             onClick = { selectedFilterIndex = index },
                             label = {
                                 Text(
@@ -295,21 +309,33 @@ fun MonthlyTransactionsCard(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // Display up to 30 transactions with scrollable or capped view
-                        filteredTransactions.take(30).forEach { tx ->
-                            TransactionRowItem(tx = tx)
+                        val visibleTransactions = if (showAllTransactions) filteredTransactions else filteredTransactions.take(30)
+                        visibleTransactions.forEach { tx ->
+                            TransactionRowItem(
+                                tx = tx,
+                                onClick = { editingTx = tx }
+                            )
                         }
                         if (filteredTransactions.size > 30) {
-                            Text(
-                                text = "+ ${filteredTransactions.size - 30} more transactions (use search to filter)",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp
-                                ),
+                            TextButton(
+                                onClick = { showAllTransactions = !showAllTransactions },
                                 modifier = Modifier
                                     .align(Alignment.CenterHorizontally)
-                                    .padding(vertical = 4.dp)
-                            )
+                                    .testTag("toggle_all_monthly_transactions_button")
+                            ) {
+                                Text(
+                                    text = if (showAllTransactions) {
+                                        "Show first 30 transactions"
+                                    } else {
+                                        "Show all ${filteredTransactions.size} transactions (+${filteredTransactions.size - 30} more)"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = BrandTeal,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
                         }
                     }
 
@@ -357,10 +383,32 @@ fun MonthlyTransactionsCard(
             }
         }
     }
+
+    editingTx?.let { tx ->
+        val matchingCount = remember(tx, transactions) {
+            transactions.count { other ->
+                com.example.util.StatementImportCoordinator.matchesMerchantInMonth(tx, other)
+            }
+        }
+        EditImportedTransactionDialog(
+            tx = tx,
+            matchingCountInMonth = matchingCount,
+            onConfirmCategoryChange = { newCat, rem, applyAll ->
+                onUpdateCategory?.invoke(tx.id, newCat, rem, applyAll)
+            },
+            onToggleExcluded = {
+                onToggleExcluded?.invoke(tx.id)
+            },
+            onDismiss = { editingTx = null }
+        )
+    }
 }
 
 @Composable
-private fun TransactionRowItem(tx: ImportedBankTransactionEntity) {
+private fun TransactionRowItem(
+    tx: ImportedBankTransactionEntity,
+    onClick: (() -> Unit)? = null
+) {
     val isCredit = tx.amount > 0
     val amountColor = when {
         tx.isNetted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -380,49 +428,14 @@ private fun TransactionRowItem(tx: ImportedBankTransactionEntity) {
     }
 
     val bankBadgeText = remember(tx.bankName) {
-        when {
-            tx.bankName.contains("MONETA", ignoreCase = true) -> "MON"
-            tx.bankName.contains("CSOB", ignoreCase = true) -> "ČSOB"
-            tx.bankName.contains("MBANK", ignoreCase = true) -> "mB"
-            tx.bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
-            tx.bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
-            tx.bankName.contains("FIO", ignoreCase = true) -> "Fio"
-            tx.bankName.contains("AIR_BANK", ignoreCase = true) -> "Air"
-            tx.bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
-            tx.bankName.contains("REVOLUT", ignoreCase = true) -> "Rev"
-            else -> tx.bankName.take(3).uppercase()
-        }
+        com.example.ui.tabs.bankShortBadge(tx.bankName)
     }
 
-    val cTeal = BrandTeal
-    val cGold = BrandGold
-    val cGreen = GoodGreen
-    val cOnSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val cPrimary = MaterialTheme.colorScheme.primary
+    val bankColor = com.example.ui.tabs.bankBadgeColor(tx.bankName)
 
-    val bankColor = when {
-        tx.bankName.contains("MONETA", ignoreCase = true) -> cTeal
-        tx.bankName.contains("CSOB", ignoreCase = true) -> cGold
-        tx.bankName.contains("MBANK", ignoreCase = true) -> Color(0xFFE11D48)
-        tx.bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> Color(0xFF2563EB)
-        tx.bankName.contains("FIO", ignoreCase = true) -> Color(0xFF16A34A)
-        else -> cTeal
-    }
-
-    val categoryColor = when {
-        tx.category == "HOUSING_RENT" -> Color(0xFFD97706)
-        tx.category == "GROCERIES" -> Color(0xFF16A34A)
-        tx.category == "DINING_RESTAURANT" -> Color(0xFFEA580C)
-        tx.category == "TRANSPORTATION" -> Color(0xFF0284C7)
-        tx.category == "SHOPPING_GOODS" -> Color(0xFF6366F1)
-        tx.category == "HEALTH_DRUGSTORE" -> Color(0xFFE11D48)
-        tx.category == "SUBSCRIPTIONS_MEDIA" -> Color(0xFF0D9488)
-        tx.category.startsWith("INVESTMENT") -> cGold
-        tx.category.startsWith("SALARY") -> cGreen
-        tx.category == "PARENTAL_BENEFIT" -> cGreen
-        tx.category == "INTERNAL_TRANSFER" -> cOnSurfaceVariant
-        else -> cPrimary
-    }
+    val categoryColor = runCatching {
+        getCategoryColorValue(BankTransactionType.valueOf(tx.category))
+    }.getOrElse { MaterialTheme.colorScheme.primary }
 
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -432,7 +445,9 @@ private fun TransactionRowItem(tx: ImportedBankTransactionEntity) {
             0.5.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (tx.isNetted) 0.2f else 0.35f)
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick?.invoke() }
     ) {
         Row(
             modifier = Modifier
@@ -510,7 +525,10 @@ private fun TransactionRowItem(tx: ImportedBankTransactionEntity) {
                                 )
                             }
                         } else {
-                            val catLabel = tx.category.replace("INVESTMENT_", "").replace("SALARY_", "SALARY ").replace("_", " ")
+                            val catLabel = remember(tx.category) {
+                                runCatching { formatCategoryLabel(BankTransactionType.valueOf(tx.category)) }
+                                    .getOrElse { tx.category.replace("INVESTMENT_", "").replace("SALARY_", "SALARY ").replace("_", " ") }
+                            }
                             ColorPill(
                                 text = catLabel,
                                 color = categoryColor,

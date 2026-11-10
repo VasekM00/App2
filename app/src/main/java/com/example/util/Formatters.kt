@@ -190,3 +190,12 @@ object Formatters {
     }
 }
 
+fun String.parseUserAmountOrNull(): Double? =
+    this.replace("\u00A0", "")
+        .replace("\u202F", "")
+        .replace(" ", "")
+        .replace(",", ".")
+        .trim()
+        .toDoubleOrNull()
+        ?.takeIf { it.isFinite() }
+

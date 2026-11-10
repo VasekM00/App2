@@ -51,7 +51,7 @@ object MerchantCategoryManager {
     }
 
     fun saveOverride(context: Context, merchantPattern: String, category: BankTransactionType) {
-        val cleanPattern = merchantPattern.trim().lowercase()
+        val cleanPattern = CzechMerchantCatalog.normalizeSimple(merchantPattern).ifBlank { merchantPattern.trim().lowercase() }
         if (cleanPattern.isBlank()) return
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -66,10 +66,11 @@ object MerchantCategoryManager {
     }
 
     fun removeOverride(context: Context, merchantPattern: String) {
-        val cleanPattern = merchantPattern.trim().lowercase()
+        val cleanPattern = CzechMerchantCatalog.normalizeSimple(merchantPattern).ifBlank { merchantPattern.trim().lowercase() }
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val currentMap = getOverrides(context).toMutableMap()
         currentMap.remove(cleanPattern)
+        currentMap.remove(merchantPattern.trim().lowercase())
 
         val json = JSONObject()
         for ((k, v) in currentMap) {
