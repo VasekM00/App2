@@ -161,7 +161,7 @@ class RoomMigrationAndStateResilienceTest {
     @Test
     fun test6_databaseVersion_matchesLatest() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(37, version)
+        assertEquals(38, version)
     }
 
     @Test
@@ -322,6 +322,8 @@ class RoomMigrationAndStateResilienceTest {
         assertTrue(columns.contains("baristaMonthlyIncome"))
         assertTrue(columns.contains("baristaSavingsMonthly"))
         assertTrue(columns.contains("emergencyReserveMonthlyOverride"))
+        assertTrue(columns.contains("knownFamilyAccountsJson"))
+        assertTrue(columns.contains("knownParentalGiftAccountsJson"))
     }
 
     @Test

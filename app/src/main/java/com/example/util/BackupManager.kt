@@ -162,6 +162,8 @@ object BackupManager {
             "emergencyReserveMonthlyOverride",
             if (s.emergencyReserveMonthlyOverride.isFinite()) s.emergencyReserveMonthlyOverride else -1.0
         )
+        json.put("knownFamilyAccountsJson", s.knownFamilyAccountsJson)
+        json.put("knownParentalGiftAccountsJson", s.knownParentalGiftAccountsJson)
 
         return json.toString()
     }
@@ -337,7 +339,9 @@ object BackupManager {
                 baristaSavingsMonthly = json.optFiniteDouble("baristaSavingsMonthly", fallback.baristaSavingsMonthly),
                 merchantRulesJson = json.optStringNonNull("merchantRulesJson", fallback.merchantRulesJson),
                 emergencyReserveMode = json.optStringNonNull("emergencyReserveMode", fallback.emergencyReserveMode),
-                emergencyReserveMonthlyOverride = json.optFiniteDouble("emergencyReserveMonthlyOverride", fallback.emergencyReserveMonthlyOverride)
+                emergencyReserveMonthlyOverride = json.optFiniteDouble("emergencyReserveMonthlyOverride", fallback.emergencyReserveMonthlyOverride),
+                knownFamilyAccountsJson = json.optStringNonNull("knownFamilyAccountsJson", fallback.knownFamilyAccountsJson),
+                knownParentalGiftAccountsJson = json.optStringNonNull("knownParentalGiftAccountsJson", fallback.knownParentalGiftAccountsJson)
             )
             sanitizeSettings(restored, fallback)
         } catch (_: Exception) {
@@ -492,7 +496,9 @@ object BackupManager {
                 !s.emergencyReserveMonthlyOverride.isFinite() -> f.emergencyReserveMonthlyOverride
                 s.emergencyReserveMonthlyOverride < 0.0 -> -1.0
                 else -> s.emergencyReserveMonthlyOverride
-            }
+            },
+            knownFamilyAccountsJson = cleanArrayJson(s.knownFamilyAccountsJson, f.knownFamilyAccountsJson),
+            knownParentalGiftAccountsJson = cleanArrayJson(s.knownParentalGiftAccountsJson, f.knownParentalGiftAccountsJson)
         )
     }
 

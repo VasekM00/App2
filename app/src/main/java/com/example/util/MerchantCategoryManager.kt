@@ -13,8 +13,9 @@ import java.util.Locale
  */
 object MerchantCategoryManager {
 
-    private const val PREFS_NAME = "merchant_category_overrides"
-    private const val KEY_OVERRIDES_JSON = "overrides_json"
+    private const val PREFS_NAME = com.example.data.AppPreferencesRepository.DEFAULT_PREFS_NAME
+    private const val LEGACY_PREFS_NAME = "merchant_category_overrides"
+    private const val KEY_OVERRIDES_JSON = com.example.data.AppPreferencesRepository.KEY_MERCHANT_OVERRIDES_JSON
     private const val MAX_RULES_JSON_CHARS = 2_000_000
     private val prefsLock = Any()
 
@@ -63,7 +64,12 @@ object MerchantCategoryManager {
 
     fun getOverrides(context: Context): Map<String, BankTransactionType> = synchronized(prefsLock) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        readOverridesLocked(prefs)
+        if (prefs.contains(KEY_OVERRIDES_JSON)) {
+            readOverridesLocked(prefs)
+        } else {
+            val legacy = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+            readOverridesLocked(legacy)
+        }
     }
 
     fun saveOverride(context: Context, merchantPattern: String, category: BankTransactionType) {

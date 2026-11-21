@@ -292,19 +292,9 @@ fun LazyListScope.settingsDataSubTab(
                                             isDone = done
                                         )
                                     }
-                                    val exportedPrefs = mutableMapOf<String, String>()
-                                    val subPrefs = context.getSharedPreferences("subscription_auditor_prefs", Context.MODE_PRIVATE)
-                                    val dismissedSet = subPrefs.getStringSet("dismissed_merchants", emptySet()) ?: emptySet()
-                                    if (dismissedSet.isNotEmpty()) {
-                                        exportedPrefs["dismissed_merchants_json"] = JSONArray(dismissedSet.toList()).toString()
-                                        exportedPrefs["dismissed_merchants"] = dismissedSet.joinToString("|")
-                                    }
-                                    val impPrefs = context.getSharedPreferences("statement_import_prefs", Context.MODE_PRIVATE)
-                                    impPrefs.all.forEach { (k, v) ->
-                                        if (k.startsWith("bank_bal_") && v != null) {
-                                            exportedPrefs[k] = v.toString()
-                                        }
-                                    }
+                                    val prefsRepo = com.example.data.AppPreferencesRepository(context)
+                                    prefsRepo.hydrate()
+                                    val exportedPrefs = prefsRepo.exportPreferencesForBackup()
                                     val lots = com.example.util.InvestmentLotManager.getLots(context)
                                     BackupManager.serializeFullBackupToJson(
                                         BackupManager.FullBackupPayload(

@@ -1,6 +1,7 @@
 package com.example.util
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,6 +19,7 @@ private const val MAX_LOTS_JSON_CHARS = 1_000_000
  * Model representing a user-recorded investment tranche for the Czech 3-year time-test
  * under § 4 odst. 1 písm. u) of Act No. 586/1992 Coll. (ZDP).
  */
+@Immutable
 data class UserInvestmentLot(
     val id: String = UUID.randomUUID().toString(),
     val batchName: String,
@@ -104,8 +106,9 @@ data class UserInvestmentLot(
  * Manages persistent user investment lots in SharedPreferences using MODE_PRIVATE.
  */
 object InvestmentLotManager {
-    private const val PREFS_NAME = "investment_lots_prefs"
-    private const val KEY_LOTS_JSON = "user_investment_lots_json"
+    private const val PREFS_NAME = com.example.data.AppPreferencesRepository.DEFAULT_PREFS_NAME
+    private const val LEGACY_PREFS_NAME = "investment_lots_prefs"
+    private const val KEY_LOTS_JSON = com.example.data.AppPreferencesRepository.KEY_LOTS_JSON
     private val prefsLock = Any()
 
     private fun safeFinite(value: Double): Double = if (value.isFinite()) value else 0.0
@@ -134,11 +137,21 @@ object InvestmentLotManager {
 
     fun getLots(context: Context): List<UserInvestmentLot> = synchronized(prefsLock) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val jsonStr = try {
-            prefs.getString(KEY_LOTS_JSON, null)
-        } catch (_: ClassCastException) {
-            null
-        } ?: return emptyList()
+        val raw = if (prefs.contains(KEY_LOTS_JSON)) {
+            try {
+                prefs.getString(KEY_LOTS_JSON, null)
+            } catch (_: ClassCastException) {
+                null
+            }
+        } else {
+            val legacy = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+            try {
+                legacy.getString(KEY_LOTS_JSON, null)
+            } catch (_: ClassCastException) {
+                null
+            }
+        }
+        val jsonStr = raw ?: return emptyList()
         return parseLotsFromJson(jsonStr)
     }
 

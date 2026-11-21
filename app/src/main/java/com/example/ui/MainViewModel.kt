@@ -1,13 +1,12 @@
 package com.example.ui
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
+import com.example.data.AppPreferencesRepository
 import com.example.data.FinancialRepository
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
@@ -18,17 +17,14 @@ import com.example.domain.FullCalculationState
 import com.example.domain.MonteCarloResult
 import com.example.domain.RetirementSurvivalResult
 import com.example.domain.StressScenarioResult
-import com.example.ui.state.MAX_BOOT_SNAPSHOT_CHARS
+import com.example.domain.parseAccountListJson
 import com.example.ui.state.buildMergedLedgerEntryInternal
 import com.example.ui.state.buildSyntheticAuditTransactions
 import com.example.ui.state.clearAuxiliaryStoresInternal
-import com.example.ui.state.clearBankBalanceKeysForMonth
 import com.example.ui.state.computeCalculationStateInternal
 import com.example.ui.state.parseAndInsertLedgerCsvFallbackInternal
-import com.example.ui.state.persistFastBootSnapshotInternal
 import com.example.ui.state.persistPendingStatementToHandle
 import com.example.ui.state.readStatementUrisSafely
-import com.example.ui.state.restoreAuxiliaryPrefsInternal
 import com.example.ui.state.runOneTimeMigrationsInternal
 import com.example.ui.tabs.friendlyBankName
 import com.example.ui.components.formatCategoryLabel
@@ -71,6 +67,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
@@ -98,47 +95,36 @@ class MainViewModel(
     private val repository = FinancialRepository(
         db, db.settingsDao(), db.ledgerDao(), db.actionStateDao(), db.importedTransactionDao()
     )
+    private val preferencesRepository = AppPreferencesRepository(application)
 
     private val _uiEvent = Channel<UiMessage>(Channel.BUFFERED)
     val uiEvent: Flow<UiMessage> = _uiEvent.receiveAsFlow()
 
-    // Statement import recency tracking & synchronous fast-boot snapshot cache
-    private val importPrefs = application.getSharedPreferences("statement_import_prefs", Context.MODE_PRIVATE)
-    private val syncPrefs = application.getSharedPreferences("czech_sync_prefs", Context.MODE_PRIVATE)
-    private val subscriptionPrefs = application.getSharedPreferences("subscription_auditor_prefs", Context.MODE_PRIVATE)
-
-    private val bootCachePayload = run {
-        val raw = importPrefs.getString("fast_boot_snapshot_v1", null)
-        if (raw == null) {
-            null
-        } else {
-            val parsed = runCatching {
-                raw.takeIf { it.length <= MAX_BOOT_SNAPSHOT_CHARS }
-                    ?.let { BackupManager.deserializeFullBackupFromJson(it, SettingsEntity.freshDefaults()) }
-            }.getOrNull()
-            if (parsed == null) {
-                // Purge corrupt or oversized snapshot so it doesn't fail on every cold start
-                importPrefs.edit { remove("fast_boot_snapshot_v1") }
-            }
-            parsed
-        }
-    }
-
-    private val initialSettings: SettingsEntity = bootCachePayload?.settings ?: SettingsEntity.freshDefaults()
-    private val initialLedger: List<LedgerEntryEntity> = bootCachePayload?.ledgerEntries ?: emptyList()
-    private val initialActions: Map<String, Boolean> =
-        bootCachePayload?.actionStates?.associate { it.actionKey to it.isDone } ?: emptyMap()
-
-    private val _liveSettings = MutableStateFlow(initialSettings)
+    private val _liveSettings = MutableStateFlow(SettingsEntity.freshDefaults())
     private val pendingSettingsWrites = AtomicInteger(0)
 
     val ledgerEntries: StateFlow<List<LedgerEntryEntity>> = repository.ledgerFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialLedger)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val actionStates: StateFlow<Map<String, Boolean>> = repository.actionStatesFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialActions)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val settingsState: StateFlow<SettingsEntity> = _liveSettings.asStateFlow()
+
+    val themeMode: StateFlow<String> = preferencesRepository.snapshot
+        .map { it.themeMode }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "SYSTEM")
+
+    val flagSecureEnabled: StateFlow<Boolean> = preferencesRepository.snapshot
+        .map { it.flagSecureEnabled }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val biometricLockEnabled: StateFlow<Boolean> = preferencesRepository.snapshot
+        .map { it.biometricLockEnabled }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val importedTransactionsShared = repository.getAllImportedTransactions()
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
@@ -179,27 +165,27 @@ class MainViewModel(
     }
 
     // Statement import recency tracking
-    private val _lastImportTimestamp = MutableStateFlow<Long?>(
-        importPrefs.getLong("last_import_all", 0L).let { if (it > 0L) it else null }
-    )
-    val lastImportTimestamp: StateFlow<Long?> = _lastImportTimestamp.asStateFlow()
+    val lastImportTimestamp: StateFlow<Long?> = preferencesRepository.snapshot
+        .map { it.lastImportTimestamp }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Czech economic sync recency tracking
-    private val _lastCzechSyncTimestamp = MutableStateFlow<Long?>(
-        syncPrefs.getLong("last_czech_sync_time", 0L).let { if (it > 0L) it else null }
-    )
-    val lastCzechSyncTimestamp: StateFlow<Long?> = _lastCzechSyncTimestamp.asStateFlow()
+    val lastCzechSyncTimestamp: StateFlow<Long?> = preferencesRepository.snapshot
+        .map { it.lastCzechSyncTimestamp }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Dismissed recurring subscriptions tracking
-    private val _dismissedSubscriptionMerchants = MutableStateFlow<Set<String>>(
-        subscriptionPrefs.getStringSet("dismissed_merchants", emptySet())?.toSet() ?: emptySet()
-    )
-    val dismissedSubscriptionMerchants: StateFlow<Set<String>> = _dismissedSubscriptionMerchants.asStateFlow()
+    val dismissedSubscriptionMerchants: StateFlow<Set<String>> = preferencesRepository.snapshot
+        .map { it.dismissedSubscriptionMerchants }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     // Active Cross-Statement Audit Report for transparency
     val activeAuditReport = MutableStateFlow<CrossStatementAuditReport?>(null)
 
-    private val importCoordinator by lazy { StatementImportCoordinator(getApplication(), repository, importPrefs) }
+    private val importCoordinator by lazy { StatementImportCoordinator(getApplication(), repository, preferencesRepository) }
     private val importMutex = Mutex()
     private val syncInFlight = AtomicBoolean(false)
     private var loadAuditJob: Job? = null
@@ -208,8 +194,10 @@ class MainViewModel(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val prefSnap = preferencesRepository.hydrate()
+                hydrateFxRatesFromJson(prefSnap.cnbFxRatesJson)
                 importMutex.withLock {
-                    runOneTimeMigrationsInternal(getApplication(), repository, importPrefs)
+                    runOneTimeMigrationsInternal(getApplication(), repository, preferencesRepository)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -222,23 +210,43 @@ class MainViewModel(
                 }
             }
         }
-        startFastBootSnapshotPersistence()
+        viewModelScope.launch {
+            repository.storageErrors.collect { msg ->
+                _uiEvent.send(UiMessage.ShowSnackbar(msg))
+            }
+        }
     }
 
-    @OptIn(FlowPreview::class)
-    private fun startFastBootSnapshotPersistence() {
-        viewModelScope.launch(Dispatchers.IO) {
-            combine(
-                repository.settingsFlow.distinctUntilChanged(),
-                repository.actionStatesFlow.distinctUntilChanged(),
-                repository.ledgerFlow.distinctUntilChanged()
-            ) { settings, actions, ledger -> Triple(settings, actions, ledger) }
-                .debounce(400L)
-                .collect { (settings, actions, ledger) ->
-                    importMutex.withLock {
-                        persistFastBootSnapshotInternal(importPrefs, settings, actions, ledger)
-                    }
+    private fun hydrateFxRatesFromJson(fxJson: String) {
+        if (fxJson.isBlank() || fxJson.trim() == "{}") return
+        runCatching {
+            val obj = JSONObject(fxJson)
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val code = keys.next()
+                val rate = obj.optDouble(code, Double.NaN)
+                if (rate.isFinite() && rate > 0.0) {
+                    FxRateService.setRate(code, rate)
                 }
+            }
+        }
+    }
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            preferencesRepository.setThemeMode(mode)
+        }
+    }
+
+    fun setFlagSecureEnabled(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            preferencesRepository.setFlagSecureEnabled(enabled)
+        }
+    }
+
+    fun setBiometricLockEnabled(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            preferencesRepository.setBiometricLockEnabled(enabled)
         }
     }
 
@@ -251,11 +259,19 @@ class MainViewModel(
                 liveRegulatoryData.value = data
                 val fetchedLive = data.rateDate.isNotBlank() || data.sourceName.contains("Official")
                 if (fetchedLive) {
-                    if (data.eurCzkRate.isFinite() && data.eurCzkRate > 0.0) FxRateService.setRate("EUR", data.eurCzkRate)
-                    if (data.usdCzkRate.isFinite() && data.usdCzkRate > 0.0) FxRateService.setRate("USD", data.usdCzkRate)
-                    val now = System.currentTimeMillis()
-                    syncPrefs.edit { putLong("last_czech_sync_time", now) }
-                    _lastCzechSyncTimestamp.value = now
+                    val fxJson = JSONObject()
+                    if (data.eurCzkRate.isFinite() && data.eurCzkRate > 0.0) {
+                        FxRateService.setRate("EUR", data.eurCzkRate)
+                        fxJson.put("EUR", data.eurCzkRate)
+                    }
+                    if (data.usdCzkRate.isFinite() && data.usdCzkRate > 0.0) {
+                        FxRateService.setRate("USD", data.usdCzkRate)
+                        fxJson.put("USD", data.usdCzkRate)
+                    }
+                    if (fxJson.length() > 0) {
+                        preferencesRepository.setCnbFxRatesJson(fxJson.toString())
+                    }
+                    preferencesRepository.setLastCzechSyncTimestamp(System.currentTimeMillis())
                     _uiEvent.send(UiMessage.ShowSnackbar("ČNB FX rates synced & 2026 Czech statutory benchmarks verified"))
                 } else {
                     _uiEvent.send(UiMessage.ShowSnackbar("Offline: using built-in 2026 Czech statutory parameters"))
@@ -352,7 +368,7 @@ class MainViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = computeCalculationStateInternal(
-                initialSettings, initialActions, initialLedger, emptyList(),
+                SettingsEntity.freshDefaults(), emptyMap(), emptyList(), emptyList(),
                 sensitivityReturnOverride.value, sensitivityCpiOverride.value, sensitivitySwrOverride.value,
                 runMonteCarlo = false
             )
@@ -368,18 +384,27 @@ class MainViewModel(
                 importMutex.withLock {
                     val now = YearMonth.now(ZoneId.of("Europe/Prague")).toString()
                     val clean = repository.updateSettingsTransformAndSyncLedger(now, transform)
-                    val parsedRules = MerchantCategoryManager.parseRulesFromJson(clean.merchantRulesJson)
-                    MerchantCategoryManager.saveAllOverrides(getApplication(), parsedRules)
-                    if (pendingSettingsWrites.decrementAndGet() == 0) {
-                        _liveSettings.value = clean
+                    if (clean != null) {
+                        val parsedRules = MerchantCategoryManager.parseRulesFromJson(clean.merchantRulesJson)
+                        MerchantCategoryManager.saveAllOverrides(getApplication(), parsedRules)
+                        if (pendingSettingsWrites.decrementAndGet() == 0) {
+                            _liveSettings.value = clean
+                        }
+                        if (showSnackbar) _uiEvent.send(UiMessage.ShowSnackbar("Settings saved successfully"))
+                    } else {
+                        if (pendingSettingsWrites.decrementAndGet() == 0) {
+                            _liveSettings.value = repository.settingsFlow.first()
+                        }
+                        _uiEvent.send(UiMessage.ShowSnackbar("Failed to save settings to local database"))
                     }
-                    if (showSnackbar) _uiEvent.send(UiMessage.ShowSnackbar("Settings saved successfully"))
                 }
             } catch (e: CancellationException) {
                 pendingSettingsWrites.decrementAndGet()
                 throw e
             } catch (_: Exception) {
-                pendingSettingsWrites.decrementAndGet()
+                if (pendingSettingsWrites.decrementAndGet() == 0) {
+                    runCatching { _liveSettings.value = repository.settingsFlow.first() }
+                }
                 _uiEvent.send(UiMessage.ShowSnackbar("Failed to save settings to local database"))
             }
         }
@@ -538,7 +563,7 @@ class MainViewModel(
                 importMutex.withLock {
                     val deletedYm = repository.deleteLedgerEntry(id)
                     if (deletedYm != null) {
-                        clearBankBalanceKeysForMonth(importPrefs, deletedYm)
+                        preferencesRepository.clearBankBalancesForMonth(deletedYm)
                         if (activeAuditReport.value?.yearMonth == deletedYm) activeAuditReport.value = null
                     }
                     _uiEvent.send(UiMessage.ShowSnackbar("Ledger entry and associated bank transactions deleted"))
@@ -554,9 +579,8 @@ class MainViewModel(
     fun dismissSubscription(merchantKey: String) {
         viewModelScope.launch(Dispatchers.IO) {
             importMutex.withLock {
-                val updated = _dismissedSubscriptionMerchants.value + merchantKey
-                _dismissedSubscriptionMerchants.value = updated
-                subscriptionPrefs.edit { putStringSet("dismissed_merchants", updated) }
+                val updated = preferencesRepository.snapshot.value.dismissedSubscriptionMerchants + merchantKey
+                preferencesRepository.setDismissedMerchants(updated)
                 _uiEvent.send(UiMessage.ShowSnackbar("Subscription dismissed: $merchantKey"))
             }
         }
@@ -565,9 +589,8 @@ class MainViewModel(
     fun restoreSubscription(merchantKey: String) {
         viewModelScope.launch(Dispatchers.IO) {
             importMutex.withLock {
-                val updated = _dismissedSubscriptionMerchants.value - merchantKey
-                _dismissedSubscriptionMerchants.value = updated
-                subscriptionPrefs.edit { putStringSet("dismissed_merchants", updated) }
+                val updated = preferencesRepository.snapshot.value.dismissedSubscriptionMerchants - merchantKey
+                preferencesRepository.setDismissedMerchants(updated)
                 _uiEvent.send(UiMessage.ShowSnackbar("Subscription restored: $merchantKey"))
             }
         }
@@ -576,8 +599,7 @@ class MainViewModel(
     fun clearAllDismissedSubscriptions() {
         viewModelScope.launch(Dispatchers.IO) {
             importMutex.withLock {
-                _dismissedSubscriptionMerchants.value = emptySet()
-                subscriptionPrefs.edit { remove("dismissed_merchants") }
+                preferencesRepository.setDismissedMerchants(emptySet())
                 _uiEvent.send(UiMessage.ShowSnackbar("All dismissed subscriptions restored"))
             }
         }
@@ -589,11 +611,12 @@ class MainViewModel(
                 importMutex.withLock {
                     val hasBank = !bankName.isNullOrBlank()
                     if (hasBank) {
-                        repository.deleteImportedTransactionsForBankAndMonth(yearMonth, bankName!!)
-                        importPrefs.edit { remove("bank_bal_${yearMonth}_$bankName") }
+                        val bank = bankName!!
+                        repository.deleteImportedTransactionsForBankAndMonth(yearMonth, bank)
+                        preferencesRepository.removeBankBalanceForMonthBank(yearMonth, bank)
                     } else {
                         repository.deleteImportedTransactionsForMonth(yearMonth)
-                        clearBankBalanceKeysForMonth(importPrefs, yearMonth)
+                        preferencesRepository.clearBankBalancesForMonth(yearMonth)
                     }
 
                     val curSettings = repository.settingsFlow.first()
@@ -622,6 +645,7 @@ class MainViewModel(
                             curSettings.primaryName.takeIf { it.isNotBlank() },
                             curSettings.spouseName.takeIf { !curSettings.isSingleHousehold && it.isNotBlank() }
                         )
+                        val knownFamilyAccounts = parseAccountListJson(curSettings.knownFamilyAccountsJson).toSet()
                         // Re-categorize previously auto-netted INTERNAL_TRANSFER rows so un-matched legs
                         // don't vanish into an uncounted INTERNAL_TRANSFER category black-hole.
                         val resetTxs = remainingTxs.map {
@@ -641,6 +665,7 @@ class MainViewModel(
                         val (reconciledTxs, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
                             transactions = resetTxs,
                             yearMonth = yearMonth,
+                            knownFamilyAccounts = knownFamilyAccounts,
                             boundaryTransactions = boundaryTxs,
                             bankBalances = storedBalances,
                             householdNames = householdNames
@@ -771,9 +796,11 @@ class MainViewModel(
                 curSettings.primaryName.takeIf { it.isNotBlank() },
                 curSettings.spouseName.takeIf { !curSettings.isSingleHousehold && it.isNotBlank() }
             )
+            val knownFamilyAccounts = parseAccountListJson(curSettings.knownFamilyAccountsJson).toSet()
             val (_, report) = CrossStatementReconciliationEngine.reconcileTransactions(
                 transactions = txsToUse,
                 yearMonth = yearMonth,
+                knownFamilyAccounts = knownFamilyAccounts,
                 boundaryTransactions = boundaryTxs,
                 bankBalances = storedBalances,
                 householdNames = householdNames
@@ -804,7 +831,6 @@ class MainViewModel(
                     setPendingStatementImport(null, bumpEpoch = true)
                     if (result != null) {
                         if (result.auditReport != null) activeAuditReport.value = result.auditReport
-                        _lastImportTimestamp.value = System.currentTimeMillis()
                         val monthsLabel = result.affectedMonths.joinToString(", ")
                         val bankDisplay = friendlyBankName(summary.detectedBank.name)
                         _uiEvent.send(
@@ -903,7 +929,7 @@ class MainViewModel(
                             currentRules[normalizedRuleKey] = newCategory
                             cur.copy(merchantRulesJson = MerchantCategoryManager.serializeRulesToJson(currentRules))
                         }
-                        if (pendingSettingsWrites.get() == 0) {
+                        if (updatedSettings != null && pendingSettingsWrites.get() == 0) {
                             _liveSettings.value = updatedSettings
                         }
                     }
@@ -993,7 +1019,7 @@ class MainViewModel(
                         else -> emptyList()
                     }
                     com.example.util.InvestmentLotManager.persistLots(getApplication(), restoredLots)
-                    _dismissedSubscriptionMerchants.value = restoreAuxiliaryPrefsInternal(subscriptionPrefs, importPrefs, payload.preferences)
+                    preferencesRepository.restorePreferencesFromBackup(payload.preferences)
                     setSensitivityOverrides(null, null, null)
                     setPendingStatementImport(null, bumpEpoch = true)
                     activeAuditReport.value = null
@@ -1015,9 +1041,6 @@ class MainViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 importMutex.withLock {
-                    importPrefs.edit { remove("fast_boot_snapshot_v1") }
-                    getApplication<Application>().getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
-                        .edit { remove("emergency_reserve_mode") }
                     val defaults = SettingsEntity.freshDefaults()
                     val currentYm = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
                     repository.updateSettingsAndSyncLedger(defaults, currentYm)
@@ -1052,10 +1075,7 @@ class MainViewModel(
                         _liveSettings.value = defaults
                     }
                     setSensitivityOverrides(null, null, null)
-                    clearAuxiliaryStoresInternal(getApplication(), importPrefs, subscriptionPrefs, syncPrefs)
-                    _lastImportTimestamp.value = null
-                    _dismissedSubscriptionMerchants.value = emptySet()
-                    _lastCzechSyncTimestamp.value = null
+                    clearAuxiliaryStoresInternal(getApplication(), preferencesRepository)
                     liveRegulatoryData.value = null
                     setPendingStatementImport(null, bumpEpoch = true)
                     activeAuditReport.value = null

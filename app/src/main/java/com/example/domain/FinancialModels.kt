@@ -102,6 +102,32 @@ fun serializeDeletedCategories(set: Set<String>): String {
     return array.toString()
 }
 
+fun parseAccountListJson(jsonStr: String): List<String> {
+    if (jsonStr.isBlank() || jsonStr.trim() == "[]") return emptyList()
+    return try {
+        val array = org.json.JSONArray(jsonStr)
+        val result = linkedSetOf<String>()
+        for (i in 0 until array.length()) {
+            val item = array.optString(i, "").trim()
+            if (item.isNotBlank()) result.add(item)
+        }
+        result.toList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun serializeAccountListJson(items: Collection<String>): String {
+    val array = org.json.JSONArray()
+    items.asSequence()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .sorted()
+        .forEach { array.put(it) }
+    return array.toString()
+}
+
 val DEFAULT_CUSTOM_LIFE_GOALS = listOf(
     CustomLifeGoalItem("1", "Real Estate Down Payment", "home", 2028, 1_500_000.0, 450_000.0),
     CustomLifeGoalItem("2", "Children Education & Family Fund", "school", 2032, 600_000.0, 120_000.0),

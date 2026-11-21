@@ -147,7 +147,9 @@ data class SettingsEntity(
     val deletedCategoriesJson: String = "[]",
     val merchantRulesJson: String = "{}",
     val emergencyReserveMode: String = "6M",
-    val emergencyReserveMonthlyOverride: Double = -1.0
+    val emergencyReserveMonthlyOverride: Double = -1.0,
+    val knownFamilyAccountsJson: String = "[]",
+    val knownParentalGiftAccountsJson: String = "[]"
 ) {
     companion object {
         internal fun defaultCustomGoalsJson(): String = cachedDefaultCustomGoalsJson

@@ -72,7 +72,7 @@ android {
   sourceSets {
     // Export Room schemas as androidTest assets so MigrationTestHelper can validate every version.
     getByName("androidTest") {
-      assets.srcDir("$projectDir/schemas")
+      assets.directories.add("$projectDir/schemas")
     }
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }

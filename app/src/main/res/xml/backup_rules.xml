@@ -4,6 +4,7 @@
    exclude the Room database, its WAL/shm sidecars, and all SharedPreferences from cloud backups.
 -->
 <full-backup-content>
+    <exclude domain="sharedpref" path="app_user_prefs.xml"/>
     <exclude domain="sharedpref" path="statement_import_prefs.xml"/>
     <exclude domain="sharedpref" path="subscription_auditor_prefs.xml"/>
     <exclude domain="sharedpref" path="czech_sync_prefs.xml"/>

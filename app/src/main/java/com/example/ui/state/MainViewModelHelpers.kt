@@ -1,19 +1,15 @@
 package com.example.ui.state
 
 import android.app.Application
-import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
-import androidx.core.content.edit
 import androidx.lifecycle.SavedStateHandle
-import com.example.data.ActionStateEntity
+import com.example.data.AppPreferencesRepository
 import com.example.data.FinancialRepository
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
-import com.example.util.BackupManager
 import com.example.util.BankStatementImporter
 import com.example.util.FxRateService
 import com.example.util.InvestmentLotManager
@@ -32,7 +28,6 @@ import kotlin.math.round
 
 private const val MAX_SAVED_STATE_SUMMARY_BYTES = 128 * 1024
 private const val MAX_LEDGER_CSV_LINES = 50_000
-internal const val MAX_BOOT_SNAPSHOT_CHARS = 2 * 1024 * 1024
 
 internal data class BatchUriReadResult(
     val byteList: List<ByteArray>,
@@ -102,13 +97,13 @@ internal fun computeCalculationStateInternal(
 internal suspend fun runOneTimeMigrationsInternal(
     application: Application,
     repository: FinancialRepository,
-    importPrefs: SharedPreferences
+    preferencesRepository: AppPreferencesRepository
 ) {
-    if (!importPrefs.getBoolean("legacy_employer_repaired_v1", false)) {
+    if (!preferencesRepository.isFlagSet("legacy_employer_repaired_v1")) {
         repository.repairLegacyEmployerContribution()
-        importPrefs.edit { putBoolean("legacy_employer_repaired_v1", true) }
+        preferencesRepository.markFlag("legacy_employer_repaired_v1", true)
     }
-    if (!importPrefs.getBoolean("legacy_balances_backfilled", false)) {
+    if (!preferencesRepository.isFlagSet("legacy_balances_backfilled")) {
         val entries = repository.getAllLedgerEntriesDirect()
         if (entries.isNotEmpty()) {
             val cur = repository.settingsFlow.first()
@@ -135,9 +130,9 @@ internal suspend fun runOneTimeMigrationsInternal(
             }
             if (toUpdate.isNotEmpty()) repository.updateLedgerEntries(toUpdate)
         }
-        importPrefs.edit { putBoolean("legacy_balances_backfilled", true) }
+        preferencesRepository.markFlag("legacy_balances_backfilled", true)
     }
-    if (!importPrefs.getBoolean("merchant_rules_unified_v1", false)) {
+    if (!preferencesRepository.isFlagSet("merchant_rules_unified_v1")) {
         val curSettings = repository.settingsFlow.first()
         val spRules = MerchantCategoryManager.getOverrides(application)
         val dbRules = MerchantCategoryManager.parseRulesFromJson(curSettings.merchantRulesJson)
@@ -149,32 +144,7 @@ internal suspend fun runOneTimeMigrationsInternal(
             }
             MerchantCategoryManager.saveAllOverrides(application, merged)
         }
-        importPrefs.edit { putBoolean("merchant_rules_unified_v1", true) }
-    }
-}
-
-internal fun persistFastBootSnapshotInternal(
-    importPrefs: SharedPreferences,
-    settings: SettingsEntity,
-    actions: Map<String, Boolean>,
-    ledger: List<LedgerEntryEntity>
-) {
-    runCatching {
-        if (ledger.isEmpty() && actions.isEmpty() && settings == SettingsEntity.freshDefaults()) {
-            importPrefs.edit { remove("fast_boot_snapshot_v1") }
-        } else {
-            val actionEntities = actions.map { (k, done) ->
-                ActionStateEntity(k, k.substringBefore('_').toIntOrNull() ?: settings.baseYear, k.substringAfter('_', k), done)
-            }
-            val snapJson = BackupManager.serializeFullBackupToJson(
-                BackupManager.FullBackupPayload(settings = settings, ledgerEntries = ledger, actionStates = actionEntities)
-            )
-            if (snapJson.length > MAX_BOOT_SNAPSHOT_CHARS) {
-                importPrefs.edit { remove("fast_boot_snapshot_v1") }
-            } else {
-                importPrefs.edit { putString("fast_boot_snapshot_v1", snapJson) }
-            }
-        }
+        preferencesRepository.markFlag("merchant_rules_unified_v1", true)
     }
 }
 
@@ -372,56 +342,11 @@ internal fun persistPendingStatementToHandle(
     }
 }
 
-internal fun clearBankBalanceKeysForMonth(prefs: SharedPreferences, yearMonth: String) {
-    val prefix = "bank_bal_${yearMonth}_"
-    prefs.edit {
-        prefs.all.keys.filter { it.startsWith(prefix) }.forEach { remove(it) }
-    }
-}
-
-internal fun restoreAuxiliaryPrefsInternal(
-    subscriptionPrefs: SharedPreferences,
-    importPrefs: SharedPreferences,
-    preferences: Map<String, String>
-): Set<String> {
-    val dismissedJson = preferences["dismissed_merchants_json"]
-    val restoredSet = if (!dismissedJson.isNullOrBlank()) {
-        runCatching {
-            val arr = org.json.JSONArray(dismissedJson)
-            buildSet {
-                for (i in 0 until arr.length()) {
-                    val item = arr.optString(i, "").trim()
-                    if (item.isNotEmpty()) add(item)
-                }
-            }
-        }.getOrDefault(emptySet())
-    } else {
-        val dismissedRaw = preferences["dismissed_merchants"]
-        dismissedRaw?.split("|")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
-    }
-    subscriptionPrefs.edit { putStringSet("dismissed_merchants", restoredSet) }
-
-    importPrefs.edit {
-        remove("fast_boot_snapshot_v1")
-        // Mark one-time migrations complete so restored historical zero-balance ledger entries aren't overwritten
-        putBoolean("legacy_balances_backfilled", true)
-        putBoolean("legacy_employer_repaired_v1", true)
-        importPrefs.all.keys.filter { it.startsWith("bank_bal_") }.forEach { remove(it) }
-        preferences.forEach { (k, v) -> if (k.startsWith("bank_bal_")) putString(k, v) }
-    }
-    return restoredSet
-}
-
-internal fun clearAuxiliaryStoresInternal(
+internal suspend fun clearAuxiliaryStoresInternal(
     application: Application,
-    importPrefs: SharedPreferences,
-    subscriptionPrefs: SharedPreferences,
-    syncPrefs: SharedPreferences
+    preferencesRepository: AppPreferencesRepository
 ) {
-    importPrefs.edit { clear() }
-    subscriptionPrefs.edit { clear() }
-    syncPrefs.edit { clear() }
-    application.getSharedPreferences("app_preferences", Context.MODE_PRIVATE).edit { clear() }
+    preferencesRepository.clearAllUserData()
     MerchantCategoryManager.clearOverrides(application)
     InvestmentLotManager.clearAll(application)
     ReportShareHelper.clearExportCache(application)

@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,6 +61,8 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankTransactionType
 import com.example.util.MerchantCategoryManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 fun formatCategoryLabel(
     cat: BankTransactionType,
@@ -103,6 +106,7 @@ fun LearnedMerchantRulesCard(
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     var lastFocusTrigger by rememberSaveable { mutableIntStateOf(0) }
+    val ioScope = rememberCoroutineScope()
     androidx.compose.runtime.LaunchedEffect(focusedSectionTrigger, focusedSectionKey) {
         if (focusedSectionTrigger > lastFocusTrigger &&
             sectionKey != null &&
@@ -265,9 +269,11 @@ fun LearnedMerchantRulesCard(
                                     IconButton(
                                         onClick = {
                                             val updated = rulesMap.toMutableMap().apply { remove(keyword) }
-                                            MerchantCategoryManager.removeOverride(context, keyword)
-                                            MerchantCategoryManager.removeOverride(context, keyword.lowercase())
                                             onUpdateRulesJson(MerchantCategoryManager.serializeRulesToJson(updated))
+                                            ioScope.launch(Dispatchers.IO) {
+                                                MerchantCategoryManager.removeOverride(context, keyword)
+                                                MerchantCategoryManager.removeOverride(context, keyword.lowercase())
+                                            }
                                         },
                                         modifier = Modifier.size(48.dp)
                                     ) {
@@ -353,8 +359,10 @@ fun LearnedMerchantRulesCard(
                         val clean = newKeyword.trim().lowercase()
                         if (clean.isNotBlank()) {
                             val updated = rulesMap.toMutableMap().apply { put(clean, selectedCategory) }
-                            MerchantCategoryManager.saveOverride(context, clean, selectedCategory)
                             onUpdateRulesJson(MerchantCategoryManager.serializeRulesToJson(updated))
+                            ioScope.launch(Dispatchers.IO) {
+                                MerchantCategoryManager.saveOverride(context, clean, selectedCategory)
+                            }
                         }
                         showAddDialog = false
                     },

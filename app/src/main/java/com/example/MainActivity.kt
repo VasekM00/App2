@@ -5,18 +5,17 @@ import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.core.content.edit
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.MainScreen
 import com.example.ui.MainViewModel
 import com.example.ui.theme.MartinuFinancialsTheme
@@ -28,29 +27,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!BuildConfig.DEBUG) {
-            window.setFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SECURE,
-                android.view.WindowManager.LayoutParams.FLAG_SECURE
-            )
-        }
-        enableEdgeToEdge()
         if (savedInstanceState == null) {
             handleIncomingIntent(intent)
         }
 
-        val prefs = getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
-        val initialThemeMode = prefs.getString("theme_mode", null) ?: if (prefs.contains("is_dark_theme")) {
-            if (prefs.getBoolean("is_dark_theme", false)) "DARK" else "LIGHT"
-        } else "SYSTEM"
-
         setContent {
             val systemDark = isSystemInDarkTheme()
-            var themeMode by rememberSaveable { mutableStateOf(initialThemeMode) }
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val flagSecureEnabled by viewModel.flagSecureEnabled.collectAsStateWithLifecycle()
             val isDarkTheme = when (themeMode) {
                 "LIGHT" -> false
                 "DARK" -> true
                 else -> systemDark
+            }
+
+            LaunchedEffect(flagSecureEnabled) {
+                if (flagSecureEnabled) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
             }
 
             DisposableEffect(isDarkTheme) {
@@ -75,15 +71,7 @@ class MainActivity : ComponentActivity() {
                     isDarkTheme = isDarkTheme,
                     themeMode = themeMode,
                     onChangeThemeMode = { newMode ->
-                        themeMode = newMode
-                        prefs.edit {
-                            putString("theme_mode", newMode)
-                            putBoolean("is_dark_theme", when (newMode) {
-                                "LIGHT" -> false
-                                "DARK" -> true
-                                else -> systemDark
-                            })
-                        }
+                        viewModel.setThemeMode(newMode)
                     },
                     onToggleDarkTheme = {
                         val nextMode = when (themeMode) {
@@ -91,15 +79,7 @@ class MainActivity : ComponentActivity() {
                             "DARK" -> "SYSTEM"
                             else -> if (systemDark) "LIGHT" else "DARK"
                         }
-                        themeMode = nextMode
-                        prefs.edit {
-                            putString("theme_mode", nextMode)
-                            putBoolean("is_dark_theme", when (nextMode) {
-                                "LIGHT" -> false
-                                "DARK" -> true
-                                else -> systemDark
-                            })
-                        }
+                        viewModel.setThemeMode(nextMode)
                     }
                 )
             }
@@ -147,15 +127,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        val canonicalDataDir = runCatching { File(applicationInfo.dataDir).canonicalPath }.getOrNull()
+        val canonicalDataDir by lazy(LazyThreadSafetyMode.NONE) {
+            runCatching { File(applicationInfo.dataDir).canonicalPath }.getOrNull()
+        }
         val safeUris = uris.filter { uri ->
             if (!"file".equals(uri.scheme, ignoreCase = true)) {
                 true
             } else {
+                val targetDir = canonicalDataDir
                 val canonicalTarget = uri.path?.let { runCatching { File(it).canonicalPath }.getOrNull() }
-                canonicalTarget != null && canonicalDataDir != null &&
-                    canonicalTarget != canonicalDataDir &&
-                    !canonicalTarget.startsWith(canonicalDataDir + File.separator)
+                canonicalTarget != null && targetDir != null &&
+                    canonicalTarget != targetDir &&
+                    !canonicalTarget.startsWith(targetDir + File.separator)
             }
         }
         if (safeUris.isNotEmpty()) {

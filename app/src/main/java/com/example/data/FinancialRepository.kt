@@ -1,8 +1,14 @@
 package com.example.data
 
+import android.database.sqlite.SQLiteException
 import androidx.room.withTransaction
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -13,34 +19,56 @@ class FinancialRepository(
     private val actionStateDao: ActionStateDao,
     private val importedTransactionDao: ImportedTransactionDao
 ) {
+    private val _storageErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val storageErrors: Flow<String> = _storageErrors.asSharedFlow()
+
     val settingsFlow: Flow<SettingsEntity> = settingsDao.getSettings()
         .map { it ?: SettingsEntity.freshDefaults() }
+        .catch { e ->
+            if (e is CancellationException) throw e
+            reportStorageFailure("settings_stream", e)
+            emit(SettingsEntity.freshDefaults())
+        }
 
     val ledgerFlow: Flow<List<LedgerEntryEntity>> = ledgerDao.getAllEntries()
+        .catch { e ->
+            if (e is CancellationException) throw e
+            reportStorageFailure("ledger_stream", e)
+            emit(emptyList())
+        }
 
     val actionStatesFlow: Flow<Map<String, Boolean>> = actionStateDao.getAllActionStates()
         .map { list -> list.associate { it.actionKey to it.isDone } }
+        .catch { e ->
+            if (e is CancellationException) throw e
+            reportStorageFailure("actions_stream", e)
+            emit(emptyMap())
+        }
 
     suspend fun saveSettings(settings: SettingsEntity) = withContext(Dispatchers.IO) {
         val clean = com.example.util.BackupManager.sanitizeSettings(settings, SettingsEntity.freshDefaults())
-        database.withTransaction {
-            settingsDao.saveSettings(clean)
+        safeDbWrite("save_settings", Unit) {
+            database.withTransaction {
+                settingsDao.saveSettings(clean)
+            }
         }
     }
 
     suspend fun updateSettingsTransformAndSyncLedger(
         currentYearMonth: String,
         transform: (SettingsEntity) -> SettingsEntity
-    ): SettingsEntity = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            val current = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
-            val cleanSettings = com.example.util.BackupManager.sanitizeSettings(
-                transform(current),
-                SettingsEntity.freshDefaults()
-            )
-            settingsDao.saveSettings(cleanSettings)
-            syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
-            cleanSettings
+    ): SettingsEntity? = withContext(Dispatchers.IO) {
+        safeDbWrite<SettingsEntity?>("update_settings_transform", null) {
+            database.withTransaction {
+                val current = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
+                val cleanSettings = com.example.util.BackupManager.sanitizeSettings(
+                    transform(current),
+                    SettingsEntity.freshDefaults()
+                )
+                settingsDao.saveSettings(cleanSettings)
+                syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
+                cleanSettings
+            }
         }
     }
 
@@ -49,9 +77,11 @@ class FinancialRepository(
         currentYearMonth: String
     ) = withContext(Dispatchers.IO) {
         val cleanSettings = com.example.util.BackupManager.sanitizeSettings(newSettings, SettingsEntity.freshDefaults())
-        database.withTransaction {
-            settingsDao.saveSettings(cleanSettings)
-            syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
+        safeDbWrite("update_settings", Unit) {
+            database.withTransaction {
+                settingsDao.saveSettings(cleanSettings)
+                syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
+            }
         }
     }
 
@@ -108,62 +138,64 @@ class FinancialRepository(
         emergencyReserve: Double?
     ) = withContext(Dispatchers.IO) {
         if (yearMonth == currentYearMonth) {
-            database.withTransaction {
-                val cur = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
-                var updated = cur
-                if (incVaclav != null && incVaclav.isFinite() && incVaclav >= 0.0 && cur.vSalary != incVaclav) {
-                    updated = updated.copy(vSalary = incVaclav)
-                }
-                if (!cur.isSingleHousehold && incEleonora != null && incEleonora.isFinite() && incEleonora >= 0.0) {
-                    val entryYm = runCatching { java.time.YearMonth.parse(yearMonth) }.getOrNull()
-                    val returnYm = java.time.YearMonth.of(
-                        cur.eReturnYear,
-                        cur.eReturnMonth.coerceIn(1, 12)
-                    )
-                    val isBeforeReturn = entryYm?.isBefore(returnYm) ?: (cur.baseYear < cur.eReturnYear)
-                    if (isBeforeReturn) {
-                        if (cur.eParentalAllowanceMonthly != incEleonora) {
-                            updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
-                        }
-                    } else {
-                        if (cur.eStartingSalary != incEleonora) {
-                            updated = updated.copy(eStartingSalary = incEleonora)
-                        }
+            safeDbWrite("sync_manual_ledger_to_settings", Unit) {
+                database.withTransaction {
+                    val cur = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
+                    var updated = cur
+                    if (incVaclav != null && incVaclav.isFinite() && incVaclav >= 0.0 && cur.vSalary != incVaclav) {
+                        updated = updated.copy(vSalary = incVaclav)
                     }
-                }
-                if (expRent != null && expRent.isFinite() && expRent >= 0.0 && cur.rentMonthly != expRent) {
-                    updated = updated.copy(rentMonthly = expRent)
-                }
-                // Ledger balances are HOUSEHOLD totals (see updateSettingsAndSyncLedger, which writes
-                // primary + spouse). Primary-only settings fields must receive total minus spouse share.
-                val includeSpouse = !cur.isSingleHousehold
-                val spouseLiquid = if (includeSpouse) cur.eLiquidPortfolioCurrent else 0.0
-                val spousePension = if (includeSpouse) cur.eDpsBalanceCurrent + cur.eDipBalanceCurrent else 0.0
-                if (portfolioBalance != null && portfolioBalance.isFinite() && portfolioBalance >= 0.0) {
-                    val primaryLiquid = (portfolioBalance - spouseLiquid).coerceAtLeast(0.0)
-                    if (cur.liquidPortfolioCurrent != primaryLiquid) {
-                        updated = updated.copy(liquidPortfolioCurrent = primaryLiquid)
-                    }
-                }
-                if (pensionBalance != null && pensionBalance.isFinite() && pensionBalance >= 0.0) {
-                    val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
-                    val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
-                    if (curPrimary != primaryPension) {
-                        // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
-                        val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
-                        val newDps = primaryPension * dpsShare
-                        updated = updated.copy(
-                            dpsBalanceCurrent = newDps,
-                            dipBalanceCurrent = primaryPension - newDps
+                    if (!cur.isSingleHousehold && incEleonora != null && incEleonora.isFinite() && incEleonora >= 0.0) {
+                        val entryYm = runCatching { java.time.YearMonth.parse(yearMonth) }.getOrNull()
+                        val returnYm = java.time.YearMonth.of(
+                            cur.eReturnYear,
+                            cur.eReturnMonth.coerceIn(1, 12)
                         )
+                        val isBeforeReturn = entryYm?.isBefore(returnYm) ?: (cur.baseYear < cur.eReturnYear)
+                        if (isBeforeReturn) {
+                            if (cur.eParentalAllowanceMonthly != incEleonora) {
+                                updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
+                            }
+                        } else {
+                            if (cur.eStartingSalary != incEleonora) {
+                                updated = updated.copy(eStartingSalary = incEleonora)
+                            }
+                        }
                     }
-                }
-                if (emergencyReserve != null && emergencyReserve.isFinite() && emergencyReserve >= 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
-                    updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
-                }
-                val clean = com.example.util.BackupManager.sanitizeSettings(updated, cur)
-                if (clean != cur) {
-                    settingsDao.saveSettings(clean)
+                    if (expRent != null && expRent.isFinite() && expRent >= 0.0 && cur.rentMonthly != expRent) {
+                        updated = updated.copy(rentMonthly = expRent)
+                    }
+                    // Ledger balances are HOUSEHOLD totals (see updateSettingsAndSyncLedger, which writes
+                    // primary + spouse). Primary-only settings fields must receive total minus spouse share.
+                    val includeSpouse = !cur.isSingleHousehold
+                    val spouseLiquid = if (includeSpouse) cur.eLiquidPortfolioCurrent else 0.0
+                    val spousePension = if (includeSpouse) cur.eDpsBalanceCurrent + cur.eDipBalanceCurrent else 0.0
+                    if (portfolioBalance != null && portfolioBalance.isFinite() && portfolioBalance >= 0.0) {
+                        val primaryLiquid = (portfolioBalance - spouseLiquid).coerceAtLeast(0.0)
+                        if (cur.liquidPortfolioCurrent != primaryLiquid) {
+                            updated = updated.copy(liquidPortfolioCurrent = primaryLiquid)
+                        }
+                    }
+                    if (pensionBalance != null && pensionBalance.isFinite() && pensionBalance >= 0.0) {
+                        val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
+                        val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
+                        if (curPrimary != primaryPension) {
+                            // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
+                            val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
+                            val newDps = primaryPension * dpsShare
+                            updated = updated.copy(
+                                dpsBalanceCurrent = newDps,
+                                dipBalanceCurrent = primaryPension - newDps
+                            )
+                        }
+                    }
+                    if (emergencyReserve != null && emergencyReserve.isFinite() && emergencyReserve >= 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
+                        updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
+                    }
+                    val clean = com.example.util.BackupManager.sanitizeSettings(updated, cur)
+                    if (clean != cur) {
+                        settingsDao.saveSettings(clean)
+                    }
                 }
             }
         }
@@ -199,127 +231,156 @@ class FinancialRepository(
     suspend fun repairLegacyEmployerContribution(
         targetCalendarYear: Int = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
     ) = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            val current = settingsDao.getSettingsDirect() ?: return@withTransaction
-            var updated = current
-            if (updated.employerRetirementMonthly >= 2795.0 && updated.employerRetirementMonthly <= 2805.0) {
-                updated = updated.copy(employerRetirementMonthly = 233.0)
-            }
-            if (updated.baseYear in 2026 until targetCalendarYear) {
-                val delta = targetCalendarYear - updated.baseYear
-                updated = updated.copy(
-                    baseYear = targetCalendarYear,
-                    primaryAge = (updated.primaryAge + delta).coerceIn(15, 100)
-                )
-            }
-            val clean = com.example.util.BackupManager.sanitizeSettings(updated, current)
-            if (clean != current) {
-                settingsDao.saveSettings(clean)
+        safeDbWrite("repair_legacy_employer", Unit) {
+            database.withTransaction {
+                val current = settingsDao.getSettingsDirect() ?: return@withTransaction
+                var updated = current
+                if (updated.employerRetirementMonthly >= 2795.0 && updated.employerRetirementMonthly <= 2805.0) {
+                    updated = updated.copy(employerRetirementMonthly = 233.0)
+                }
+                if (updated.baseYear in 2026 until targetCalendarYear) {
+                    val delta = targetCalendarYear - updated.baseYear
+                    updated = updated.copy(
+                        baseYear = targetCalendarYear,
+                        primaryAge = (updated.primaryAge + delta).coerceIn(15, 100)
+                    )
+                }
+                val clean = com.example.util.BackupManager.sanitizeSettings(updated, current)
+                if (clean != current) {
+                    settingsDao.saveSettings(clean)
+                }
             }
         }
     }
 
     suspend fun addLedgerEntry(entry: LedgerEntryEntity) = withContext(Dispatchers.IO) {
-        ledgerDao.insertEntry(sanitizeLedgerEntry(entry))
+        safeDbWrite("add_ledger_entry", Unit) { ledgerDao.insertEntry(sanitizeLedgerEntry(entry)) }
     }
 
     suspend fun updateLedgerEntry(entry: LedgerEntryEntity) = withContext(Dispatchers.IO) {
-        ledgerDao.updateEntry(sanitizeLedgerEntry(entry))
+        safeDbWrite("update_ledger_entry", Unit) { ledgerDao.updateEntry(sanitizeLedgerEntry(entry)) }
     }
 
     suspend fun updateLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
-        ledgerDao.updateEntries(entries.map(::sanitizeLedgerEntry))
+        safeDbWrite("update_ledger_entries", Unit) { ledgerDao.updateEntries(entries.map(::sanitizeLedgerEntry)) }
     }
 
     suspend fun addLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
-        ledgerDao.insertEntries(entries.map(::sanitizeLedgerEntry))
+        safeDbWrite("add_ledger_entries", Unit) { ledgerDao.insertEntries(entries.map(::sanitizeLedgerEntry)) }
     }
 
     suspend fun existingYearMonths(): Set<String> = withContext(Dispatchers.IO) {
-        ledgerDao.getAllYearMonths().toSet()
+        safeDbRead("existing_year_months", emptySet()) { ledgerDao.getAllYearMonths().toSet() }
     }
 
     suspend fun getLedgerEntryByYearMonth(yearMonth: String): LedgerEntryEntity? = withContext(Dispatchers.IO) {
-        ledgerDao.getEntryByYearMonth(yearMonth)
+        safeDbRead("get_ledger_entry", null) { ledgerDao.getEntryByYearMonth(yearMonth) }
     }
 
     suspend fun getAllLedgerEntriesDirect(): List<LedgerEntryEntity> = withContext(Dispatchers.IO) {
-        ledgerDao.getAllEntriesDirect()
+        safeDbRead("get_all_ledger_entries", emptyList()) { ledgerDao.getAllEntriesDirect() }
     }
 
     suspend fun deleteLedgerEntry(id: Long): String? = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            val entry = ledgerDao.getEntryById(id)
-            ledgerDao.deleteEntry(id)
-            if (entry != null) {
-                importedTransactionDao.deleteTransactionsForMonth(entry.yearMonth)
-                importedTransactionDao.clearStaleMatchedTransactionLinks()
+        safeDbWrite<String?>("delete_ledger_entry", null) {
+            database.withTransaction {
+                val entry = ledgerDao.getEntryById(id)
+                ledgerDao.deleteEntry(id)
+                if (entry != null) {
+                    importedTransactionDao.deleteTransactionsForMonth(entry.yearMonth)
+                    importedTransactionDao.clearStaleMatchedTransactionLinks()
+                }
+                entry?.yearMonth
             }
-            entry?.yearMonth
         }
     }
 
     suspend fun deleteImportedTransactionsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            importedTransactionDao.deleteTransactionsForMonth(yearMonth)
-            importedTransactionDao.clearStaleMatchedTransactionLinks()
+        safeDbWrite("delete_imported_month", Unit) {
+            database.withTransaction {
+                importedTransactionDao.deleteTransactionsForMonth(yearMonth)
+                importedTransactionDao.clearStaleMatchedTransactionLinks()
+            }
         }
     }
 
     suspend fun setActionState(year: Int, actionId: String, isDone: Boolean) = withContext(Dispatchers.IO) {
         val key = "${year}_$actionId"
-        actionStateDao.saveActionState(ActionStateEntity(key, year, actionId, isDone))
+        safeDbWrite("set_action_state", Unit) {
+            actionStateDao.saveActionState(ActionStateEntity(key, year, actionId, isDone))
+        }
     }
 
     suspend fun toggleActionState(year: Int, actionId: String) = withContext(Dispatchers.IO) {
-        actionStateDao.toggleActionStateUpsert("${year}_$actionId", year, actionId)
+        safeDbWrite("toggle_action_state", Unit) {
+            actionStateDao.toggleActionStateUpsert("${year}_$actionId", year, actionId)
+        }
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            ledgerDao.deleteAllEntries()
-            actionStateDao.deleteAllActionStates()
-            importedTransactionDao.deleteAllTransactions()
+        safeDbWrite("clear_all_data", Unit) {
+            database.withTransaction {
+                ledgerDao.deleteAllEntries()
+                actionStateDao.deleteAllActionStates()
+                importedTransactionDao.deleteAllTransactions()
+            }
         }
     }
 
     suspend fun getImportedTransactionsDirect(yearMonth: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
-        importedTransactionDao.getTransactionsForMonthDirect(yearMonth)
+        safeDbRead("get_imported_txs", emptyList()) { importedTransactionDao.getTransactionsForMonthDirect(yearMonth) }
     }
 
     suspend fun saveImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
-        importedTransactionDao.insertTransactions(transactions.map(::sanitizeTransaction))
-    }
-
-    suspend fun updateImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
-        importedTransactionDao.updateTransactions(transactions.map(::sanitizeTransaction))
-    }
-
-    suspend fun updateImportedTransaction(transaction: ImportedBankTransactionEntity) = withContext(Dispatchers.IO) {
-        importedTransactionDao.updateTransaction(sanitizeTransaction(transaction))
-    }
-
-    suspend fun getImportedTransactionById(id: Long): ImportedBankTransactionEntity? = withContext(Dispatchers.IO) {
-        importedTransactionDao.getTransactionById(id)
-    }
-
-    suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
-        database.withTransaction {
-            importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
-            importedTransactionDao.clearStaleMatchedTransactionLinks()
+        safeDbWrite("save_imported_txs", Unit) {
+            importedTransactionDao.insertTransactions(transactions.map(::sanitizeTransaction))
         }
     }
 
-    fun getAllImportedTransactions(): kotlinx.coroutines.flow.Flow<List<ImportedBankTransactionEntity>> {
+    suspend fun updateImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
+        safeDbWrite("update_imported_txs", Unit) {
+            importedTransactionDao.updateTransactions(transactions.map(::sanitizeTransaction))
+        }
+    }
+
+    suspend fun updateImportedTransaction(transaction: ImportedBankTransactionEntity) = withContext(Dispatchers.IO) {
+        safeDbWrite("update_imported_tx", Unit) {
+            importedTransactionDao.updateTransaction(sanitizeTransaction(transaction))
+        }
+    }
+
+    suspend fun getImportedTransactionById(id: Long): ImportedBankTransactionEntity? = withContext(Dispatchers.IO) {
+        safeDbRead("get_imported_tx_by_id", null) { importedTransactionDao.getTransactionById(id) }
+    }
+
+    suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
+        safeDbWrite("delete_imported_bank_month", Unit) {
+            database.withTransaction {
+                importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
+                importedTransactionDao.clearStaleMatchedTransactionLinks()
+            }
+        }
+    }
+
+    fun getAllImportedTransactions(): Flow<List<ImportedBankTransactionEntity>> {
         return importedTransactionDao.getAllImportedTransactions()
+            .catch { e ->
+                if (e is CancellationException) throw e
+                reportStorageFailure("imported_txs_stream", e)
+                emit(emptyList())
+            }
     }
 
     suspend fun getTransactionsForBankAndMonthDirect(yearMonth: String, bankName: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
-        importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+        safeDbRead("get_txs_bank_month", emptyList()) {
+            importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+        }
     }
 
     suspend fun getTransactionsInDateRangeDirect(startDate: String, endDate: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
-        importedTransactionDao.getTransactionsInDateRangeDirect(startDate, endDate)
+        safeDbRead("get_txs_date_range", emptyList()) {
+            importedTransactionDao.getTransactionsInDateRangeDirect(startDate, endDate)
+        }
     }
 
     suspend fun saveImportedTransactionsSmartMerge(
@@ -371,11 +432,11 @@ class FinancialRepository(
     }
 
     suspend fun getAllActionStatesDirect(): List<ActionStateEntity> = withContext(Dispatchers.IO) {
-        actionStateDao.getAllActionStatesDirect()
+        safeDbRead("get_all_action_states", emptyList()) { actionStateDao.getAllActionStatesDirect() }
     }
 
     suspend fun getAllImportedTransactionsDirect(): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
-        importedTransactionDao.getAllTransactionsDirect()
+        safeDbRead("get_all_imported_txs", emptyList()) { importedTransactionDao.getAllTransactionsDirect() }
     }
 
     suspend fun restoreFullBackupData(
@@ -400,22 +461,66 @@ class FinancialRepository(
             .map(::sanitizeTransaction)
             .filter { it.yearMonth.isNotBlank() }
 
-        database.withTransaction {
-            ledgerDao.deleteAllEntries()
-            actionStateDao.deleteAllActionStates()
-            importedTransactionDao.deleteAllTransactions()
-            settingsDao.saveSettings(cleanSettings)
-            if (cleanLedger.isNotEmpty()) {
-                ledgerDao.insertEntries(cleanLedger)
+        try {
+            database.withTransaction {
+                ledgerDao.deleteAllEntries()
+                actionStateDao.deleteAllActionStates()
+                importedTransactionDao.deleteAllTransactions()
+                settingsDao.saveSettings(cleanSettings)
+                if (cleanLedger.isNotEmpty()) {
+                    ledgerDao.insertEntries(cleanLedger)
+                }
+                if (cleanActions.isNotEmpty()) {
+                    actionStateDao.saveActionStates(cleanActions)
+                }
+                if (cleanTransactions.isNotEmpty()) {
+                    importedTransactionDao.insertTransactions(cleanTransactions)
+                    importedTransactionDao.clearStaleMatchedTransactionLinks()
+                }
             }
-            if (cleanActions.isNotEmpty()) {
-                actionStateDao.saveActionStates(cleanActions)
-            }
-            if (cleanTransactions.isNotEmpty()) {
-                importedTransactionDao.insertTransactions(cleanTransactions)
-                importedTransactionDao.clearStaleMatchedTransactionLinks()
-            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLiteException) {
+            reportStorageFailure("restore_full_backup", e)
+            throw e
+        } catch (e: IOException) {
+            reportStorageFailure("restore_full_backup", e)
+            throw e
         }
+    }
+
+    private suspend inline fun <T> safeDbRead(operation: String, fallback: T, block: () -> T): T {
+        return try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLiteException) {
+            reportStorageFailure(operation, e)
+            fallback
+        } catch (e: IOException) {
+            reportStorageFailure(operation, e)
+            fallback
+        }
+    }
+
+    private suspend inline fun <T> safeDbWrite(operation: String, fallback: T, block: () -> T): T {
+        return try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SQLiteException) {
+            reportStorageFailure(operation, e)
+            fallback
+        } catch (e: IOException) {
+            reportStorageFailure(operation, e)
+            fallback
+        }
+    }
+
+    private fun reportStorageFailure(operation: String, error: Throwable) {
+        val label = error.javaClass.simpleName.ifBlank { "StorageError" }
+        runCatching { android.util.Log.w("FinancialRepository", "Storage failure in $operation ($label)") }
+        _storageErrors.tryEmit("Database storage error during $operation ($label). Check free device storage.")
     }
 
     private fun finiteOrZero(v: Double): Double = if (v.isFinite()) v else 0.0

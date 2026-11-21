@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,9 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.ui.components.charts.finiteOrZero
 import com.example.util.Formatters.fmtCZK
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ExportReportDialog(
@@ -64,6 +68,7 @@ fun ExportReportDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val snap = state.snapshot
     val sEff = state.effectiveSettings
@@ -238,24 +243,28 @@ fun ExportReportDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
-                        try {
-                            val shareIntent = if (exportFormat == "Summary") {
-                                com.example.util.ReportShareHelper.createShareTextIntent(
-                                    text = activeText,
-                                    subject = "Personal Finance Report (${state.settings.baseYear})"
-                                )
-                            } else {
-                                com.example.util.ReportShareHelper.createShareCsvIntent(
-                                    context = context,
-                                    csvBytes = com.example.util.ReportShareHelper.getCsvBytesWithBom(activeText),
-                                    filename = "fire_trajectory_${state.settings.baseYear}.csv",
-                                    subject = "FIRE Trajectory Export (${state.settings.baseYear})"
-                                )
+                        scope.launch {
+                            try {
+                                val shareIntent = if (exportFormat == "Summary") {
+                                    com.example.util.ReportShareHelper.createShareTextIntent(
+                                        text = activeText,
+                                        subject = "Personal Finance Report (${sEff.baseYear})"
+                                    )
+                                } else {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        com.example.util.ReportShareHelper.createShareCsvIntent(
+                                            context = context,
+                                            csvBytes = com.example.util.ReportShareHelper.getCsvBytesWithBom(activeText),
+                                            filename = "fire_trajectory_${sEff.baseYear}.csv",
+                                            subject = "FIRE Trajectory Export (${sEff.baseYear})"
+                                        )
+                                    }
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share Financial Report"))
+                                onDismiss()
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Unable to open share sheet.", Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Financial Report"))
-                            onDismiss()
-                        } catch (_: Exception) {
-                            Toast.makeText(context, "Unable to open share sheet.", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier

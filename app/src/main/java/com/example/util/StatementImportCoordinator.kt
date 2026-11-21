@@ -1,11 +1,11 @@
 package com.example.util
 
 import android.app.Application
-import android.content.SharedPreferences
-import androidx.core.content.edit
+import com.example.data.AppPreferencesRepository
 import com.example.data.FinancialRepository
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
+import com.example.domain.parseAccountListJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -14,7 +14,7 @@ import java.time.YearMonth
 class StatementImportCoordinator(
     private val application: Application,
     private val repository: FinancialRepository,
-    private val importPrefs: SharedPreferences
+    private val preferencesRepository: AppPreferencesRepository
 ) {
     data class AggregatedMonthTotals(
         val incVaclav: Double,
@@ -146,13 +146,15 @@ class StatementImportCoordinator(
         }
     }
 
-    fun getStoredBankBalancesForMonth(yearMonth: String): Map<String, Double> {
-        val prefix = "bank_bal_${yearMonth}_"
+    suspend fun getStoredBankBalancesForMonth(yearMonth: String): Map<String, Double> {
+        val snap = preferencesRepository.snapshot.value.let {
+            if (it.isHydrated) it else preferencesRepository.hydrate()
+        }
+        val prefix = "${yearMonth}_"
         val map = mutableMapOf<String, Double>()
-        importPrefs.all.forEach { (key, value) ->
-            if (key.startsWith(prefix)) {
-                val bal = (value as? Number)?.toDouble() ?: (value as? String)?.toDoubleOrNull()
-                if (bal != null) map[key.removePrefix(prefix)] = bal
+        snap.bankBalances.forEach { (key, value) ->
+            if (key.startsWith(prefix) && value.isFinite()) {
+                map[key.removePrefix(prefix)] = value
             }
         }
         return map
@@ -216,7 +218,7 @@ class StatementImportCoordinator(
         val latestMonth = txsByMonth.keys.maxOrNull() ?: summary.yearMonth
         val affectedMonths = txsByMonth.keys.sorted()
         var latestAuditReport: CrossStatementAuditReport? = null
-        val pendingBankBalanceWrites = mutableMapOf<String, String>()
+        val pendingBankBalanceWrites = mutableMapOf<String, Double>()
 
         repository.withTransaction {
             for ((targetYm, monthTxs) in txsByMonth) {
@@ -247,15 +249,16 @@ class StatementImportCoordinator(
                     cur.primaryName.takeIf { it.isNotBlank() },
                     cur.spouseName.takeIf { !cur.isSingleHousehold && it.isNotBlank() }
                 )
+                val knownFamilyAccounts = parseAccountListJson(cur.knownFamilyAccountsJson).toSet()
 
-                // Stage per-bank closing balances in memory and persist to SharedPreferences only after DB commit.
+                // Stage per-bank closing balances in memory and persist only after DB commit.
                 val storedBalances = getStoredBankBalancesForMonth(targetYm).toMutableMap()
                 val perBankForMonth = summary.monthEndBalancesByBank[targetYm]
                 if (!perBankForMonth.isNullOrEmpty()) {
                     perBankForMonth.forEach { (bankKey, balVal) ->
                         if (balVal.isFinite()) {
                             storedBalances[bankKey] = balVal
-                            pendingBankBalanceWrites["bank_bal_${targetYm}_$bankKey"] = balVal.toString()
+                            pendingBankBalanceWrites["${targetYm}_$bankKey"] = balVal
                         }
                     }
                 } else {
@@ -271,7 +274,7 @@ class StatementImportCoordinator(
                                 summary.detectedBank.name
                             }
                             storedBalances[balBankKey] = monthEndBal
-                            pendingBankBalanceWrites["bank_bal_${targetYm}_$balBankKey"] = monthEndBal.toString()
+                            pendingBankBalanceWrites["${targetYm}_$balBankKey"] = monthEndBal
                         }
                     }
                 }
@@ -282,7 +285,8 @@ class StatementImportCoordinator(
                     yearMonth = targetYm,
                     boundaryTransactions = boundaryTxs,
                     bankBalances = storedBalances,
-                    householdNames = householdNames
+                    householdNames = householdNames,
+                    knownFamilyAccounts = knownFamilyAccounts
                 )
                 val reconciledTxs = reconcileResult.currentMonthTxs
                 val auditReport = reconcileResult.auditReport
@@ -353,11 +357,10 @@ class StatementImportCoordinator(
         }
 
         val now = System.currentTimeMillis()
-        importPrefs.edit {
-            pendingBankBalanceWrites.forEach { (k, v) -> putString(k, v) }
-            putLong("last_import_all", now)
-            putLong("last_import_${summary.detectedBank.name}", now)
+        if (pendingBankBalanceWrites.isNotEmpty()) {
+            preferencesRepository.putBankBalances(pendingBankBalanceWrites)
         }
+        preferencesRepository.setLastImportTimestamp(summary.detectedBank.name, now)
 
         ConfirmResult(
             auditReport = latestAuditReport,

@@ -441,34 +441,66 @@ class FullCodebaseAuditFixesRegressionTest {
             content.contains("val sy = plotH - (plotH * (realPoints[idx].p50 / maxVal)).toFloat()"))
     }
 
-    // Issue 22: Fast-boot snapshot cache eliminates cold-start flash of default settings
+    // Issue 22: Zero-disk cold start (no sync fast_boot_snapshot_v1) + lossless AppPreferencesRepository migration
     @Test
-    fun test22_fastBootSnapshotHydratesMainViewModelWithoutDefaultFlash() {
+    fun test22_fastBootSnapshotHydratesMainViewModelWithoutDefaultFlash() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val prefs = app.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
-        val customSettings = SettingsEntity(
-            vSalary = 92500.0,
-            liquidPortfolioCurrent = 1450000.0,
-            emergencyReserveCurrent = 320000.0
+        val importPrefs = app.getSharedPreferences("statement_import_prefs", android.content.Context.MODE_PRIVATE)
+        val themePrefs = app.getSharedPreferences("app_theme_prefs", android.content.Context.MODE_PRIVATE)
+        val subPrefs = app.getSharedPreferences("subscription_auditor_prefs", android.content.Context.MODE_PRIVATE)
+        val syncPrefs = app.getSharedPreferences("czech_sync_prefs", android.content.Context.MODE_PRIVATE)
+        val unifiedPrefs = app.getSharedPreferences(
+            com.example.data.AppPreferencesRepository.DEFAULT_PREFS_NAME,
+            android.content.Context.MODE_PRIVATE
         )
+
         val snapJson = BackupManager.serializeFullBackupToJson(
             BackupManager.FullBackupPayload(
-                settings = customSettings,
-                ledgerEntries = listOf(
-                    LedgerEntryEntity(id = 1L, yearMonth = "2026-10", incVaclav = 92500.0, portfolioBalanceAtMonthEnd = 1500000.0)
-                )
+                settings = SettingsEntity(vSalary = 92500.0)
             )
         )
-        prefs.edit().putString("fast_boot_snapshot_v1", snapJson).commit()
+        unifiedPrefs.edit().clear().commit()
+        importPrefs.edit().clear()
+            .putString("fast_boot_snapshot_v1", snapJson)
+            .putLong("last_import_all", 1_700_000_000_000L)
+            .putString("bank_bal_2026-10_CSOB", "125000.0")
+            .commit()
+        themePrefs.edit().clear().putString("theme_mode", "DARK").commit()
+        subPrefs.edit().clear().putStringSet("dismissed_merchants", setOf("spotify")).commit()
+        syncPrefs.edit().clear().putLong("last_czech_sync_time", 1_700_000_100_000L).commit()
+
         try {
+            val vmSource = File(getAppSrcMain(), "java/com/example/ui/MainViewModel.kt").readText()
+            assertFalse(
+                "MainViewModel must not read fast_boot_snapshot_v1 synchronously on cold start",
+                vmSource.contains("fast_boot_snapshot_v1")
+            )
+            assertFalse(
+                "MainViewModel must not call getSharedPreferences synchronously during init",
+                vmSource.contains("getSharedPreferences(")
+            )
+
             val vm = MainViewModel(app, SavedStateHandle())
-            assertEquals(92500.0, vm.settingsState.value.vSalary, 0.001)
-            assertEquals(1, vm.ledgerEntries.value.size)
-            assertEquals("2026-10", vm.ledgerEntries.value[0].yearMonth)
-            // Initial calculationState immediately reflects the cached snapshot on Frame 0
-            assertEquals(92500.0, vm.calculationState.value.settings.vSalary, 0.001)
+            assertEquals("SYSTEM", vm.themeMode.value)
+
+            val repo = com.example.data.AppPreferencesRepository(app)
+            val snap = repo.hydrate()
+            assertTrue(snap.isHydrated)
+            assertEquals("DARK", snap.themeMode)
+            assertEquals(1_700_000_000_000L, snap.lastImportTimestamp)
+            assertEquals(1_700_000_100_000L, snap.lastCzechSyncTimestamp)
+            assertEquals(setOf("spotify"), snap.dismissedSubscriptionMerchants)
+            assertEquals(125000.0, snap.bankBalances["2026-10_CSOB"] ?: 0.0, 0.01)
+            assertFalse(
+                "Obsolete fast_boot_snapshot_v1 must be purged during legacy migration",
+                importPrefs.contains("fast_boot_snapshot_v1")
+            )
         } finally {
-            prefs.edit().remove("fast_boot_snapshot_v1").commit()
+            importPrefs.edit().clear().commit()
+            themePrefs.edit().clear().commit()
+            subPrefs.edit().clear().commit()
+            syncPrefs.edit().clear().commit()
+            unifiedPrefs.edit().clear().commit()
         }
     }
 
