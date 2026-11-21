@@ -5,7 +5,6 @@ import com.example.util.BankTransactionType
 import com.example.util.BankType
 import com.example.util.CzechMerchantCatalog
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

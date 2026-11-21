@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.ui.tabs.OverviewTab
-import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
 import com.example.ui.theme.MartinuFinancialsTheme
@@ -29,17 +28,18 @@ class UIReactivityAuditRobolectricTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun `test UI reactivity in PlanTab milestone hierarchy on settings change`() {
+    fun `test UI reactivity in ProjectionsTab Goals milestone hierarchy on settings change`() {
         val settingsState = mutableStateOf(SettingsEntity(vStatePensionAge = 67))
         val calculationState = mutableStateOf(FinancialEngine.calculate(settingsState.value))
 
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                PlanTab(
+                ProjectionsTab(
                     state = calculationState.value,
                     actionStates = emptyMap(),
                     onToggleAction = { _, _, _ -> },
-                    onUpdateSettings = { settingsState.value = it }
+                    onApplySettings = { settingsState.value = it },
+                    initialSubTab = 4
                 )
             }
         }

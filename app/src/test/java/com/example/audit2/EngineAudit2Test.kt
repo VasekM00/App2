@@ -1,21 +1,16 @@
 package com.example.audit2
 
 import com.example.data.SettingsEntity
-import com.example.domain.CzechRegulatoryData
 import com.example.domain.CzechTaxEngine
 import com.example.domain.DpsDipEngine
 import com.example.domain.FinancialEngine
 import com.example.domain.PresetProfiles
-import com.example.domain.RegulatoryConstants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.roundToInt
 
 class EngineAudit2Test {
 

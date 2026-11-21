@@ -161,27 +161,6 @@ class ChildCostAndStatementIntelligenceTest {
     }
 
     @Test
-    fun testFreedomDays_calculationAndGuards() {
-        val monthlyCost = 30420.0
-        val monthlySavings = 30420.0
-
-        // Daily burn = 30420 / 30.42 = 1000 Kč/day
-        // Savings = 30420 Kč -> 30.42 days of freedom bought
-        val daysBought = FinancialEngine.freedomDaysBoughtMonthly(monthlySavings, monthlyCost)
-        assertEquals(30.42, daysBought, 0.01)
-
-        // Portfolio = 365,040 Kč -> 365.04 days of runway
-        val daysCovered = FinancialEngine.freedomDaysCoveredByPortfolio(365040.0, monthlyCost)
-        assertEquals(365.04, daysCovered, 0.01)
-
-        // Zero / negative guards
-        assertEquals(0.0, FinancialEngine.freedomDaysBoughtMonthly(0.0, monthlyCost), 0.001)
-        assertEquals(0.0, FinancialEngine.freedomDaysBoughtMonthly(monthlySavings, 0.0), 0.001)
-        assertEquals(0.0, FinancialEngine.freedomDaysCoveredByPortfolio(0.0, monthlyCost), 0.001)
-        assertEquals(0.0, FinancialEngine.freedomDaysCoveredByPortfolio(365040.0, 0.0), 0.001)
-    }
-
-    @Test
     fun testSubscriptionAuditor_detectsRecurringAndPriceCreep() {
         val txs = listOf(
             ImportedBankTransactionEntity(
@@ -462,16 +441,6 @@ class ChildCostAndStatementIntelligenceTest {
         val singleState = FinancialEngine.calculate(singleSettings, runMonteCarlo = false)
         val expectedSingleTotal = 500_000.0 + 50_000.0 + 40_000.0 + 100_000.0
         assertEquals(expectedSingleTotal, singleState.netWorthTotal, 0.001)
-    }
-
-    @Test
-    fun testFreedomDaysDeficitCalculation() {
-        val deficitSavings = -15_000.0
-        val livingCostMonthly = 45_000.0
-        val daysBurned = FinancialEngine.freedomDaysBoughtMonthly(deficitSavings, livingCostMonthly)
-        assertTrue("Deficit should produce negative freedom days", daysBurned < 0.0)
-        val dailyCost = livingCostMonthly / 30.42
-        assertEquals(deficitSavings / dailyCost, daysBurned, 0.001)
     }
 
     @Test

@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.example.data.ActionStateEntity
 import com.example.data.AppDatabase
 import com.example.data.FinancialRepository
 import com.example.data.ImportedBankTransactionEntity
@@ -170,16 +169,15 @@ class FullCodebaseAuditFixesRegressionTest {
         assertEquals(3.8, handle.get<Double?>("sensitivity_swr_override"))
     }
 
-    // Issue 8: Sub-tab selection state synchronization wired across MainScreen and all 4 multi-subtab screens
+    // Issue 8: Sub-tab selection state synchronization wired across MainScreen and all multi-subtab screens
     @Test
     fun test8_subTabSelectedCallbacksWiredInMainScreenAndTabs() {
         val mainScreen = File(getAppSrcMain(), "java/com/example/ui/MainScreen.kt").readText()
         assertTrue(mainScreen.contains("onSubTabSelected = { targetCashFlowSubTab = it }"))
         assertTrue(mainScreen.contains("onSubTabSelected = { targetProjectionsSubTab = it }"))
-        assertTrue(mainScreen.contains("onSubTabSelected = { targetPlanSubTab = it }"))
         assertTrue(mainScreen.contains("onSubTabSelected = { targetSettingsSubTab = it }"))
 
-        val tabs = listOf("CashFlowTab.kt", "ProjectionsTab.kt", "PlanTab.kt", "SettingsTab.kt")
+        val tabs = listOf("CashFlowTab.kt", "ProjectionsTab.kt", "SettingsTab.kt")
         for (tab in tabs) {
             val content = File(getAppSrcMain(), "java/com/example/ui/tabs/$tab").readText()
             assertTrue("$tab must declare and invoke onSubTabSelected", content.contains("onSubTabSelected"))
@@ -393,7 +391,7 @@ class FullCodebaseAuditFixesRegressionTest {
         assertNotNull(restored)
         assertEquals(2000, restored!!.monteCarloN)
 
-        val overLimitJson = """{"monteCarloN": 2500}"""
+        val overLimitJson = """{"monteCarloN": 15000}"""
         val fallbackRestored = BackupManager.deserializeSettingsFromJson(overLimitJson, SettingsEntity())
         assertNotNull(fallbackRestored)
         assertEquals(SettingsEntity().monteCarloN, fallbackRestored!!.monteCarloN)
@@ -418,31 +416,28 @@ class FullCodebaseAuditFixesRegressionTest {
         assertEquals("Single one-off Steam purchase must not be flagged as monthly subscription", 0, summary.items.size)
     }
 
-    // Issue 20: HouseholdTimelineEditDialogs familyGiftMonthly sync
+    // Issue 20: HouseholdTimelineEditDialogs separate vGiftsMonthly / eGiftsMonthly summing
     @Test
     fun test20_householdTimelineEditDialogs_familyGiftsSync() {
         val settings = SettingsEntity().copy(
             vGiftsMonthly = 16000.0,
-            eGiftsMonthly = 0.0,
-            familyGiftMonthly = 16000.0
+            eGiftsMonthly = 0.0
         )
         // Spouse updates gift to 5000 CZK
-        val updated = settings.copy(
-            eGiftsMonthly = 5000.0,
-            familyGiftMonthly = settings.vGiftsMonthly + 5000.0
-        )
-        assertEquals(21000.0, updated.familyGiftMonthly, 0.001)
+        val updated = settings.copy(eGiftsMonthly = 5000.0)
+        val state = FinancialEngine.calculate(updated, runMonteCarlo = false)
+        assertEquals(21000.0, state.currentIncome.gift, 0.001)
     }
 
-    // Issue 21: Charts indicator dot yPix source check
+    // Issue 21: MonteCarloFanChart indicator dot yPix source check
     @Test
     fun test21_chartsIndicatorDotsUseYPix() {
-        val chartsFile = File(getAppSrcMain(), "java/com/example/ui/components/Charts.kt")
-        assertTrue("Charts.kt must exist at ${chartsFile.absolutePath}", chartsFile.exists())
+        val chartsFile = File(getAppSrcMain(), "java/com/example/ui/components/charts/MonteCarloFanChart.kt")
+        assertTrue("MonteCarloFanChart.kt must exist at ${chartsFile.absolutePath}", chartsFile.exists())
         val content = chartsFile.readText()
-        assertFalse("Charts.kt should not compute raw plotH - plotH * ... for indicator dots",
+        assertFalse("MonteCarloFanChart.kt should not compute raw plotH - plotH * ... for indicator dots",
             content.contains("val curY = plotH - (plotH * (realPoints[0].p50 / maxVal)).toFloat()"))
-        assertFalse("Charts.kt should not compute raw plotH - plotH * ... for scrubber",
+        assertFalse("MonteCarloFanChart.kt should not compute raw plotH - plotH * ... for scrubber",
             content.contains("val sy = plotH - (plotH * (realPoints[idx].p50 / maxVal)).toFloat()"))
     }
 
@@ -480,7 +475,7 @@ class FullCodebaseAuditFixesRegressionTest {
     // Issue 23: Charts nice axis ceiling & monotone cubic spline interpolation
     @Test
     fun test23_chartsNiceAxisMaxAndMonotoneCubicSpline() {
-        val niceMax = com.example.ui.components.computeNiceAxisMax(17_300_000.0, steps = 4)
+        val niceMax = com.example.ui.components.charts.computeNiceAxisMax(17_300_000.0, steps = 4)
         assertEquals(20_000_000.0, niceMax, 0.01)
 
         val points = listOf(
@@ -489,7 +484,7 @@ class FullCodebaseAuditFixesRegressionTest {
             androidx.compose.ui.geometry.Offset(100f, 80f),
             androidx.compose.ui.geometry.Offset(150f, 20f)
         )
-        val path = com.example.ui.components.buildMonotoneCubicPath(points)
+        val path = com.example.ui.components.charts.buildMonotoneCubicPath(points)
         assertFalse(path.isEmpty)
     }
 
@@ -529,5 +524,102 @@ class FullCodebaseAuditFixesRegressionTest {
         } finally {
             db.close()
         }
+    }
+
+    // Issue 25: Investment lots full backup and restore serialization
+    @Test
+    fun test25_investmentLotsBackupAndRestore() {
+        val originalLots = listOf(
+            com.example.util.UserInvestmentLot(
+                id = "lot-1",
+                batchName = "VWCE Core",
+                instrument = "VWCE.DE",
+                purchaseDateStr = "2023-05-31",
+                acquisitionCostCzk = 150000.0,
+                currentValueCzk = 195000.0,
+                notes = "Interactive Brokers lump sum"
+            )
+        )
+        val payload = BackupManager.FullBackupPayload(
+            settings = SettingsEntity.freshDefaults(),
+            investmentLots = originalLots
+        )
+        val jsonStr = BackupManager.serializeFullBackupToJson(payload)
+        val deserialized = BackupManager.deserializeFullBackupFromJson(jsonStr, SettingsEntity.freshDefaults())
+        assertNotNull(deserialized)
+        assertEquals(1, deserialized!!.investmentLots.size)
+        val restoredLot = deserialized.investmentLots.first()
+        assertEquals("lot-1", restoredLot.id)
+        assertEquals("VWCE Core", restoredLot.batchName)
+        assertEquals("VWCE.DE", restoredLot.instrument)
+        assertEquals(150000.0, restoredLot.acquisitionCostCzk, 0.001)
+        assertEquals(195000.0, restoredLot.currentValueCzk, 0.001)
+    }
+
+    // Issue 26: Investment lot 3-year time-test exact anniversary boundary
+    @Test
+    fun test26_investmentLotTimeTestAnniversaryExemption() {
+        val lot = com.example.util.UserInvestmentLot(
+            batchName = "EUNL",
+            instrument = "iShares Core MSCI World",
+            purchaseDateStr = "2023-05-31",
+            acquisitionCostCzk = 100000.0,
+            currentValueCzk = 135000.0
+        )
+        val exactAnniversary = java.time.LocalDate.of(2026, 5, 31)
+        val dayAfter = exactAnniversary.plusDays(1)
+        assertTrue("Day strictly after 3-year anniversary must be tax-exempt", lot.isExempt(dayAfter))
+        assertEquals(0, lot.monthsRemaining(dayAfter))
+        assertEquals(1f, lot.progress(dayAfter), 0.001f)
+
+        assertFalse("Exact 3-year anniversary is not yet strictly > 3 years", lot.isExempt(exactAnniversary))
+        assertEquals(1, lot.monthsRemaining(exactAnniversary))
+    }
+
+    // Issue 27: Barista mode does not create phantom unfunded locked retirement inflows
+    @Test
+    fun test27_baristaTransitionCashflowRetirementSeparation() {
+        val s = SettingsEntity.freshDefaults().copy(
+            baseYear = 2026,
+            primaryAge = 30,
+            baristaTransitionEnabled = true,
+            baristaStartYear = 2028,
+            baristaMonthlyIncome = 25000.0,
+            baristaSavingsMonthly = 0.0,
+            dpsOwnContributionMonthly = 3000.0,
+            dipContributionMonthly = 4000.0,
+            employerRetirementMonthly = 2500.0
+        )
+        val plan = FinancialEngine.calculate(s, emptyMap(), runMonteCarlo = true)
+        assertNotNull(plan)
+        assertNotNull("decumulationComparison should be populated when runMonteCarlo = true", plan.decumulationComparison)
+        assertEquals(3, plan.decumulationComparison!!.strategies.size)
+        val noMcPlan = FinancialEngine.calculate(s, emptyMap(), runMonteCarlo = false)
+        assertNull("decumulationComparison should stay null when runMonteCarlo = false", noMcPlan.decumulationComparison)
+    }
+
+    // Issue 28: CzechYearEndTaxChecklist checks spouse employer pension contribution and parental leave status
+    @Test
+    fun test28_yearEndTaxChecklistSpouseEmployerContribution() {
+        val s = SettingsEntity.freshDefaults().copy(
+            isSingleHousehold = false,
+            primaryName = "Vaclav",
+            spouseName = "Eleonora",
+            employerRetirementMonthly = 4166.67, // exactly 50k/year -> fully optimized
+            eEmployerRetirementMonthly = 1000.0   // 12k/year -> headroom of 38k
+        )
+        val checklist = com.example.domain.CzechYearEndTaxChecklist.generateChecklist(s, 2026, 400000.0)
+        val spouseEmpItem = checklist.items.find { it.id == "employer_contribution_exemption_spouse" }
+        assertNotNull("Spouse employer item must exist in dual-earner checklist", spouseEmpItem)
+        assertEquals(com.example.domain.ChecklistStatus.ATTENTION_NEEDED, spouseEmpItem!!.status)
+        assertEquals(38000.0, spouseEmpItem.remainingHeadroomCzk, 0.01)
+
+        // When spouse is on parental leave (eReturnYear in future, no spouse salary or employer contrib), status is NOT_APPLICABLE
+        val parentalSettings = s.copy(eReturnYear = 2029, eEmployerRetirementMonthly = 0.0)
+        val parentalChecklist = com.example.domain.CzechYearEndTaxChecklist.generateChecklist(parentalSettings, 2026, 0.0)
+        val parentalSpouseEmp = parentalChecklist.items.find { it.id == "employer_contribution_exemption_spouse" }
+        assertNotNull(parentalSpouseEmp)
+        assertEquals(com.example.domain.ChecklistStatus.NOT_APPLICABLE, parentalSpouseEmp!!.status)
+        assertEquals(0.0, parentalSpouseEmp.potentialTaxSavingCzk, 0.001)
     }
 }

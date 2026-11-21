@@ -1,9 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,8 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -25,10 +22,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,18 +32,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
 import com.example.domain.CzechRegulatoryData
 import com.example.domain.SyncDifferenceItem
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.CzechEconomicSyncService
 import com.example.util.Formatters.fmtRelativeTime
 
@@ -59,6 +58,7 @@ fun LiveSyncDialog(
     isLoading: Boolean,
     onDismiss: () -> Unit,
     onApplySettings: (SettingsEntity) -> Unit,
+    onRetry: (() -> Unit)? = null,
     lastSyncTimestamp: Long? = null
 ) {
     val haptic = LocalHapticFeedback.current
@@ -89,7 +89,7 @@ fun LiveSyncDialog(
                     val subtitleText = if (lastSyncTimestamp != null) {
                         "${liveData?.sourceName ?: "Official registers"} · Checked ${fmtRelativeTime(lastSyncTimestamp)}"
                     } else {
-                        liveData?.sourceName ?: "Querying official registers..."
+                        liveData?.sourceName ?: "Official Czech financial registers"
                     }
                     Text(
                         text = subtitleText,
@@ -113,7 +113,7 @@ fun LiveSyncDialog(
                     CircularProgressIndicator(color = BrandTeal, modifier = Modifier.size(36.dp))
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Connecting to official ČNB exchange rate API...",
+                        text = "Connecting to official ČNB exchange rate feed",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -140,17 +140,24 @@ fun LiveSyncDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val datePrefix = if (liveData.rateDate.isNotBlank()) " (${liveData.rateDate})" else ""
+                            val eurRate = liveData.eurCzkRate.finiteOrZero()
+                            val usdRate = liveData.usdCzkRate.finiteOrZero()
                             Text(
-                                text = "ČNB FX$datePrefix: 1 EUR = ${String.format(java.util.Locale.getDefault(), "%.2f", liveData.eurCzkRate)} CZK · 1 USD = ${String.format(java.util.Locale.getDefault(), "%.2f", liveData.usdCzkRate)} CZK",
+                                text = "ČNB FX$datePrefix: 1 EUR = ${String.format(java.util.Locale.getDefault(), "%.2f", eurRate)} Kč · 1 USD = ${String.format(java.util.Locale.getDefault(), "%.2f", usdRate)} Kč",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
+                                    fontFamily = BodyFontFamily,
                                     fontSize = 11.sp
-                                )
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
                             ColorPill(
                                 text = if (diffCount > 0) "$diffCount DIFFERENCES" else "FULLY SYNCED",
                                 color = if (diffCount > 0) BrandGold else GoodGreen,
                                 fontSize = 9.sp,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 horizontalPadding = 6.dp,
                                 verticalPadding = 2.dp
@@ -160,17 +167,41 @@ fun LiveSyncDialog(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
+
                     // Comparison List
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 320.dp),
+                            .heightIn(max = maxListHeight),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(differences) { diff ->
+                        itemsIndexed(
+                            items = differences,
+                            key = { idx, diff -> "${idx}_${diff.label}" }
+                        ) { _, diff ->
                             SyncDifferenceCard(diff)
                         }
                     }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Unable to reach the ČNB exchange rate feed right now.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Check your internet connection and retry, or continue using your current local Czech benchmarks.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         },
@@ -188,20 +219,44 @@ fun LiveSyncDialog(
                         onApplySettings(updated)
                         onDismiss()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    ),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.testTag("apply_all_sync_button")
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("apply_all_sync_button")
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Apply Official Benchmarks")
+                    Text("Apply Official Benchmarks", maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
+                }
+            } else if (!isLoading && onRetry != null) {
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onRetry()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Retry Sync", maxLines = 2, softWrap = true)
                 }
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.testTag("close_sync_dialog_button")
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("close_sync_dialog_button")
             ) {
                 Text("Keep Custom")
             }
@@ -216,7 +271,7 @@ private fun SyncDifferenceCard(diff: SyncDifferenceItem) {
         color = if (diff.isDifferent) BrandGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
-            if (diff.isDifferent) BrandGold.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+            if (diff.isDifferent) BrandGold.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -253,7 +308,7 @@ private fun SyncDifferenceCard(diff: SyncDifferenceItem) {
                     text = "Current: ${diff.currentValueFormatted}",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = BodyFontFamily,
                         fontSize = 11.sp
                     )
                 )
@@ -262,7 +317,7 @@ private fun SyncDifferenceCard(diff: SyncDifferenceItem) {
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = if (diff.isDifferent) BrandTeal else GoodGreen,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = BodyFontFamily,
                         fontSize = 11.sp
                     )
                 )

@@ -65,7 +65,7 @@ class DataLayerIntegrityTest {
             eLecturingMonthly = 10000.0,
             eIncludeLecturing = false,
             eOtherInflowsMonthly = 4500.0,
-            familyGiftMonthly = 20000.0,
+            vGiftsMonthly = 20000.0,
             lumpSumYear = 2033,
             lumpSumAmount = 1000000.0,
             lumpSumInclude = false,

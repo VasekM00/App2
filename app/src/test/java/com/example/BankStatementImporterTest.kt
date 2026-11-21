@@ -280,30 +280,34 @@ class BankStatementImporterTest {
     }
 
     @Test
-    fun testRealMonetaPdfStatement() {
-        val file = listOf(
-            java.io.File("sample_statement.pdf"),
-            java.io.File("../sample_statement.pdf"),
-            java.io.File("C:/Users/Ela/.gemini/antigravity/scratch/App2/sample_statement.pdf")
-        ).firstOrNull { it.exists() } ?: return
-
-        val bytes = file.readBytes()
+    fun testSyntheticMonetaPdfStatementEndToEnd() {
+        val pdfLines = listOf(
+            "MONETA Money Bank, a.s. - Výpis z běžného účtu",
+            "Za období: 01.07.2026 - 31.07.2026",
+            "01.07.2026 111222333/0100 Zaměstnavatel a.s. 35 000,00 CZK Mzda 07/2026",
+            "05.07.2026 222333444/0800 Portu WOOD & Company -10 000,00 CZK Pravidelná investice",
+            "10.07.2026 333444555/0300 Lidl ČR -2 500,00 CZK Nákup potravin",
+            "15.07.2026 987654321/6210 Václav Martinů -5 000,00 CZK Převod na vlastní účet",
+            "Konečný zůstatek: 35 429,76 CZK"
+        )
+        val bytes = createSyntheticPdf(pdfLines)
         assertTrue(com.example.util.PdfTextExtractor.isPdf(bytes))
 
-        val summary = BankStatementImporter.parseStatement(bytes.inputStream())
+        val summary = BankStatementImporter.parseStatement(
+            bytes.inputStream(),
+            knownFamilyAccounts = setOf("987654321/6210")
+        )
 
         assertEquals(BankType.MONETA, summary.detectedBank)
         assertEquals("2026-07", summary.yearMonth)
-        assertTrue("Expected ~79 transactions, got ${summary.transactions.size}", summary.transactions.size >= 75)
-        assertTrue("Total expenses should be > 20 000 CZK, was ${summary.totalExpenses}", summary.totalExpenses > 20000.0)
-        assertTrue("Internal self-transfers should be netted out, was ${summary.internalTransfersCount}", summary.internalTransfersCount >= 1)
-        assertTrue("Total netted amount should be > 0, was ${summary.totalNettedAmount}", summary.totalNettedAmount > 0.0)
+        assertEquals(4, summary.transactions.size)
+        assertEquals(2500.0, summary.totalExpenses, 0.01)
+        assertEquals(1, summary.internalTransfersCount)
+        assertEquals(5000.0, summary.totalNettedAmount, 0.01)
         assertNotNull(summary.monthEndBalance)
         assertEquals(35429.76, summary.monthEndBalance!!, 0.01)
-
-        // Verify key categorized transactions
         assertTrue("Portu investment should be parsed", summary.invPortu >= 5000.0)
-        assertTrue("Vaclav salary should be parsed", summary.incVaclav >= 30000.0)
+        assertTrue("Primary salary should be parsed", summary.incVaclav >= 30000.0)
         assertTrue("Groceries should be parsed", summary.expGroceries > 0.0)
 
         val entry = summary.toLedgerEntry()

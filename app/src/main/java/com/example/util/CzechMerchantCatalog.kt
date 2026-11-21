@@ -9,6 +9,23 @@ import java.util.Locale
  */
 object CzechMerchantCatalog {
 
+    private val COMBINING_MARKS_REGEX = Regex("""\p{InCombiningDiacriticalMarks}+""")
+    private val NON_ALNUM_SPACE_REGEX = Regex("""[^a-z0-9\s]""")
+    private val NON_ALNUM_SPACE_WILDCARD_REGEX = Regex("""[^a-z0-9\s*]""")
+    private val MULTI_SPACE_REGEX = Regex("""\s+""")
+    private val CITY_DISTRICT_REGEX = Regex("""^(?:praha|prague|brno|ostrava|plzen|olomouc|liberec)\d+$""")
+    private val CORP_AND_CITY_SUGGEST_REGEX = Regex(
+        """(?<![\p{L}\d])(?:od|cz|com|s\s*\.\s*r\s*\.\s*o\s*\.?|a\s*\.\s*s\s*\.?|z\s*\.\s*s\s*\.?|o\s*\.\s*p\s*\.\s*s\s*\.?|v\s*\.\s*o\s*\.\s*s\s*\.?|k\s*\.\s*s\s*\.?|(?:brno|praha|prague|ostrava|plze[nň]|olomouc|liberec)(?:\s*\d+)?)(?![\p{L}\d])""",
+        RegexOption.IGNORE_CASE
+    )
+    private val MID_NUMBERS_REGEX = Regex("""\b\d{3,6}\b""")
+    private val TRAILING_NUM_REGEX = Regex("""\b\d{1,2}\b$""")
+
+    private fun stripAccentsLower(rawText: String): String =
+        Normalizer.normalize(rawText, Normalizer.Form.NFD)
+            .replace(COMBINING_MARKS_REGEX, "")
+            .lowercase(Locale.ROOT)
+
     /**
      * Normalizes a merchant or payment description string:
      * - Removes Czech/Slovak diacritics (á -> a, č -> c, etc.)
@@ -17,17 +34,17 @@ object CzechMerchantCatalog {
      */
     fun normalize(rawText: String): String {
         if (rawText.isBlank()) return ""
-        val withoutAccents = Normalizer.normalize(rawText, Normalizer.Form.NFD)
-            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
-            .lowercase(Locale.ROOT)
+        val withoutAccents = stripAccentsLower(rawText)
 
         // Replace non-alphanumeric punctuation with spaces (including * from gateways like GOPAY *...)
-        val alphanumeric = withoutAccents.replace(Regex("""[^a-z0-9\s]"""), " ")
+        val alphanumeric = NON_ALNUM_SPACE_REGEX.replace(withoutAccents, " ")
 
         // Remove common Czech city names, corporate suffixes, and terminal noise
-        val cleanTokens = alphanumeric.split(Regex("""\s+""")).filter { token ->
-            token !in CITY_NOISE && token !in CORPORATE_SUFFIXES && token.length > 1 &&
-            !token.matches(Regex("""(praha|brno|ostrava|plzen|olomouc|liberec)\d+"""))
+        val cleanTokens = MULTI_SPACE_REGEX.split(alphanumeric.trim()).filter { token ->
+            token.length > 1 &&
+                token !in CITY_NOISE &&
+                token !in CORPORATE_SUFFIXES &&
+                !CITY_DISTRICT_REGEX.matches(token)
         }
 
         return cleanTokens.joinToString(" ").trim()
@@ -35,14 +52,12 @@ object CzechMerchantCatalog {
 
     fun normalizeSimple(rawText: String): String {
         if (rawText.isBlank()) return ""
-        val withoutAccents = Normalizer.normalize(rawText, Normalizer.Form.NFD)
-            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
-            .lowercase(Locale.ROOT)
-        return withoutAccents.replace(Regex("""[^a-z0-9\s]"""), " ")
-            .split(Regex("""\s+"""))
+        val withoutAccents = stripAccentsLower(rawText)
+        return NON_ALNUM_SPACE_REGEX.replace(withoutAccents, " ")
+            .trim()
+            .let { MULTI_SPACE_REGEX.split(it) }
             .filter { it.isNotBlank() }
             .joinToString(" ")
-            .trim()
     }
 
     private val CITY_NOISE = setOf(
@@ -67,6 +82,56 @@ object CzechMerchantCatalog {
      * @param userOverrides User-defined overrides mapping merchant keywords/patterns to categories.
      * @return The identified BankTransactionType, or null if no catalog match is found.
      */
+    private fun findUserOverrideMatch(
+        norm: String,
+        simpleNorm: String,
+        normTokenSet: Set<String>,
+        simpleTokenSet: Set<String>,
+        padded: String,
+        simplePadded: String,
+        userOverrides: Map<String, BankTransactionType>
+    ): BankTransactionType? {
+        if (userOverrides.isEmpty()) return null
+        val sortedOverrides = userOverrides.entries.sortedByDescending { it.key.trim().length }
+        for ((pattern, category) in sortedOverrides) {
+            val normPattern = normalize(pattern)
+            val simplePattern = normalizeSimple(pattern)
+            if (normPattern.isBlank() && simplePattern.isBlank()) continue
+            val tokenMatch = (normPattern.length >= 2 && normTokenSet.contains(normPattern)) ||
+                (simplePattern.length >= 2 && simpleTokenSet.contains(simplePattern))
+            val phraseMatch = (normPattern.contains(' ') && padded.contains(" $normPattern ")) ||
+                (simplePattern.contains(' ') && simplePadded.contains(" $simplePattern "))
+            val normSubstringMatch = normPattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && norm.contains(normPattern)
+            val simpleSubstringMatch = simplePattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && simpleNorm.contains(simplePattern)
+            if (tokenMatch || phraseMatch || normSubstringMatch || simpleSubstringMatch) {
+                return category
+            }
+        }
+        return null
+    }
+
+    fun matchUserOverrideOnly(
+        rawDescription: String,
+        userOverrides: Map<String, BankTransactionType>
+    ): BankTransactionType? {
+        if (userOverrides.isEmpty()) return null
+        val norm = normalize(rawDescription)
+        val simpleNorm = normalizeSimple(rawDescription)
+        if (norm.isBlank() && simpleNorm.isBlank()) return null
+
+        val normTokenSet = norm.split(" ").asSequence().filter { it.isNotBlank() }.toHashSet()
+        val simpleTokenSet = simpleNorm.split(" ").asSequence().filter { it.isNotBlank() }.toHashSet()
+        return findUserOverrideMatch(
+            norm = norm,
+            simpleNorm = simpleNorm,
+            normTokenSet = normTokenSet,
+            simpleTokenSet = simpleTokenSet,
+            padded = " $norm ",
+            simplePadded = " $simpleNorm ",
+            userOverrides = userOverrides
+        )
+    }
+
     fun matchCategory(
         rawDescription: String,
         userOverrides: Map<String, BankTransactionType> = emptyMap()
@@ -77,29 +142,35 @@ object CzechMerchantCatalog {
 
         val normTokens = norm.split(" ").filter { it.isNotBlank() }
         val simpleTokens = simpleNorm.split(" ").filter { it.isNotBlank() }
+        val normTokenSet = normTokens.toHashSet()
+        val simpleTokenSet = simpleTokens.toHashSet()
+        val padded = " $norm "
+        val simplePadded = " $simpleNorm "
 
-        // 1. Check user custom overrides first (allow 2-letter tokens like "o2", "dm", "cd", "dp"
-        //    when matched as isolated whole words, and 3+ char patterns via substring).
-        for ((pattern, category) in userOverrides) {
-            val normPattern = normalize(pattern)
-            val simplePattern = normalizeSimple(pattern)
-            val tokenMatch = (normPattern.length >= 2 && normTokens.contains(normPattern)) ||
-                    (simplePattern.length >= 2 && simpleTokens.contains(simplePattern))
-            val normSubstringMatch = normPattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && norm.contains(normPattern)
-            val simpleSubstringMatch = simplePattern.length >= MIN_OVERRIDE_PATTERN_LENGTH && simpleNorm.contains(simplePattern)
-            if (tokenMatch || normSubstringMatch || simpleSubstringMatch) {
-                return category
-            }
-        }
+        // 1. Check user custom overrides longest-first (allow 2-letter isolated tokens like "o2", "dm", "cd",
+        //    multi-word 2+ char patterns as phrase boundaries, and 3+ char patterns via substring).
+        findUserOverrideMatch(
+            norm = norm,
+            simpleNorm = simpleNorm,
+            normTokenSet = normTokenSet,
+            simpleTokenSet = simpleTokenSet,
+            padded = padded,
+            simplePadded = simplePadded,
+            userOverrides = userOverrides
+        )?.let { return it }
 
-        // 2. Check built-in merchant rules
+        // 2. Check precompiled built-in merchant rules, favoring more specific multi-word matches over single fallback words
+        var bestCategory: BankTransactionType? = null
+        var bestScore = 0
         for (rule in CATALOG_RULES) {
-            if (rule.matches(norm, simpleNorm)) {
-                return rule.category
+            val score = rule.bestMatchScore(normTokenSet, simpleTokenSet, padded, simplePadded)
+            if (score > bestScore) {
+                bestScore = score
+                bestCategory = rule.category
             }
         }
 
-        return null
+        return bestCategory
     }
 
     /**
@@ -107,34 +178,105 @@ object CzechMerchantCatalog {
      */
     fun suggestMerchantSearchQuery(rawText: String): String {
         val clean = BankStatementImporter.cleanPaymentDescription(rawText)
-        var result = clean.replace(Regex("""\b(od|cz|com|s\.r\.o\.|a\.s\.|z\.s\.|o\.p\.s\.|(?:brno|praha|ostrava|plzen|olomouc|liberec)\s*\d*)\b""", RegexOption.IGNORE_CASE), " ")
+        var result = CORP_AND_CITY_SUGGEST_REGEX.replace(clean, " ")
         if (result.any { it.isLetter() }) {
-            result = result.replace(Regex("""\b\d{3,6}\b"""), " ")
-            result = result.replace(Regex("""\b\d{1,2}\b$"""), " ")
+            result = MID_NUMBERS_REGEX.replace(result, " ")
+            result = TRAILING_NUM_REGEX.replace(result, " ")
         }
-        return result.replace(Regex("""\s+"""), " ").trim()
+        return MULTI_SPACE_REGEX.replace(result, " ").trim()
     }
 
-    private data class MerchantRule(
+    private fun normalizeKeepingWildcards(raw: String): String {
+        val withoutAccents = stripAccentsLower(raw)
+        return NON_ALNUM_SPACE_WILDCARD_REGEX.replace(withoutAccents, " ")
+            .trim()
+            .let { MULTI_SPACE_REGEX.split(it) }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private class MerchantRule(
         val category: BankTransactionType,
-        val keywords: List<String>
+        keywords: List<String>
     ) {
-        fun matches(normalizedText: String, simpleText: String = normalizedText): Boolean {
-            val tokens = normalizedText.split(" ").filter { it.isNotBlank() }
-            val simpleTokens = simpleText.split(" ").filter { it.isNotBlank() }
-            val padded = " $normalizedText "
-            val simplePadded = " $simpleText "
-            return keywords.any { kw ->
-                val normKw = normalizeSimple(kw)
-                if (kw.endsWith("*")) {
-                    val prefix = normKw.removeSuffix("*")
-                    tokens.any { it.startsWith(prefix) } || simpleTokens.any { it.startsWith(prefix) }
-                } else if (normKw.contains(" ")) {
-                    padded.contains(" $normKw ") || simplePadded.contains(" $normKw ")
+        private val singleTokens: Set<String>
+        private val singleWildcards: List<String>
+        private val multiWordPhrases: List<Pair<String, Int>>
+        private val multiWildcardRegexes: List<Pair<Regex, Int>>
+
+        init {
+            val exactSingle = hashSetOf<String>()
+            val prefixSingle = mutableListOf<String>()
+            val exactMulti = mutableListOf<Pair<String, Int>>()
+            val regexMulti = mutableListOf<Pair<Regex, Int>>()
+
+            for (rawKw in keywords) {
+                if (rawKw.contains('*')) {
+                    val wcNorm = normalizeKeepingWildcards(rawKw)
+                    if (wcNorm.isBlank()) continue
+                    if (!wcNorm.contains(' ')) {
+                        val prefix = wcNorm.replace("*", "")
+                        if (prefix.isNotEmpty()) prefixSingle.add(prefix)
+                    } else {
+                        val parts = wcNorm.split(' ').filter { it.isNotBlank() }
+                        val regexBody = parts.joinToString("""\s+""") { part ->
+                            if (part.contains('*')) {
+                                part.split('*').joinToString("""[^\s]*""") { seg -> Regex.escape(seg) }
+                            } else {
+                                Regex.escape(part)
+                            }
+                        }
+                        regexMulti.add(Regex("""(?:^|\s)$regexBody(?=\s|$)""") to (parts.size * 10 - 2))
+                    }
                 } else {
-                    tokens.contains(normKw) || simpleTokens.contains(normKw)
+                    val normKw = normalizeSimple(rawKw)
+                    if (normKw.isBlank()) continue
+                    if (normKw.contains(' ')) {
+                        val wordCount = normKw.count { it == ' ' } + 1
+                        exactMulti.add(" $normKw " to (wordCount * 10))
+                    } else {
+                        exactSingle.add(normKw)
+                    }
                 }
             }
+
+            singleTokens = exactSingle
+            singleWildcards = prefixSingle
+            multiWordPhrases = exactMulti
+            multiWildcardRegexes = regexMulti
+        }
+
+        fun bestMatchScore(
+            normTokens: Set<String>,
+            simpleTokens: Set<String>,
+            padded: String,
+            simplePadded: String
+        ): Int {
+            var best = 0
+            for ((phrase, score) in multiWordPhrases) {
+                if (score > best && (padded.contains(phrase) || simplePadded.contains(phrase))) {
+                    best = score
+                }
+            }
+            for ((regex, score) in multiWildcardRegexes) {
+                if (score > best && (regex.containsMatchIn(padded) || regex.containsMatchIn(simplePadded))) {
+                    best = score
+                }
+            }
+            if (best < 10) {
+                if (normTokens.any { it in singleTokens } || simpleTokens.any { it in singleTokens }) {
+                    best = 10
+                }
+            }
+            if (best < 8) {
+                for (prefix in singleWildcards) {
+                    if (normTokens.any { it.startsWith(prefix) } || simpleTokens.any { it.startsWith(prefix) }) {
+                        best = 8
+                        break
+                    }
+                }
+            }
+            return best
         }
     }
 

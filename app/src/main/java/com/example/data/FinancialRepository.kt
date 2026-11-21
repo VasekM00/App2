@@ -23,7 +23,25 @@ class FinancialRepository(
 
     suspend fun saveSettings(settings: SettingsEntity) = withContext(Dispatchers.IO) {
         val clean = com.example.util.BackupManager.sanitizeSettings(settings, SettingsEntity.freshDefaults())
-        settingsDao.saveSettings(clean)
+        database.withTransaction {
+            settingsDao.saveSettings(clean)
+        }
+    }
+
+    suspend fun updateSettingsTransformAndSyncLedger(
+        currentYearMonth: String,
+        transform: (SettingsEntity) -> SettingsEntity
+    ): SettingsEntity = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val current = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
+            val cleanSettings = com.example.util.BackupManager.sanitizeSettings(
+                transform(current),
+                SettingsEntity.freshDefaults()
+            )
+            settingsDao.saveSettings(cleanSettings)
+            syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
+            cleanSettings
+        }
     }
 
     suspend fun updateSettingsAndSyncLedger(
@@ -33,28 +51,120 @@ class FinancialRepository(
         val cleanSettings = com.example.util.BackupManager.sanitizeSettings(newSettings, SettingsEntity.freshDefaults())
         database.withTransaction {
             settingsDao.saveSettings(cleanSettings)
-            val currentEntry = ledgerDao.getEntryByYearMonth(currentYearMonth)
-            if (currentEntry != null) {
-                if (currentEntry.notes.contains("Imported")) {
-                    return@withTransaction
+            syncCurrentManualLedgerFromSettingsLocked(cleanSettings, currentYearMonth)
+        }
+    }
+
+    private suspend fun syncCurrentManualLedgerFromSettingsLocked(
+        cleanSettings: SettingsEntity,
+        currentYearMonth: String
+    ) {
+        val currentEntry = ledgerDao.getEntryByYearMonth(currentYearMonth) ?: return
+        if (currentEntry.notes.startsWith("Imported from", ignoreCase = true) ||
+            currentEntry.notes.startsWith("Direct Bank Statement", ignoreCase = true) ||
+            importedTransactionDao.getTransactionsForMonthDirect(currentYearMonth).isNotEmpty()
+        ) {
+            return
+        }
+        val currentYm = runCatching { java.time.YearMonth.parse(currentYearMonth) }.getOrNull()
+        val returnYm = java.time.YearMonth.of(
+            cleanSettings.eReturnYear,
+            cleanSettings.eReturnMonth.coerceIn(1, 12)
+        )
+        val isBeforeReturn = currentYm?.isBefore(returnYm)
+            ?: (cleanSettings.baseYear < cleanSettings.eReturnYear)
+        val updatedEleonora = if (cleanSettings.isSingleHousehold) {
+            0.0
+        } else if (isBeforeReturn) {
+            // Lecturing is added separately by FinancialEngine.householdIncome; store allowance only to avoid double counting.
+            cleanSettings.eParentalAllowanceMonthly
+        } else {
+            cleanSettings.eStartingSalary
+        }
+        val updatedLiquid = cleanSettings.liquidPortfolioCurrent +
+            if (!cleanSettings.isSingleHousehold) cleanSettings.eLiquidPortfolioCurrent else 0.0
+        val updatedPension = cleanSettings.dpsBalanceCurrent + cleanSettings.dipBalanceCurrent +
+            if (!cleanSettings.isSingleHousehold) (cleanSettings.eDpsBalanceCurrent + cleanSettings.eDipBalanceCurrent) else 0.0
+        ledgerDao.updateEntry(
+            currentEntry.copy(
+                incVaclav = cleanSettings.vSalary,
+                incEleonora = updatedEleonora,
+                expRent = cleanSettings.rentMonthly,
+                portfolioBalanceAtMonthEnd = updatedLiquid,
+                pensionBalanceAtMonthEnd = updatedPension,
+                emergencyReserveAtMonthEnd = cleanSettings.emergencyReserveCurrent
+            )
+        )
+    }
+
+    suspend fun syncManualLedgerToSettingsTransaction(
+        yearMonth: String,
+        currentYearMonth: String,
+        incVaclav: Double?,
+        incEleonora: Double?,
+        expRent: Double?,
+        portfolioBalance: Double?,
+        pensionBalance: Double?,
+        emergencyReserve: Double?
+    ) = withContext(Dispatchers.IO) {
+        if (yearMonth == currentYearMonth) {
+            database.withTransaction {
+                val cur = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
+                var updated = cur
+                if (incVaclav != null && incVaclav.isFinite() && incVaclav >= 0.0 && cur.vSalary != incVaclav) {
+                    updated = updated.copy(vSalary = incVaclav)
                 }
-                val updatedEleonora = if (cleanSettings.baseYear < cleanSettings.eReturnYear) {
-                    cleanSettings.eParentalAllowanceMonthly
-                } else {
-                    cleanSettings.eStartingSalary
-                }
-                val updatedLiquid = cleanSettings.liquidPortfolioCurrent + if (!cleanSettings.isSingleHousehold) cleanSettings.eLiquidPortfolioCurrent else 0.0
-                val updatedPension = cleanSettings.dpsBalanceCurrent + cleanSettings.dipBalanceCurrent + if (!cleanSettings.isSingleHousehold) (cleanSettings.eDpsBalanceCurrent + cleanSettings.eDipBalanceCurrent) else 0.0
-                ledgerDao.updateEntry(
-                    currentEntry.copy(
-                        incVaclav = cleanSettings.vSalary,
-                        incEleonora = if (updatedEleonora > 0.0) updatedEleonora else currentEntry.incEleonora,
-                        expRent = if (cleanSettings.rentMonthly > 0.0) cleanSettings.rentMonthly else currentEntry.expRent,
-                        portfolioBalanceAtMonthEnd = if (updatedLiquid > 0.0) updatedLiquid else currentEntry.portfolioBalanceAtMonthEnd,
-                        pensionBalanceAtMonthEnd = if (updatedPension > 0.0) updatedPension else currentEntry.pensionBalanceAtMonthEnd,
-                        emergencyReserveAtMonthEnd = if (cleanSettings.emergencyReserveCurrent > 0.0) cleanSettings.emergencyReserveCurrent else currentEntry.emergencyReserveAtMonthEnd
+                if (!cur.isSingleHousehold && incEleonora != null && incEleonora.isFinite() && incEleonora >= 0.0) {
+                    val entryYm = runCatching { java.time.YearMonth.parse(yearMonth) }.getOrNull()
+                    val returnYm = java.time.YearMonth.of(
+                        cur.eReturnYear,
+                        cur.eReturnMonth.coerceIn(1, 12)
                     )
-                )
+                    val isBeforeReturn = entryYm?.isBefore(returnYm) ?: (cur.baseYear < cur.eReturnYear)
+                    if (isBeforeReturn) {
+                        if (cur.eParentalAllowanceMonthly != incEleonora) {
+                            updated = updated.copy(eParentalAllowanceMonthly = incEleonora)
+                        }
+                    } else {
+                        if (cur.eStartingSalary != incEleonora) {
+                            updated = updated.copy(eStartingSalary = incEleonora)
+                        }
+                    }
+                }
+                if (expRent != null && expRent.isFinite() && expRent >= 0.0 && cur.rentMonthly != expRent) {
+                    updated = updated.copy(rentMonthly = expRent)
+                }
+                // Ledger balances are HOUSEHOLD totals (see updateSettingsAndSyncLedger, which writes
+                // primary + spouse). Primary-only settings fields must receive total minus spouse share.
+                val includeSpouse = !cur.isSingleHousehold
+                val spouseLiquid = if (includeSpouse) cur.eLiquidPortfolioCurrent else 0.0
+                val spousePension = if (includeSpouse) cur.eDpsBalanceCurrent + cur.eDipBalanceCurrent else 0.0
+                if (portfolioBalance != null && portfolioBalance.isFinite() && portfolioBalance >= 0.0) {
+                    val primaryLiquid = (portfolioBalance - spouseLiquid).coerceAtLeast(0.0)
+                    if (cur.liquidPortfolioCurrent != primaryLiquid) {
+                        updated = updated.copy(liquidPortfolioCurrent = primaryLiquid)
+                    }
+                }
+                if (pensionBalance != null && pensionBalance.isFinite() && pensionBalance >= 0.0) {
+                    val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
+                    val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
+                    if (curPrimary != primaryPension) {
+                        // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
+                        val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
+                        val newDps = primaryPension * dpsShare
+                        updated = updated.copy(
+                            dpsBalanceCurrent = newDps,
+                            dipBalanceCurrent = primaryPension - newDps
+                        )
+                    }
+                }
+                if (emergencyReserve != null && emergencyReserve.isFinite() && emergencyReserve >= 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
+                    updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
+                }
+                val clean = com.example.util.BackupManager.sanitizeSettings(updated, cur)
+                if (clean != cur) {
+                    settingsDao.saveSettings(clean)
+                }
             }
         }
     }
@@ -68,62 +178,17 @@ class FinancialRepository(
         portfolioBalance: Double,
         pensionBalance: Double,
         emergencyReserve: Double
-    ) = withContext(Dispatchers.IO) {
-        if (yearMonth == currentYearMonth) {
-            database.withTransaction {
-                val cur = settingsDao.getSettingsDirect() ?: SettingsEntity.freshDefaults()
-                var updated = cur
-                if (incVaclav > 0.0 && cur.vSalary != incVaclav) {
-                    updated = updated.copy(vSalary = incVaclav)
-                }
-                if (incEleonora > 0.0) {
-                    if (cur.baseYear < cur.eReturnYear) {
-                        val candidateAllowance = (incEleonora - cur.eLecturingMonthly).coerceAtLeast(0.0)
-                        val allowanceToSet = if (candidateAllowance > 0.0) candidateAllowance else incEleonora
-                        if (cur.eParentalAllowanceMonthly != allowanceToSet) {
-                            updated = updated.copy(eParentalAllowanceMonthly = allowanceToSet)
-                        }
-                    } else {
-                        if (cur.eStartingSalary != incEleonora) {
-                            updated = updated.copy(eStartingSalary = incEleonora)
-                        }
-                    }
-                }
-                if (expRent > 0.0 && cur.rentMonthly != expRent) {
-                    updated = updated.copy(rentMonthly = expRent)
-                }
-                // Ledger balances are HOUSEHOLD totals (see updateSettingsAndSyncLedger, which writes
-                // primary + spouse). Primary-only settings fields must receive total minus spouse share.
-                val includeSpouse = !cur.isSingleHousehold
-                val spouseLiquid = if (includeSpouse) cur.eLiquidPortfolioCurrent else 0.0
-                val spousePension = if (includeSpouse) cur.eDpsBalanceCurrent + cur.eDipBalanceCurrent else 0.0
-                if (portfolioBalance > 0.0) {
-                    val primaryLiquid = (portfolioBalance - spouseLiquid).coerceAtLeast(0.0)
-                    if (cur.liquidPortfolioCurrent != primaryLiquid) {
-                        updated = updated.copy(liquidPortfolioCurrent = primaryLiquid)
-                    }
-                }
-                if (pensionBalance > 0.0) {
-                    val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
-                    val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
-                    if (curPrimary != primaryPension) {
-                        // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
-                        val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
-                        val newDps = primaryPension * dpsShare
-                        updated = updated.copy(
-                            dpsBalanceCurrent = newDps,
-                            dipBalanceCurrent = primaryPension - newDps
-                        )
-                    }
-                }
-                if (emergencyReserve > 0.0 && cur.emergencyReserveCurrent != emergencyReserve) {
-                    updated = updated.copy(emergencyReserveCurrent = emergencyReserve)
-                }
-                if (updated != cur) {
-                    settingsDao.saveSettings(updated)
-                }
-            }
-        }
+    ) {
+        syncManualLedgerToSettingsTransaction(
+            yearMonth = yearMonth,
+            currentYearMonth = currentYearMonth,
+            incVaclav = incVaclav.takeIf { it.isFinite() && it > 0.0 },
+            incEleonora = incEleonora.takeIf { it.isFinite() && it > 0.0 },
+            expRent = expRent.takeIf { it.isFinite() && it > 0.0 },
+            portfolioBalance = portfolioBalance.takeIf { it.isFinite() && it > 0.0 },
+            pensionBalance = pensionBalance.takeIf { it.isFinite() && it > 0.0 },
+            emergencyReserve = emergencyReserve.takeIf { it.isFinite() && it > 0.0 }
+        )
     }
 
     /**
@@ -147,26 +212,27 @@ class FinancialRepository(
                     primaryAge = (updated.primaryAge + delta).coerceIn(15, 100)
                 )
             }
-            if (updated != current) {
-                settingsDao.saveSettings(updated)
+            val clean = com.example.util.BackupManager.sanitizeSettings(updated, current)
+            if (clean != current) {
+                settingsDao.saveSettings(clean)
             }
         }
     }
 
     suspend fun addLedgerEntry(entry: LedgerEntryEntity) = withContext(Dispatchers.IO) {
-        ledgerDao.insertEntry(entry)
+        ledgerDao.insertEntry(sanitizeLedgerEntry(entry))
     }
 
     suspend fun updateLedgerEntry(entry: LedgerEntryEntity) = withContext(Dispatchers.IO) {
-        ledgerDao.updateEntry(entry)
+        ledgerDao.updateEntry(sanitizeLedgerEntry(entry))
     }
 
     suspend fun updateLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
-        ledgerDao.updateEntries(entries)
+        ledgerDao.updateEntries(entries.map(::sanitizeLedgerEntry))
     }
 
     suspend fun addLedgerEntries(entries: List<LedgerEntryEntity>) = withContext(Dispatchers.IO) {
-        ledgerDao.insertEntries(entries)
+        ledgerDao.insertEntries(entries.map(::sanitizeLedgerEntry))
     }
 
     suspend fun existingYearMonths(): Set<String> = withContext(Dispatchers.IO) {
@@ -187,17 +253,17 @@ class FinancialRepository(
             ledgerDao.deleteEntry(id)
             if (entry != null) {
                 importedTransactionDao.deleteTransactionsForMonth(entry.yearMonth)
+                importedTransactionDao.clearStaleMatchedTransactionLinks()
             }
             entry?.yearMonth
         }
     }
 
     suspend fun deleteImportedTransactionsForMonth(yearMonth: String) = withContext(Dispatchers.IO) {
-        importedTransactionDao.deleteTransactionsForMonth(yearMonth)
-    }
-
-    suspend fun cleanupOrphanedImportedTransactions(): Int = withContext(Dispatchers.IO) {
-        importedTransactionDao.deleteOrphanedTransactions()
+        database.withTransaction {
+            importedTransactionDao.deleteTransactionsForMonth(yearMonth)
+            importedTransactionDao.clearStaleMatchedTransactionLinks()
+        }
     }
 
     suspend fun setActionState(year: Int, actionId: String, isDone: Boolean) = withContext(Dispatchers.IO) {
@@ -217,24 +283,20 @@ class FinancialRepository(
         }
     }
 
-    fun getImportedTransactions(yearMonth: String): Flow<List<ImportedBankTransactionEntity>> {
-        return importedTransactionDao.getTransactionsForMonth(yearMonth)
-    }
-
     suspend fun getImportedTransactionsDirect(yearMonth: String): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
         importedTransactionDao.getTransactionsForMonthDirect(yearMonth)
     }
 
     suspend fun saveImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
-        importedTransactionDao.insertTransactions(transactions)
+        importedTransactionDao.insertTransactions(transactions.map(::sanitizeTransaction))
     }
 
     suspend fun updateImportedTransactions(transactions: List<ImportedBankTransactionEntity>) = withContext(Dispatchers.IO) {
-        importedTransactionDao.updateTransactions(transactions)
+        importedTransactionDao.updateTransactions(transactions.map(::sanitizeTransaction))
     }
 
     suspend fun updateImportedTransaction(transaction: ImportedBankTransactionEntity) = withContext(Dispatchers.IO) {
-        importedTransactionDao.updateTransaction(transaction)
+        importedTransactionDao.updateTransaction(sanitizeTransaction(transaction))
     }
 
     suspend fun getImportedTransactionById(id: Long): ImportedBankTransactionEntity? = withContext(Dispatchers.IO) {
@@ -242,7 +304,10 @@ class FinancialRepository(
     }
 
     suspend fun deleteImportedTransactionsForBankAndMonth(yearMonth: String, bankName: String) = withContext(Dispatchers.IO) {
-        importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
+        database.withTransaction {
+            importedTransactionDao.deleteTransactionsForBankAndMonth(yearMonth, bankName)
+            importedTransactionDao.clearStaleMatchedTransactionLinks()
+        }
     }
 
     fun getAllImportedTransactions(): kotlinx.coroutines.flow.Flow<List<ImportedBankTransactionEntity>> {
@@ -266,9 +331,10 @@ class FinancialRepository(
         // bank/month would otherwise both observe the same existing set and double-insert.
         database.withTransaction {
             val existing = importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+            val cleanIncoming = newTransactions.map(::sanitizeTransaction)
             if (existing.isEmpty()) {
-                importedTransactionDao.insertTransactions(newTransactions)
-                return@withTransaction newTransactions
+                importedTransactionDao.insertTransactions(cleanIncoming)
+                return@withTransaction cleanIncoming
             }
 
             val existingCounts = mutableMapOf<String, Int>()
@@ -281,7 +347,7 @@ class FinancialRepository(
 
             val incomingCounts = mutableMapOf<String, Int>()
             val toInsert = mutableListOf<ImportedBankTransactionEntity>()
-            for (tx in newTransactions) {
+            for (tx in cleanIncoming) {
                 val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
                     tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
                 )
@@ -318,21 +384,64 @@ class FinancialRepository(
         actionStates: List<ActionStateEntity>,
         transactions: List<ImportedBankTransactionEntity>
     ) = withContext(Dispatchers.IO) {
+        val cleanSettings = com.example.util.BackupManager.sanitizeSettings(settings, SettingsEntity.freshDefaults())
+        val cleanLedger = ledgerEntries
+            .map(::sanitizeLedgerEntry)
+            .filter { it.yearMonth.isNotBlank() }
+            .associateBy { it.yearMonth }
+            .values
+            .toList()
+        val cleanActions = actionStates
+            .filter { it.actionKey.isNotBlank() }
+            .associateBy { it.actionKey }
+            .values
+            .toList()
+        val cleanTransactions = transactions
+            .map(::sanitizeTransaction)
+            .filter { it.yearMonth.isNotBlank() }
+
         database.withTransaction {
             ledgerDao.deleteAllEntries()
             actionStateDao.deleteAllActionStates()
             importedTransactionDao.deleteAllTransactions()
-            settingsDao.saveSettings(settings)
-            if (ledgerEntries.isNotEmpty()) {
-                ledgerDao.insertEntries(ledgerEntries)
+            settingsDao.saveSettings(cleanSettings)
+            if (cleanLedger.isNotEmpty()) {
+                ledgerDao.insertEntries(cleanLedger)
             }
-            if (actionStates.isNotEmpty()) {
-                actionStateDao.saveActionStates(actionStates)
+            if (cleanActions.isNotEmpty()) {
+                actionStateDao.saveActionStates(cleanActions)
             }
-            if (transactions.isNotEmpty()) {
-                importedTransactionDao.insertTransactions(transactions)
+            if (cleanTransactions.isNotEmpty()) {
+                importedTransactionDao.insertTransactions(cleanTransactions)
+                importedTransactionDao.clearStaleMatchedTransactionLinks()
             }
         }
     }
+
+    private fun finiteOrZero(v: Double): Double = if (v.isFinite()) v else 0.0
+
+    private fun nonNegativeFiniteOrZero(v: Double): Double = if (v.isFinite() && v > 0.0) v else 0.0
+
+    private fun sanitizeLedgerEntry(entry: LedgerEntryEntity): LedgerEntryEntity = entry.copy(
+        yearMonth = entry.yearMonth.trim(),
+        incVaclav = nonNegativeFiniteOrZero(entry.incVaclav),
+        incEleonora = nonNegativeFiniteOrZero(entry.incEleonora),
+        incUnforeseen = nonNegativeFiniteOrZero(entry.incUnforeseen),
+        expRent = nonNegativeFiniteOrZero(entry.expRent),
+        expGroceries = nonNegativeFiniteOrZero(entry.expGroceries),
+        expOther = nonNegativeFiniteOrZero(entry.expOther),
+        portfolioBalanceAtMonthEnd = nonNegativeFiniteOrZero(entry.portfolioBalanceAtMonthEnd),
+        pensionBalanceAtMonthEnd = nonNegativeFiniteOrZero(entry.pensionBalanceAtMonthEnd),
+        emergencyReserveAtMonthEnd = nonNegativeFiniteOrZero(entry.emergencyReserveAtMonthEnd)
+    )
+
+    private fun sanitizeTransaction(tx: ImportedBankTransactionEntity): ImportedBankTransactionEntity = tx.copy(
+        yearMonth = tx.yearMonth.trim(),
+        bankName = tx.bankName.trim().ifBlank { "GENERIC" },
+        date = tx.date.trim(),
+        amount = finiteOrZero(tx.amount),
+        category = tx.category.trim().ifBlank { "LIFESTYLE_LIVING" },
+        matchedTxId = tx.matchedTxId?.takeIf { it > 0L }
+    )
 }
 

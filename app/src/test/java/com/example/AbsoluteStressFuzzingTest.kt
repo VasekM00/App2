@@ -143,7 +143,7 @@ class AbsoluteStressFuzzingTest {
             eParentalAllowanceMonthly = 0.0,
             eLecturingMonthly = 0.0,
             eOtherInflowsMonthly = 0.0,
-            familyGiftMonthly = 0.0,
+            vGiftsMonthly = 0.0,
             lumpSumAmount = 0.0,
             liquidPortfolioCurrent = 0.0,
             eLiquidPortfolioCurrent = 0.0,
@@ -247,7 +247,6 @@ class AbsoluteStressFuzzingTest {
 
         val state = FinancialEngine.calculate(young, runMonteCarlo = false)
         assertTrue(state.fireBaseTargetToday > 0.0)
-        assertEquals(47, FinancialEngine.statePensionBridgeYears(18, young))
     }
 
     @Test
@@ -262,7 +261,6 @@ class AbsoluteStressFuzzingTest {
         )
 
         val state = FinancialEngine.calculate(senior, runMonteCarlo = false)
-        assertEquals(0, FinancialEngine.statePensionBridgeYears(75, senior))
         assertEquals(0.0, state.fireBaseTargetToday, 0.001)
     }
 

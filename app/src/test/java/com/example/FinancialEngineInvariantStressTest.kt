@@ -123,7 +123,10 @@ class FinancialEngineInvariantStressTest {
             employerRetirementMonthly = 0.0,
             eDpsBalanceCurrent = 0.0, eDipBalanceCurrent = 0.0,
             eDpsOwnContributionMonthly = 0.0, eDipContributionMonthly = 0.0,
-            eEmployerRetirementMonthly = 0.0
+            eEmployerRetirementMonthly = 0.0,
+            includeSpouseCredit = false,
+            child1Enabled = false,
+            child2Enabled = false
         )
         val trajectory = FinancialEngine.buildLiquidPortfolio(settings, dualIncome = true)
         for (point in trajectory) {
@@ -141,9 +144,16 @@ class FinancialEngineInvariantStressTest {
 
     @Test
     fun test1_11_ZeroHorizon() {
-        val settings = SettingsEntity(primaryAge = 67, vStatePensionAge = 67, eStatePensionAge = 67)
-        val bridgeYears = FinancialEngine.statePensionBridgeYears(settings.primaryAge, settings)
-        assertEquals(0, bridgeYears)
+        val settings = SettingsEntity(
+            primaryAge = 67,
+            vStatePensionAge = 67,
+            eStatePensionAge = 67,
+            lifestyleCostAtFireMonthly = 30000.0,
+            vStatePensionMonthly = 20000.0,
+            eStatePensionMonthly = 15000.0
+        )
+        val target = FinancialEngine.fireTargetBase(settings)
+        assertEquals(0.0, target, 0.001)
     }
 
     @Test

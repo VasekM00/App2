@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,8 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -48,10 +51,13 @@ import com.example.ui.components.statement.StatementSummaryBar
 import com.example.ui.components.statement.StatementTransactionRowItem
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.BankType
 import com.example.util.StatementParseSummary
+
+private val YEAR_MONTH_REGEX = Regex("""\d{4}-\d{2}""")
 
 @Composable
 fun StatementImportReviewDialog(
@@ -70,27 +76,27 @@ fun StatementImportReviewDialog(
         BankType.MONETA -> BrandTeal
         BankType.CSOB -> BrandGold
         BankType.MBANK -> Color(0xFFE11D48)
-        BankType.CESKA_SPORITELNA -> Color(0xFF00539B)
-        BankType.KOMERCNI_BANKA -> Color(0xFFB0231E)
-        BankType.FIO -> Color(0xFF1E5AA8)
-        BankType.RAIFFEISENBANK -> Color(0xFFFFC400)
+        BankType.CESKA_SPORITELNA -> Color(0xFF2563EB)
+        BankType.KOMERCNI_BANKA -> Color(0xFFDC2626)
+        BankType.FIO -> Color(0xFF3B82F6)
+        BankType.RAIFFEISENBANK -> Color(0xFFD97706)
         BankType.AIR_BANK -> Color(0xFF00A0E3)
         BankType.UNICREDIT -> Color(0xFFE4002B)
-        BankType.CREDITAS -> Color(0xFF00695C)
-        BankType.MAX_BANKA -> Color(0xFF6A1B9A)
+        BankType.CREDITAS -> Color(0xFF0D9488)
+        BankType.MAX_BANKA -> Color(0xFF9333EA)
         BankType.PARTNERS -> Color(0xFF00838F)
-        BankType.PPF -> Color(0xFF37474F)
-        BankType.JT -> Color(0xFF8D6E63)
+        BankType.PPF -> Color(0xFF0284C7)
+        BankType.JT -> Color(0xFFA1887F)
         BankType.EQUA -> Color(0xFFEF6C00)
         BankType.ING -> Color(0xFFFF6200)
-        BankType.OBERBANK -> Color(0xFF00695C)
-        BankType.REVOLUT -> Color(0xFF191C1F)
+        BankType.OBERBANK -> Color(0xFF0D9488)
+        BankType.REVOLUT -> Color(0xFF3B82F6)
         BankType.WISE -> Color(0xFF7BB661)
         BankType.GENERIC -> MaterialTheme.colorScheme.primary
     }
 
     val distinctMonths = remember(summary.transactions) {
-        summary.transactions.map { it.date.take(7) }.filter { it.matches(Regex("""\d{4}-\d{2}""")) }.distinct().sorted()
+        summary.transactions.map { it.date.take(7) }.filter { it.matches(YEAR_MONTH_REGEX) }.distinct().sorted()
     }
     var selectedMonthFilter by remember { mutableStateOf<String?>(null) }
 
@@ -192,6 +198,8 @@ fun StatementImportReviewDialog(
         }
     }
 
+    val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.90f).dp
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -202,7 +210,8 @@ fun StatementImportReviewDialog(
             border = BorderStroke(1.dp, bankColor.copy(alpha = 0.4f)),
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.92f)
+                .heightIn(min = 320.dp, max = maxDialogHeight)
+                .fillMaxHeight(0.90f)
                 .imePadding()
                 .testTag("statement_import_review_dialog")
         ) {
@@ -271,7 +280,7 @@ fun StatementImportReviewDialog(
                         ) {
                             items(
                                 items = filteredTransactions,
-                                key = { (origIdx, tx) -> "${origIdx}_${tx.date}_${tx.amount}_${tx.category.name}_${tx.isExcluded}" }
+                                key = { (origIdx, _) -> origIdx }
                             ) { (origIndex, tx) ->
                                 StatementTransactionRowItem(
                                     tx = tx,
@@ -302,18 +311,23 @@ fun StatementImportReviewDialog(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 48.dp)
                             .testTag("cancel_statement_import")
                     ) {
-                        Text("Cancel", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                        Text("Cancel", fontWeight = FontWeight.SemiBold, maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
                     }
 
                     Button(
                         onClick = { onConfirm(summary) },
                         enabled = activeTransactionsCount > 0,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BrandTeal,
+                            contentColor = OnBrandTeal
+                        ),
                         modifier = Modifier
                             .weight(1.6f)
+                            .heightIn(min = 48.dp)
                             .testTag("confirm_statement_import")
                     ) {
                         Icon(
@@ -323,11 +337,12 @@ fun StatementImportReviewDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (distinctMonths.size > 1) "Split & Save ($activeTransactionsCount txs)" else "Save $activeTransactionsCount to Ledger",
+                            text = if (distinctMonths.size > 1) "Split & Save ($activeTransactionsCount transactions)" else "Save $activeTransactionsCount to Ledger",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -338,16 +353,19 @@ fun StatementImportReviewDialog(
     editingTxIndex?.let { idx ->
         if (idx in summary.transactions.indices) {
             val tx = summary.transactions[idx]
-            val rawTitle = if (tx.counterpartyName.isNotBlank()) tx.counterpartyName else tx.message.ifBlank { "Transaction" }
-            val cleanTitle = BankStatementImporter.cleanPaymentDescription(rawTitle)
-            val merchantQuery = com.example.util.CzechMerchantCatalog.suggestMerchantSearchQuery(cleanTitle)
-            val normQuery = com.example.util.CzechMerchantCatalog.normalize(merchantQuery)
-            val matchingCount = if (normQuery.isNotBlank()) {
-                summary.transactions.count { other ->
-                    val otherText = "${other.counterpartyName} ${other.message}"
-                    com.example.util.CzechMerchantCatalog.normalize(otherText).contains(normQuery)
-                }
-            } else 1
+            val (merchantQuery, matchingCount) = remember(idx, tx, summary.transactions) {
+                val rawTitle = if (tx.counterpartyName.isNotBlank()) tx.counterpartyName else tx.message.ifBlank { "Transaction" }
+                val cleanTitle = BankStatementImporter.cleanPaymentDescription(rawTitle)
+                val query = com.example.util.CzechMerchantCatalog.suggestMerchantSearchQuery(cleanTitle)
+                val normQuery = com.example.util.CzechMerchantCatalog.normalize(query)
+                val count = if (normQuery.isNotBlank()) {
+                    summary.transactions.count { other ->
+                        val otherText = "${other.counterpartyName} ${other.message}"
+                        com.example.util.CzechMerchantCatalog.normalize(otherText).contains(normQuery)
+                    }
+                } else 1
+                query to count
+            }
 
             CategoryPickerModal(
                 tx = tx,

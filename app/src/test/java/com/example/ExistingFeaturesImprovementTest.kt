@@ -100,7 +100,7 @@ class ExistingFeaturesImprovementTest {
         )
 
         val fireYear = 2046
-        val header = "Year\tLiquid Portfolio (CZK)\tPension Portfolio (CZK)\tTotal Net Worth (CZK)\tFIRE Target (CZK)\tStatus"
+        val header = "Year\tLiquid Portfolio (Kč)\tPension Portfolio (Kč)\tTotal Net Worth (Kč)\tFIRE Target (Kč)\tStatus"
         val rows = points.map { pt ->
             val status = if (pt.year == fireYear) "FIRE Milestone" else if (pt.totalPortfolio >= pt.target) "FIRE Ready" else "Accumulation"
             "${pt.year}\t${pt.portfolio.toLong()}\t${pt.pensionPortfolio.toLong()}\t${pt.totalPortfolio.toLong()}\t${pt.target.toLong()}\t$status"
@@ -271,7 +271,8 @@ class ExistingFeaturesImprovementTest {
         val vmText = File(mainDir, "com/example/ui/MainViewModel.kt").readText()
         assertTrue(
             "MainViewModel must persist learned merchant rules to merchantRulesJson",
-            vmText.contains("merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson")
+            vmText.contains("merchantRulesJson = MerchantCategoryManager.serializeRulesToJson") ||
+                vmText.contains("merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson")
         )
         assertTrue(
             "MainViewModel.deleteImportedStatement must preserve manual exclusions",

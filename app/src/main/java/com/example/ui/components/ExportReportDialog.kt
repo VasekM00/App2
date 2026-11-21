@@ -3,15 +3,22 @@
 package com.example.ui.components
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.PersistableBundle
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -28,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,13 +46,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
+import com.example.ui.components.charts.finiteOrZero
 import com.example.util.Formatters.fmtCZK
 
 @Composable
@@ -53,7 +65,7 @@ fun ExportReportDialog(
 ) {
     val context = LocalContext.current
 
-    val fiProgress = state.fireMilestones.standardFire.progressPct
+    val fiProgress = state.fireMilestones.standardFire.progressPct.finiteOrZero()
 
     val reportText = remember(state) {
         buildString {
@@ -64,21 +76,21 @@ fun ExportReportDialog(
             appendLine("==============================================")
             appendLine()
             appendLine("EXECUTIVE SUMMARY")
-        appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal)}")
-        appendLine("• Liquid Investments: ${fmtCZK(state.currentLiquidPortfolio)}")
-        appendLine("• Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
-        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio)}")
-        appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday)}")
+        appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal.finiteOrZero())}")
+        appendLine("• Liquid Investments: ${fmtCZK(state.currentLiquidPortfolio.finiteOrZero())}")
+        appendLine("• Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve.finiteOrZero())} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths.finiteOrZero())} months)")
+        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio.finiteOrZero())}")
+        appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday.finiteOrZero())}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
         if (state.settings.isSingleHousehold) {
-            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
         } else {
-            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35y"}")
-            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35y"}")
+            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
+            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
         }
         appendLine()
-        val pName = state.settings.primaryName.ifBlank { "Václav" }
-        val sName = state.settings.spouseName.ifBlank { "Eleonora" }
+        val pName = state.settings.primaryName.ifBlank { "Primary Earner" }
+        val sName = state.settings.spouseName.ifBlank { "Partner" }
         appendLine("MONTHLY CASH FLOW")
         appendLine("• $pName Net Income: ${fmtCZK(state.currentIncome.vaclavNet)}")
         if (state.currentIncome.vaclavOther > 0.0) {
@@ -108,20 +120,22 @@ fun ExportReportDialog(
         if (state.currentIncome.lumpSumMonthly > 0.0) {
             appendLine("• Lump Sums / Bonuses: ${fmtCZK(state.currentIncome.lumpSumMonthly)}")
         }
-        appendLine("• Total Family Net/mo: ${fmtCZK(state.currentIncome.totalMonthly)}")
+        appendLine("• Total Net Household Income: ${fmtCZK(state.currentIncome.totalMonthly)} monthly")
         appendLine("• Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
         appendLine()
         appendLine("CZECH TAX & PENSION REFORM")
         appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")
         appendLine("• DIP Annual Tax Saved: ${fmtCZK(state.taxReturnHelper.dipSaving)}")
         appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio)}")
-        appendLine("• DPS Statutory Fee Cap: ${String.format(java.util.Locale.ROOT, "%.1f", state.settings.dpsAnnualFeePct)}% p.a.")
+        appendLine("• DPS Annual Fee: ${String.format(java.util.Locale.ROOT, "%.2f", state.settings.dpsAnnualFeePct.finiteOrZero())}%/year (statutory cap ${String.format(java.util.Locale.ROOT, "%.2f", state.settings.dpsStatutoryFeeCapPct.finiteOrZero())}%)")
         appendLine()
-        appendLine("MONTE CARLO STRESS TEST")
-        appendLine("• FIRE Success Probability: ${String.format(java.util.Locale.ROOT, "%.1f%%", state.monteCarlo.successRatePct)}")
-        appendLine("• Median FIRE Year: ${state.monteCarlo.medianFireAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
-        appendLine("• Fastest / Best-Case (5th percentile year): ${state.monteCarlo.bestCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
-        appendLine("• Conservative / Late (95th percentile year): ${state.monteCarlo.worstCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
+        val activeMc = if (state.settings.useHistoricalBootstrap) state.historicalMonteCarlo else state.monteCarlo
+        val mcModeLabel = if (state.settings.useHistoricalBootstrap) "HISTORICAL BOOTSTRAP" else "PARAMETRIC MONTE CARLO"
+        appendLine("MONTE CARLO STRESS TEST ($mcModeLabel)")
+        appendLine("• FIRE Success Probability: ${String.format(java.util.Locale.ROOT, "%.1f%%", activeMc.successRatePct.finiteOrZero())}")
+        appendLine("• Median FIRE Year: ${activeMc.medianFireAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
+        appendLine("• Fastest / Best-Case (5th percentile year): ${activeMc.bestCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
+        appendLine("• Conservative / Late (95th percentile year): ${activeMc.worstCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "N/A"}")
         appendLine("==============================================")
         }
     }
@@ -130,15 +144,16 @@ fun ExportReportDialog(
 
     val csvReportText = remember(state) {
         buildString {
-            appendLine("Year,Age,Portfolio CZK,Target CZK,Invested Annual CZK,Status")
+            appendLine("Year,Age,Portfolio (Kč),Target (Kč),Invested Annual (Kč),Status")
             val traj = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory
             traj.forEach { point ->
-                appendLine("${point.year},${point.age},${point.totalPortfolio.toLong()},${point.target.toLong()},${point.investedAnnual.toLong()},${point.status}")
+                appendLine("${point.year},${point.age},${point.totalPortfolio.finiteOrZero().toLong()},${point.target.finiteOrZero().toLong()},${point.investedAnnual.finiteOrZero().toLong()},${escapeExportCsvCell(point.status)}")
             }
         }
     }
 
     val activeText = if (exportFormat == "Summary") reportText else csvReportText
+    val maxBodyHeight = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -168,6 +183,7 @@ fun ExportReportDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = maxBodyHeight)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
@@ -179,9 +195,9 @@ fun ExportReportDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Format toggle chips
-                Row(
+                ChipWrapRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalSpacing = 8.dp
                 ) {
                     listOf("Summary", "CSV Trajectory").forEach { format ->
                         FilterChip(
@@ -189,17 +205,19 @@ fun ExportReportDialog(
                             onClick = {
                                 exportFormat = if (format == "Summary") "Summary" else "CSV"
                             },
-                            label = { Text(format, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                            label = { Text(format, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis) }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -207,44 +225,93 @@ fun ExportReportDialog(
                         text = activeText,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(12.dp)
                     )
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText(
-                        if (exportFormat == "Summary") "Personal Finance Report" else "FIRE Projections CSV",
-                        activeText
-                    )
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        clip.description.extras = android.os.PersistableBundle().apply {
-                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val shareIntent = if (exportFormat == "Summary") {
+                                com.example.util.ReportShareHelper.createShareTextIntent(
+                                    text = activeText,
+                                    subject = "Personal Finance Report (${state.settings.baseYear})"
+                                )
+                            } else {
+                                com.example.util.ReportShareHelper.createShareCsvIntent(
+                                    context = context,
+                                    csvBytes = com.example.util.ReportShareHelper.getCsvBytesWithBom(activeText),
+                                    filename = "fire_trajectory_${state.settings.baseYear}.csv",
+                                    subject = "FIRE Trajectory Export (${state.settings.baseYear})"
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Financial Report"))
+                            onDismiss()
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Unable to open share sheet.", Toast.LENGTH_SHORT).show()
                         }
-                    }
-                    clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "${if (exportFormat == "Summary") "Report" else "CSV"} copied to clipboard!", Toast.LENGTH_SHORT).show()
-                    onDismiss()
-                },
-                modifier = Modifier.testTag("copy_report_button")
-            ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Copy ${if (exportFormat == "Summary") "Report" else "CSV"}")
+                    },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("share_report_button")
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Share", maxLines = 2, softWrap = true)
+                }
+                Button(
+                    onClick = {
+                        try {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText(
+                                if (exportFormat == "Summary") "Personal Finance Report" else "FIRE Projections CSV",
+                                activeText
+                            )
+                            clip.description.extras = PersistableBundle().apply {
+                                putBoolean(
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        ClipDescription.EXTRA_IS_SENSITIVE
+                                    } else {
+                                        "android.content.extra.IS_SENSITIVE"
+                                    },
+                                    true
+                                )
+                            }
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "${if (exportFormat == "Summary") "Report" else "CSV"} copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Report too large for clipboard. Tap Share instead.", Toast.LENGTH_LONG).show()
+                        }
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("copy_report_button")
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copy ${if (exportFormat == "Summary") "Report" else "CSV"}", maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
+                }
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.testTag("close_report_dialog_button")
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("close_report_dialog_button")
             ) {
                 Text("Close")
             }
         },
-        modifier = Modifier.testTag("export_report_dialog")
+        modifier = Modifier
+            .testTag("export_report_dialog")
     )
 }
+
+internal fun escapeExportCsvCell(value: String): String =
+    com.example.util.ReportShareHelper.escapeCsvCell(value, delimiter = ",")

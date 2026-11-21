@@ -51,8 +51,7 @@ class SecurityAuditTest {
         val permissionLines = lines.filter { it.contains("<uses-permission") }
 
         val allowedPermissions = setOf(
-            "android.permission.INTERNET",
-            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.INTERNET"
         )
 
         val foundPermissions = mutableListOf<String>()
@@ -67,9 +66,8 @@ class SecurityAuditTest {
         for (perm in foundPermissions) {
             assertTrue("Unexpected permission found: $perm", allowedPermissions.contains(perm))
         }
-        assertEquals("Manifest should contain exactly 2 permissions", 2, foundPermissions.size)
+        assertEquals("Manifest should contain only INTERNET permission", 1, foundPermissions.size)
         assertTrue("Manifest must contain INTERNET permission", foundPermissions.contains("android.permission.INTERNET"))
-        assertTrue("Manifest must contain ACCESS_NETWORK_STATE permission", foundPermissions.contains("android.permission.ACCESS_NETWORK_STATE"))
     }
 
     /**
@@ -93,24 +91,45 @@ class SecurityAuditTest {
 
     /**
      * 4.3: backup rules
-     * Asserts backup_rules.xml excludes the Room database from cloud backups.
+     * Asserts allowBackup="false" and backup_rules.xml excludes Room DB (+ WAL/SHM) and all 7 SharedPreferences.
      */
     @Test
     fun test4_3_backupRulesExcludeDatabase() {
+        val manifestFile = File(getAppSrcMain(), "AndroidManifest.xml")
+        assertTrue("AndroidManifest.xml must exist", manifestFile.exists())
+        val manifestContent = manifestFile.readText()
+        assertTrue(
+            "AndroidManifest.xml must set android:allowBackup=\"false\"",
+            manifestContent.contains("""android:allowBackup="false"""")
+        )
+
         val rulesFile = File(getAppSrcMain(), "res/xml/backup_rules.xml")
         assertTrue("backup_rules.xml must exist at ${rulesFile.absolutePath}", rulesFile.exists())
         val content = rulesFile.readText()
-        assertTrue(
-            "backup_rules.xml must exclude the Room database from cloud backups",
-            content.contains("<exclude") && content.contains("martinu_financials_db")
+        val requiredExclusions = listOf(
+            "martinu_financials_db",
+            "martinu_financials_db-wal",
+            "martinu_financials_db-shm",
+            "statement_import_prefs.xml",
+            "subscription_auditor_prefs.xml",
+            "czech_sync_prefs.xml",
+            "investment_lots_prefs.xml",
+            "merchant_category_overrides.xml",
+            "app_preferences.xml",
+            "app_theme_prefs.xml"
         )
+        for (item in requiredExclusions) {
+            assertTrue(
+                "backup_rules.xml must exclude '$item' from cloud backups",
+                content.contains("<exclude") && content.contains(item)
+            )
+        }
     }
 
     /**
      * 4.4: data_extraction_rules.xml
-     * Asserts data_extraction_rules.xml excludes the Room database from cloud backup
-     * and contains no template TODOs. (Device transfer intentionally includes the DB
-     * so users keep their data when migrating to a new phone.)
+     * Asserts data_extraction_rules.xml excludes the Room database (+ WAL/SHM) and all 7 SharedPreferences
+     * from cloud backup and contains no template TODOs.
      */
     @Test
     fun test4_4_dataExtractionRules() {
@@ -121,10 +140,17 @@ class SecurityAuditTest {
             "data_extraction_rules.xml must not contain template 'TODO' comments",
             !content.contains("TODO")
         )
+        assertTrue("data_extraction_rules.xml must contain <cloud-backup>", content.contains("<cloud-backup>"))
+        val cloudBackupSection = content.substringAfter("<cloud-backup>").substringBefore("</cloud-backup>")
         assertTrue(
-            "data_extraction_rules.xml must exclude the Room database from cloud backup",
-            content.contains("<cloud-backup>") && content.contains("<exclude") &&
-                    content.contains("martinu_financials_db")
+            "data_extraction_rules.xml <cloud-backup> must wildcard-exclude all databases",
+            cloudBackupSection.contains("""<exclude domain="database" path="." />""") ||
+                cloudBackupSection.contains("""<exclude domain="database" path="."/>""")
+        )
+        assertTrue(
+            "data_extraction_rules.xml <cloud-backup> must wildcard-exclude all sharedprefs",
+            cloudBackupSection.contains("""<exclude domain="sharedpref" path="." />""") ||
+                cloudBackupSection.contains("""<exclude domain="sharedpref" path="."/>""")
         )
     }
 
@@ -172,15 +198,19 @@ class SecurityAuditTest {
 
     /**
      * 4.6: No PII logging
-     * Scans all .kt files for Android Log calls containing sensitive financial variables.
+     * Scans all .kt files for Android Log calls containing sensitive financial variables and forbids printStackTrace().
      */
     @Test
     fun test4_6_noPiiLogging() {
         val ktFiles = getAllSourceKtFiles()
         assertTrue("Should scan Kotlin source files", ktFiles.isNotEmpty())
 
-        val piiKeywords = listOf("salary", "portfolio", "balance", "income")
+        val piiKeywords = listOf(
+            "salary", "portfolio", "balance", "income", "czk", "tax",
+            "pension", "counterparty", "account", "expense", "wealth", "dividend"
+        )
         val logRegex = Regex("""Log\.[deiwv]\s*\([^)]*\)""", RegexOption.DOT_MATCHES_ALL)
+        val stackTraceRegex = Regex("""\.printStackTrace\s*\(""")
 
         val violations = mutableListOf<String>()
 
@@ -195,29 +225,56 @@ class SecurityAuditTest {
                     }
                 }
             }
+            file.readLines().forEachIndexed { idx, rawLine ->
+                val trimmed = rawLine.trim()
+                if (!trimmed.startsWith("//") && !trimmed.startsWith("/*") && !trimmed.startsWith("*")) {
+                    if (stackTraceRegex.containsMatchIn(trimmed)) {
+                        violations.add("${file.name}:${idx + 1}: Forbidden printStackTrace() call: $trimmed")
+                    }
+                }
+            }
         }
 
         assertTrue(
-            "Found PII/financial variables in Log statements:\n${violations.joinToString("\n")}",
+            "Found PII/financial variables in Log statements or printStackTrace() calls:\n${violations.joinToString("\n")}",
             violations.isEmpty()
         )
     }
 
     /**
      * 4.7: SharedPreferences MODE_PRIVATE
-     * Asserts EmergencyReserveWidget.kt specifies MODE_PRIVATE.
+     * Asserts every SharedPreferences creation across all production .kt files specifies MODE_PRIVATE.
      */
     @Test
     fun test4_7_sharedPreferencesModePrivate() {
-        val widgetFile = File(getAppSrcMain(), "java/com/example/ui/components/EmergencyReserveWidget.kt")
-        assertTrue("EmergencyReserveWidget.kt must exist at ${widgetFile.absolutePath}", widgetFile.exists())
-        val content = widgetFile.readText()
-        assertTrue("EmergencyReserveWidget.kt must use MODE_PRIVATE for SharedPreferences", content.contains("MODE_PRIVATE"))
+        val ktFiles = getAllSourceKtFiles()
+        assertTrue("Should scan Kotlin source files", ktFiles.isNotEmpty())
+
+        val prefCallRegex = Regex("""getSharedPreferences\s*\([^)]*\)""", RegexOption.DOT_MATCHES_ALL)
+        var callsFound = 0
+        val violations = mutableListOf<String>()
+
+        for (file in ktFiles) {
+            val content = file.readText()
+            for (match in prefCallRegex.findAll(content)) {
+                callsFound++
+                if (!match.value.contains("MODE_PRIVATE")) {
+                    violations.add("${file.name}: SharedPreferences call without MODE_PRIVATE: ${match.value}")
+                }
+            }
+        }
+
+        assertTrue("Expected SharedPreferences usages in production source", callsFound >= 7)
+        assertTrue(
+            "All SharedPreferences calls must use MODE_PRIVATE:\n${violations.joinToString("\n")}",
+            violations.isEmpty()
+        )
     }
 
     /**
-     * 4.8: CSV injection protection
-     * Verifies MainViewModel.kt parses CSV numerical cells with toDoubleOrNull() to prevent formula injection.
+     * 4.8: CSV injection protection & FileProvider sharing
+     * Verifies MainViewModel.kt sanitizes CSV numerical cells and ReportShareHelper/ExportReportDialog
+     * neutralize leading formula characters (=, +, -, @, \t, \r) and share via FileProvider.
      */
     @Test
     fun test4_8_csvInjectionProtection() {
@@ -230,6 +287,33 @@ class SecurityAuditTest {
             "MainViewModel must sanitize CSV numerical inputs using toDoubleOrNull() to mitigate CSV formula injection",
             content.contains("toDoubleOrNull()")
         )
+
+        val shareHelperFile = File(getAppSrcMain(), "java/com/example/util/ReportShareHelper.kt")
+        assertTrue("ReportShareHelper.kt must exist", shareHelperFile.exists())
+        val shareContent = shareHelperFile.readText()
+        assertTrue(
+            "ReportShareHelper must neutralize CSV formula prefix characters",
+            shareContent.contains("FORMULA_PREFIX_CHARS") && shareContent.contains("escapeCsvCell")
+        )
+        assertTrue(
+            "ReportShareHelper must use FileProvider and never fall back to Uri.fromFile",
+            shareContent.contains("FileProvider.getUriForFile") && !shareContent.contains("Uri.fromFile")
+        )
+
+        val manifestContent = File(getAppSrcMain(), "AndroidManifest.xml").readText()
+        assertTrue(
+            "AndroidManifest.xml must register androidx.core.content.FileProvider",
+            manifestContent.contains("androidx.core.content.FileProvider") &&
+                manifestContent.contains("file_paths")
+        )
+        val filePathsFile = File(getAppSrcMain(), "res/xml/file_paths.xml")
+        assertTrue("res/xml/file_paths.xml must exist", filePathsFile.exists())
+
+        // Direct behavioral check of ExportReportDialog CSV injection sanitizer (including \t / \r prefix bypass)
+        assertTrue("Formula '=1+1' must be neutralized", com.example.ui.components.escapeExportCsvCell("=1+1").startsWith("'"))
+        assertTrue("Tab-prefixed formula must be neutralized", com.example.ui.components.escapeExportCsvCell("\t=cmd|'/C calc'!A0").startsWith("'"))
+        assertTrue("CR-prefixed formula must be neutralized", com.example.ui.components.escapeExportCsvCell("\r+1+1").contains("'\r+1+1"))
+        assertEquals("Safe signed number must remain untouched", "-123.45", com.example.ui.components.escapeExportCsvCell("-123.45"))
     }
 
     /**
@@ -294,5 +378,37 @@ class SecurityAuditTest {
         }
 
         assertTrue("At least one @Database annotation must exist and be audited", databaseAnnotationFound)
+    }
+
+    /**
+     * 4.11: Clipboard sensitivity & no raw file:// URI exposure
+     * Verifies all ClipboardManager copies mark EXTRA_IS_SENSITIVE and zero Uri.fromFile calls exist.
+     */
+    @Test
+    fun test4_11_clipboardCopiesMarkSensitiveAndNoUriFromFile() {
+        val ktFiles = getAllSourceKtFiles()
+        assertTrue("Should scan Kotlin source files", ktFiles.isNotEmpty())
+
+        val clipboardViolations = mutableListOf<String>()
+        val uriFromFileViolations = mutableListOf<String>()
+
+        for (file in ktFiles) {
+            val content = file.readText()
+            if (content.contains("setPrimaryClip(") && !content.contains("EXTRA_IS_SENSITIVE")) {
+                clipboardViolations.add(file.name)
+            }
+            if (content.contains("Uri.fromFile(")) {
+                uriFromFileViolations.add(file.name)
+            }
+        }
+
+        assertTrue(
+            "Clipboard copies must mark ClipDescription.EXTRA_IS_SENSITIVE = true: $clipboardViolations",
+            clipboardViolations.isEmpty()
+        )
+        assertTrue(
+            "Production code must never expose raw file:// URIs via Uri.fromFile(): $uriFromFileViolations",
+            uriFromFileViolations.isEmpty()
+        )
     }
 }

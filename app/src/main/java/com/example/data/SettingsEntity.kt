@@ -8,6 +8,10 @@ import com.example.domain.serializeCustomLifeGoals
 const val VACLAV_BIRTH_YEAR: Int = 2000
 const val ELEONORA_BIRTH_YEAR: Int = 2000
 
+private val cachedDefaultCustomGoalsJson: String by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
+}
+
 @Entity(tableName = "app_settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,
@@ -32,7 +36,6 @@ data class SettingsEntity(
     val eOtherInflowsMonthly: Double = 0.0,
     val vGiftsMonthly: Double = 16000.0,
     val eGiftsMonthly: Double = 0.0,
-    val familyGiftMonthly: Double = 16000.0,
     val lumpSumYear: Int = 2030,
     val lumpSumAmount: Double = 500000.0,
     val lumpSumInclude: Boolean = true,
@@ -93,7 +96,7 @@ data class SettingsEntity(
     val dpsYouthAgeLimit: Int = 30,
     val dpsSubsidyRateStandardPct: Double = 20.0,
     val dpsSubsidyRateYouthPct: Double = 20.0,
-    val dpsStatutoryFeeCapPct: Double = 0.5,
+    val dpsStatutoryFeeCapPct: Double = 1.0,
     val employerRetirementExemptionAnnual: Double = 50000.0,
     val childBonusMinWageMultiplier: Double = 6.0,
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0,
@@ -141,16 +144,19 @@ data class SettingsEntity(
     val customLumpSumsJson: String = "[]",
     val deletedCategoriesJson: String = "[]",
     val merchantRulesJson: String = "{}",
-    val emergencyReserveMode: String = "6M"
+    val emergencyReserveMode: String = "6M",
+    val emergencyReserveMonthlyOverride: Double = -1.0
 ) {
     companion object {
+        internal fun defaultCustomGoalsJson(): String = cachedDefaultCustomGoalsJson
+
         fun freshDefaults(): SettingsEntity {
             // Always use the Czech calendar year, regardless of the device time zone.
             val yr = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
             return SettingsEntity(
                 baseYear = yr,
                 primaryAge = yr - VACLAV_BIRTH_YEAR,
-                customGoalsJson = serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
+                customGoalsJson = cachedDefaultCustomGoalsJson
             )
         }
     }

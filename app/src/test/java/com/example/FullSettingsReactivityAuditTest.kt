@@ -2,11 +2,8 @@ package com.example
 
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
-import com.example.domain.parseCustomExpenses
-import com.example.domain.parseDeletedCategories
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -105,8 +102,8 @@ class FullSettingsReactivityAuditTest {
         val withoutLecturing = FinancialEngine.calculate(base.copy(eLecturingMonthly = 0.0))
         assertEquals(0.0, withoutLecturing.currentIncome.lecturing, 0.001)
 
-        // familyGiftMonthly
-        val giftState = FinancialEngine.calculate(base.copy(familyGiftMonthly = 35000.0))
+        // vGiftsMonthly & eGiftsMonthly
+        val giftState = FinancialEngine.calculate(base.copy(vGiftsMonthly = 25000.0, eGiftsMonthly = 10000.0))
         assertEquals(35000.0, giftState.currentIncome.gift, 0.001)
 
         // lumpSumYear, lumpSumAmount, lumpSumInclude, and customLumpSumsJson

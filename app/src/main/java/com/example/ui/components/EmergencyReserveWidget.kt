@@ -1,15 +1,19 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.core.content.edit
 import kotlin.math.roundToInt
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,7 +33,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,83 +42,100 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.ui.theme.BadRed
-import com.example.ui.components.ColorPill
+import com.example.ui.theme.BodyFontFamily
+import com.example.ui.theme.DisplayFontFamily
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.WarnAmber
-import android.content.Context
-import androidx.compose.ui.platform.LocalContext
 import com.example.data.SettingsEntity
 import com.example.util.Formatters.fmtCompact
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EmergencyReserveWidget(
     state: FullCalculationState,
     modifier: Modifier = Modifier,
     onShowInfo: ((MetricInfo) -> Unit)? = null,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null
+    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
+    onSelectReserveMode: ((String) -> Unit)? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE) }
-    val rawMode = state.settings.emergencyReserveMode.ifBlank {
-        prefs.getString("emergency_reserve_mode", "6M") ?: "6M"
-    }
-    val initialMode = if (rawMode == "Target") "6M" else rawMode
-    var selectedTargetMode by remember(state.settings.emergencyReserveMode) {
-        mutableStateOf(initialMode)
+    val resolvedMode = state.settings.emergencyReserveMode.ifBlank { "6M" }
+    var selectedTargetMode by remember(state.settings.emergencyReserveMode, resolvedMode) {
+        mutableStateOf(resolvedMode)
     }
 
-    val monthlyExpense = state.totalLivingCostMonthly.coerceAtLeast(1.0)
-    val currentLiquidCash = state.currentEmergencyReserve
+    val monthlyExpense = state.totalLivingCostMonthly.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+    val currentLiquidCash = state.currentEmergencyReserve.takeIf { it.isFinite() } ?: 0.0
 
-    val targetAmount = if (selectedTargetMode == state.settings.emergencyReserveMode) {
+    val targetAmount = if (selectedTargetMode == state.settings.emergencyReserveMode &&
+        state.effectiveEmergencyReserveTargetToday.isFinite() &&
+        state.effectiveEmergencyReserveTargetToday > 0.0
+    ) {
         state.effectiveEmergencyReserveTargetToday
     } else {
-        com.example.domain.FinancialEngine.effectiveEmergencyReserveTarget(state.settings.copy(emergencyReserveMode = selectedTargetMode))
+        FinancialEngine.computeEmergencyReserveTargetForMode(
+            settings = state.settings,
+            totalLivingMonthly = monthlyExpense,
+            mode = selectedTargetMode
+        )
     }
 
-    val safeTarget = targetAmount.coerceAtLeast(1.0)
-    val progress = (currentLiquidCash / safeTarget).let { if (it.isNaN()) 0.0 else it }.coerceIn(0.0, 1.0).toFloat()
-    val monthsCovered = if (monthlyExpense > 0.0) (currentLiquidCash / monthlyExpense).coerceAtLeast(0.0) else 0.0
+    val safeTarget = targetAmount.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+    val progress = ((currentLiquidCash / safeTarget).takeIf { it.isFinite() } ?: 0.0)
+        .coerceIn(0.0, 1.0)
+        .toFloat()
+    val animProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "emergency_reserve_progress"
+    )
 
     val cGreen = GoodGreen
     val cAmber = WarnAmber
     val cRed = BadRed
 
-    val pctCovered = ((currentLiquidCash / targetAmount.coerceAtLeast(1.0)) * 100).roundToInt().coerceIn(0, 100)
+    val rawPct = ((currentLiquidCash / safeTarget) * 100.0).takeIf { it.isFinite() } ?: 0.0
+    val pctCovered = rawPct.roundToInt().coerceIn(0, 100)
 
     val (statusText, statusColor, statusIcon) = when {
-        currentLiquidCash >= targetAmount -> Triple("Fully Funded ($pctCovered%)", cGreen, Icons.Default.CheckCircle)
-        currentLiquidCash >= (targetAmount * 0.5) -> Triple("Building ($pctCovered%)", cAmber, Icons.Default.Info)
+        currentLiquidCash >= safeTarget -> Triple("Fully Funded ($pctCovered%)", cGreen, Icons.Default.CheckCircle)
+        currentLiquidCash >= (safeTarget * 0.5) -> Triple("Building ($pctCovered%)", cAmber, Icons.Default.Info)
         else -> Triple("Low Reserve ($pctCovered%)", cRed, Icons.Default.Warning)
     }
 
-    val reserveInfo = MetricInfo(
-        title = "Emergency Runway & Buffer",
-        category = "Liquidity & Risk Buffer",
-        formulaOrRule = "Runway = Liquid Reserve (${fmtCompact(currentLiquidCash)}) / Monthly Burn (${fmtCompact(monthlyExpense)})",
-        explanation = "Measures how many months your household can sustain full baseline expenditures with zero incoming salary. Storing this cash in high-yield savings (e.g. ČNB repo-rate linked accounts) insulates your long-term equity DCA portfolio from forced liquidation during market downturns.",
-        practicalImplication = "A 6-month buffer provides peace of mind while eliminating sequence-of-returns destruction during sudden market corrections.",
-        accentColor = MaterialTheme.colorScheme.primary
-    )
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val reserveInfo = remember(currentLiquidCash, state.totalLivingCostMonthly, primaryColor) {
+        val burnLabel = if (state.totalLivingCostMonthly > 0.0) fmtCompact(state.totalLivingCostMonthly) else "0\u00A0Kč"
+        MetricInfo(
+            title = "Emergency Runway & Buffer",
+            category = "Liquidity & Risk Buffer",
+            formulaOrRule = "Runway = Liquid Reserve (${fmtCompact(currentLiquidCash)}) ÷ Monthly Burn ($burnLabel)",
+            explanation = "Measures how many months your household can sustain full baseline expenditures with zero incoming salary. Storing this cash in high-yield savings (e.g. ČNB repo-rate linked accounts) insulates your long-term equity DCA portfolio from forced liquidation during market downturns.",
+            practicalImplication = "A 6-month buffer provides peace of mind while eliminating sequence-of-returns destruction during sudden market corrections.",
+            accentColor = primaryColor
+        )
+    }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("emergency_reserve_widget"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp).animateContentSize()) {
             // Header
             Row(
                 modifier = Modifier
@@ -133,16 +153,16 @@ fun EmergencyReserveWidget(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -155,21 +175,23 @@ fun EmergencyReserveWidget(
                             text = "Emergency Fund",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
+                                fontSize = 16.sp
                             ),
-                            maxLines = 1,
-                            softWrap = false
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Status Pill Badge (Guaranteed full visibility)
+                // Status Pill Badge (Actionable reserve status)
                 ColorPill(
                     text = statusText,
                     color = statusColor,
                     icon = statusIcon,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = BodyFontFamily,
                     horizontalPadding = 8.dp,
                     verticalPadding = 4.dp,
                     info = reserveInfo,
@@ -182,40 +204,47 @@ fun EmergencyReserveWidget(
             // Progress Bar & Stats
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Current: ${fmtCompact(currentLiquidCash)}",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    softWrap = false
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = DisplayFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontFeatureSettings = "tnum"
+                    ),
+                    maxLines = 2,
+                    softWrap = true,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "Target: ${fmtCompact(targetAmount)}",
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = BodyFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontFeatureSettings = "tnum",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    maxLines = 1,
-                    softWrap = false
+                    maxLines = 2,
+                    softWrap = true
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Smooth Continuous Progress Bar (Zero trailing dots)
+            // Smooth Continuous Progress Bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(10.dp)
+                    .height(8.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                if (progress > 0f) {
+                if (animProgress > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                            .fillMaxWidth(animProgress.coerceIn(0f, 1f))
                             .fillMaxHeight()
                             .clip(CircleShape)
                             .background(statusColor)
@@ -226,48 +255,57 @@ fun EmergencyReserveWidget(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Target Selector Chips
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "Goal Runway:",
+                    text = "Runway goal",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false
+                    maxLines = 2,
+                    softWrap = true
                 )
 
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("3M", "6M", "9M", "12M").forEach { mode ->
+                    listOf("3M" to "3 months", "6M" to "6 months", "9M" to "9 months", "12M" to "12 months").forEach { (mode, labelText) ->
                         FilterChip(
                             selected = selectedTargetMode == mode,
                             onClick = {
                                 selectedTargetMode = mode
-                                prefs.edit { putString("emergency_reserve_mode", mode) }
-                                onUpdateSettings?.invoke(state.settings.copy(emergencyReserveMode = mode))
+                                if (onSelectReserveMode != null) {
+                                    onSelectReserveMode(mode)
+                                } else if (onReduceSettings != null) {
+                                    onReduceSettings { it.copy(emergencyReserveMode = mode) }
+                                } else {
+                                    onUpdateSettings?.invoke(state.settings.copy(emergencyReserveMode = mode))
+                                }
                             },
                             label = {
-                                Text(
-                                    text = mode,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                                Box(
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = labelText,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = BodyFontFamily,
+                                        maxLines = 2,
+                                        softWrap = true
+                                    )
+                                }
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                             ),
-                            modifier = Modifier.testTag("reserve_chip_${mode.lowercase()}")
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("reserve_chip_${mode.lowercase()}")
                         )
                     }
                 }

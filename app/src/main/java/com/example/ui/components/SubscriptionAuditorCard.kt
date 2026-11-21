@@ -2,8 +2,6 @@ package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,8 +32,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.util.RecurringSubscriptionItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,18 +41,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ImportedBankTransactionEntity
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.BankTransactionType
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import com.example.util.SubscriptionAuditor
@@ -102,17 +101,21 @@ fun SubscriptionAuditorCard(
                         .padding(end = 8.dp)
                 ) {
                     Text(
-                        text = "Subscription & Fixed Debit Auditor",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        text = "Recurring Subscriptions",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = if (audit.items.isEmpty()) {
-                            "Recurring debits & perpetual FIRE capital requirement"
+                            "Auto-detected recurring bills"
                         } else {
-                            "${audit.items.size} detected recurring subscriptions (${fmtCZK(audit.totalMonthlyBurn)} monthly)"
+                            "${audit.items.size} recurring · ${fmtCZK(audit.totalMonthlyBurn)} monthly"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -123,17 +126,14 @@ fun SubscriptionAuditorCard(
                     if (audit.priceCreepCount > 0) {
                         ColorPill(
                             text = "${audit.priceCreepCount} PRICE CREEP",
-                            color = BadRed
+                            color = BadRed,
+                            fontFamily = BodyFontFamily
                         )
                     } else if (audit.items.isNotEmpty()) {
                         ColorPill(
                             text = "${audit.items.size} ACTIVE",
-                            color = BrandTeal
-                        )
-                    } else {
-                        ColorPill(
-                            text = "0 DETECTED",
-                            color = MaterialTheme.colorScheme.outline
+                            color = BrandTeal,
+                            fontFamily = BodyFontFamily
                         )
                     }
 
@@ -155,7 +155,8 @@ fun SubscriptionAuditorCard(
                 if (audit.items.isEmpty()) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
@@ -174,7 +175,8 @@ fun SubscriptionAuditorCard(
                                 if (onClearAllDismissed != null) {
                                     TextButton(
                                         onClick = onClearAllDismissed,
-                                        contentPadding = PaddingValues(0.dp)
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.heightIn(min = 48.dp)
                                     ) {
                                         Text("Restore all dismissed items", color = BrandTeal, style = MaterialTheme.typography.labelSmall)
                                     }
@@ -190,9 +192,9 @@ fun SubscriptionAuditorCard(
                     ) {
                         Surface(
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
@@ -201,13 +203,18 @@ fun SubscriptionAuditorCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = fmtCZK(audit.totalMonthlyBurn),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    text = fmtCZK(audit.totalMonthlyBurn.finiteOrZero()),
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily
+                                    ),
                                     color = BrandGold
                                 )
                                 Text(
-                                    text = "${fmtCZK(audit.annualizedBurn)} annual",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = "${fmtCZK(audit.annualizedBurn.finiteOrZero())} annual",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = BodyFontFamily
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -215,9 +222,9 @@ fun SubscriptionAuditorCard(
 
                         Surface(
                             modifier = Modifier.weight(1.3f),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
@@ -226,13 +233,18 @@ fun SubscriptionAuditorCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = fmtCZK(audit.fireCapitalRequired),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    text = fmtCZK(audit.fireCapitalRequired.finiteOrZero()),
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily
+                                    ),
                                     color = BrandTeal
                                 )
                                 Text(
                                     text = "to fund forever at ${fmtPct(swrPct)} SWR",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = BodyFontFamily
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -254,16 +266,16 @@ fun SubscriptionAuditorCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         audit.items.forEach { item ->
-                            val itemAnnualBurn = item.normalizedMonthlyAmount * 12.0
-                            val itemFireCapital = itemAnnualBurn / (swrPct / 100.0).coerceAtLeast(0.001)
+                            val itemAnnualBurn = item.normalizedMonthlyAmount.finiteOrZero() * 12.0
+                            val itemFireCapital = (itemAnnualBurn / (swrPct.finiteOrZero() / 100.0).coerceAtLeast(0.001)).finiteOrZero()
 
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
                                 border = BorderStroke(
                                     1.dp,
                                     if (item.priceCreepDelta > 0.0) BadRed.copy(alpha = 0.4f)
-                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -289,7 +301,9 @@ fun SubscriptionAuditorCard(
                                                 Text(
                                                     text = formatCategoryLabel(item.category),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = BrandTeal
+                                                    color = BrandTeal,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                                 when (item.billingCadence) {
                                                     "ANNUAL" -> ColorPill(
@@ -334,32 +348,39 @@ fun SubscriptionAuditorCard(
                                                     },
                                                     style = MaterialTheme.typography.bodyMedium.copy(
                                                         fontWeight = FontWeight.Bold,
-                                                        fontFamily = FontFamily.Monospace
-                                                    )
+                                                        fontFamily = BodyFontFamily
+                                                    ),
+                                                    maxLines = 2,
+                                                    softWrap = true
                                                 )
                                                 val cadenceSubtitle = when (item.billingCadence) {
-                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)} annual · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)} quarterly · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)} semi-annual · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/year · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)}/quarter · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/6 months · FIRE: ${fmtCZK(itemFireCapital)}"
                                                     else -> "FIRE: ${fmtCZK(itemFireCapital)}"
                                                 }
                                                 Text(
                                                     text = cadenceSubtitle,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontFamily = BodyFontFamily,
+                                                        fontSize = 10.sp
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 2,
+                                                    softWrap = true
                                                 )
                                             }
 
                                             if (onDismissMerchant != null) {
                                                 IconButton(
                                                     onClick = { onDismissMerchant(item.merchantKey) },
-                                                    modifier = Modifier.size(28.dp).testTag("dismiss_subscription_${item.merchantKey}")
+                                                    modifier = Modifier.size(48.dp).testTag("dismiss_subscription_${item.merchantKey}")
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Close,
                                                         contentDescription = "Dismiss Subscription",
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                        modifier = Modifier.size(16.dp)
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(18.dp)
                                                     )
                                                 }
                                             }
@@ -381,7 +402,10 @@ fun SubscriptionAuditorCard(
                                             ) {
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .padding(end = 6.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.AutoMirrored.Filled.TrendingUp,
@@ -391,15 +415,24 @@ fun SubscriptionAuditorCard(
                                                     )
                                                     Text(
                                                         text = "Price Increase: +${fmtCZK(item.priceCreepDelta)} (+${String.format(Locale.ROOT, "%.1f", item.priceCreepPct)}%)",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        color = BadRed
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontFamily = BodyFontFamily
+                                                        ),
+                                                        color = BadRed,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                                 if (item.previousMonthlyAmount != null) {
                                                     Text(
                                                         text = "was ${fmtCZK(item.previousMonthlyAmount)}",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontFamily = BodyFontFamily
+                                                        ),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        softWrap = false
                                                     )
                                                 }
                                             }
@@ -503,236 +536,5 @@ fun SubscriptionAuditorCard(
             },
             onClose = { selectedItemForDetail = null }
         )
-    }
-}
-
-@Composable
-private fun SubscriptionDetailDialog(
-    item: RecurringSubscriptionItem,
-    swrPct: Double,
-    onDismissItem: () -> Unit,
-    onClose: () -> Unit
-) {
-    val itemAnnualBurn = item.normalizedMonthlyAmount * 12.0
-    val itemFireCapital = itemAnnualBurn / (swrPct / 100.0).coerceAtLeast(0.001)
-
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(vertical = 16.dp)
-                .testTag("subscription_detail_dialog")
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = item.displayName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "${formatCategoryLabel(item.category)} • Cadence: ${item.billingCadence}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                    IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Monthly Cost & FIRE Capital KPI Box
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = BrandTeal.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Monthly Cost:",
-                                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                            Text(
-                                text = fmtCZK(item.normalizedMonthlyAmount),
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = BrandGold
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Annual Cost (12 mo):",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                            Text(
-                                text = fmtCZK(itemAnnualBurn),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = BrandTeal.copy(alpha = 0.2f))
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Dedicated FIRE Capital:",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "Invested net worth required at ${fmtPct(swrPct)} SWR",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.sp
-                                    )
-                                )
-                            }
-                            Text(
-                                text = fmtCZK(itemFireCapital),
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = BrandTeal
-                                )
-                            )
-                        }
-                    }
-                }
-
-                // Price Creep Alert (if applicable)
-                if (item.priceCreepDelta > 0.0) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = BadRed.copy(alpha = 0.08f),
-                        border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                                contentDescription = null,
-                                tint = BadRed,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "Price Creep Detected",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = BadRed)
-                                )
-                                Text(
-                                    text = "Billed amount rose by +${fmtCZK(item.priceCreepDelta)} (+${String.format(Locale.ROOT, "%.1f", item.priceCreepPct)}%) compared to previous billing (${item.previousMonthlyAmount?.let { fmtCZK(it) } ?: "unknown"}).",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.5.sp
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Insight banner
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = "FIRE FREEDOM IMPACT",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = BrandTeal,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.6.sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Canceling or renegotiating this subscription permanently lowers your FIRE threshold by ${fmtCZK(itemFireCapital)}, accelerating your path to retirement.",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Actions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismissItem,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(imageVector = Icons.Default.Block, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dismiss Item", fontSize = 11.5.sp)
-                    }
-
-                    Button(
-                        onClick = onClose,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Close", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
     }
 }

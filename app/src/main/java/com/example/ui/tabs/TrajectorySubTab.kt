@@ -2,27 +2,30 @@ package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,18 +37,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
-import com.example.ui.components.DcaTrajectoryBarChart
+import com.example.ui.components.charts.DcaTrajectoryBarChart
 import com.example.ui.components.MetricInfo
-import com.example.ui.components.NetWorthChart
+import com.example.ui.components.charts.NetWorthChart
 import com.example.ui.components.infoTapHold
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.util.Formatters.fmtCZK
@@ -55,6 +62,7 @@ import com.example.util.Formatters.fmtPct
 internal fun TrajectorySubTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity> = emptyList(),
+    onOpenSandbox: (() -> Unit)? = null,
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -72,26 +80,28 @@ internal fun TrajectorySubTab(
     val returnInflationInfo = MetricInfo(
         title = "Nominal vs Real Compound Returns",
         category = "Macroeconomic Assumptions",
-        formulaOrRule = "Real CAGR = (1 + Nominal Return) / (1 + CPI Inflation) - 1",
-        explanation = "With an expected ${fmtPct(state.settings.portfolioNominalReturnPct)} nominal return and ${fmtPct(state.settings.cpiInflationPct)} inflation, your equity assets grow at ~${String.format(java.util.Locale.getDefault(), "%.2f%%", ((1 + state.settings.portfolioNominalReturnPct/100.0)/(1 + state.settings.cpiInflationPct/100.0) - 1.0) * 100.0)} net purchasing power annually.",
+        formulaOrRule = "Real CAGR = (1 + Net Nominal Return) / (1 + CPI Inflation) - 1",
+        explanation = "With an expected ${fmtPct(state.settings.portfolioNominalReturnPct)} gross nominal return (${fmtPct(com.example.domain.FinancialEngine.netTaxableNominalReturnPct(state.settings), 2)} net after dividend tax drag) and ${fmtPct(state.settings.cpiInflationPct)} inflation, your equity assets grow at ~${fmtPct(state.realReturnPct, 2)} real purchasing power annually.",
         statutoryReference = "Fisher Equation of Real Interest",
-        practicalImplication = "Maintaining realistic inflation assumptions guarantees your FIRE target in today's CZK remains accurate in future purchasing power.",
+        practicalImplication = "Maintaining realistic inflation assumptions guarantees your FIRE target in today's Kč remains accurate in future purchasing power.",
         accentColor = BrandGold
     )
 
-    val combinedPension = state.settings.vStatePensionMonthly + state.settings.eStatePensionMonthly
-    val pensionAgeDisplay = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
+    val pLabel = state.settings.primaryName.ifBlank { "Primary Earner" }
+    val sLabel = state.settings.spouseName.ifBlank { "Partner" }
+    val combinedPension = state.settings.vStatePensionMonthly + if (state.settings.isSingleHousehold) 0.0 else state.settings.eStatePensionMonthly
+    val pensionAgeDisplay = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
         "${state.settings.vStatePensionAge}"
     } else {
-        "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge}"
+        "$pLabel: ${state.settings.vStatePensionAge} / $sLabel: ${state.settings.eStatePensionAge}"
     }
     val pensionBridgeInfo = MetricInfo(
         title = "State Pension Bridge Years",
         category = "Actuarial Horizon",
         formulaOrRule = "Bridge Horizon = State Pension Age ($pensionAgeDisplay) - Target FIRE Age",
-        explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(combinedPension)}/mo), the required portfolio draw drops dramatically.",
-        statutoryReference = "§ 32 Act No. 155/1995 Coll.",
-        practicalImplication = "Dynamic bridge modeling avoids over-saving millions of CZK by accounting for future guaranteed state annuity cash flows.",
+        explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(combinedPension)} monthly), the required portfolio draw drops dramatically.",
+        statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act § 32)",
+        practicalImplication = "Dynamic bridge modeling avoids over-saving millions of Kč by accounting for future guaranteed state annuity cash flows.",
         accentColor = BrandTeal
     )
 
@@ -104,29 +114,56 @@ internal fun TrajectorySubTab(
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
-        // Chart Selector Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        val haptic = LocalHapticFeedback.current
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            AssistChip(
-                onClick = { selectedTrajectoryChart = 0 },
-                label = { Text("Net Worth Curve", fontSize = 12.sp, fontWeight = if (selectedTrajectoryChart == 0) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (selectedTrajectoryChart == 0) BrandTeal.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    labelColor = if (selectedTrajectoryChart == 0) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.weight(1f).testTag("chip_net_worth_curve")
-            )
-            AssistChip(
-                onClick = { selectedTrajectoryChart = 1 },
-                label = { Text("DCA & Growth Bars", fontSize = 12.sp, fontWeight = if (selectedTrajectoryChart == 1) FontWeight.Bold else FontWeight.Normal) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (selectedTrajectoryChart == 1) BrandGold.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    labelColor = if (selectedTrajectoryChart == 1) BrandGold else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.weight(1f).testTag("chip_dca_bars")
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val chartModes = listOf(
+                    Triple(0, "Net Worth Curve", "chip_net_worth_curve"),
+                    Triple(1, "Contributions & Growth", "chip_dca_bars")
+                )
+                chartModes.forEach { (idx, label, tag) ->
+                    val isSelected = selectedTrajectoryChart == idx
+                    Surface(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedTrajectoryChart = idx
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                        contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+                        shadowElevation = if (isSelected) 1.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag(tag)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp
+                                ),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         val isSingleHh = state.settings.isSingleHousehold
@@ -142,7 +179,8 @@ internal fun TrajectorySubTab(
                 cpiInflationPct = state.settings.cpiInflationPct,
                 ledgerEntries = ledgerEntries,
                 isRealPurchasingPower = isRealPurchasingPower,
-                onRealPurchasingPowerChange = { isRealPurchasingPower = it }
+                onRealPurchasingPowerChange = { isRealPurchasingPower = it },
+                onOpenSandbox = onOpenSandbox
             )
         } else {
             // 35-Year DCA Bar Chart & Growth
@@ -170,13 +208,12 @@ internal fun TrajectorySubTab(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = "FIRE Trajectory Assumptions",
-                    subtitle = "Withdrawal rates, inflation & pension targets (Tap for deep insight)",
-                    badgeText = if (isRealPurchasingPower) "REAL MODE" else "NOMINAL MODE",
+                    title = "Forecast Assumptions",
+                    subtitle = "Tap any row to see how it affects your goal",
                     accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(14.dp))
@@ -184,13 +221,13 @@ internal fun TrajectorySubTab(
                 if (!isSingleHh) {
                     ProjectionMetricRow(
                         label = "Projected FIRE Year (Dual Income)",
-                        value = state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35y",
+                        value = state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandTeal,
                         info = MetricInfo(
                             title = "Dual-Income FIRE Date",
                             category = "Household Horizon",
-                            explanation = "Models both Václav and Eleonora contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
+                            explanation = "Models both $pLabel and $sLabel contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
                             accentColor = BrandTeal
                         ),
                         onShowInfo = onShowInfo
@@ -199,7 +236,7 @@ internal fun TrajectorySubTab(
 
                     ProjectionMetricRow(
                         label = "Projected FIRE Year (Single Income)",
-                        value = state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35y",
+                        value = state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandGold,
                         info = MetricInfo(
@@ -214,7 +251,7 @@ internal fun TrajectorySubTab(
                 } else {
                     ProjectionMetricRow(
                         label = "Projected FIRE Year",
-                        value = activeFirePoint?.let { "${it.year}" } ?: "Beyond 35y",
+                        value = activeFirePoint?.let { "${it.year}" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandTeal,
                         info = MetricInfo(
@@ -261,24 +298,23 @@ internal fun TrajectorySubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 ProjectionMetricRow(
-                    label = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) "State Pension Age" else "State Pension Ages",
-                    value = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} yrs" else "V: ${state.settings.vStatePensionAge} / E: ${state.settings.eStatePensionAge} yrs",
+                    label = if (isSingleHh || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "State Pension Age" else "State Pension Ages",
+                    value = if (isSingleHh || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} years" else "$pLabel: ${state.settings.vStatePensionAge} / $sLabel: ${state.settings.eStatePensionAge} years",
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                val totalStatePension = state.settings.vStatePensionMonthly + state.settings.eStatePensionMonthly
                 ProjectionMetricRow(
-                    label = "Combined State Pension",
-                    value = fmtCZK(totalStatePension),
+                    label = if (isSingleHh) "State Pension (Monthly)" else "Combined State Pension",
+                    value = fmtCZK(combinedPension),
                     info = pensionBridgeInfo,
                     onShowInfo = onShowInfo
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(96.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -297,46 +333,60 @@ internal fun ProjectionMetricRow(
             .infoTapHold(info, onShowInfo)
     } else Modifier
 
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .then(clickModifier)
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 4.dp)
     ) {
+        val maxValueWidth = maxWidth * 0.54f
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f).padding(end = 8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = label,
-                style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                else MaterialTheme.typography.bodyMedium
-            )
-            if (info != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "Info available",
-                    tint = BrandTeal.copy(alpha = 0.42f),
-                    modifier = Modifier.size(12.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
+                Text(
+                    text = label,
+                    style = if (isBold) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                    else MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
                 )
+                if (info != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Info available",
+                        tint = BrandTeal,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
             }
-        }
-        val isNumericValue = value.any { it.isDigit() }
-        Text(
-            text = value,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            style = if (isBold) MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = if (isNumericValue) FontFamily.Monospace else FontFamily.Default,
-                fontWeight = FontWeight.Bold,
-                color = highlightColor ?: MaterialTheme.colorScheme.onSurface
-            ) else MaterialTheme.typography.bodyMedium.copy(
-                fontFamily = if (isNumericValue) FontFamily.Monospace else FontFamily.Default,
-                fontWeight = FontWeight.SemiBold,
-                color = highlightColor ?: MaterialTheme.colorScheme.onSurface
+            val isNumericValue = value.any { it.isDigit() }
+            Text(
+                text = value,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = maxValueWidth),
+                style = if (isBold) MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = BodyFontFamily,
+                    fontFeatureSettings = if (isNumericValue) "tnum" else null,
+                    fontWeight = FontWeight.Bold,
+                    color = highlightColor ?: MaterialTheme.colorScheme.onSurface
+                ) else MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = BodyFontFamily,
+                    fontFeatureSettings = if (isNumericValue) "tnum" else null,
+                    fontWeight = FontWeight.SemiBold,
+                    color = highlightColor ?: MaterialTheme.colorScheme.onSurface
+                )
             )
-        )
+        }
     }
 }

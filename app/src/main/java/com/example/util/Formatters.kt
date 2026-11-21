@@ -1,13 +1,26 @@
 package com.example.util
 
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 object Formatters {
     private val czkLocale = Locale.forLanguageTag("cs-CZ")
+
+    // Precompiled typographic & formatting regexes to avoid per-call allocation in Compose loops
+    private val NEGATIVE_ZERO_PCT_REGEX = Regex("^[-\\u2212]+(0+(?:[,.]0+)?%)$")
+    private val SECTION_SIGN_REGEX = Regex("§[ \\t]+")
+    private val THOUSANDS_SPACE_REGEX = Regex("(?<!\\d)(\\d{1,3})[ \\t]+(\\d{3})(?!\\d)")
+    private val NUMBER_UNIT_REGEX = Regex("(\\d+)[ \\t]+(Kč|CZK|EUR|USD|%)")
+    private val COMPACT_K_UNIT_REGEX = Regex("(\\d+k)[ \\t]+(Kč|CZK|EUR|USD)")
+    private val DURATION_UNIT_REGEX = Regex("(\\d+)[ \\t]+(let|roky|roků|rok|měsíců|měsíce|dní|dnů|hodin|years|months|days)")
+    private val SINGLE_LETTER_PREP_REGEX = Regex("(?<=[\\s\\u00A0\\u202F(\\[\"'“„]|^)([ksvzouaiIKSVZOUAI])[ \\t]+")
+    private val ORDINAL_UNIT_REGEX = Regex("(\\d+(?:st|nd|rd|th|\\.)?)[ \\t]+(child|dítě|kroku|step|level)")
 
     private val czkFormatThreadLocal = ThreadLocal.withInitial {
         NumberFormat.getNumberInstance(czkLocale).apply {
@@ -37,16 +50,44 @@ object Formatters {
         return kotlin.math.round(value / 1_000.0) * 1_000.0
     }
 
+    private fun formatIntegerDouble(value: Double): String {
+        val clean = if (value == 0.0) 0.0 else value
+        val absVal = abs(clean)
+        return when {
+            absVal < 9.0e15 -> getCzkFormat().format(clean.roundToLong()).replace(' ', '\u00A0')
+            absVal <= 1.0e25 -> {
+                val rounded = BigDecimal.valueOf(clean).setScale(0, RoundingMode.HALF_UP)
+                getCzkFormat().format(rounded).replace(' ', '\u00A0')
+            }
+            else -> String.format(czkLocale, "%.2e", clean).replace(' ', '\u00A0')
+        }
+    }
+
+    fun fmtEditableAmount(value: Double): String {
+        if (!value.isFinite() || value == 0.0) return "0"
+        val bd = BigDecimal.valueOf(value)
+            .setScale(4, RoundingMode.HALF_UP)
+            .stripTrailingZeros()
+        return if (bd.compareTo(BigDecimal.ZERO) == 0) "0" else bd.toPlainString()
+    }
+
     fun fmtNum(value: Double): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        return getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
+        return formatIntegerDouble(displayVal)
     }
 
     fun fmtCZK(value: Double, symbol: String = "Kč"): String {
         if (value.isNaN() || value.isInfinite()) return "--"
         val displayVal = roundToDisplay(value)
-        val formatted = getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
+        val formatted = formatIntegerDouble(displayVal)
+        return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
+    }
+
+    /** Formats exact CZK amounts without nearest-10 display rounding (e.g. statutory credits 15 204 Kč). */
+    fun fmtExactCZK(value: Double, symbol: String = "Kč"): String {
+        if (value.isNaN() || value.isInfinite()) return "--"
+        val formatted = formatIntegerDouble(value)
         return if (symbol.isBlank()) formatted else "$formatted\u00A0$symbol"
     }
 
@@ -82,19 +123,19 @@ object Formatters {
         return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
     }
 
-    fun fmtLeverageReduction(amount: Double): String {
+    fun fmtLeverageReduction(amount: Double, symbol: String = "Kč"): String {
         if (amount.isNaN() || amount.isInfinite()) return "--"
         val absVal = abs(amount)
         val numStr = when {
             absVal >= 999_950_000 -> {
                 val b = amount / 1_000_000_000.0
-                if (abs(b - b.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fB", b)
-                else String.format(Locale.ROOT, "%.1fB", b)
+                if (abs(b - b.roundToInt()) < 0.05) String.format(czkLocale, "%.0fB", b)
+                else String.format(czkLocale, "%.1fB", b)
             }
             absVal >= 999_500 -> {
                 val mil = amount / 1_000_000.0
-                if (abs(mil - mil.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fM", mil)
-                else String.format(Locale.ROOT, "%.1fM", mil)
+                if (abs(mil - mil.roundToInt()) < 0.05) String.format(czkLocale, "%.0fM", mil)
+                else String.format(czkLocale, "%.1fM", mil)
             }
             absVal >= 10_000 -> {
                 val k = kotlin.math.round(amount / 1_000.0).roundToLong()
@@ -102,31 +143,26 @@ object Formatters {
             }
             absVal >= 1_000 -> {
                 val k = amount / 1_000.0
-                if (abs(k - k.roundToInt()) < 0.05) String.format(Locale.ROOT, "%.0fk", k)
-                else String.format(Locale.ROOT, "%.1fk", k)
+                if (abs(k - k.roundToInt()) < 0.05) String.format(czkLocale, "%.0fk", k)
+                else String.format(czkLocale, "%.1fk", k)
             }
             else -> {
                 val displayVal = roundToDisplay(amount)
-                getCzkFormat().format(displayVal.roundToLong()).replace(' ', '\u00A0')
+                formatIntegerDouble(displayVal)
             }
         }
-        return "$numStr\u00A0CZK"
+        return if (symbol.isBlank()) numStr else "$numStr\u00A0$symbol"
     }
 
     fun fmtPct(value: Double, digits: Int? = null): String {
         if (value.isNaN() || value.isInfinite()) return "--%"
-        val cleanVal = if (abs(value) < 1e-9) 0.0 else value
-        val formatted = if (digits != null) {
-            String.format(czkLocale, "%.${digits.coerceAtLeast(0)}f%%", cleanVal)
-        } else {
-            val isWhole = abs(cleanVal - kotlin.math.round(cleanVal)) < 1e-6
-            if (isWhole) {
-                String.format(czkLocale, "%.0f%%", cleanVal)
-            } else {
-                String.format(czkLocale, "%.1f%%", cleanVal)
-            }
-        }
-        return formatted.replace(' ', '\u00A0')
+        val effectiveDigits = digits?.coerceAtLeast(0)
+            ?: if (abs(value - kotlin.math.round(value)) < 1e-6) 0 else 1
+        val zeroThreshold = if (effectiveDigits <= 15) 0.5 * 10.0.pow(-effectiveDigits) else 1e-9
+        val cleanVal = if (abs(value) < maxOf(1e-9, zeroThreshold)) 0.0 else value
+        val formatted = String.format(czkLocale, "%.${effectiveDigits}f%%", cleanVal)
+            .replace(' ', '\u00A0')
+        return NEGATIVE_ZERO_PCT_REGEX.replaceFirst(formatted, "$1")
     }
 
     /**
@@ -143,25 +179,29 @@ object Formatters {
         var result = text
 
         // 1. Bind section signs: "§ 15" -> "§\u00A015"
-        result = result.replace(Regex("§\\s+"), "§\u00A0")
+        result = SECTION_SIGN_REGEX.replace(result, "§\u00A0")
 
-        // 2. Czech thousands separators within multi-digit numbers: "48 000" -> "48\u00A0000"
-        result = result.replace(Regex("(?<!\\d)(\\d{1,3})\\s+(\\d{3})(?!\\d)"), "$1\u00A0$2")
-        result = result.replace(Regex("(?<!\\d)(\\d{1,3})\\s+(\\d{3})(?!\\d)"), "$1\u00A0$2")
+        // 2. Czech thousands separators within multi-digit numbers: "48 000 000" -> "48\u00A0000\u00A0000"
+        var prevResult: String
+        var pass = 0
+        do {
+            prevResult = result
+            result = THOUSANDS_SPACE_REGEX.replace(result, "$1\u00A0$2")
+            pass++
+        } while (result != prevResult && pass < 5)
 
         // 3. Numbers with currency, units, or percentages: "1,700 Kč", "48k CZK", "15 %"
-        result = result.replace(Regex("(\\d+)\\s+(Kč|CZK|EUR|USD|%)"), "$1\u00A0$2")
-        result = result.replace(Regex("(\\d+k)\\s+(Kč|CZK|EUR|USD)"), "$1\u00A0$2")
-        result = result.replace(Regex("(\\d+)\\s+(let|roky|roků|rok|měsíců|měsíce|dní|dnů|hodin|years|months|days)"), "$1\u00A0$2")
+        result = NUMBER_UNIT_REGEX.replace(result, "$1\u00A0$2")
+        result = COMPACT_K_UNIT_REGEX.replace(result, "$1\u00A0$2")
+        result = DURATION_UNIT_REGEX.replace(result, "$1\u00A0$2")
 
         // 4. Single-letter prepositions & conjunctions (Czech: k, s, v, z, o, u, a, i; English: a, I)
         // Matches when preceded by whitespace, NBSP, opening punctuation, or start of string/line.
-        val singleLetterRegex = Regex("(?<=[\\s\\u00A0\\u202F(\\[\"'“„]|^)([ksvzouaiIKSVZOUAI])\\s+")
-        result = result.replace(singleLetterRegex, "$1\u00A0")
-        result = result.replace(singleLetterRegex, "$1\u00A0")
+        result = SINGLE_LETTER_PREP_REGEX.replace(result, "$1\u00A0")
+        result = SINGLE_LETTER_PREP_REGEX.replace(result, "$1\u00A0")
 
         // 5. Ordinals: "1st child" -> "1st\u00A0child", "2nd child" -> "2nd\u00A0child"
-        result = result.replace(Regex("(\\d+(?:st|nd|rd|th|\\.)?)\\s+(child|dítě|kroku|step|level)"), "$1\u00A0$2")
+        result = ORDINAL_UNIT_REGEX.replace(result, "$1\u00A0$2")
 
         return result
     }
@@ -190,12 +230,30 @@ object Formatters {
     }
 }
 
-fun String.parseUserAmountOrNull(): Double? =
-    this.replace("\u00A0", "")
+private val MULTI_DOT_THOUSANDS_REGEX = Regex("^-?\\d{1,3}(\\.\\d{3}){2,}$")
+private val MULTI_COMMA_THOUSANDS_REGEX = Regex("^-?\\d{1,3}(,\\d{3}){2,}$")
+
+fun String.parseUserAmountOrNull(): Double? {
+    val cleaned = this.replace("\u00A0", "")
         .replace("\u202F", "")
         .replace(" ", "")
-        .replace(",", ".")
+        .replace("\t", "")
         .trim()
-        .toDoubleOrNull()
-        ?.takeIf { it.isFinite() }
+    if (cleaned.isEmpty()) return null
+    val normalized = when {
+        cleaned.contains(',') && cleaned.contains('.') -> {
+            if (cleaned.lastIndexOf('.') > cleaned.lastIndexOf(',')) {
+                cleaned.replace(",", "")
+            } else {
+                cleaned.replace(".", "").replace(",", ".")
+            }
+        }
+        MULTI_COMMA_THOUSANDS_REGEX.matches(cleaned) -> cleaned.replace(",", "")
+        MULTI_DOT_THOUSANDS_REGEX.matches(cleaned) -> cleaned.replace(".", "")
+        cleaned.count { it == ',' } > 1 -> return null
+        cleaned.count { it == '.' } > 1 -> return null
+        else -> cleaned.replace(",", ".")
+    }
+    return normalized.toDoubleOrNull()?.takeIf { it.isFinite() }
+}
 

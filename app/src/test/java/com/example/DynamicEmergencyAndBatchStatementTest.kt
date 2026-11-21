@@ -1,7 +1,10 @@
 package com.example
 
 import com.example.data.SettingsEntity
+import com.example.domain.CustomExpenseItem
 import com.example.domain.FinancialEngine
+import com.example.domain.parseCustomExpenses
+import com.example.domain.serializeCustomExpenses
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.BankType
@@ -223,5 +226,66 @@ class DynamicEmergencyAndBatchStatementTest {
         assertTrue(BankStatementImporter.isWithinSizeLimit(100))
         assertTrue(BankStatementImporter.isWithinSizeLimit(BankStatementImporter.MAX_STATEMENT_BYTES))
         assertFalse(BankStatementImporter.isWithinSizeLimit(BankStatementImporter.MAX_STATEMENT_BYTES + 1))
+    }
+
+    @Test
+    fun testMonthlySavingsAndInvestmentTotalIncludesEmergencyReserveContribution() {
+        val base = SettingsEntity(
+            isSingleHousehold = false,
+            portuDcaMonthly = 10_000.0,
+            ePortuDcaMonthly = 2_000.0,
+            dipContributionMonthly = 4_000.0,
+            eDipContributionMonthly = 1_000.0,
+            dpsOwnContributionMonthly = 1_700.0,
+            eDpsOwnContributionMonthly = 1_300.0,
+            employerRetirementMonthly = 2_000.0,
+            eEmployerRetirementMonthly = 500.0,
+            emergencyReserveMode = "Target",
+            emergencyReserveTarget = 240_000.0,
+            emergencyReserveCurrent = 120_000.0
+        )
+
+        val expectedReserveMonthly = 120_000.0 / 24.0
+        assertEquals(expectedReserveMonthly, FinancialEngine.monthlyEmergencyReserveContribution(base), 0.01)
+
+        val expectedTotal = 10_000.0 + 2_000.0 + 4_000.0 + 1_000.0 + 1_700.0 + 1_300.0 + 2_000.0 + 500.0 + expectedReserveMonthly
+        assertEquals(expectedTotal, FinancialEngine.monthlySavingsAndInvestmentTotal(base), 0.01)
+
+        // When reserve is fully funded, contribution drops to zero
+        val funded = base.copy(emergencyReserveCurrent = 300_000.0)
+        assertEquals(0.0, FinancialEngine.monthlyEmergencyReserveContribution(funded), 0.01)
+        assertEquals(expectedTotal - expectedReserveMonthly, FinancialEngine.monthlySavingsAndInvestmentTotal(funded), 0.01)
+
+        // Single household excludes spouse allocations
+        val single = funded.copy(isSingleHousehold = true)
+        assertEquals(10_000.0 + 4_000.0 + 1_700.0 + 2_000.0, FinancialEngine.monthlySavingsAndInvestmentTotal(single), 0.01)
+
+        // Explicit manual monthly reserve override = 0.0 suppresses auto catch-up even when underfunded
+        val manualZero = base.copy(emergencyReserveMonthlyOverride = 0.0)
+        assertEquals(expectedReserveMonthly, FinancialEngine.autoEmergencyReserveContribution(manualZero), 0.01)
+        assertEquals(0.0, FinancialEngine.monthlyEmergencyReserveContribution(manualZero), 0.01)
+        assertEquals(expectedTotal - expectedReserveMonthly, FinancialEngine.monthlySavingsAndInvestmentTotal(manualZero), 0.01)
+
+        // Explicit manual monthly reserve override = 3,500 CZK supersedes 24-month calculation
+        val manualCustom = base.copy(emergencyReserveMonthlyOverride = 3_500.0)
+        assertEquals(3_500.0, FinancialEngine.monthlyEmergencyReserveContribution(manualCustom), 0.01)
+        assertEquals(expectedTotal - expectedReserveMonthly + 3_500.0, FinancialEngine.monthlySavingsAndInvestmentTotal(manualCustom), 0.01)
+    }
+
+    @Test
+    fun testCustomExpenseDayOfMonthSerializationRoundTrip() {
+        val items = listOf(
+            CustomExpenseItem(id = "c1", name = "Gym", amount = 1_450.0, dayOfMonth = 12),
+            CustomExpenseItem(id = "c2", name = "Parking", amount = 900.0)
+        )
+        val encoded = serializeCustomExpenses(items)
+        val parsed = parseCustomExpenses(encoded)
+        assertEquals(2, parsed.size)
+        assertEquals("Gym", parsed[0].name)
+        assertEquals(1_450.0, parsed[0].amount, 0.01)
+        assertEquals(12, parsed[0].dayOfMonth)
+        assertEquals("Parking", parsed[1].name)
+        assertEquals(900.0, parsed[1].amount, 0.01)
+        assertEquals(null, parsed[1].dayOfMonth)
     }
 }

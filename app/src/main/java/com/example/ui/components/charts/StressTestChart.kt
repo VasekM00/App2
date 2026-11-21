@@ -3,9 +3,13 @@ package com.example.ui.components.charts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,9 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,10 +38,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,11 +57,14 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCompact
 import kotlin.math.max
+import kotlin.math.round
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StressComparisonChart(
     scenarios: List<StressScenarioResult>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentYearMonth: java.time.YearMonth? = null,
 ) {
     if (scenarios.isEmpty()) return
 
@@ -58,6 +73,7 @@ fun StressComparisonChart(
     val cRed = BadRed
     val cGold = BrandGold
     val cCardSurface = MaterialTheme.colorScheme.surface
+    val haptic = LocalHapticFeedback.current
 
     val scenarioColors = listOf(
         cTeal,                             // Baseline
@@ -66,6 +82,13 @@ fun StressComparisonChart(
         cGold,                             // Crash
         MaterialTheme.colorScheme.tertiary // Inflation Shock
     )
+
+    val refTraj = remember(scenarios) {
+        scenarios.maxByOrNull { it.trajectory.size }?.trajectory ?: emptyList()
+    }
+    val maxTrajSize = scenarios.maxOfOrNull { it.trajectory.size } ?: refTraj.size
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    val safeSelectedIndex = selectedIndex?.takeIf { maxTrajSize > 0 }?.coerceIn(0, maxTrajSize - 1)
 
     Card(
         modifier = modifier
@@ -94,67 +117,109 @@ fun StressComparisonChart(
                 text = "Stress & Scenario Multi-Trajectory Comparison",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
+            val horizonLabel = if (maxTrajSize > 0) "over $maxTrajSize years" else "across horizon"
             Text(
-                text = "Comparing portfolio growth across economic regimes over 35 years",
+                text = "Comparing portfolio growth across economic regimes $horizonLabel",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Legend
-            Column(
+            // Legend (FlowRow for narrow 360dp screen wrapping)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                scenarios.chunked(3).forEach { rowScenarios ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        rowScenarios.forEach { sc ->
-                            val colorIdx = scenarios.indexOf(sc) % scenarioColors.size
-                            val color = scenarioColors[colorIdx]
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = sc.name, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
+                scenarios.forEachIndexed { idx, sc ->
+                    val color = scenarioColors[idx % scenarioColors.size]
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = sc.name,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val firstTraj = scenarios.firstOrNull()?.trajectory ?: emptyList()
-            val maxVal = (scenarios.flatMap { it.trajectory }.maxOfOrNull { it.portfolio } ?: 1000000.0).coerceAtLeast(100.0) * 1.1
-            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
+            val ySteps = 4
+            val maxVal = remember(scenarios) {
+                val rawMax = scenarios.flatMap { it.trajectory }
+                    .maxOfOrNull { it.portfolio.finiteOrZero().coerceAtLeast(0.0) } ?: 0.0
+                computeNiceAxisMax((rawMax * 1.1).coerceAtLeast(100000.0), steps = ySteps)
+            }
+            val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
 
-            val paddingTop = 18f
-            val paddingLeft = 85f
-            val paddingRight = 32f
-            val paddingBottom = 50f
-            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
+            val density = LocalDensity.current
+            val textPx = with(density) { 10.sp.toPx() }
 
             val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
                     textSize = textPx
+                    typeface = android.graphics.Typeface.MONOSPACE
                     isAntiAlias = true
                 }
             }
+            val scenarioPath = remember { Path() }
+            val crashDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) }
+            val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
 
+            val maxYLabelW = remember(maxVal, textPaint) {
+                (0..ySteps).maxOf { i -> textPaint.measureText(fmtCompact(maxVal * i / ySteps)) }
+            }
+            val paddingTop = with(density) { 14.dp.toPx() }
+            val paddingLeft = maxOf(with(density) { 56.dp.toPx() }, maxYLabelW + with(density) { 12.dp.toPx() })
+            val paddingRight = with(density) { 16.dp.toPx() }
+            val paddingBottom = maxOf(with(density) { 28.dp.toPx() }, textPx + with(density) { 14.dp.toPx() })
+            val xLabelGap = with(density) { 6.dp.toPx() }
+
+            val updateScrubber: (Float, Float) -> Unit = { touchX, width ->
+                val plotW = width - paddingLeft - paddingRight
+                if (plotW > 0f && maxTrajSize > 0) {
+                    val clickedIdx = if (maxTrajSize > 1) {
+                        val stepX = plotW / (maxTrajSize - 1).toFloat()
+                        val relativeX = touchX - paddingLeft
+                        if (stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, maxTrajSize - 1) else 0
+                    } else 0
+                    if (clickedIdx != selectedIndex) {
+                        selectedIndex = clickedIdx
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                }
+            }
+
+            val chartHeight = (240f * density.fontScale.coerceIn(1f, 1.35f)).dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(chartHeight)
             ) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .height(chartHeight)
+                        .pointerInput(scenarios, paddingLeft, paddingRight) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset -> updateScrubber(offset.x, size.width.toFloat()) },
+                                onHorizontalDrag = { change, _ ->
+                                    change.consume()
+                                    updateScrubber(change.position.x, size.width.toFloat())
+                                }
+                            )
+                        }
+                        .pointerInput(scenarios, paddingLeft, paddingRight) {
+                            detectTapGestures(
+                                onTap = { offset -> updateScrubber(offset.x, size.width.toFloat()) }
+                            )
+                        }
                 ) {
                     val w = size.width
                     val h = size.height
@@ -163,11 +228,12 @@ fun StressComparisonChart(
                     val usableH = plotH - paddingTop
                     if (w <= 0f || h <= 0f || plotW <= 0f || usableH <= 0f) return@Canvas
 
-                    fun yPix(v: Double): Float =
-                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
+                    fun yPix(v: Double): Float {
+                        val frac = safeFraction(v.finiteOrZero().coerceAtLeast(0.0), maxVal)
+                        return paddingTop + (usableH - usableH * frac)
+                    }
 
                     // Y-Axis
-                    val ySteps = 4
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
                         val y = yPix(valAtStep)
@@ -181,34 +247,43 @@ fun StressComparisonChart(
 
                         drawContext.canvas.nativeCanvas.drawText(
                             fmtCompact(valAtStep),
-                            10f,
-                            y + 8f,
+                            4.dp.toPx(),
+                            (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
                         )
                     }
 
                     // X-Axis
-                    val maxTrajSize = scenarios.maxOfOrNull { it.trajectory.size } ?: firstTraj.size
-                    val stepX = if (maxTrajSize > 1) plotW / (maxTrajSize - 1).toFloat() else plotW
+                    val stepX = if (maxTrajSize > 1) plotW / (maxTrajSize - 1).toFloat() else 0f
+                    fun xForIndex(index: Int): Float = if (maxTrajSize > 1) {
+                        paddingLeft + (index * stepX)
+                    } else {
+                        paddingLeft + plotW / 2f
+                    }
                     val xStepCount = 5
-                    for (i in 0 until firstTraj.size step max(1, firstTraj.size / xStepCount)) {
-                        val pt = firstTraj[i]
-                        val x = paddingLeft + (i * stepX)
-                        if (x in paddingLeft..(w - paddingRight + 10f)) {
+                    var lastDrawnRight = -Float.MAX_VALUE
+                    for (i in 0 until refTraj.size step max(1, refTraj.size / xStepCount)) {
+                        val pt = refTraj[i]
+                        val x = xForIndex(i)
+                        if (x in paddingLeft..(w - paddingRight + 4f)) {
                             drawLine(
-                                color = if (i == 0) cTeal else gridColor,
+                                color = gridColor,
                                 start = Offset(x, plotH),
-                                end = Offset(x, plotH + 8f),
-                                strokeWidth = if (i == 0) 3f else 2f
+                                end = Offset(x, plotH + 5.dp.toPx()),
+                                strokeWidth = 2f
                             )
-                            val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
+                            val labelText = "${pt.year}"
                             val textWidth = textPaint.measureText(labelText)
-                            drawContext.canvas.nativeCanvas.drawText(
-                                labelText,
-                                (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
-                                plotH + 34f,
-                                textPaint
-                            )
+                            val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
+                            if (drawX >= lastDrawnRight + xLabelGap) {
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    labelText,
+                                    drawX,
+                                    plotH + 5.dp.toPx() + textPx,
+                                    textPaint
+                                )
+                                lastDrawnRight = drawX + textWidth
+                            }
                         }
                     }
 
@@ -217,40 +292,117 @@ fun StressComparisonChart(
 
                     scenarios.forEachIndexed { sIdx, scenario ->
                         val color = scenarioColors[sIdx % scenarioColors.size]
-                        val path = Path()
-                        scenario.trajectory.forEachIndexed { i, pt ->
-                            val x = paddingLeft + (i * stepX)
-                            val y = yPix(pt.portfolio)
-                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                        }
-                        drawPath(
-                            path = path,
-                            color = color,
-                            style = Stroke(
-                                width = if (scenario.id == "baseline") 5f else 3f,
-                                cap = StrokeCap.Round,
-                                pathEffect = if (scenario.id == "crash") PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) else null
+                        if (scenario.trajectory.size > 1) {
+                            scenarioPath.reset()
+                            scenario.trajectory.forEachIndexed { i, pt ->
+                                val x = xForIndex(i)
+                                val y = yPix(pt.portfolio)
+                                if (i == 0) scenarioPath.moveTo(x, y) else scenarioPath.lineTo(x, y)
+                            }
+                            drawPath(
+                                path = scenarioPath,
+                                color = color,
+                                style = Stroke(
+                                    width = if (scenario.id == "baseline") 5f else 3f,
+                                    cap = StrokeCap.Round,
+                                    pathEffect = if (scenario.id == "crash") crashDashEffect else null
+                                )
                             )
-                        )
+                        } else if (scenario.trajectory.size == 1) {
+                            drawCircle(
+                                color = color,
+                                radius = if (scenario.id == "baseline") 7f else 5f,
+                                center = Offset(xForIndex(0), yPix(scenario.trajectory[0].portfolio))
+                            )
+                        }
                     }
 
-                    // Draw Current Position (Now / Start Year) Indicator Dot
-                    if (firstTraj.isNotEmpty()) {
-                        val curX = paddingLeft + (0 * stepX)
-                        val curY = plotH - (plotH * (firstTraj[0].portfolio / maxVal)).toFloat()
+                    // Draw Current Position (Now) Indicator Dot along baseline trajectory
+                    drawNowMarkerOnSeries(
+                        items = refTraj,
+                        yearOf = { it.year },
+                        valueOf = { it.portfolio },
+                        xForFraction = { frac -> if (refTraj.size > 1) paddingLeft + frac * stepX else xForIndex(0) },
+                        yPix = ::yPix,
+                        plotLeft = paddingLeft,
+                        plotRight = w - paddingRight,
+                        plotTop = paddingTop,
+                        plotBottom = plotH,
+                        accentColor = cTeal,
+                        currentYearMonth = currentYearMonth,
+                    )
+
+                    // Selected scrubber highlight
+                    safeSelectedIndex?.let { idx ->
+                        val sx = xForIndex(idx)
                         drawLine(
-                            color = cTeal.copy(alpha = 0.35f),
-                            start = Offset(curX, curY),
-                            end = Offset(curX, plotH),
+                            color = cTeal.copy(alpha = 0.5f),
+                            start = Offset(sx, paddingTop),
+                            end = Offset(sx, plotH),
                             strokeWidth = 2f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                            pathEffect = selDashEffect
                         )
-                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
-                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
-                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
+                        scenarios.forEachIndexed { sIdx, sc ->
+                            sc.trajectory.getOrNull(idx)?.let { pt ->
+                                val sy = yPix(pt.portfolio)
+                                val color = scenarioColors[sIdx % scenarioColors.size]
+                                drawCircle(color = color, radius = 6f, center = Offset(sx, sy))
+                                drawCircle(color = cCardSurface, radius = 2.5f, center = Offset(sx, sy))
+                            }
+                        }
                     }
 
                     drawContext.canvas.restore()
+                }
+            }
+
+            // Nested Inspection Panel for Selected or Terminal Year
+            if (refTraj.isNotEmpty()) {
+                val inspectIdx = safeSelectedIndex ?: (refTraj.size - 1)
+                val inspectYearPt = refTraj.getOrNull(inspectIdx)
+                if (inspectYearPt != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Year ${inspectYearPt.year} - Age ${inspectYearPt.age} Regime Comparison",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            )
+                            scenarios.chunked(2).forEach { rowScenarios ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    rowScenarios.forEach { sc ->
+                                        val sIdx = scenarios.indexOf(sc).coerceAtLeast(0)
+                                        val color = scenarioColors[sIdx % scenarioColors.size]
+                                        val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.portfolio ?: 0.0).finiteOrZero()
+                                        ChartMetricPill(
+                                            label = sc.name,
+                                            value = fmtCompact(ptVal),
+                                            color = color,
+                                            isBold = sc.id == "baseline",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    if (rowScenarios.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -4,14 +4,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import com.example.data.SettingsEntity
-import com.example.domain.CzechRegulatoryData
 import com.example.domain.FinancialEngine
-import com.example.domain.FullCalculationState
 import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.tabs.CashFlowTab
 import com.example.ui.tabs.OverviewTab
-import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
 import com.example.ui.theme.MartinuFinancialsTheme
@@ -51,15 +48,13 @@ class UIAccessibilityStressTest {
     fun test6_1_allTabsRenderDefaultSettings() {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                PlanTab(
+                OverviewTab(state = defaultCalcState)
+                ProjectionsTab(
                     state = defaultCalcState,
                     actionStates = emptyMap(),
                     onToggleAction = { _, _, _ -> },
-                    onUpdateSettings = {}
-                )
-                OverviewTab(state = defaultCalcState)
-                ProjectionsTab(
-                    state = defaultCalcState
+                    onApplySettings = {},
+                    initialSubTab = 4
                 )
                 SettingsTab(
                     state = defaultCalcState,
@@ -81,7 +76,6 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
         composeTestRule.onNodeWithTag("projections_tab").assertExists()
         composeTestRule.onNodeWithTag("settings_tab").assertExists()
@@ -92,15 +86,13 @@ class UIAccessibilityStressTest {
     fun test6_2_allTabsRenderZeroSettings() {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                PlanTab(
+                OverviewTab(state = zeroCalcState)
+                ProjectionsTab(
                     state = zeroCalcState,
                     actionStates = emptyMap(),
                     onToggleAction = { _, _, _ -> },
-                    onUpdateSettings = {}
-                )
-                OverviewTab(state = zeroCalcState)
-                ProjectionsTab(
-                    state = zeroCalcState
+                    onApplySettings = {},
+                    initialSubTab = 3
                 )
                 SettingsTab(
                     state = zeroCalcState,
@@ -122,7 +114,6 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
         composeTestRule.onNodeWithTag("projections_tab").assertExists()
         composeTestRule.onNodeWithTag("settings_tab").assertExists()
@@ -133,15 +124,13 @@ class UIAccessibilityStressTest {
     fun test6_3_allTabsRenderMaxSettings() {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                PlanTab(
+                OverviewTab(state = maxCalcState)
+                ProjectionsTab(
                     state = maxCalcState,
                     actionStates = emptyMap(),
                     onToggleAction = { _, _, _ -> },
-                    onUpdateSettings = {}
-                )
-                OverviewTab(state = maxCalcState)
-                ProjectionsTab(
-                    state = maxCalcState
+                    onApplySettings = {},
+                    initialSubTab = 4
                 )
                 SettingsTab(
                     state = maxCalcState,
@@ -163,7 +152,6 @@ class UIAccessibilityStressTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
         composeTestRule.onNodeWithTag("projections_tab").assertExists()
         composeTestRule.onNodeWithTag("settings_tab").assertExists()
@@ -171,19 +159,20 @@ class UIAccessibilityStressTest {
     }
 
     @Test
-    fun test6_4_planTabSettingsChange() {
+    fun test6_4_projectionsGoalsTabSettingsChange() {
         var settingsUpdated = false
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                PlanTab(
+                ProjectionsTab(
                     state = defaultCalcState,
                     actionStates = emptyMap(),
                     onToggleAction = { _, _, _ -> },
-                    onUpdateSettings = { settingsUpdated = true }
+                    onApplySettings = { settingsUpdated = true },
+                    initialSubTab = 4
                 )
             }
         }
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 
     @Test
@@ -231,11 +220,7 @@ class UIAccessibilityStressTest {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
-                    state = defaultCalcState,
-                    isDarkTheme = false,
-                    onToggleDarkTheme = {},
-                    onOpenExportReportDialog = {},
-                    onOpenSettings = {}
+                    state = defaultCalcState
                 )
             }
         }
@@ -256,19 +241,16 @@ class UIAccessibilityStressTest {
 
     @Test
     fun test6_10_heroHeaderButtonsAreClickable() {
-        var settingsOpened = false
+        var quickGuideOpened = false
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
                     state = defaultCalcState,
-                    isDarkTheme = false,
-                    onToggleDarkTheme = {},
-                    onOpenExportReportDialog = {},
-                    onOpenSettings = { settingsOpened = true }
+                    onOpenQuickGuide = { quickGuideOpened = true }
                 )
             }
         }
-        composeTestRule.onNodeWithTag("open_settings_button").performClick()
-        assertTrue(settingsOpened)
+        composeTestRule.onNodeWithTag("hero_quick_guide_button").performClick()
+        assertTrue(quickGuideOpened)
     }
 }

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,12 +34,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
@@ -56,13 +59,13 @@ fun TwoBucketLiquidityBridgeCard(
     // Engine already resolves ledger snapshot vs settings per bucket; display exactly what it used.
     val liquidBal = state.currentLiquidPortfolio
     val pensionBal = state.currentPensionPortfolio
-    val totalInvestable = liquidBal + pensionBal
 
     val yearsTo60 = max(0, 60 - s.primaryAge)
     val bridgeFunded = state.isLiquidBridgeFundedToday
     val bridgeRequired = state.liquidBridgeTo60RequiredToday
     val bridgeDeficit = state.liquidBridgeDeficitToday
 
+    val haptic = LocalHapticFeedback.current
     val tealColor = BrandTeal
     val greenColor = GoodGreen
     val goldColor = BrandGold
@@ -70,6 +73,7 @@ fun TwoBucketLiquidityBridgeCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("two_bucket_liquidity_bridge_card"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -96,14 +100,15 @@ fun TwoBucketLiquidityBridgeCard(
             ) {
                 // Bucket 1: Liquid Brokerage (Portu)
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = GoodGreen.copy(alpha = 0.07f),
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onShowInfo?.invoke(
                                 MetricInfo(
                                     title = "Bucket 1: Liquid Brokerage (Portu)",
@@ -155,8 +160,9 @@ fun TwoBucketLiquidityBridgeCard(
                                 color = GoodGreen,
                                 fontSize = 12.sp
                             ),
-                            maxLines = 1,
-                            softWrap = true
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -165,7 +171,7 @@ fun TwoBucketLiquidityBridgeCard(
                             text = fmtCZK(liquidBal),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = GoodGreen,
                                 fontSize = 15.sp
                             )
@@ -188,7 +194,9 @@ fun TwoBucketLiquidityBridgeCard(
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 2,
+                                softWrap = true
                             )
                         }
                     }
@@ -196,14 +204,15 @@ fun TwoBucketLiquidityBridgeCard(
 
                 // Bucket 2: Statutory Pension (DIP & DPS)
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.07f),
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onShowInfo?.invoke(
                                 MetricInfo(
                                     title = "Bucket 2: Statutory Pension (DIP & DPS)",
@@ -255,8 +264,9 @@ fun TwoBucketLiquidityBridgeCard(
                                 color = BrandGold,
                                 fontSize = 12.sp
                             ),
-                            maxLines = 1,
-                            softWrap = true
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -265,7 +275,7 @@ fun TwoBucketLiquidityBridgeCard(
                             text = fmtCZK(pensionBal),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = BrandGold,
                                 fontSize = 15.sp
                             )
@@ -288,7 +298,9 @@ fun TwoBucketLiquidityBridgeCard(
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 2,
+                                softWrap = true
                             )
                         }
                     }
@@ -319,7 +331,10 @@ fun TwoBucketLiquidityBridgeCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { onShowInfo?.invoke(bridgeInfo) }
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onShowInfo?.invoke(bridgeInfo)
+                    }
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
@@ -352,6 +367,7 @@ fun TwoBucketLiquidityBridgeCard(
                             },
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
+                                fontFamily = BodyFontFamily,
                                 color = if (bridgeFunded) GoodGreen else BrandGold,
                                 fontSize = 12.sp
                             )
@@ -361,6 +377,7 @@ fun TwoBucketLiquidityBridgeCard(
                             text = if (yearsTo60 == 0) "Capital fully unlocked" else "Required liquid: ${fmtCZK(bridgeRequired)} · Tap for details",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontSize = 11.sp,
+                                fontFamily = BodyFontFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
@@ -383,7 +400,7 @@ fun TwoBucketLiquidityBridgeCard(
                     title = "Actuarially Viable Full FIRE",
                     category = "Two-Bucket Bridge",
                     explanation = if (targetPoint != null && targetPoint.year < bridgePoint.year) {
-                        "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} yrs) for the liquid bridge to fully fund burn to age 60."
+                        "Gross capital milestone reached in Year ${targetPoint.year}, but full retirement requires waiting until Year ${bridgePoint.year} (+${bridgePoint.year - targetPoint.year} years) for the liquid bridge to fully fund burn to age 60."
                     } else {
                         "Your liquid bridge to age 60 and overall retirement capital both unlock simultaneously in Year ${bridgePoint.year}."
                     },
@@ -393,18 +410,21 @@ fun TwoBucketLiquidityBridgeCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { onShowInfo?.invoke(viableInfo) }
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onShowInfo?.invoke(viableInfo)
+                        }
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -412,6 +432,7 @@ fun TwoBucketLiquidityBridgeCard(
                             text = "Viable Full FIRE: ${bridgePoint.year}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
+                                fontFamily = BodyFontFamily,
                                 color = BrandTeal
                             )
                         )

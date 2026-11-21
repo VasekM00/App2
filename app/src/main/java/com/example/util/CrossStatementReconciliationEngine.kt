@@ -56,8 +56,43 @@ object CrossStatementReconciliationEngine {
     private val EXTERNAL_INCOME_CATEGORIES = setOf(
         BankTransactionType.SALARY_VACLAV.name,
         BankTransactionType.SALARY_ELEONORA.name,
-        BankTransactionType.PARENTAL_BENEFIT.name
+        BankTransactionType.PARENTAL_BENEFIT.name,
+        BankTransactionType.FAMILY_GIFT.name
     )
+
+    private val SVJ_REGEX = Regex("""\bsvj\b""")
+    private val CIL_WORD_REGEX = Regex("""\bcil(?:e|em|u)?\b""")
+    private val RB_CODE_REGEX = Regex("""\brb\b""")
+    private val KB_CODE_REGEX = Regex("""\bkb\b""")
+    private val CS_CODE_REGEX = Regex("""\bcs\b""")
+    private val FAMILY_GIFT_WORD_REGEX = Regex(
+        """\b(?:dar|dary|darek|darem|darovani|maminka|mamka|tatinek|tatka|babicka|dedecek|rodice|rodicu|tchyne|tchan)\b"""
+    )
+
+    private fun canonicalAccountKey(rawAccount: String): String {
+        val stripped = rawAccount.replace(" ", "").lowercase(Locale.ROOT).trim()
+        if (stripped.isEmpty()) return ""
+        val slashIdx = stripped.indexOf('/')
+        if (slashIdx == -1) return stripped.replace("-", "").trimStart('0')
+        val accPart = stripped.substring(0, slashIdx)
+        val bankPart = stripped.substring(slashIdx + 1)
+        val parts = accPart.split("-")
+            .map { it.trimStart('0').ifEmpty { "0" } }
+            .filter { it.isNotEmpty() }
+        val normalizedAcc = if (parts.size >= 2 && parts[0] == "0") {
+            parts.drop(1).joinToString("")
+        } else {
+            parts.joinToString("")
+        }
+        return "$normalizedAcc/$bankPart"
+    }
+
+    private fun isKnownFamilyAccount(canonicalTxAcc: String, knownCanonicalAccounts: Set<String>): Boolean {
+        if (canonicalTxAcc.isEmpty() || knownCanonicalAccounts.isEmpty()) return false
+        if (canonicalTxAcc in knownCanonicalAccounts) return true
+        val accCore = canonicalTxAcc.substringBefore('/')
+        return knownCanonicalAccounts.any { !it.contains('/') && it == accCore }
+    }
 
     fun computeFingerprint(
         date: String,
@@ -94,91 +129,135 @@ object CrossStatementReconciliationEngine {
         counterpartyAccount: String,
         message: String,
         knownFamilyAccounts: Set<String> = emptySet(),
-        isDebit: Boolean = false
+        isDebit: Boolean = false,
+        householdNames: List<String> = emptyList()
     ): Boolean {
-        val cleanAcc = counterpartyAccount.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)
-        if (knownFamilyAccounts.any { cleanAcc.contains(it.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)) && it.isNotBlank() }) {
+        val cleanAcc = canonicalAccountKey(counterpartyAccount)
+        if (cleanAcc.isNotEmpty() && knownFamilyAccounts.any { fam ->
+                val famKey = canonicalAccountKey(fam)
+                famKey.isNotEmpty() && (famKey == cleanAcc || (!famKey.contains('/') && famKey == cleanAcc.substringBefore('/')))
+            }
+        ) {
             return true
         }
 
-        val text = "$counterpartyName $message".lowercase(Locale.ROOT)
+        val normAll = CzechMerchantCatalog.normalizeSimple("$counterpartyName $message")
 
         // Rent and housing payments are never self-transfers
-        if (text.contains("nájem") || text.contains("najem") || text.contains("činže") || text.contains("cinze") ||
-            text.contains("nájemné") || text.contains("najemne") || text.contains("fond oprav") || text.contains("svj")
+        if (normAll.contains("najem") || normAll.contains("najmu") ||
+            normAll.contains("cinze") || normAll.contains("fond oprav") ||
+            SVJ_REGEX.containsMatchIn(normAll)
         ) {
             return false
         }
 
         // Salaries, wages, and state parental benefits are employment/statutory income, never internal transfers
-        val isSalaryOrBenefit = text.contains("mzda") || text.contains("vyplata") || text.contains("výplata") ||
-            text.contains("rodičov") || text.contains("rodicov") || text.contains("úřad práce") || text.contains("urad prace")
+        val isSalaryOrBenefit = normAll.contains("mzda") || normAll.contains("vyplata") ||
+            normAll.contains("rodicov") || normAll.contains("urad prace")
         if (isSalaryOrBenefit) {
             return false
         }
 
-        // Self and spouse name occurrences:
-        // On an incoming credit (!isDebit), receiving money from either spouse or family is an internal household transfer.
-        // On an outgoing debit (isDebit), the account holder's name on the statement simply reflects the ordering party (plátce/příkazce).
-        // Therefore, on a debit, a transaction is an internal transfer ONLY if:
-        //  - The destination counterparty is explicitly the spouse/family (e.g. cpLower contains spouse/family name)
-        //  - Or the message explicitly indicates a transfer to the other spouse (e.g. "pro Václava", "pro Eleonoru", "převod Eleonoře")
-        // But if the name only appears as ordering party/plátce in the message while paying an external merchant, it is NOT an internal transfer.
-        val cpLower = counterpartyName.lowercase(Locale.ROOT)
-        val msgLower = message.lowercase(Locale.ROOT)
+        // Incoming family gifts from parents/relatives are tax-exempt household inflows, never internal self-transfers
+        if (!isDebit && isFamilyGiftContribution(counterpartyName, message)) {
+            return false
+        }
+
+        val normCp = CzechMerchantCatalog.normalizeSimple(counterpartyName)
+        val normMsg = CzechMerchantCatalog.normalizeSimple(message)
+
+        val cpTokens = normCp.split(" ").filter { it.isNotBlank() }
+        val normHouseholdNames = householdNames
+            .map { CzechMerchantCatalog.normalizeSimple(it) }
+            .filter { it.length >= 3 }
+        val allHouseholdTokens = normHouseholdNames
+            .flatMap { it.split(" ") }
+            .filter { it.length >= 3 }
+            .toSet()
+        val matchesConfiguredHouseholdName = cpTokens.isNotEmpty() && normHouseholdNames.any { name ->
+            val nameTokens = name.split(" ").filter { it.isNotBlank() }
+            if (nameTokens.size >= 2) {
+                nameTokens.all { tok -> tok in cpTokens }
+            } else {
+                cpTokens == nameTokens || (cpTokens.size >= 2 && cpTokens.all { it in allHouseholdTokens })
+            }
+        }
+
+        val hasVaclavName = normCp.contains("vaclav martinu") || normCp.contains("martinu vaclav")
+        val hasEleonoraName = normCp.contains("eleonora martinu") || normCp.contains("martinu eleonora")
 
         if (!isDebit) {
-            if (cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav")) return true
-            if (cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora")) return true
-            if (msgLower.contains("prevod z uctu") || msgLower.contains("převod z účtu")) return true
+            if (hasVaclavName || hasEleonoraName || matchesConfiguredHouseholdName) return true
+            if (normMsg.contains("prevod z vlastniho uctu") || normMsg.contains("prevod ze sporeni")) return true
         } else {
-            val isPayerPrefix = cpLower.contains("příkazce:") || cpLower.contains("prikazce:") ||
-                    cpLower.contains("plátce:") || cpLower.contains("platce:") ||
-                    cpLower.contains("majitel:")
-            val mentionsVaclav = (!isPayerPrefix && (cpLower.contains("vaclav martinu") || cpLower.contains("václav martinů") || cpLower.contains("martinu vaclav") || cpLower.contains("martinů václav"))) ||
-                    msgLower.contains("pro vaclava") || msgLower.contains("pro václava") || msgLower.contains("prevod vaclavovi") || msgLower.contains("převod václavovi")
-            val mentionsEleonora = (!isPayerPrefix && (cpLower.contains("eleonora martinu") || cpLower.contains("eleonora martinů") || cpLower.contains("martinu eleonora") || cpLower.contains("martinů eleonora"))) ||
-                    msgLower.contains("pro eleonoru") || msgLower.contains("prevod eleonore") || msgLower.contains("převod eleonoře")
-            if (mentionsVaclav || mentionsEleonora) return true
+            val isPayerPrefix = normCp.contains("prikazce") || normCp.contains("platce") || normCp.contains("majitel")
+            val mentionsVaclav = (!isPayerPrefix && hasVaclavName) ||
+                normMsg.contains("pro vaclava") || normMsg.contains("prevod vaclavovi")
+            val mentionsEleonora = (!isPayerPrefix && hasEleonoraName) ||
+                normMsg.contains("pro eleonoru") || normMsg.contains("prevod eleonore")
+            val mentionsConfigured = !isPayerPrefix && matchesConfiguredHouseholdName
+            if (mentionsVaclav || mentionsEleonora || mentionsConfigured) return true
         }
 
         // Explicit self-transfer keywords
-        if (text.contains("vlastní převod") || text.contains("vlastni prevod") || text.contains("převod mezi účty") || text.contains("prevod mezi ucty")) return true
-        if (text.contains("spořicí účet") || text.contains("sporicí ucet") || text.contains("spořící účet") || text.contains("prevod na sporeni") || text.contains("převod na spoření")) return true
-        if (text.contains("sent from revolut") || (text.contains("revolut") && text.contains("martinu"))) return true
+        if (normAll.contains("vlastni prevod") || normAll.contains("prevod mezi ucty")) return true
+        if (normAll.contains("sporici ucet") || normAll.contains("prevod na sporeni") || normAll.contains("prevod ze sporeni")) return true
+        if (normAll.contains("sent from revolut") || (normAll.contains("revolut") && normAll.contains("martinu"))) return true
 
-        // mBank micro-savings and goals (mSpoření / Cíle)
+        // mBank micro-savings and goals (mSporeni / Cile)
         if (isMbankGoalOrMsporeni(counterpartyName, message)) return true
 
         return false
     }
 
     fun isMbankGoalOrMsporeni(counterpartyName: String, message: String): Boolean {
-        val text = "$counterpartyName $message".lowercase(Locale.ROOT)
-        val norm = CzechMerchantCatalog.normalize("$counterpartyName $message")
-        return text.contains("převod z cíle") || text.contains("prevod z cile") ||
-                norm.contains("prevod cile") || norm.contains("prevod z cile") ||
-                text.contains("převod na mspoření") || text.contains("prevod na msporeni") ||
-                norm.contains("prevod na msporeni") ||
-                text.contains("převod z mspoření") || text.contains("prevod z msporeni") ||
-                norm.contains("prevod msporeni") || norm.contains("prevod z msporeni") ||
-                text.contains("převod na cíl") || text.contains("prevod na cil") ||
-                norm.contains("prevod na cil") ||
-                text.contains("mspoření") || text.contains("msporeni") ||
-                norm.contains("msporeni") ||
-                ((text.contains("cíl") || norm.contains("cil") || norm.contains("cile")) &&
-                        (text.contains("převod") || text.contains("prevod") || text.contains("sporeni") || text.contains("spori")))
+        val norm = CzechMerchantCatalog.normalizeSimple("$counterpartyName $message")
+        return norm.contains("msporeni") ||
+            norm.contains("prevod z cile") ||
+            norm.contains("prevod cile") ||
+            norm.contains("prevod na cil") ||
+            (CIL_WORD_REGEX.containsMatchIn(norm) &&
+                (norm.contains("prevod") || norm.contains("sporeni") || norm.contains("spori")))
     }
 
     fun isFamilyGiftContribution(
         counterpartyName: String,
         message: String
     ): Boolean {
-        val text = "$counterpartyName $message".lowercase(Locale.ROOT)
-        return (text.contains("andrea martinu") || text.contains("andrea martinů") ||
-                text.contains("petr martinu") || text.contains("petr martinů") ||
-                text.contains("příspěvek na") || text.contains("prispevek na") ||
-                text.contains("dar od rodiny") || text.contains("rodinný dar"))
+        val norm = CzechMerchantCatalog.normalizeSimple("$counterpartyName $message")
+        if (norm.isBlank()) return false
+        if (norm.contains("rodicovsk") || norm.contains("urad prace")) return false
+        val hasKnownFamilyPhrase = norm.contains("andrea martinu") ||
+            norm.contains("petr martinu") ||
+            norm.contains("prispevek na") ||
+            norm.contains("prispevek od") ||
+            norm.contains("dar od rodiny") ||
+            norm.contains("rodinny dar") ||
+            norm.contains("financni podpora") ||
+            norm.contains("podpora rodiny") ||
+            norm.contains("rodinna podpora") ||
+            norm.contains("od rodicu") ||
+            norm.contains("od mamy") ||
+            norm.contains("od maminky") ||
+            norm.contains("od taty") ||
+            norm.contains("od tatinka") ||
+            norm.contains("od babicky") ||
+            norm.contains("od dedecka") ||
+            norm.contains("od tchyne") ||
+            norm.contains("od tchana") ||
+            norm.contains("k narozeninam") ||
+            norm.contains("k vanocum") ||
+            norm.contains("k svatku") ||
+            norm.contains("svatebni dar") ||
+            norm.contains("kapesne")
+        if (hasKnownFamilyPhrase) return true
+        val isCharityOrEmployment = norm.contains("nadace") ||
+            norm.contains("charita") ||
+            norm.contains("darcov") ||
+            norm.contains("mzda") ||
+            norm.contains("vyplata") ||
+            norm.contains("zamestnavatel")
+        return !isCharityOrEmployment && FAMILY_GIFT_WORD_REGEX.containsMatchIn(norm)
     }
 
     private fun parseDate(dateStr: String): LocalDate? {
@@ -190,34 +269,21 @@ object CrossStatementReconciliationEngine {
     }
 
     fun bankCodeForBankName(bankName: String): String? {
-        val norm = bankName.trim().uppercase(Locale.ROOT)
+        val norm = CzechMerchantCatalog.normalizeSimple(bankName)
+        if (norm.isEmpty()) return null
         return when {
-            norm.contains("MONETA") -> "0600"
-            norm.contains("CSOB") || norm.contains("ČSOB") -> "0300"
-            norm.contains("MBANK") -> "6210"
-            norm.contains("SPORITELNA") || norm.contains("ČS") -> "0800"
-            norm.contains("KOMERCNI") || norm.contains("KB") -> "0100"
-            norm.contains("FIO") -> "2010"
-            norm.contains("RAIFFEISEN") || norm.contains("RB") -> "5500"
-            norm.contains("AIR") -> "3030"
-            norm.contains("UNICREDIT") -> "2700"
-            norm.contains("CREDITAS") -> "2250"
+            norm.contains("moneta") -> "0600"
+            norm.contains("csob") -> "0300"
+            norm.contains("mbank") -> "6210"
+            norm.contains("sporitelna") || CS_CODE_REGEX.containsMatchIn(norm) -> "0800"
+            norm.contains("komercni") || KB_CODE_REGEX.containsMatchIn(norm) -> "0100"
+            norm.contains("fio") -> "2010"
+            norm.contains("airbank") || norm.contains("air bank") -> "3030"
+            norm.contains("raiffeisen") || RB_CODE_REGEX.containsMatchIn(norm) -> "5500"
+            norm.contains("unicredit") -> "2700"
+            norm.contains("creditas") -> "2250"
             else -> null
         }
-    }
-
-    private fun isCrossBankRoutingMatch(
-        debit: ImportedBankTransactionEntity,
-        credit: ImportedBankTransactionEntity
-    ): Boolean {
-        val creditBankCode = bankCodeForBankName(credit.bankName)
-        val debitBankCode = bankCodeForBankName(debit.bankName)
-        val debitTargetCode = debit.counterpartyAccount.split("/").getOrNull(1)?.trim()
-        val creditSourceCode = credit.counterpartyAccount.split("/").getOrNull(1)?.trim()
-
-        if (creditBankCode != null && debitTargetCode == creditBankCode) return true
-        if (debitBankCode != null && creditSourceCode == debitBankCode) return true
-        return false
     }
 
     fun reconcileTransactions(
@@ -225,10 +291,162 @@ object CrossStatementReconciliationEngine {
         yearMonth: String,
         knownFamilyAccounts: Set<String> = emptySet(),
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
-        bankBalances: Map<String, Double> = emptyMap()
+        bankBalances: Map<String, Double> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): Pair<List<ImportedBankTransactionEntity>, CrossStatementAuditReport> {
-        val result = reconcileTransactionsWithBoundaries(transactions, yearMonth, knownFamilyAccounts, boundaryTransactions, bankBalances)
+        val result = reconcileTransactionsWithBoundaries(
+            transactions, yearMonth, knownFamilyAccounts, boundaryTransactions, bankBalances, householdNames
+        )
         return Pair(result.currentMonthTxs, result.auditReport)
+    }
+
+    private data class TxMeta(
+        val index: Int,
+        val tx: ImportedBankTransactionEntity,
+        val parsedDate: LocalDate?,
+        val absAmount: Double,
+        val isSelfTransfer: Boolean,
+        val normName: String,
+        val normNameIsBankLabel: Boolean,
+        val canonicalAccount: String,
+        val isKnownFamilyAcc: Boolean,
+        val routingBankCode: String?,
+        val ownBankCode: String?,
+        val normBankName: String
+    )
+
+    private fun buildTxMeta(
+        index: Int,
+        tx: ImportedBankTransactionEntity,
+        knownFamilyAccounts: Set<String>,
+        knownFamilyCanonical: Set<String>,
+        householdNames: List<String> = emptyList()
+    ): TxMeta {
+        val isDebit = tx.amount < 0
+        val cleanAcc = canonicalAccountKey(tx.counterpartyAccount)
+        val normName = CzechMerchantCatalog.normalizeSimple(tx.counterpartyName)
+        return TxMeta(
+            index = index,
+            tx = tx,
+            parsedDate = parseDate(tx.date),
+            absAmount = abs(tx.amount),
+            isSelfTransfer = isSelfOrFamilyTransfer(
+                counterpartyName = tx.counterpartyName,
+                counterpartyAccount = tx.counterpartyAccount,
+                message = tx.message,
+                knownFamilyAccounts = knownFamilyAccounts,
+                isDebit = isDebit,
+                householdNames = householdNames
+            ),
+            normName = normName,
+            normNameIsBankLabel = normName.isNotEmpty() && bankCodeForBankName(tx.counterpartyName) != null,
+            canonicalAccount = cleanAcc,
+            isKnownFamilyAcc = isKnownFamilyAccount(cleanAcc, knownFamilyCanonical),
+            routingBankCode = tx.counterpartyAccount.split("/").getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() },
+            ownBankCode = bankCodeForBankName(tx.bankName),
+            normBankName = CzechMerchantCatalog.normalizeSimple(tx.bankName)
+        )
+    }
+
+    private fun scoreTransferPair(debit: TxMeta, credit: TxMeta): Pair<Int, Long>? {
+        val dDate = debit.parsedDate ?: return null
+        val cDate = credit.parsedDate ?: return null
+        if (!debit.absAmount.isFinite() || !credit.absAmount.isFinite()) return null
+        if (abs(debit.absAmount - credit.absAmount) >= 0.05) return null
+
+        val daysDiff = ChronoUnit.DAYS.between(dDate, cDate)
+        if (daysDiff !in -1..CLEARING_WINDOW_DAYS) return null
+
+        if (debit.tx.category == BankTransactionType.FAMILY_GIFT.name ||
+            credit.tx.category == BankTransactionType.FAMILY_GIFT.name
+        ) {
+            return null
+        }
+
+        val debitIsExternal = debit.tx.category in EXTERNAL_EXPENSE_CATEGORIES
+        val creditIsExternal = credit.tx.category in EXTERNAL_INCOME_CATEGORIES
+        if (debitIsExternal && !debit.isSelfTransfer) return null
+        if (creditIsExternal && !credit.isSelfTransfer) return null
+
+        val isFlaggedSelf = debit.isSelfTransfer || credit.isSelfTransfer
+        val debitExplicitInternal = debit.tx.category == BankTransactionType.INTERNAL_TRANSFER.name
+        val creditExplicitInternal = credit.tx.category == BankTransactionType.INTERNAL_TRANSFER.name
+        val sameAccountKnownFamily = debit.isKnownFamilyAcc || credit.isKnownFamilyAcc
+
+        if (!isFlaggedSelf && !debitExplicitInternal && !creditExplicitInternal && !sameAccountKnownFamily) {
+            val dHasName = debit.normName.isNotEmpty() && !debit.normNameIsBankLabel
+            val cHasName = credit.normName.isNotEmpty() && !credit.normNameIsBankLabel
+            if (dHasName && cHasName && debit.normName != credit.normName) return null
+            // A named non-self third-party counterparty on one leg cannot match a blank counterparty via routing-code coincidence.
+            if (dHasName xor cHasName) return null
+        }
+
+        val isCrossBank = credit.normBankName != debit.normBankName
+        val hasRoutingCodeMatch = (credit.ownBankCode != null && debit.routingBankCode == credit.ownBankCode) ||
+            (debit.ownBankCode != null && credit.routingBankCode == debit.ownBankCode)
+
+        val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
+            debitExplicitInternal || creditExplicitInternal || sameAccountKnownFamily
+
+        // Within the same bank, require explicit self-transfer/account evidence; across different banks, matching non-external transfers pair cleanly
+        if (!isCrossBank && !isSelfOrExplicitTransfer) {
+            return null
+        }
+
+        var score = 0
+        if (hasRoutingCodeMatch) score += 100
+        if (debit.isSelfTransfer && credit.isSelfTransfer) score += 60 else if (isFlaggedSelf) score += 40
+        if (debit.normName.isNotEmpty() && debit.normName == credit.normName) score += 30
+        if (isCrossBank) score += 10
+        score += if (daysDiff >= 0) (20 - daysDiff.toInt() * 3) else 2
+        return score to abs(daysDiff)
+    }
+
+    private fun indexByAmountBucket(items: List<TxMeta>): HashMap<Long, MutableList<TxMeta>> {
+        val map = HashMap<Long, MutableList<TxMeta>>(items.size * 2)
+        for (item in items) {
+            if (!item.absAmount.isFinite() || item.absAmount >= 1e15 || item.parsedDate == null) continue
+            val bucket = kotlin.math.round(item.absAmount).toLong()
+            map.getOrPut(bucket) { mutableListOf() }.add(item)
+        }
+        return map
+    }
+
+    private fun popBestCandidate(
+        anchor: TxMeta,
+        isAnchorDebit: Boolean,
+        candidateBuckets: HashMap<Long, MutableList<TxMeta>>
+    ): Pair<TxMeta, Long>? {
+        if (!anchor.absAmount.isFinite() || anchor.absAmount >= 1e15 || anchor.parsedDate == null) return null
+        val centerBucket = kotlin.math.round(anchor.absAmount).toLong()
+        var bestBucket = 0L
+        var bestIdxInBucket = -1
+        var bestScore = Int.MIN_VALUE
+        var bestDaysApart = 0L
+        var bestCandidate: TxMeta? = null
+
+        for (b in (centerBucket - 1)..(centerBucket + 1)) {
+            val list = candidateBuckets[b] ?: continue
+            for (idx in list.indices) {
+                val cand = list[idx]
+                val scored = if (isAnchorDebit) {
+                    scoreTransferPair(anchor, cand)
+                } else {
+                    scoreTransferPair(cand, anchor)
+                } ?: continue
+                if (scored.first > bestScore) {
+                    bestScore = scored.first
+                    bestDaysApart = scored.second
+                    bestCandidate = cand
+                    bestBucket = b
+                    bestIdxInBucket = idx
+                }
+            }
+        }
+
+        if (bestCandidate == null || bestIdxInBucket == -1) return null
+        candidateBuckets[bestBucket]?.removeAt(bestIdxInBucket)
+        return bestCandidate to bestDaysApart
     }
 
     fun reconcileTransactionsWithBoundaries(
@@ -236,26 +454,32 @@ object CrossStatementReconciliationEngine {
         yearMonth: String,
         knownFamilyAccounts: Set<String> = emptySet(),
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
-        bankBalances: Map<String, Double> = emptyMap()
+        bankBalances: Map<String, Double> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): ReconcileResult {
         val workingList = transactions.map { it.copy() }.toMutableList()
         val workingBoundary = boundaryTransactions.map { it.copy() }.toMutableList()
+        val modifiedBoundaryIndices = mutableSetOf<Int>()
+        val knownFamilyCanonical = knownFamilyAccounts
+            .map { canonicalAccountKey(it) }
+            .filter { it.isNotEmpty() }
+            .toSet()
 
         // 1. Initial pass: identify known self-transfers and family contributions
         for (i in workingList.indices) {
             val tx = workingList[i]
-            if (tx.isNetted || tx.category == BankTransactionType.HOUSING_RENT.name) continue
+            if (tx.isNetted ||
+                tx.category == BankTransactionType.HOUSING_RENT.name ||
+                tx.category == BankTransactionType.FAMILY_GIFT.name ||
+                tx.nettingReason.startsWith("Manually ")
+            ) continue
 
-            if (isSelfOrFamilyTransfer(tx.counterpartyName, tx.counterpartyAccount, tx.message, knownFamilyAccounts, isDebit = tx.amount < 0)) {
+            if (isSelfOrFamilyTransfer(tx.counterpartyName, tx.counterpartyAccount, tx.message, knownFamilyAccounts, isDebit = tx.amount < 0, householdNames = householdNames)) {
                 val reason = when {
                     isMbankGoalOrMsporeni(tx.counterpartyName, tx.message) ->
                         "mBank internal transfer (mSpoření / Cíl)"
                     tx.message.contains("Revolut", ignoreCase = true) || tx.counterpartyName.contains("Revolut", ignoreCase = true) ->
                         "Own Revolut account transfer"
-                    tx.counterpartyName.contains("Václav", ignoreCase = true) || tx.counterpartyName.contains("Vaclav", ignoreCase = true) || tx.message.contains("Václav", ignoreCase = true) || tx.message.contains("Vaclav", ignoreCase = true) ->
-                        "Self-transfer (Václav Martinu)"
-                    tx.counterpartyName.contains("Eleonora", ignoreCase = true) || tx.message.contains("Eleonora", ignoreCase = true) ->
-                        "Self-transfer (Eleonora Martinu)"
                     else ->
                         "Internal household transfer"
                 }
@@ -268,273 +492,161 @@ object CrossStatementReconciliationEngine {
             }
         }
 
-        // 2a. Cross-Statement Pairwise Matcher within current month: Pair debit on Account A with credit on Account B within clearing window
+        // 2a. Cross-Statement Pairwise Matcher within current month
         val matchedPairs = mutableListOf<MatchedTransferPair>()
         val pairedWorkingIndices = mutableSetOf<Int>()
-        val debits = workingList.filter { it.amount < 0 && it.category != BankTransactionType.HOUSING_RENT.name && !it.nettingReason.startsWith("Manually ") }.toMutableList()
-        val credits = workingList.filter { it.amount > 0 && !it.nettingReason.startsWith("Manually ") }.toMutableList()
 
-        for (debit in debits) {
-            val debitDate = parseDate(debit.date) ?: continue
-            val debitAbs = abs(debit.amount)
-
-            // Look for matching credit in another bank or internal transfer pair
-            val candidateIndex = credits.indexOfFirst { credit ->
-                val creditDate = parseDate(credit.date) ?: return@indexOfFirst false
-                val amountMatches = abs(debitAbs - credit.amount) < 0.05
-                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
-                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
-                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
-
-                val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
-                        isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
-
-                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
-                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
-                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
-                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
-
-                val isCrossBank = credit.bankName != debit.bankName
-                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
-                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
-                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
-                        !isFlaggedSelf &&
-                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
-
-                if (hasConflictingThirdParties) return@indexOfFirst false
-
-                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
-                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
-                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
-
-                if (isSelfOrExplicitTransfer) {
-                    true
-                } else if (isCrossBank && bothBlankCounterparties) {
-                    true
-                } else {
-                    false
-                }
+        val currentDebits = workingList.withIndex()
+            .filter { (_, tx) ->
+                tx.amount < 0 &&
+                    tx.category != BankTransactionType.HOUSING_RENT.name &&
+                    (!tx.isNetted || !isConfirmedPair(tx)) &&
+                    !tx.nettingReason.startsWith("Manually ")
             }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
 
-            if (candidateIndex != -1) {
-                val credit = credits.removeAt(candidateIndex)
-                val creditDate = parseDate(credit.date)!!
-                val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
+        val currentCredits = workingList.withIndex()
+            .filter { (_, tx) ->
+                tx.amount > 0 &&
+                    tx.category != BankTransactionType.FAMILY_GIFT.name &&
+                    (!tx.isNetted || !isConfirmedPair(tx)) &&
+                    !tx.nettingReason.startsWith("Manually ")
+            }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
 
-                val debitIdxInWorking = workingList.indices.firstOrNull { idx ->
-                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
-                } ?: -1
-                val creditIdxInWorking = workingList.indices.firstOrNull { idx ->
-                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
-                } ?: -1
+        val currentCreditBuckets = indexByAmountBucket(currentCredits)
+        for (debitMeta in currentDebits) {
+            val (creditMeta, daysApart) = popBestCandidate(debitMeta, isAnchorDebit = true, currentCreditBuckets) ?: continue
+            val debit = debitMeta.tx
+            val credit = creditMeta.tx
 
-                val reason = "Cross-account transfer: ${debit.bankName} -> ${credit.bankName} ($daysApart d apart)"
-                if (debitIdxInWorking != -1) {
-                    pairedWorkingIndices.add(debitIdxInWorking)
-                    workingList[debitIdxInWorking] = workingList[debitIdxInWorking].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
-                if (creditIdxInWorking != -1) {
-                    pairedWorkingIndices.add(creditIdxInWorking)
-                    workingList[creditIdxInWorking] = workingList[creditIdxInWorking].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
+            val reason = "Cross-account transfer: ${debit.bankName} -> ${credit.bankName} ($daysApart d apart)"
+            pairedWorkingIndices.add(debitMeta.index)
+            workingList[debitMeta.index] = workingList[debitMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = credit.id.takeIf { it > 0L }
+            )
+            pairedWorkingIndices.add(creditMeta.index)
+            workingList[creditMeta.index] = workingList[creditMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = debit.id.takeIf { it > 0L }
+            )
 
-                matchedPairs.add(
-                    MatchedTransferPair(
-                        debitTx = debit,
-                        creditTx = credit,
-                        daysApart = daysApart,
-                        amount = debitAbs
-                    )
+            matchedPairs.add(
+                MatchedTransferPair(
+                    debitTx = debit,
+                    creditTx = credit,
+                    daysApart = daysApart,
+                    amount = debitMeta.absAmount
                 )
-            }
+            )
         }
 
-        // 2b. Cross-Month Boundary Pairing: match remaining unmatched debits in workingList against boundary credits in adjacent months
-        val boundaryCredits = workingBoundary.filter { it.amount > 0 && (!it.isNetted || !isConfirmedPair(it)) && !it.nettingReason.startsWith("Manually ") }.toMutableList()
-        val remainingDebits = workingList.withIndex().filter { (idx, debit) ->
-            idx !in pairedWorkingIndices && debit.amount < 0 && debit.category != BankTransactionType.HOUSING_RENT.name && !debit.nettingReason.startsWith("Manually ")
-        }.map { it.value }
-
-        for (debit in remainingDebits) {
-            val debitDate = parseDate(debit.date) ?: continue
-            val debitAbs = abs(debit.amount)
-
-            val candidateIndex = boundaryCredits.indexOfFirst { credit ->
-                val creditDate = parseDate(credit.date) ?: return@indexOfFirst false
-                val amountMatches = abs(debitAbs - credit.amount) < 0.05
-                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
-                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
-                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
-
-                val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
-                        isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
-
-                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
-                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
-                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
-                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
-
-                val isCrossBank = credit.bankName != debit.bankName
-                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
-                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
-                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
-                        !isFlaggedSelf &&
-                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
-
-                if (hasConflictingThirdParties) return@indexOfFirst false
-
-                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
-                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
-                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
-
-                if (isSelfOrExplicitTransfer) {
-                    true
-                } else if (isCrossBank && bothBlankCounterparties) {
-                    true
-                } else {
-                    false
-                }
+        // 2b. Cross-Month Boundary Pairing: match remaining unmatched debits against boundary credits
+        val boundaryCredits = workingBoundary.withIndex()
+            .filter { (_, tx) ->
+                tx.amount > 0 &&
+                    tx.category != BankTransactionType.FAMILY_GIFT.name &&
+                    (!tx.isNetted || !isConfirmedPair(tx)) &&
+                    !tx.nettingReason.startsWith("Manually ")
             }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+        val remainingDebits = currentDebits.filter { it.index !in pairedWorkingIndices }
 
-            if (candidateIndex != -1) {
-                val credit = boundaryCredits.removeAt(candidateIndex)
-                val creditDate = parseDate(credit.date)!!
-                val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
+        val boundaryCreditBuckets = indexByAmountBucket(boundaryCredits)
+        for (debitMeta in remainingDebits) {
+            val (creditMeta, daysApart) = popBestCandidate(debitMeta, isAnchorDebit = true, boundaryCreditBuckets) ?: continue
+            val debit = debitMeta.tx
+            val credit = creditMeta.tx
 
-                val debitIdx = workingList.indices.firstOrNull { idx ->
-                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
-                } ?: -1
-                val creditIdx = workingBoundary.indexOfFirst { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
+            val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
+            pairedWorkingIndices.add(debitMeta.index)
+            workingList[debitMeta.index] = workingList[debitMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = credit.id.takeIf { it > 0L }
+            )
+            workingBoundary[creditMeta.index] = workingBoundary[creditMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = debit.id.takeIf { it > 0L }
+            )
+            modifiedBoundaryIndices.add(creditMeta.index)
 
-                val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
-                if (debitIdx != -1) {
-                    pairedWorkingIndices.add(debitIdx)
-                    workingList[debitIdx] = workingList[debitIdx].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
-                if (creditIdx != -1) {
-                    workingBoundary[creditIdx] = workingBoundary[creditIdx].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
-
-                matchedPairs.add(
-                    MatchedTransferPair(
-                        debitTx = debit,
-                        creditTx = credit,
-                        daysApart = daysApart,
-                        amount = debitAbs
-                    )
+            matchedPairs.add(
+                MatchedTransferPair(
+                    debitTx = debit,
+                    creditTx = credit,
+                    daysApart = daysApart,
+                    amount = debitMeta.absAmount
                 )
-            }
+            )
         }
 
-        // 2c. Cross-Month Boundary Pairing: match remaining unmatched credits in workingList against boundary debits in adjacent months
-        val boundaryDebits = workingBoundary.filter { it.amount < 0 && (!it.isNetted || !isConfirmedPair(it)) && it.category != BankTransactionType.HOUSING_RENT.name && !it.nettingReason.startsWith("Manually ") }.toMutableList()
-        val remainingCredits = workingList.withIndex().filter { (idx, credit) ->
-            idx !in pairedWorkingIndices && credit.amount > 0 && !credit.nettingReason.startsWith("Manually ")
-        }.map { it.value }
-
-        for (credit in remainingCredits) {
-            val creditDate = parseDate(credit.date) ?: continue
-            val creditAmount = credit.amount
-
-            val candidateIndex = boundaryDebits.indexOfFirst { debit ->
-                val debitDate = parseDate(debit.date) ?: return@indexOfFirst false
-                val amountMatches = abs(abs(debit.amount) - creditAmount) < 0.05
-                val daysDiff = ChronoUnit.DAYS.between(debitDate, creditDate)
-                val withinClearingWindow = daysDiff in -1..CLEARING_WINDOW_DAYS
-                if (!amountMatches || !withinClearingWindow) return@indexOfFirst false
-
-                val debitIsExternal = debit.category in EXTERNAL_EXPENSE_CATEGORIES
-                val creditIsExternal = credit.category in EXTERNAL_INCOME_CATEGORIES
-                if (debitIsExternal && !isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)) return@indexOfFirst false
-                if (creditIsExternal && !isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false)) return@indexOfFirst false
-
-                val isCrossBank = credit.bankName != debit.bankName
-                val isFlaggedSelf = isSelfOrFamilyTransfer(credit.counterpartyName, credit.counterpartyAccount, credit.message, knownFamilyAccounts, isDebit = false) ||
-                        isSelfOrFamilyTransfer(debit.counterpartyName, debit.counterpartyAccount, debit.message, knownFamilyAccounts, isDebit = true)
-                val hasRoutingCodeMatch = isCrossBankRoutingMatch(debit, credit)
-                val bothBlankCounterparties = debit.counterpartyName.isBlank() && credit.counterpartyName.isBlank()
-                val hasConflictingThirdParties = debit.counterpartyName.isNotBlank() && credit.counterpartyName.isNotBlank() &&
-                        !isFlaggedSelf &&
-                        !debit.counterpartyName.equals(credit.counterpartyName, ignoreCase = true)
-
-                if (hasConflictingThirdParties) return@indexOfFirst false
-
-                val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
-                        debit.category == BankTransactionType.INTERNAL_TRANSFER.name ||
-                        credit.category == BankTransactionType.INTERNAL_TRANSFER.name
-
-                if (isSelfOrExplicitTransfer) {
-                    true
-                } else if (isCrossBank && bothBlankCounterparties) {
-                    true
-                } else {
-                    false
-                }
+        // 2c. Cross-Month Boundary Pairing: match remaining unmatched credits against boundary debits
+        val boundaryDebits = workingBoundary.withIndex()
+            .filter { (_, tx) ->
+                tx.amount < 0 &&
+                    (!tx.isNetted || !isConfirmedPair(tx)) &&
+                    tx.category != BankTransactionType.HOUSING_RENT.name &&
+                    !tx.nettingReason.startsWith("Manually ")
             }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+        val remainingCredits = currentCredits.filter { it.index !in pairedWorkingIndices }
 
-            if (candidateIndex != -1) {
-                val debit = boundaryDebits.removeAt(candidateIndex)
-                val debitDate = parseDate(debit.date)!!
-                val daysApart = abs(ChronoUnit.DAYS.between(debitDate, creditDate))
+        val boundaryDebitBuckets = indexByAmountBucket(boundaryDebits)
+        for (creditMeta in remainingCredits) {
+            val (debitMeta, daysApart) = popBestCandidate(creditMeta, isAnchorDebit = false, boundaryDebitBuckets) ?: continue
+            val debit = debitMeta.tx
+            val credit = creditMeta.tx
 
-                val creditIdx = workingList.indices.firstOrNull { idx ->
-                    idx !in pairedWorkingIndices && workingList[idx].let { it.id == credit.id && it.date == credit.date && it.amount == credit.amount }
-                } ?: -1
-                val debitIdx = workingBoundary.indexOfFirst { it.id == debit.id && it.date == debit.date && it.amount == debit.amount }
+            val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
+            pairedWorkingIndices.add(creditMeta.index)
+            workingList[creditMeta.index] = workingList[creditMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = debit.id.takeIf { it > 0L }
+            )
+            workingBoundary[debitMeta.index] = workingBoundary[debitMeta.index].copy(
+                isNetted = true,
+                category = BankTransactionType.INTERNAL_TRANSFER.name,
+                nettingReason = reason,
+                matchedTxId = credit.id.takeIf { it > 0L }
+            )
+            modifiedBoundaryIndices.add(debitMeta.index)
 
-                val reason = "Cross-month transfer: ${debit.bankName} (${debit.date}) -> ${credit.bankName} (${credit.date}, $daysApart d apart)"
-                if (creditIdx != -1) {
-                    pairedWorkingIndices.add(creditIdx)
-                    workingList[creditIdx] = workingList[creditIdx].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
-                if (debitIdx != -1) {
-                    workingBoundary[debitIdx] = workingBoundary[debitIdx].copy(
-                        isNetted = true,
-                        category = BankTransactionType.INTERNAL_TRANSFER.name,
-                        nettingReason = reason
-                    )
-                }
-
-                matchedPairs.add(
-                    MatchedTransferPair(
-                        debitTx = debit,
-                        creditTx = credit,
-                        daysApart = daysApart,
-                        amount = creditAmount
-                    )
+            matchedPairs.add(
+                MatchedTransferPair(
+                    debitTx = debit,
+                    creditTx = credit,
+                    daysApart = daysApart,
+                    amount = creditMeta.absAmount
                 )
-            }
+            )
         }
 
-        // 3. Compute audit report metrics
+        // 3. Compute audit report metrics (count each matched pair once — never double-count both legs!)
         val singleSideTransfers = workingList.filterIndexed { idx, tx ->
             tx.isNetted && idx !in pairedWorkingIndices
         }
 
-        val totalNetted = workingList.filter { it.isNetted }.sumOf { abs(it.amount) }
+        val totalNetted = matchedPairs.sumOf { if (it.amount.isFinite()) it.amount * 2.0 else 0.0 } +
+            singleSideTransfers.sumOf { if (it.amount.isFinite()) abs(it.amount) else 0.0 }
         val agg = StatementImportCoordinator.aggregateMonthTransactions(workingList)
         val totalInflows = agg.incVaclav + agg.incEleonora + agg.incOther
         val totalExpenses = agg.expRent + agg.expGroceries + agg.expOther
+        val cleanReserve = if (bankBalances.isNotEmpty()) {
+            bankBalances.values.filter { it.isFinite() }.sum()
+        } else {
+            null
+        }
 
         val auditReport = CrossStatementAuditReport(
             yearMonth = yearMonth,
@@ -545,11 +657,11 @@ object CrossStatementReconciliationEngine {
             reconciledInflows = totalInflows,
             reconciledExpenses = totalExpenses,
             reconciledNetCashFlow = totalInflows - totalExpenses,
-            combinedEmergencyReserve = if (bankBalances.isNotEmpty()) bankBalances.values.sum() else null,
+            combinedEmergencyReserve = cleanReserve,
             bankBalances = bankBalances
         )
 
-        val updatedBoundaryTxs = workingBoundary.filter { it.isNetted }
+        val updatedBoundaryTxs = modifiedBoundaryIndices.sorted().map { workingBoundary[it] }
         return ReconcileResult(workingList, updatedBoundaryTxs, auditReport)
     }
 

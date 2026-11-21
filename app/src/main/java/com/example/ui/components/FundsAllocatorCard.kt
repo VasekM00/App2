@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -27,11 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
-import com.example.domain.RegulatoryConstants
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
@@ -45,7 +47,7 @@ private object WaterfallMetricInfos {
     val emergencyReserve = MetricInfo(
         title = "Step 1: Emergency Reserve Safety Buffer",
         category = "Financial Defense",
-        formulaOrRule = "3–6 Months Essential Living Costs in Yield Account (>4% p.a.)",
+        formulaOrRule = "3–6 Months Essential Living Costs in Yield Account (>4%/year)",
         explanation = "Liquid capital held in instant-access savings accounts or short-term treasury repos. Must be fully funded before locking money in multi-year pension products or equity markets.",
         practicalImplication = "Protects against having to sell ETF shares at a loss during bear market drawdowns or sudden unexpected income pauses.",
         accentColor = Color(0xFF0F766E)
@@ -53,10 +55,10 @@ private object WaterfallMetricInfos {
 
     val employerMatch = MetricInfo(
         title = "Step 2: Employer Pension Exemption",
-        category = "Statutory Benefit",
-        formulaOrRule = "Up to 50 000 CZK annually per employee · 100% tax and levy exempt",
-        explanation = "Employer contributions to retirement products (DPS, DIP, životní pojištění). Fully exempt from income tax, health insurance (9%), and social security (24.8%) for the employer, and 100% net for the employee.",
-        statutoryReference = "§ 6 odst. 9 písm. m) Act No. 586/1992 Coll. (ZDP)",
+        category = "Employer Benefit",
+        formulaOrRule = "Up to 50 000 Kč annually per employee · 100% tax and levy exempt",
+        explanation = "Employer contributions to retirement products (DPS, DIP, life insurance). Fully exempt from income tax, health insurance (9%), and social security (24.8%) for the employer, and 100% net for the employee.",
+        statutoryReference = "§ 6(9)(m) of Act No. 586/1992 Coll. (ITA)",
         practicalImplication = "Instant 100% immediate return on employer capital with zero tax drag.",
         accentColor = Color(0xFF16A34A)
     )
@@ -64,29 +66,29 @@ private object WaterfallMetricInfos {
     val dpsSubsidy = MetricInfo(
         title = "Step 3: State Supplementary Pension (DPS)",
         category = "State Cash Subsidy",
-        formulaOrRule = "20% state match up to 1,700 CZK/mo deposit (max 340 CZK/mo)",
-        explanation = "Deposits up to 1,700 CZK/mo receive direct monthly state cash payments (up to 340 CZK/mo standard match). Above 1,700 CZK, subsidy is 0 CZK; tax shield is identical to DIP, but DIP has lower ETF fees.",
-        statutoryReference = "Act No. 427/2011 Coll. (ZPS)",
-        practicalImplication = "Max out 1,700 CZK/mo first for guaranteed 20% state match. Any additional retirement savings beyond 1,700 CZK should go to DIP rather than DPS to avoid pension fund fee drag.",
+        formulaOrRule = "20% state match up to 1,700 Kč monthly deposit (max 340 Kč monthly)",
+        explanation = "Deposits up to 1,700 Kč monthly receive direct monthly state cash payments (up to 340 Kč monthly standard match). Above 1,700 Kč, subsidy is 0 Kč; tax shield is identical to DIP, but DIP has lower ETF fees.",
+        statutoryReference = "Act No. 427/2011 Coll. (Supplementary Pension Savings)",
+        practicalImplication = "Max out 1,700 Kč monthly first for guaranteed 20% state match. Any additional retirement savings beyond 1,700 Kč should go to DIP rather than DPS to avoid pension fund fee drag.",
         accentColor = Color(0xFFD97706)
     )
 
     val dipTaxShield = MetricInfo(
         title = "Step 4: Long-Term Investment Product (DIP)",
         category = "Retirement Tax Shield",
-        formulaOrRule = "Up to 48 000 CZK annual tax deduction per earner",
-        explanation = "Pre-tax investment into broad-market index ETFs (VWCE, S&P 500) through regulated brokers. Saves 7 200 CZK (15% tax bracket) or 11 040 CZK (23% progressive bracket) annually per person.",
-        statutoryReference = "§ 15a Act No. 586/1992 Coll. (ZDP)",
-        practicalImplication = "Preferred vehicle over DPS for savings beyond 1 700 CZK/mo: captures the exact same tax shield (up to 48 000 CZK annually) but in low-cost global ETFs (TER ~0.2%) vs DPS fund fees.",
+        formulaOrRule = "Up to 48 000 Kč annual tax deduction per earner",
+        explanation = "Pre-tax investment into broad-market index ETFs (VWCE, S&P 500) through regulated brokers. Saves 7 200 Kč (15% tax bracket) or 11 040 Kč (23% progressive bracket) annually per person.",
+        statutoryReference = "§ 15a of Act No. 586/1992 Coll. (ITA)",
+        practicalImplication = "Preferred vehicle over DPS for savings beyond 1,700 Kč monthly: captures the exact same tax shield (up to 48,000 Kč annually) but in low-cost global ETFs (TER ~0.2%) vs DPS fund fees.",
         accentColor = Color(0xFF16A34A)
     )
 
     val liquidBrokerage = MetricInfo(
         title = "Step 5: Liquid Brokerage Index ETFs",
         category = "Wealth Compounding & Early Retirement Bridge",
-        formulaOrRule = "Broad Equity Index Funds (VWCE, S&P 500) · 3-year holding test",
+        formulaOrRule = "Broad Equity Index Funds (VWCE, S&P 500) · 3-Year Holding Period",
         explanation = "Unconstrained dollar-cost averaging into liquid brokerage accounts (Portu, XTB, Fio). 100% tax-free capital gains after holding for 3 years, with immediate liquidity at any age without penalty.",
-        statutoryReference = "§ 4 odst. 1 písm. u) Act No. 586/1992 Coll. (ZDP)",
+        statutoryReference = "§ 4(1)(u) of Act No. 586/1992 Coll. (ITA)",
         practicalImplication = "Serves as the vital financial bridge between early retirement and statutory state pension age, free from age-60 withdrawal locks.",
         accentColor = Color(0xFF0F766E)
     )
@@ -108,40 +110,42 @@ fun FundsAllocatorCard(
     modifier: Modifier = Modifier
 ) {
     val s = state.settings
-    val reserveCurrent = state.currentEmergencyReserve
-    val reserveTarget = state.effectiveEmergencyReserveTargetToday
+    val reserveCurrent = state.currentEmergencyReserve.finiteOrZero()
+    val reserveTarget = state.effectiveEmergencyReserveTargetToday.finiteOrZero()
     val isReserveFilled = state.isEmergencyReserveFundedToday
+    val coverageMonths = state.emergencyCoverageMonths.finiteOrZero()
 
     // Employer match
-    val vEmp = min(s.employerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0)
-    val eEmp = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly, s.employerRetirementExemptionAnnual / 12.0) else 0.0
-    val totalEmpMonthly = vEmp + eEmp
+    val vEmp = min(s.employerRetirementMonthly.finiteOrZero(), (s.employerRetirementExemptionAnnual / 12.0).finiteOrZero())
+    val eEmp = if (!s.isSingleHousehold) min(s.eEmployerRetirementMonthly.finiteOrZero(), (s.employerRetirementExemptionAnnual / 12.0).finiteOrZero()) else 0.0
+    val totalEmpMonthly = (vEmp + eEmp).finiteOrZero()
 
     // DPS deposits & subsidy status
-    val vDps = s.dpsOwnContributionMonthly
-    val eDps = if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0
-    val dpsSubsidyOptimalTier = s.dpsDeductionThresholdMonthly
+    val vDps = s.dpsOwnContributionMonthly.finiteOrZero()
+    val eDps = if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly.finiteOrZero() else 0.0
+    val dpsSubsidyOptimalTier = s.dpsDeductionThresholdMonthly.finiteOrZero()
     val isDpsMaxed = vDps >= dpsSubsidyOptimalTier && (s.isSingleHousehold || eDps >= dpsSubsidyOptimalTier)
 
     // DIP deposits & tax shield status
-    val vDip = s.dipContributionMonthly
-    val eDip = if (!s.isSingleHousehold) s.eDipContributionMonthly else 0.0
-    val vDipDpsAbove = max(0.0, vDps - s.dpsDeductionThresholdMonthly)
-    val eDipDpsAbove = max(0.0, eDps - s.dpsDeductionThresholdMonthly)
+    val vDip = s.dipContributionMonthly.finiteOrZero()
+    val eDip = if (!s.isSingleHousehold) s.eDipContributionMonthly.finiteOrZero() else 0.0
+    val vDipDpsAbove = max(0.0, vDps - dpsSubsidyOptimalTier)
+    val eDipDpsAbove = max(0.0, eDps - dpsSubsidyOptimalTier)
     val vRetirementDeductionMonthly = vDip + vDipDpsAbove
     val eRetirementDeductionMonthly = eDip + eDipDpsAbove
     val eHasIncome = !s.isSingleHousehold && FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) > 0.0
-    val statutoryCeilingMonthly = s.taxDeductionCeilingAnnual / 12.0
+    val statutoryCeilingMonthly = (s.taxDeductionCeilingAnnual / 12.0).finiteOrZero()
     val isDipMaxed = vRetirementDeductionMonthly >= statutoryCeilingMonthly && (s.isSingleHousehold || !eHasIncome || eRetirementDeductionMonthly >= statutoryCeilingMonthly)
 
     // Liquid Brokerage ETF DCA
-    val vPortu = s.portuDcaMonthly
-    val ePortu = if (!s.isSingleHousehold) s.ePortuDcaMonthly else 0.0
-    val totalBrokerageMonthly = vPortu + ePortu
+    val vPortu = s.portuDcaMonthly.finiteOrZero()
+    val ePortu = if (!s.isSingleHousehold) s.ePortuDcaMonthly.finiteOrZero() else 0.0
+    val totalBrokerageMonthly = (vPortu + ePortu).finiteOrZero()
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("funds_allocator_card"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -162,7 +166,7 @@ fun FundsAllocatorCard(
                 stepNumber = "1",
                 title = "Emergency Reserve Buffer",
                 currentAlloc = "${fmtCompact(reserveCurrent)} / ${fmtCompact(reserveTarget)}",
-                statusText = if (isReserveFilled) "FILLED (${String.format(java.util.Locale.getDefault(), "%.1f", state.emergencyCoverageMonths)} mo)" else "BUILDING (${String.format(java.util.Locale.getDefault(), "%.1f", state.emergencyCoverageMonths)} mo)",
+                statusText = if (isReserveFilled) "FILLED (${String.format(java.util.Locale.getDefault(), "%.1f", coverageMonths)} mo)" else "BUILDING (${String.format(java.util.Locale.getDefault(), "%.1f", coverageMonths)} mo)",
                 statusColor = if (isReserveFilled) GoodGreen else BrandGold,
                 recommendation = "Target 3–6 months essential living burn in high-yield account. Fund this first before locking capital.",
                 info = WaterfallMetricInfos.emergencyReserve,
@@ -178,7 +182,7 @@ fun FundsAllocatorCard(
                 currentAlloc = "${fmtCZK(totalEmpMonthly)} / month",
                 statusText = if (totalEmpMonthly > 0) "ACTIVE MATCH" else "NOT CLAIMED",
                 statusColor = if (totalEmpMonthly > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                recommendation = "Capture 100% employer match up to 50 000 Kč annually per person. 100% tax and levy exempt.",
+                recommendation = "Capture 100% employer match up to 50,000 Kč annually per person. 100% tax and levy exempt.",
                 info = WaterfallMetricInfos.employerMatch,
                 onShowInfo = onShowInfo
             )
@@ -192,7 +196,7 @@ fun FundsAllocatorCard(
                 currentAlloc = "${fmtCZK(vDps + eDps)} / month",
                 statusText = if (isDpsMaxed) "MAX SUBSIDY" else "OPTIMIZE TO 1,700",
                 statusColor = if (isDpsMaxed) GoodGreen else BrandGold,
-                recommendation = "Deposit 1 700 Kč monthly for the max 20% state match (340 Kč). Above 1 700 Kč, route savings to DIP for lower ETF fees.",
+                recommendation = "Deposit 1,700 Kč monthly for the max 20% state match (340 Kč). Above 1,700 Kč, route savings to DIP for lower ETF fees.",
                 info = WaterfallMetricInfos.dpsSubsidy,
                 onShowInfo = onShowInfo
             )
@@ -204,9 +208,9 @@ fun FundsAllocatorCard(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
                 currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
-                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving)}",
+                statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving.finiteOrZero())}",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
-                recommendation = "Deduct up to 48 000 Kč annually per earner into global ETFs. Captures +7.2k to 11k tax savings with lower fees than DPS above 1 700 Kč.",
+                recommendation = "Deduct up to 48,000 Kč annually per earner into global ETFs. Captures +7.2k to 11k Kč tax savings with lower fees than DPS above 1,700 Kč.",
                 info = WaterfallMetricInfos.dipTaxShield,
                 onShowInfo = onShowInfo
             )
@@ -255,7 +259,8 @@ private fun WaterfallStepRow(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -268,6 +273,7 @@ private fun WaterfallStepRow(
                         text = stepNumber,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
+                            fontFamily = BodyFontFamily,
                             color = statusColor,
                             fontSize = 11.sp
                         )
@@ -275,7 +281,10 @@ private fun WaterfallStepRow(
                 }
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -284,6 +293,7 @@ private fun WaterfallStepRow(
                 color = statusColor,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = BodyFontFamily,
                 horizontalPadding = 6.dp,
                 verticalPadding = 2.dp
             )
@@ -294,7 +304,7 @@ private fun WaterfallStepRow(
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 32.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             Text(
                 text = recommendation,
@@ -302,12 +312,14 @@ private fun WaterfallStepRow(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                softWrap = true
             )
             Text(
                 text = currentAlloc,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = FontWeight.SemiBold,
+                    fontFamily = BodyFontFamily,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -328,13 +340,14 @@ fun DipOptimizationMatrixCard(
     val dip = state.dip
     val vDipMonthly = s.dipContributionMonthly
     val eDipMonthly = s.eDipContributionMonthly
-    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "VÁCLAV"
-    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "ELEONORA"
-    val bothLabel = "${primaryLabel.take(1)} & ${spouseLabel.take(1)} CURRENT"
+    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "PRIMARY"
+    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "PARTNER"
+    val bothLabel = "$primaryLabel & $spouseLabel CURRENT"
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("dip_optimization_matrix_card"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -386,11 +399,11 @@ fun DipOptimizationMatrixCard(
                     val isHighlighted = isVaclav || isEleonora
 
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = if (isHighlighted) BrandTeal.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                         border = BorderStroke(
                             1.dp,
-                            if (isHighlighted) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                            if (isHighlighted) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -409,6 +422,7 @@ fun DipOptimizationMatrixCard(
                                     text = fmtCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily,
                                         fontSize = 13.sp
                                     )
                                 )
@@ -430,12 +444,13 @@ fun DipOptimizationMatrixCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val monthlySaved = sc.annualTaxSaved / 12.0
+                                val monthlySaved = (sc.annualTaxSaved / 12.0).finiteOrZero()
                                 Text(
                                     text = "+${fmtCZK(monthlySaved)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily,
                                         fontSize = 11.5.sp
                                     )
                                 )
@@ -470,13 +485,14 @@ fun DpsOptimizationMatrixCard(
     val dps = state.dps
     val vDpsMonthly = s.dpsOwnContributionMonthly
     val eDpsMonthly = s.eDpsOwnContributionMonthly
-    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "VÁCLAV"
-    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "ELEONORA"
-    val bothLabel = "${primaryLabel.take(1)} & ${spouseLabel.take(1)} CURRENT"
+    val primaryLabel = if (s.primaryName.isNotBlank()) s.primaryName.uppercase() else "PRIMARY"
+    val spouseLabel = if (s.spouseName.isNotBlank()) s.spouseName.uppercase() else "PARTNER"
+    val bothLabel = "$primaryLabel & $spouseLabel CURRENT"
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("dps_optimization_matrix_card"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -528,11 +544,11 @@ fun DpsOptimizationMatrixCard(
                     val isHighlighted = isVaclav || isEleonora
 
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = if (isHighlighted) BrandGold.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                         border = BorderStroke(
                             1.dp,
-                            if (isHighlighted) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                            if (isHighlighted) BrandGold else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -551,6 +567,7 @@ fun DpsOptimizationMatrixCard(
                                     text = fmtCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily,
                                         fontSize = 13.sp
                                     )
                                 )
@@ -572,12 +589,13 @@ fun DpsOptimizationMatrixCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val monthlyBenefit = sc.totalAnnualBenefit / 12.0
+                                val monthlyBenefit = (sc.totalAnnualBenefit / 12.0).finiteOrZero()
                                 Text(
                                     text = "+${fmtCZK(monthlyBenefit)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
+                                        fontFamily = BodyFontFamily,
                                         fontSize = 11.5.sp
                                     )
                                 )

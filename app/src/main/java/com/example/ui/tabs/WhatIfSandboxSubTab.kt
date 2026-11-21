@@ -4,43 +4,49 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
@@ -48,18 +54,23 @@ import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.DecumulationComparisonCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.SandboxScenarioChips
-import com.example.ui.components.infoTapHold
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import com.example.domain.PresetProfiles
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -76,8 +87,16 @@ internal fun WhatIfSandboxSubTab(
 
     var sandbox by remember(state.settings) { mutableStateOf(state.settings) }
     var activePresetId by remember(state.settings) { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
-    val sandboxState = remember(sandbox, ledgerEntries, actionStates) {
-        FinancialEngine.calculate(sandbox, ledgerEntries = ledgerEntries, actionStates = actionStates, runMonteCarlo = false)
+    var sandboxState by remember(state) { mutableStateOf(state) }
+    LaunchedEffect(sandbox, state, ledgerEntries, actionStates) {
+        if (sandbox == state.settings) {
+            sandboxState = state
+            return@LaunchedEffect
+        }
+        delay(35)
+        sandboxState = withContext(Dispatchers.Default) {
+            FinancialEngine.calculate(sandbox, ledgerEntries = ledgerEntries, actionStates = actionStates, runMonteCarlo = false)
+        }
     }
     val isDirty = sandbox != state.settings
 
@@ -107,48 +126,66 @@ internal fun WhatIfSandboxSubTab(
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
                     title = "What-If Sandbox",
-                    subtitle = "Simulate assumptions without touching your plan",
-                    badgeText = if (isDirty) "MODIFIED" else "IN SYNC",
-                    accentColor = BrandGold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "Drag the assumptions below — results update live. Nothing is saved until you tap Apply to Plan.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            sandbox = state.settings
-                            activePresetId = PresetProfiles.PLAN_BASELINE.id
-                        },
-                        enabled = isDirty,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f).testTag("sandbox_reset")
-                    ) {
-                        Text("Reset", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    subtitle = "Test scenarios locally · Tap info for guide",
+                    badgeText = if (isDirty) "MODIFIED" else null,
+                    accentColor = BrandGold,
+                    trailingContent = {
+                        IconButton(
+                            onClick = { onShowInfo(sandboxInfo) },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Info on What-If Sandbox",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
-                    Button(
-                        onClick = { onApplySettings(sandbox) },
-                        enabled = isDirty,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
-                        modifier = Modifier.weight(1.5f).testTag("sandbox_apply")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Apply to Plan", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+                )
+                androidx.compose.animation.AnimatedVisibility(visible = isDirty) {
+                    Column {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    sandbox = state.settings
+                                    activePresetId = PresetProfiles.PLAN_BASELINE.id
+                                },
+                                enabled = isDirty,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("sandbox_reset")
+                            ) {
+                                Text("Reset", fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            }
+                            Button(
+                                onClick = { onApplySettings(sandbox) },
+                                enabled = isDirty,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BrandTeal,
+                                    contentColor = OnBrandTeal
+                                ),
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("sandbox_apply")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Apply to Plan", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
@@ -165,7 +202,7 @@ internal fun WhatIfSandboxSubTab(
                 CardHeaderPill(
                     title = "Scenario Presets",
                     subtitle = "One tap sets a coherent assumption set",
-                    badgeText = "PRESETS",
+                    badgeText = null,
                     accentColor = BrandTeal
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -190,7 +227,7 @@ internal fun WhatIfSandboxSubTab(
                 CardHeaderPill(
                     title = "Assumptions",
                     subtitle = "Every change recalculates instantly",
-                    badgeText = "LIVE",
+                    badgeText = null,
                     accentColor = BrandBlue
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -203,7 +240,7 @@ internal fun WhatIfSandboxSubTab(
                 val sandboxTotalDca = sandbox.portuDcaMonthly + if (!sandbox.isSingleHousehold) sandbox.ePortuDcaMonthly else 0.0
 
                 SandboxSliderRow(
-                    label = "Portfolio return (% p.a.)",
+                    label = "Portfolio return (%/year)",
                     value = sandbox.portfolioNominalReturnPct,
                     range = 0f..12f,
                     steps = 0,
@@ -214,7 +251,7 @@ internal fun WhatIfSandboxSubTab(
                     activePresetId = null
                 }
                 SandboxSliderRow(
-                    label = "Inflation (% p.a.)",
+                    label = "Inflation (%/year)",
                     value = sandbox.cpiInflationPct,
                     range = 0f..8f,
                     steps = 0,
@@ -266,28 +303,6 @@ internal fun WhatIfSandboxSubTab(
                     sandbox = sandbox.copy(vStatePensionAge = age, eStatePensionAge = age)
                     activePresetId = null
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .infoTapHold(sandboxInfo, onShowInfo)
-                        .padding(vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = BrandGold,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Simulation is local and instant; only Apply writes to your plan.",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
 
@@ -310,7 +325,13 @@ internal fun WhatIfSandboxSubTab(
             }
         }
 
-        // 5. Read-only accounts & DCA breakdown
+        // 5. Decumulation Strategy Matrix (Bengen 4% vs Guardrails vs Variable)
+        DecumulationComparisonCard(
+            state = sandboxState,
+            onShowInfo = onShowInfo
+        )
+
+        // 6. Read-only accounts & DCA breakdown
         PortfolioAccountsView(state = sandboxState, onShowInfo = onShowInfo)
     }
 }
@@ -367,10 +388,10 @@ private fun SandboxLiveDeltaBar(
 
             val yearDelta = if (baseYearPt != null && scenarioYearPt != null) scenarioYearPt - baseYearPt else null
             val yearText = when {
-                yearDelta == null -> if (scenarioYearPt != null) "$scenarioYearPt" else "N/A"
+                yearDelta == null -> if (scenarioYearPt != null) "$scenarioYearPt" else "Beyond 35 years"
                 yearDelta == 0 -> "Unchanged"
-                yearDelta > 0 -> "+$yearDelta yr"
-                else -> "$yearDelta yr"
+                yearDelta > 0 -> "+$yearDelta ${if (yearDelta == 1) "year" else "years"}"
+                else -> "$yearDelta ${if (yearDelta == -1) "year" else "years"}"
             }
             val yearColor = when {
                 yearDelta == null || yearDelta == 0 -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -392,7 +413,7 @@ private fun SandboxLiveDeltaBar(
             )
 
             SandboxDeltaItem(
-                label = "35Y WEALTH",
+                label = "35-YEAR WEALTH",
                 valueText = when {
                     abs(wealthDelta) < 1.0 -> "Unchanged"
                     wealthDelta > 0 -> "+${fmtCompact(wealthDelta)}"
@@ -433,12 +454,13 @@ private fun SandboxDeltaItem(
         Text(
             text = valueText,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
+                fontFamily = BodyFontFamily,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Bold
             ),
             color = color,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -463,7 +485,7 @@ private fun SandboxSliderRow(
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = BodyFontFamily,
                     fontWeight = FontWeight.Bold
                 ),
                 color = BrandTeal
@@ -504,11 +526,14 @@ private fun SandboxComparison(
         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
         SandboxComparisonRow(
             label = "Projected FIRE year",
-            baselineText = baseYearPt?.let { "$it" } ?: "Beyond 35y",
-            scenarioText = scenarioYearPt?.let { "$it" } ?: "Beyond 35y",
+            baselineText = baseYearPt?.let { "$it" } ?: "Beyond 35 years",
+            scenarioText = scenarioYearPt?.let { "$it" } ?: "Beyond 35 years",
             delta = if (baseYearPt != null && scenarioYearPt != null) (scenarioYearPt - baseYearPt).toDouble() else Double.NaN,
             higherIsBetter = false,
-            deltaFormatter = { "${abs(it).roundToInt()} yrs" }
+            deltaFormatter = {
+                val n = abs(it).roundToInt()
+                "$n ${if (n == 1) "year" else "years"}"
+            }
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
         SandboxComparisonRow(
@@ -562,30 +587,54 @@ private fun SandboxComparisonRow(
         (if (delta > 0) "+" else "-") + deltaFormatter(delta)
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp))
-            Text(
-                text = "Plan: $baselineText",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                color = neutral
-            )
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = scenarioText,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = color
-            )
-            Text(
-                text = deltaText,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
-                color = color
-            )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        val maxRightWidth = maxWidth * 0.52f
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Text(label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = "Plan: $baselineText",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = BodyFontFamily,
+                        fontSize = 10.5.sp
+                    ),
+                    color = neutral,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.widthIn(max = maxRightWidth)
+            ) {
+                Text(
+                    text = scenarioText,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = BodyFontFamily,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = color
+                )
+                Text(
+                    text = deltaText,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = BodyFontFamily,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = color
+                )
+            }
         }
     }
 }
@@ -619,9 +668,19 @@ private fun PortfolioAccountsView(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 val isSingle = s.isSingleHousehold
-                val liquidTotal = s.liquidPortfolioCurrent + if (!isSingle) s.eLiquidPortfolioCurrent else 0.0
-                val dipTotalBal = s.dipBalanceCurrent + if (!isSingle) s.eDipBalanceCurrent else 0.0
-                val dpsTotalBal = s.dpsBalanceCurrent + if (!isSingle) s.eDpsBalanceCurrent else 0.0
+                val liquidTotal = state.currentLiquidPortfolio
+                val rawDipTotal = s.dipBalanceCurrent + if (!isSingle) s.eDipBalanceCurrent else 0.0
+                val rawDpsTotal = s.dpsBalanceCurrent + if (!isSingle) s.eDpsBalanceCurrent else 0.0
+                val rawPensionSum = rawDipTotal + rawDpsTotal
+                val actualPensionTotal = state.currentPensionPortfolio
+                val dipTotalBal = if (rawPensionSum > 0.0 && abs(actualPensionTotal - rawPensionSum) > 1.0) {
+                    actualPensionTotal * (rawDipTotal / rawPensionSum)
+                } else if (rawPensionSum <= 0.0 && actualPensionTotal > 0.0) {
+                    actualPensionTotal
+                } else {
+                    rawDipTotal
+                }
+                val dpsTotalBal = (actualPensionTotal - dipTotalBal).coerceAtLeast(0.0)
 
                 ProjectionMetricRow("Brokerage / ETF Portfolio", fmtCZK(liquidTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -629,7 +688,7 @@ private fun PortfolioAccountsView(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(dpsTotalBal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(s.emergencyReserveCurrent))
+                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(state.currentEmergencyReserve))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("Total Portfolio Net Worth", fmtCZK(state.netWorthTotal), isBold = true, highlightColor = BrandTeal)
             }
@@ -668,7 +727,7 @@ private fun PortfolioAccountsView(
                 ProjectionMetricRow("DPS Own Contribution", fmtCZK(dpsTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 if (empTotal > 0) {
-                    ProjectionMetricRow("Employer Benefit (Equiv.)", fmtCZK(empTotal))
+                    ProjectionMetricRow("Employer Pension Match", fmtCZK(empTotal))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
                 ProjectionMetricRow("Total Combined Investment", fmtCZK(state.investMonthlyTotal), isBold = true, highlightColor = BrandTeal)

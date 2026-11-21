@@ -5,6 +5,11 @@ import org.json.JSONObject
 
 object BackupManager {
 
+    private const val MAX_BACKUP_JSON_CHARS = 10 * 1024 * 1024
+    private const val MAX_NESTED_JSON_CHARS = 1 * 1024 * 1024
+
+    private fun safeFinite(v: Double): Double = if (v.isFinite()) v else 0.0
+
     fun serializeSettingsToJson(s: SettingsEntity): String {
         val json = JSONObject()
         json.put("_format", "martinu-settings")
@@ -14,72 +19,71 @@ object BackupManager {
         json.put("primaryName", s.primaryName)
         json.put("spouseName", s.spouseName)
         json.put("isSingleHousehold", s.isSingleHousehold)
-        json.put("dcaAnnualGrowthPct", s.dcaAnnualGrowthPct)
+        json.put("dcaAnnualGrowthPct", safeFinite(s.dcaAnnualGrowthPct))
         
         // Income & Work
-        json.put("vSalary", s.vSalary)
-        json.put("vSalaryGrowthPct", s.vSalaryGrowthPct)
-        json.put("vMealVouchersMonthly", s.vMealVouchersMonthly)
-        json.put("vOtherInflowsMonthly", s.vOtherInflowsMonthly)
+        json.put("vSalary", safeFinite(s.vSalary))
+        json.put("vSalaryGrowthPct", safeFinite(s.vSalaryGrowthPct))
+        json.put("vMealVouchersMonthly", safeFinite(s.vMealVouchersMonthly))
+        json.put("vOtherInflowsMonthly", safeFinite(s.vOtherInflowsMonthly))
         json.put("eReturnYear", s.eReturnYear)
         json.put("eReturnMonth", s.eReturnMonth)
-        json.put("eStartingSalary", s.eStartingSalary)
-        json.put("eSalaryGrowthPct", s.eSalaryGrowthPct)
-        json.put("eReinvestedPct", s.eReinvestedPct)
-        json.put("eParentalAllowanceMonthly", s.eParentalAllowanceMonthly)
-        json.put("eLecturingMonthly", s.eLecturingMonthly)
+        json.put("eStartingSalary", safeFinite(s.eStartingSalary))
+        json.put("eSalaryGrowthPct", safeFinite(s.eSalaryGrowthPct))
+        json.put("eReinvestedPct", safeFinite(s.eReinvestedPct))
+        json.put("eParentalAllowanceMonthly", safeFinite(s.eParentalAllowanceMonthly))
+        json.put("eLecturingMonthly", safeFinite(s.eLecturingMonthly))
         json.put("eIncludeLecturing", s.eIncludeLecturing)
-        json.put("eOtherInflowsMonthly", s.eOtherInflowsMonthly)
-        json.put("vGiftsMonthly", s.vGiftsMonthly)
-        json.put("eGiftsMonthly", s.eGiftsMonthly)
-        json.put("familyGiftMonthly", s.familyGiftMonthly)
+        json.put("eOtherInflowsMonthly", safeFinite(s.eOtherInflowsMonthly))
+        json.put("vGiftsMonthly", safeFinite(s.vGiftsMonthly))
+        json.put("eGiftsMonthly", safeFinite(s.eGiftsMonthly))
         json.put("lumpSumYear", s.lumpSumYear)
-        json.put("lumpSumAmount", s.lumpSumAmount)
+        json.put("lumpSumAmount", safeFinite(s.lumpSumAmount))
         json.put("lumpSumInclude", s.lumpSumInclude)
 
         // Balances & Portfolios
-        json.put("liquidPortfolioCurrent", s.liquidPortfolioCurrent)
-        json.put("dpsBalanceCurrent", s.dpsBalanceCurrent)
-        json.put("dipBalanceCurrent", s.dipBalanceCurrent)
-        json.put("eLiquidPortfolioCurrent", s.eLiquidPortfolioCurrent)
-        json.put("eDpsBalanceCurrent", s.eDpsBalanceCurrent)
-        json.put("eDipBalanceCurrent", s.eDipBalanceCurrent)
-        json.put("emergencyReserveCurrent", s.emergencyReserveCurrent)
-        json.put("emergencyReserveTarget", s.emergencyReserveTarget)
+        json.put("liquidPortfolioCurrent", safeFinite(s.liquidPortfolioCurrent))
+        json.put("dpsBalanceCurrent", safeFinite(s.dpsBalanceCurrent))
+        json.put("dipBalanceCurrent", safeFinite(s.dipBalanceCurrent))
+        json.put("eLiquidPortfolioCurrent", safeFinite(s.eLiquidPortfolioCurrent))
+        json.put("eDpsBalanceCurrent", safeFinite(s.eDpsBalanceCurrent))
+        json.put("eDipBalanceCurrent", safeFinite(s.eDipBalanceCurrent))
+        json.put("emergencyReserveCurrent", safeFinite(s.emergencyReserveCurrent))
+        json.put("emergencyReserveTarget", safeFinite(s.emergencyReserveTarget))
 
         // Monthly DCA Flow
-        json.put("portuDcaMonthly", s.portuDcaMonthly)
-        json.put("dpsOwnContributionMonthly", s.dpsOwnContributionMonthly)
-        json.put("dipContributionMonthly", s.dipContributionMonthly)
-        json.put("employerRetirementMonthly", s.employerRetirementMonthly)
-        json.put("ePortuDcaMonthly", s.ePortuDcaMonthly)
-        json.put("eDpsOwnContributionMonthly", s.eDpsOwnContributionMonthly)
-        json.put("eDipContributionMonthly", s.eDipContributionMonthly)
-        json.put("eEmployerRetirementMonthly", s.eEmployerRetirementMonthly)
+        json.put("portuDcaMonthly", safeFinite(s.portuDcaMonthly))
+        json.put("dpsOwnContributionMonthly", safeFinite(s.dpsOwnContributionMonthly))
+        json.put("dipContributionMonthly", safeFinite(s.dipContributionMonthly))
+        json.put("employerRetirementMonthly", safeFinite(s.employerRetirementMonthly))
+        json.put("ePortuDcaMonthly", safeFinite(s.ePortuDcaMonthly))
+        json.put("eDpsOwnContributionMonthly", safeFinite(s.eDpsOwnContributionMonthly))
+        json.put("eDipContributionMonthly", safeFinite(s.eDipContributionMonthly))
+        json.put("eEmployerRetirementMonthly", safeFinite(s.eEmployerRetirementMonthly))
 
         // Core Assumptions & FIRE Targets
-        json.put("portfolioNominalReturnPct", s.portfolioNominalReturnPct)
-        json.put("cpiInflationPct", s.cpiInflationPct)
-        json.put("safeWithdrawalRatePct", s.safeWithdrawalRatePct)
-        json.put("safetyBufferPct", s.safetyBufferPct)
-        json.put("fireTargetOverride", s.fireTargetOverride)
+        json.put("portfolioNominalReturnPct", safeFinite(s.portfolioNominalReturnPct))
+        json.put("cpiInflationPct", safeFinite(s.cpiInflationPct))
+        json.put("safeWithdrawalRatePct", safeFinite(s.safeWithdrawalRatePct))
+        json.put("safetyBufferPct", safeFinite(s.safetyBufferPct))
+        json.put("fireTargetOverride", safeFinite(s.fireTargetOverride))
         json.put("vStatePensionAge", s.vStatePensionAge)
         json.put("eStatePensionAge", s.eStatePensionAge)
-        json.put("vStatePensionMonthly", s.vStatePensionMonthly)
-        json.put("eStatePensionMonthly", s.eStatePensionMonthly)
-        json.put("lifestyleCostAtFireMonthly", s.lifestyleCostAtFireMonthly)
+        json.put("vStatePensionMonthly", safeFinite(s.vStatePensionMonthly))
+        json.put("eStatePensionMonthly", safeFinite(s.eStatePensionMonthly))
+        json.put("lifestyleCostAtFireMonthly", safeFinite(s.lifestyleCostAtFireMonthly))
 
         // Living Expenses
-        json.put("rentMonthly", s.rentMonthly)
-        json.put("groceriesMonthly", s.groceriesMonthly)
-        json.put("cafesMonthly", s.cafesMonthly)
-        json.put("therapyMonthly", s.therapyMonthly)
-        json.put("charityMonthly", s.charityMonthly)
-        json.put("entertainmentMonthly", s.entertainmentMonthly)
-        json.put("transportMonthly", s.transportMonthly)
-        json.put("subscriptionsMonthly", s.subscriptionsMonthly)
-        json.put("otherDiscretionaryMonthly", s.otherDiscretionaryMonthly)
-        json.put("rentGrowthPct", s.rentGrowthPct)
+        json.put("rentMonthly", safeFinite(s.rentMonthly))
+        json.put("groceriesMonthly", safeFinite(s.groceriesMonthly))
+        json.put("cafesMonthly", safeFinite(s.cafesMonthly))
+        json.put("therapyMonthly", safeFinite(s.therapyMonthly))
+        json.put("charityMonthly", safeFinite(s.charityMonthly))
+        json.put("entertainmentMonthly", safeFinite(s.entertainmentMonthly))
+        json.put("transportMonthly", safeFinite(s.transportMonthly))
+        json.put("subscriptionsMonthly", safeFinite(s.subscriptionsMonthly))
+        json.put("otherDiscretionaryMonthly", safeFinite(s.otherDiscretionaryMonthly))
+        json.put("rentGrowthPct", safeFinite(s.rentGrowthPct))
         json.put("customExpensesJson", s.customExpensesJson)
         json.put("customGoalsJson", s.customGoalsJson)
         json.put("customLumpSumsJson", s.customLumpSumsJson)
@@ -92,228 +96,248 @@ object BackupManager {
         json.put("currentChildCostsInBaseline", s.currentChildCostsInBaseline)
         json.put("child1Enabled", s.child1Enabled)
         json.put("child1BirthYear", s.child1BirthYear)
-        json.put("child1TaxBonusAnnual", s.child1TaxBonusAnnual)
+        json.put("child1TaxBonusAnnual", safeFinite(s.child1TaxBonusAnnual))
         json.put("child2Enabled", s.child2Enabled)
         json.put("child2BirthYear", s.child2BirthYear)
-        json.put("child2TaxBonusAnnual", s.child2TaxBonusAnnual)
-        json.put("child3PlusTaxBonusAnnual", s.child3PlusTaxBonusAnnual)
-        json.put("childToddlerMonthly", s.childToddlerMonthly)
-        json.put("childPreschoolMonthly", s.childPreschoolMonthly)
-        json.put("childSchoolMonthly", s.childSchoolMonthly)
-        json.put("childTeenMonthly", s.childTeenMonthly)
-        json.put("childUniMonthly", s.childUniMonthly)
+        json.put("child2TaxBonusAnnual", safeFinite(s.child2TaxBonusAnnual))
+        json.put("child3PlusTaxBonusAnnual", safeFinite(s.child3PlusTaxBonusAnnual))
+        json.put("childToddlerMonthly", safeFinite(s.childToddlerMonthly))
+        json.put("childPreschoolMonthly", safeFinite(s.childPreschoolMonthly))
+        json.put("childSchoolMonthly", safeFinite(s.childSchoolMonthly))
+        json.put("childTeenMonthly", safeFinite(s.childTeenMonthly))
+        json.put("childUniMonthly", safeFinite(s.childUniMonthly))
         json.put("prolongChildSupportInFire", s.prolongChildSupportInFire)
         json.put("childSupportUntilAge", s.childSupportUntilAge)
 
         // Statutory & Tax parameters (Czech Tax Act No. 586/1992 Coll.)
-        json.put("taxRatePct", s.taxRatePct)
-        json.put("taxRateSecondPct", s.taxRateSecondPct)
-        json.put("taxSecondBracketThresholdAnnual", s.taxSecondBracketThresholdAnnual)
-        json.put("taxpayerCreditAnnual", s.taxpayerCreditAnnual)
-        json.put("taxDeductionCeilingAnnual", s.taxDeductionCeilingAnnual)
-        json.put("spouseTaxCreditAnnual", s.spouseTaxCreditAnnual)
-        json.put("spouseIncomeLimitAnnual", s.spouseIncomeLimitAnnual)
+        json.put("taxRatePct", safeFinite(s.taxRatePct))
+        json.put("taxRateSecondPct", safeFinite(s.taxRateSecondPct))
+        json.put("taxSecondBracketThresholdAnnual", safeFinite(s.taxSecondBracketThresholdAnnual))
+        json.put("taxpayerCreditAnnual", safeFinite(s.taxpayerCreditAnnual))
+        json.put("taxDeductionCeilingAnnual", safeFinite(s.taxDeductionCeilingAnnual))
+        json.put("spouseTaxCreditAnnual", safeFinite(s.spouseTaxCreditAnnual))
+        json.put("spouseIncomeLimitAnnual", safeFinite(s.spouseIncomeLimitAnnual))
         json.put("includeSpouseCredit", s.includeSpouseCredit)
         json.put("hasChildUnder3", s.hasChildUnder3)
-        json.put("minWageMonthly", s.minWageMonthly)
+        json.put("minWageMonthly", safeFinite(s.minWageMonthly))
 
         // DPS Reform parameters (Lepší penzijko)
-        json.put("dpsGrossReturnPct", s.dpsGrossReturnPct)
-        json.put("dpsAnnualFeePct", s.dpsAnnualFeePct)
-        json.put("dpsDeductionThresholdMonthly", s.dpsDeductionThresholdMonthly)
-        json.put("dpsStandardSubsidyMaxMonthly", s.dpsStandardSubsidyMaxMonthly)
-        json.put("dpsYouthSubsidyMaxMonthly", s.dpsYouthSubsidyMaxMonthly)
-        json.put("dpsMinDepositForSubsidy", s.dpsMinDepositForSubsidy)
+        json.put("dpsGrossReturnPct", safeFinite(s.dpsGrossReturnPct))
+        json.put("dpsAnnualFeePct", safeFinite(s.dpsAnnualFeePct))
+        json.put("dpsDeductionThresholdMonthly", safeFinite(s.dpsDeductionThresholdMonthly))
+        json.put("dpsStandardSubsidyMaxMonthly", safeFinite(s.dpsStandardSubsidyMaxMonthly))
+        json.put("dpsYouthSubsidyMaxMonthly", safeFinite(s.dpsYouthSubsidyMaxMonthly))
+        json.put("dpsMinDepositForSubsidy", safeFinite(s.dpsMinDepositForSubsidy))
         json.put("dpsYouthAgeLimit", s.dpsYouthAgeLimit)
-        json.put("dpsSubsidyRateStandardPct", s.dpsSubsidyRateStandardPct)
-        json.put("dpsSubsidyRateYouthPct", s.dpsSubsidyRateYouthPct)
-        json.put("dpsStatutoryFeeCapPct", s.dpsStatutoryFeeCapPct)
-        json.put("employerRetirementExemptionAnnual", s.employerRetirementExemptionAnnual)
-        json.put("childBonusMinWageMultiplier", s.childBonusMinWageMultiplier)
-        json.put("parentalAllowanceTotalBeforeCutoff", s.parentalAllowanceTotalBeforeCutoff)
-        json.put("parentalAllowanceTotalFromCutoff", s.parentalAllowanceTotalFromCutoff)
+        json.put("dpsSubsidyRateStandardPct", safeFinite(s.dpsSubsidyRateStandardPct))
+        json.put("dpsSubsidyRateYouthPct", safeFinite(s.dpsSubsidyRateYouthPct))
+        json.put("dpsStatutoryFeeCapPct", safeFinite(s.dpsStatutoryFeeCapPct))
+        json.put("employerRetirementExemptionAnnual", safeFinite(s.employerRetirementExemptionAnnual))
+        json.put("childBonusMinWageMultiplier", safeFinite(s.childBonusMinWageMultiplier))
+        json.put("parentalAllowanceTotalBeforeCutoff", safeFinite(s.parentalAllowanceTotalBeforeCutoff))
+        json.put("parentalAllowanceTotalFromCutoff", safeFinite(s.parentalAllowanceTotalFromCutoff))
         json.put("parentalAllowanceCutoffYear", s.parentalAllowanceCutoffYear)
 
         // Monte Carlo configuration
         json.put("monteCarloN", s.monteCarloN)
-        json.put("monteCarloVolatilityPct", s.monteCarloVolatilityPct)
+        json.put("monteCarloVolatilityPct", safeFinite(s.monteCarloVolatilityPct))
         json.put("monteCarloSeed", s.monteCarloSeed)
         json.put("retirementHorizonYears", s.retirementHorizonYears)
-        json.put("dividendYieldPct", s.dividendYieldPct)
-        json.put("dividendTaxRatePct", s.dividendTaxRatePct)
+        json.put("dividendYieldPct", safeFinite(s.dividendYieldPct))
+        json.put("dividendTaxRatePct", safeFinite(s.dividendTaxRatePct))
         json.put("useHistoricalBootstrap", s.useHistoricalBootstrap)
         json.put("guardrailsEnabled", s.guardrailsEnabled)
-        json.put("guardrailsUpperThresholdPct", s.guardrailsUpperThresholdPct)
-        json.put("guardrailsLowerThresholdPct", s.guardrailsLowerThresholdPct)
-        json.put("guardrailsCutPct", s.guardrailsCutPct)
-        json.put("guardrailsBoostPct", s.guardrailsBoostPct)
-        json.put("guardrailsFloorPct", s.guardrailsFloorPct)
+        json.put("guardrailsUpperThresholdPct", safeFinite(s.guardrailsUpperThresholdPct))
+        json.put("guardrailsLowerThresholdPct", safeFinite(s.guardrailsLowerThresholdPct))
+        json.put("guardrailsCutPct", safeFinite(s.guardrailsCutPct))
+        json.put("guardrailsBoostPct", safeFinite(s.guardrailsBoostPct))
+        json.put("guardrailsFloorPct", safeFinite(s.guardrailsFloorPct))
         json.put("baristaTransitionEnabled", s.baristaTransitionEnabled)
         json.put("baristaStartYear", s.baristaStartYear)
-        json.put("baristaMonthlyIncome", s.baristaMonthlyIncome)
-        json.put("baristaSavingsMonthly", s.baristaSavingsMonthly)
+        json.put("baristaMonthlyIncome", safeFinite(s.baristaMonthlyIncome))
+        json.put("baristaSavingsMonthly", safeFinite(s.baristaSavingsMonthly))
         json.put("merchantRulesJson", s.merchantRulesJson)
         json.put("emergencyReserveMode", s.emergencyReserveMode)
+        json.put(
+            "emergencyReserveMonthlyOverride",
+            if (s.emergencyReserveMonthlyOverride.isFinite()) s.emergencyReserveMonthlyOverride else -1.0
+        )
 
         return json.toString()
     }
 
     fun deserializeSettingsFromJson(jsonStr: String, fallback: SettingsEntity): SettingsEntity? {
+        if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
         return try {
             val rawJson = JSONObject(jsonStr.trim())
-            val json = if (rawJson.has("settings")) rawJson.getJSONObject("settings") else rawJson
+            val json = if (rawJson.has("settings")) {
+                rawJson.optJSONObject("settings") ?: return null
+            } else {
+                rawJson
+            }
+            val restoredVGifts = json.optFiniteDouble(
+                "vGiftsMonthly",
+                json.optFiniteDouble("familyGiftMonthly", fallback.vGiftsMonthly)
+            )
+            val restoredEGifts = json.optFiniteDouble("eGiftsMonthly", fallback.eGiftsMonthly)
             val restored = fallback.copy(
-                baseYear = json.optInt("baseYear", fallback.baseYear),
-                primaryAge = json.optInt("primaryAge", fallback.primaryAge),
-                primaryName = json.optString("primaryName", fallback.primaryName),
-                spouseName = json.optString("spouseName", fallback.spouseName),
-                isSingleHousehold = json.optBoolean("isSingleHousehold", fallback.isSingleHousehold),
-                dcaAnnualGrowthPct = json.optDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
+                baseYear = json.optSafeInt("baseYear", fallback.baseYear),
+                primaryAge = json.optSafeInt("primaryAge", fallback.primaryAge),
+                primaryName = json.optStringNonNull("primaryName", fallback.primaryName),
+                spouseName = json.optStringNonNull("spouseName", fallback.spouseName),
+                isSingleHousehold = json.optSafeBoolean("isSingleHousehold", fallback.isSingleHousehold),
+                dcaAnnualGrowthPct = json.optFiniteDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
-                vSalary = json.optDouble("vSalary", fallback.vSalary),
-                vSalaryGrowthPct = json.optDouble("vSalaryGrowthPct", fallback.vSalaryGrowthPct),
-                vMealVouchersMonthly = json.optDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
-                vOtherInflowsMonthly = json.optDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),
-                eReturnYear = json.optInt("eReturnYear", fallback.eReturnYear),
-                eReturnMonth = json.optInt("eReturnMonth", fallback.eReturnMonth),
-                eStartingSalary = json.optDouble("eStartingSalary", fallback.eStartingSalary),
-                eSalaryGrowthPct = json.optDouble("eSalaryGrowthPct", fallback.eSalaryGrowthPct),
-                eReinvestedPct = json.optDouble("eReinvestedPct", fallback.eReinvestedPct),
-                eParentalAllowanceMonthly = json.optDouble("eParentalAllowanceMonthly", fallback.eParentalAllowanceMonthly),
-                eLecturingMonthly = json.optDouble("eLecturingMonthly", fallback.eLecturingMonthly),
-                eIncludeLecturing = json.optBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
-                eOtherInflowsMonthly = json.optDouble("eOtherInflowsMonthly", fallback.eOtherInflowsMonthly),
-                vGiftsMonthly = json.optDouble("vGiftsMonthly", json.optDouble("familyGiftMonthly", fallback.vGiftsMonthly)),
-                eGiftsMonthly = json.optDouble("eGiftsMonthly", fallback.eGiftsMonthly),
-                familyGiftMonthly = json.optDouble("familyGiftMonthly", fallback.familyGiftMonthly),
-                lumpSumYear = json.optInt("lumpSumYear", fallback.lumpSumYear),
-                lumpSumAmount = json.optDouble("lumpSumAmount", fallback.lumpSumAmount),
-                lumpSumInclude = json.optBoolean("lumpSumInclude", fallback.lumpSumInclude),
+                vSalary = json.optFiniteDouble("vSalary", fallback.vSalary),
+                vSalaryGrowthPct = json.optFiniteDouble("vSalaryGrowthPct", fallback.vSalaryGrowthPct),
+                vMealVouchersMonthly = json.optFiniteDouble("vMealVouchersMonthly", fallback.vMealVouchersMonthly),
+                vOtherInflowsMonthly = json.optFiniteDouble("vOtherInflowsMonthly", fallback.vOtherInflowsMonthly),
+                eReturnYear = json.optSafeInt("eReturnYear", fallback.eReturnYear),
+                eReturnMonth = json.optSafeInt("eReturnMonth", fallback.eReturnMonth),
+                eStartingSalary = json.optFiniteDouble("eStartingSalary", fallback.eStartingSalary),
+                eSalaryGrowthPct = json.optFiniteDouble("eSalaryGrowthPct", fallback.eSalaryGrowthPct),
+                eReinvestedPct = json.optFiniteDouble("eReinvestedPct", fallback.eReinvestedPct),
+                eParentalAllowanceMonthly = json.optFiniteDouble("eParentalAllowanceMonthly", fallback.eParentalAllowanceMonthly),
+                eLecturingMonthly = json.optFiniteDouble("eLecturingMonthly", fallback.eLecturingMonthly),
+                eIncludeLecturing = json.optSafeBoolean("eIncludeLecturing", fallback.eIncludeLecturing),
+                eOtherInflowsMonthly = json.optFiniteDouble("eOtherInflowsMonthly", fallback.eOtherInflowsMonthly),
+                vGiftsMonthly = restoredVGifts,
+                eGiftsMonthly = restoredEGifts,
+                lumpSumYear = json.optSafeInt("lumpSumYear", fallback.lumpSumYear),
+                lumpSumAmount = json.optFiniteDouble("lumpSumAmount", fallback.lumpSumAmount),
+                lumpSumInclude = json.optSafeBoolean("lumpSumInclude", fallback.lumpSumInclude),
 
-                liquidPortfolioCurrent = json.optDouble("liquidPortfolioCurrent", fallback.liquidPortfolioCurrent),
-                dpsBalanceCurrent = json.optDouble("dpsBalanceCurrent", fallback.dpsBalanceCurrent),
-                dipBalanceCurrent = json.optDouble("dipBalanceCurrent", fallback.dipBalanceCurrent),
-                eLiquidPortfolioCurrent = json.optDouble("eLiquidPortfolioCurrent", fallback.eLiquidPortfolioCurrent),
-                eDpsBalanceCurrent = json.optDouble("eDpsBalanceCurrent", fallback.eDpsBalanceCurrent),
-                eDipBalanceCurrent = json.optDouble("eDipBalanceCurrent", fallback.eDipBalanceCurrent),
-                emergencyReserveCurrent = json.optDouble("emergencyReserveCurrent", fallback.emergencyReserveCurrent),
-                emergencyReserveTarget = json.optDouble("emergencyReserveTarget", fallback.emergencyReserveTarget),
+                liquidPortfolioCurrent = json.optFiniteDouble("liquidPortfolioCurrent", fallback.liquidPortfolioCurrent),
+                dpsBalanceCurrent = json.optFiniteDouble("dpsBalanceCurrent", fallback.dpsBalanceCurrent),
+                dipBalanceCurrent = json.optFiniteDouble("dipBalanceCurrent", fallback.dipBalanceCurrent),
+                eLiquidPortfolioCurrent = json.optFiniteDouble("eLiquidPortfolioCurrent", fallback.eLiquidPortfolioCurrent),
+                eDpsBalanceCurrent = json.optFiniteDouble("eDpsBalanceCurrent", fallback.eDpsBalanceCurrent),
+                eDipBalanceCurrent = json.optFiniteDouble("eDipBalanceCurrent", fallback.eDipBalanceCurrent),
+                emergencyReserveCurrent = json.optFiniteDouble("emergencyReserveCurrent", fallback.emergencyReserveCurrent),
+                emergencyReserveTarget = json.optFiniteDouble("emergencyReserveTarget", fallback.emergencyReserveTarget),
 
-                portuDcaMonthly = json.optDouble("portuDcaMonthly", fallback.portuDcaMonthly),
-                dpsOwnContributionMonthly = json.optDouble("dpsOwnContributionMonthly", fallback.dpsOwnContributionMonthly),
-                dipContributionMonthly = json.optDouble("dipContributionMonthly", fallback.dipContributionMonthly),
-                employerRetirementMonthly = json.optDouble("employerRetirementMonthly", fallback.employerRetirementMonthly),
-                ePortuDcaMonthly = json.optDouble("ePortuDcaMonthly", fallback.ePortuDcaMonthly),
-                eDpsOwnContributionMonthly = json.optDouble("eDpsOwnContributionMonthly", fallback.eDpsOwnContributionMonthly),
-                eDipContributionMonthly = json.optDouble("eDipContributionMonthly", fallback.eDipContributionMonthly),
-                eEmployerRetirementMonthly = json.optDouble("eEmployerRetirementMonthly", fallback.eEmployerRetirementMonthly),
+                portuDcaMonthly = json.optFiniteDouble("portuDcaMonthly", fallback.portuDcaMonthly),
+                dpsOwnContributionMonthly = json.optFiniteDouble("dpsOwnContributionMonthly", fallback.dpsOwnContributionMonthly),
+                dipContributionMonthly = json.optFiniteDouble("dipContributionMonthly", fallback.dipContributionMonthly),
+                employerRetirementMonthly = json.optFiniteDouble("employerRetirementMonthly", fallback.employerRetirementMonthly),
+                ePortuDcaMonthly = json.optFiniteDouble("ePortuDcaMonthly", fallback.ePortuDcaMonthly),
+                eDpsOwnContributionMonthly = json.optFiniteDouble("eDpsOwnContributionMonthly", fallback.eDpsOwnContributionMonthly),
+                eDipContributionMonthly = json.optFiniteDouble("eDipContributionMonthly", fallback.eDipContributionMonthly),
+                eEmployerRetirementMonthly = json.optFiniteDouble("eEmployerRetirementMonthly", fallback.eEmployerRetirementMonthly),
 
-                portfolioNominalReturnPct = json.optDouble("portfolioNominalReturnPct", fallback.portfolioNominalReturnPct),
-                cpiInflationPct = json.optDouble("cpiInflationPct", fallback.cpiInflationPct),
-                safeWithdrawalRatePct = json.optDouble("safeWithdrawalRatePct", fallback.safeWithdrawalRatePct),
-                safetyBufferPct = json.optDouble("safetyBufferPct", fallback.safetyBufferPct),
-                fireTargetOverride = json.optDouble("fireTargetOverride", fallback.fireTargetOverride),
-                vStatePensionAge = json.optInt("vStatePensionAge", json.optInt("statePensionAge", fallback.vStatePensionAge)),
-                eStatePensionAge = json.optInt("eStatePensionAge", json.optInt("statePensionAge", fallback.eStatePensionAge)),
-                vStatePensionMonthly = if (json.has("vStatePensionMonthly")) {
-                    json.optDouble("vStatePensionMonthly", fallback.vStatePensionMonthly)
-                } else if (json.has("statePensionMonthly")) {
-                    json.optDouble("statePensionMonthly", fallback.vStatePensionMonthly * 2.0) / 2.0
-                } else {
-                    fallback.vStatePensionMonthly
+                portfolioNominalReturnPct = json.optFiniteDouble("portfolioNominalReturnPct", fallback.portfolioNominalReturnPct),
+                cpiInflationPct = json.optFiniteDouble("cpiInflationPct", fallback.cpiInflationPct),
+                safeWithdrawalRatePct = json.optFiniteDouble("safeWithdrawalRatePct", fallback.safeWithdrawalRatePct),
+                safetyBufferPct = json.optFiniteDouble("safetyBufferPct", fallback.safetyBufferPct),
+                fireTargetOverride = json.optFiniteDouble("fireTargetOverride", fallback.fireTargetOverride),
+                vStatePensionAge = json.optSafeInt(
+                    "vStatePensionAge",
+                    json.optSafeInt("statePensionAge", fallback.vStatePensionAge)
+                ),
+                eStatePensionAge = json.optSafeInt(
+                    "eStatePensionAge",
+                    json.optSafeInt("statePensionAge", fallback.eStatePensionAge)
+                ),
+                vStatePensionMonthly = when {
+                    json.has("vStatePensionMonthly") && !json.isNull("vStatePensionMonthly") ->
+                        json.optFiniteDouble("vStatePensionMonthly", fallback.vStatePensionMonthly)
+                    json.has("statePensionMonthly") && !json.isNull("statePensionMonthly") ->
+                        json.optFiniteDouble("statePensionMonthly", fallback.vStatePensionMonthly * 2.0) / 2.0
+                    else -> fallback.vStatePensionMonthly
                 },
-                eStatePensionMonthly = if (json.has("eStatePensionMonthly")) {
-                    json.optDouble("eStatePensionMonthly", fallback.eStatePensionMonthly)
-                } else if (json.has("statePensionMonthly")) {
-                    json.optDouble("statePensionMonthly", fallback.eStatePensionMonthly * 2.0) / 2.0
-                } else {
-                    fallback.eStatePensionMonthly
+                eStatePensionMonthly = when {
+                    json.has("eStatePensionMonthly") && !json.isNull("eStatePensionMonthly") ->
+                        json.optFiniteDouble("eStatePensionMonthly", fallback.eStatePensionMonthly)
+                    json.has("statePensionMonthly") && !json.isNull("statePensionMonthly") ->
+                        json.optFiniteDouble("statePensionMonthly", fallback.eStatePensionMonthly * 2.0) / 2.0
+                    else -> fallback.eStatePensionMonthly
                 },
-                lifestyleCostAtFireMonthly = json.optDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
+                lifestyleCostAtFireMonthly = json.optFiniteDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
 
-                rentMonthly = json.optDouble("rentMonthly", fallback.rentMonthly),
-                groceriesMonthly = json.optDouble("groceriesMonthly", fallback.groceriesMonthly),
-                cafesMonthly = json.optDouble("cafesMonthly", fallback.cafesMonthly),
-                therapyMonthly = json.optDouble("therapyMonthly", fallback.therapyMonthly),
-                charityMonthly = json.optDouble("charityMonthly", fallback.charityMonthly),
-                entertainmentMonthly = json.optDouble("entertainmentMonthly", fallback.entertainmentMonthly),
-                transportMonthly = json.optDouble("transportMonthly", fallback.transportMonthly),
-                subscriptionsMonthly = json.optDouble("subscriptionsMonthly", fallback.subscriptionsMonthly),
-                otherDiscretionaryMonthly = json.optDouble("otherDiscretionaryMonthly", fallback.otherDiscretionaryMonthly),
-                rentGrowthPct = json.optDouble("rentGrowthPct", fallback.rentGrowthPct),
-                customExpensesJson = json.optString("customExpensesJson", fallback.customExpensesJson),
-                customGoalsJson = json.optString("customGoalsJson", fallback.customGoalsJson),
-                customLumpSumsJson = json.optString("customLumpSumsJson", fallback.customLumpSumsJson),
-                deletedCategoriesJson = json.optString("deletedCategoriesJson", fallback.deletedCategoriesJson),
+                rentMonthly = json.optFiniteDouble("rentMonthly", fallback.rentMonthly),
+                groceriesMonthly = json.optFiniteDouble("groceriesMonthly", fallback.groceriesMonthly),
+                cafesMonthly = json.optFiniteDouble("cafesMonthly", fallback.cafesMonthly),
+                therapyMonthly = json.optFiniteDouble("therapyMonthly", fallback.therapyMonthly),
+                charityMonthly = json.optFiniteDouble("charityMonthly", fallback.charityMonthly),
+                entertainmentMonthly = json.optFiniteDouble("entertainmentMonthly", fallback.entertainmentMonthly),
+                transportMonthly = json.optFiniteDouble("transportMonthly", fallback.transportMonthly),
+                subscriptionsMonthly = json.optFiniteDouble("subscriptionsMonthly", fallback.subscriptionsMonthly),
+                otherDiscretionaryMonthly = json.optFiniteDouble("otherDiscretionaryMonthly", fallback.otherDiscretionaryMonthly),
+                rentGrowthPct = json.optFiniteDouble("rentGrowthPct", fallback.rentGrowthPct),
+                customExpensesJson = json.optStringNonNull("customExpensesJson", fallback.customExpensesJson),
+                customGoalsJson = json.optStringNonNull("customGoalsJson", fallback.customGoalsJson),
+                customLumpSumsJson = json.optStringNonNull("customLumpSumsJson", fallback.customLumpSumsJson),
+                deletedCategoriesJson = json.optStringNonNull("deletedCategoriesJson", fallback.deletedCategoriesJson),
 
-                child1Name = json.optString("child1Name", fallback.child1Name),
-                child2Name = json.optString("child2Name", fallback.child2Name),
-                childExpensesEnabled = json.optBoolean("childExpensesEnabled", fallback.childExpensesEnabled),
-                currentChildCostsInBaseline = json.optBoolean("currentChildCostsInBaseline", fallback.currentChildCostsInBaseline),
-                child1Enabled = json.optBoolean("child1Enabled", fallback.child1Enabled),
-                child1BirthYear = json.optInt("child1BirthYear", fallback.child1BirthYear),
-                child1TaxBonusAnnual = json.optDouble("child1TaxBonusAnnual", fallback.child1TaxBonusAnnual),
-                child2Enabled = json.optBoolean("child2Enabled", fallback.child2Enabled),
-                child2BirthYear = json.optInt("child2BirthYear", fallback.child2BirthYear),
-                child2TaxBonusAnnual = json.optDouble("child2TaxBonusAnnual", fallback.child2TaxBonusAnnual),
-                child3PlusTaxBonusAnnual = json.optDouble("child3PlusTaxBonusAnnual", fallback.child3PlusTaxBonusAnnual),
-                childToddlerMonthly = json.optDouble("childToddlerMonthly", fallback.childToddlerMonthly),
-                childPreschoolMonthly = json.optDouble("childPreschoolMonthly", fallback.childPreschoolMonthly),
-                childSchoolMonthly = json.optDouble("childSchoolMonthly", fallback.childSchoolMonthly),
-                childTeenMonthly = json.optDouble("childTeenMonthly", fallback.childTeenMonthly),
-                childUniMonthly = json.optDouble("childUniMonthly", fallback.childUniMonthly),
-                prolongChildSupportInFire = json.optBoolean("prolongChildSupportInFire", fallback.prolongChildSupportInFire),
-                childSupportUntilAge = json.optInt("childSupportUntilAge", fallback.childSupportUntilAge),
+                child1Name = json.optStringNonNull("child1Name", fallback.child1Name),
+                child2Name = json.optStringNonNull("child2Name", fallback.child2Name),
+                childExpensesEnabled = json.optSafeBoolean("childExpensesEnabled", fallback.childExpensesEnabled),
+                currentChildCostsInBaseline = json.optSafeBoolean("currentChildCostsInBaseline", fallback.currentChildCostsInBaseline),
+                child1Enabled = json.optSafeBoolean("child1Enabled", fallback.child1Enabled),
+                child1BirthYear = json.optSafeInt("child1BirthYear", fallback.child1BirthYear),
+                child1TaxBonusAnnual = json.optFiniteDouble("child1TaxBonusAnnual", fallback.child1TaxBonusAnnual),
+                child2Enabled = json.optSafeBoolean("child2Enabled", fallback.child2Enabled),
+                child2BirthYear = json.optSafeInt("child2BirthYear", fallback.child2BirthYear),
+                child2TaxBonusAnnual = json.optFiniteDouble("child2TaxBonusAnnual", fallback.child2TaxBonusAnnual),
+                child3PlusTaxBonusAnnual = json.optFiniteDouble("child3PlusTaxBonusAnnual", fallback.child3PlusTaxBonusAnnual),
+                childToddlerMonthly = json.optFiniteDouble("childToddlerMonthly", fallback.childToddlerMonthly),
+                childPreschoolMonthly = json.optFiniteDouble("childPreschoolMonthly", fallback.childPreschoolMonthly),
+                childSchoolMonthly = json.optFiniteDouble("childSchoolMonthly", fallback.childSchoolMonthly),
+                childTeenMonthly = json.optFiniteDouble("childTeenMonthly", fallback.childTeenMonthly),
+                childUniMonthly = json.optFiniteDouble("childUniMonthly", fallback.childUniMonthly),
+                prolongChildSupportInFire = json.optSafeBoolean("prolongChildSupportInFire", fallback.prolongChildSupportInFire),
+                childSupportUntilAge = json.optSafeInt("childSupportUntilAge", fallback.childSupportUntilAge),
 
                 // Statutory & Tax parameters
-                taxRatePct = json.optDouble("taxRatePct", fallback.taxRatePct),
-                taxRateSecondPct = json.optDouble("taxRateSecondPct", fallback.taxRateSecondPct),
-                taxSecondBracketThresholdAnnual = json.optDouble("taxSecondBracketThresholdAnnual", fallback.taxSecondBracketThresholdAnnual),
-                taxpayerCreditAnnual = json.optDouble("taxpayerCreditAnnual", fallback.taxpayerCreditAnnual),
-                taxDeductionCeilingAnnual = json.optDouble("taxDeductionCeilingAnnual", fallback.taxDeductionCeilingAnnual),
-                spouseTaxCreditAnnual = json.optDouble("spouseTaxCreditAnnual", fallback.spouseTaxCreditAnnual),
-                spouseIncomeLimitAnnual = json.optDouble("spouseIncomeLimitAnnual", fallback.spouseIncomeLimitAnnual),
-                includeSpouseCredit = json.optBoolean("includeSpouseCredit", fallback.includeSpouseCredit),
-                hasChildUnder3 = json.optBoolean("hasChildUnder3", fallback.hasChildUnder3),
-                minWageMonthly = json.optDouble("minWageMonthly", fallback.minWageMonthly),
+                taxRatePct = json.optFiniteDouble("taxRatePct", fallback.taxRatePct),
+                taxRateSecondPct = json.optFiniteDouble("taxRateSecondPct", fallback.taxRateSecondPct),
+                taxSecondBracketThresholdAnnual = json.optFiniteDouble("taxSecondBracketThresholdAnnual", fallback.taxSecondBracketThresholdAnnual),
+                taxpayerCreditAnnual = json.optFiniteDouble("taxpayerCreditAnnual", fallback.taxpayerCreditAnnual),
+                taxDeductionCeilingAnnual = json.optFiniteDouble("taxDeductionCeilingAnnual", fallback.taxDeductionCeilingAnnual),
+                spouseTaxCreditAnnual = json.optFiniteDouble("spouseTaxCreditAnnual", fallback.spouseTaxCreditAnnual),
+                spouseIncomeLimitAnnual = json.optFiniteDouble("spouseIncomeLimitAnnual", fallback.spouseIncomeLimitAnnual),
+                includeSpouseCredit = json.optSafeBoolean("includeSpouseCredit", fallback.includeSpouseCredit),
+                hasChildUnder3 = json.optSafeBoolean("hasChildUnder3", fallback.hasChildUnder3),
+                minWageMonthly = json.optFiniteDouble("minWageMonthly", fallback.minWageMonthly),
 
                 // DPS Reform parameters
-                dpsGrossReturnPct = json.optDouble("dpsGrossReturnPct", fallback.dpsGrossReturnPct),
-                dpsAnnualFeePct = json.optDouble("dpsAnnualFeePct", fallback.dpsAnnualFeePct),
-                dpsDeductionThresholdMonthly = json.optDouble("dpsDeductionThresholdMonthly", fallback.dpsDeductionThresholdMonthly),
-                dpsStandardSubsidyMaxMonthly = json.optDouble("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly),
-                dpsYouthSubsidyMaxMonthly = json.optDouble("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly),
-                dpsMinDepositForSubsidy = json.optDouble("dpsMinDepositForSubsidy", fallback.dpsMinDepositForSubsidy),
-                dpsYouthAgeLimit = json.optInt("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit),
-                dpsSubsidyRateStandardPct = json.optDouble("dpsSubsidyRateStandardPct", fallback.dpsSubsidyRateStandardPct),
-                dpsSubsidyRateYouthPct = json.optDouble("dpsSubsidyRateYouthPct", fallback.dpsSubsidyRateYouthPct),
-                dpsStatutoryFeeCapPct = json.optDouble("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct),
-                employerRetirementExemptionAnnual = json.optDouble("employerRetirementExemptionAnnual", fallback.employerRetirementExemptionAnnual),
-                childBonusMinWageMultiplier = json.optDouble("childBonusMinWageMultiplier", fallback.childBonusMinWageMultiplier),
-                parentalAllowanceTotalBeforeCutoff = json.optDouble("parentalAllowanceTotalBeforeCutoff", fallback.parentalAllowanceTotalBeforeCutoff),
-                parentalAllowanceTotalFromCutoff = json.optDouble("parentalAllowanceTotalFromCutoff", fallback.parentalAllowanceTotalFromCutoff),
-                parentalAllowanceCutoffYear = json.optInt("parentalAllowanceCutoffYear", fallback.parentalAllowanceCutoffYear),
+                dpsGrossReturnPct = json.optFiniteDouble("dpsGrossReturnPct", fallback.dpsGrossReturnPct),
+                dpsAnnualFeePct = json.optFiniteDouble("dpsAnnualFeePct", fallback.dpsAnnualFeePct),
+                dpsDeductionThresholdMonthly = json.optFiniteDouble("dpsDeductionThresholdMonthly", fallback.dpsDeductionThresholdMonthly),
+                dpsStandardSubsidyMaxMonthly = json.optFiniteDouble("dpsStandardSubsidyMaxMonthly", fallback.dpsStandardSubsidyMaxMonthly),
+                dpsYouthSubsidyMaxMonthly = json.optFiniteDouble("dpsYouthSubsidyMaxMonthly", fallback.dpsYouthSubsidyMaxMonthly),
+                dpsMinDepositForSubsidy = json.optFiniteDouble("dpsMinDepositForSubsidy", fallback.dpsMinDepositForSubsidy),
+                dpsYouthAgeLimit = json.optSafeInt("dpsYouthAgeLimit", fallback.dpsYouthAgeLimit),
+                dpsSubsidyRateStandardPct = json.optFiniteDouble("dpsSubsidyRateStandardPct", fallback.dpsSubsidyRateStandardPct),
+                dpsSubsidyRateYouthPct = json.optFiniteDouble("dpsSubsidyRateYouthPct", fallback.dpsSubsidyRateYouthPct),
+                dpsStatutoryFeeCapPct = json.optFiniteDouble("dpsStatutoryFeeCapPct", fallback.dpsStatutoryFeeCapPct),
+                employerRetirementExemptionAnnual = json.optFiniteDouble("employerRetirementExemptionAnnual", fallback.employerRetirementExemptionAnnual),
+                childBonusMinWageMultiplier = json.optFiniteDouble("childBonusMinWageMultiplier", fallback.childBonusMinWageMultiplier),
+                parentalAllowanceTotalBeforeCutoff = json.optFiniteDouble("parentalAllowanceTotalBeforeCutoff", fallback.parentalAllowanceTotalBeforeCutoff),
+                parentalAllowanceTotalFromCutoff = json.optFiniteDouble("parentalAllowanceTotalFromCutoff", fallback.parentalAllowanceTotalFromCutoff),
+                parentalAllowanceCutoffYear = json.optSafeInt("parentalAllowanceCutoffYear", fallback.parentalAllowanceCutoffYear),
 
                 // Monte Carlo configuration
-                monteCarloN = json.optInt("monteCarloN", fallback.monteCarloN),
-                monteCarloVolatilityPct = json.optDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
-                monteCarloSeed = json.optLong("monteCarloSeed", fallback.monteCarloSeed),
-                retirementHorizonYears = json.optInt("retirementHorizonYears", fallback.retirementHorizonYears),
-                dividendYieldPct = json.optDouble("dividendYieldPct", fallback.dividendYieldPct),
-                dividendTaxRatePct = json.optDouble("dividendTaxRatePct", fallback.dividendTaxRatePct),
-                useHistoricalBootstrap = json.optBoolean("useHistoricalBootstrap", fallback.useHistoricalBootstrap),
-                guardrailsEnabled = json.optBoolean("guardrailsEnabled", fallback.guardrailsEnabled),
-                guardrailsUpperThresholdPct = json.optDouble("guardrailsUpperThresholdPct", fallback.guardrailsUpperThresholdPct),
-                guardrailsLowerThresholdPct = json.optDouble("guardrailsLowerThresholdPct", fallback.guardrailsLowerThresholdPct),
-                guardrailsCutPct = json.optDouble("guardrailsCutPct", fallback.guardrailsCutPct),
-                guardrailsBoostPct = json.optDouble("guardrailsBoostPct", fallback.guardrailsBoostPct),
-                guardrailsFloorPct = json.optDouble("guardrailsFloorPct", fallback.guardrailsFloorPct),
-                baristaTransitionEnabled = json.optBoolean("baristaTransitionEnabled", fallback.baristaTransitionEnabled),
-                baristaStartYear = json.optInt("baristaStartYear", fallback.baristaStartYear),
-                baristaMonthlyIncome = json.optDouble("baristaMonthlyIncome", fallback.baristaMonthlyIncome),
-                baristaSavingsMonthly = json.optDouble("baristaSavingsMonthly", fallback.baristaSavingsMonthly),
-                merchantRulesJson = json.optString("merchantRulesJson", fallback.merchantRulesJson),
-                emergencyReserveMode = json.optString("emergencyReserveMode", fallback.emergencyReserveMode)
+                monteCarloN = json.optSafeInt("monteCarloN", fallback.monteCarloN),
+                monteCarloVolatilityPct = json.optFiniteDouble("monteCarloVolatilityPct", fallback.monteCarloVolatilityPct),
+                monteCarloSeed = json.optSafeLong("monteCarloSeed", fallback.monteCarloSeed),
+                retirementHorizonYears = json.optSafeInt("retirementHorizonYears", fallback.retirementHorizonYears),
+                dividendYieldPct = json.optFiniteDouble("dividendYieldPct", fallback.dividendYieldPct),
+                dividendTaxRatePct = json.optFiniteDouble("dividendTaxRatePct", fallback.dividendTaxRatePct),
+                useHistoricalBootstrap = json.optSafeBoolean("useHistoricalBootstrap", fallback.useHistoricalBootstrap),
+                guardrailsEnabled = json.optSafeBoolean("guardrailsEnabled", fallback.guardrailsEnabled),
+                guardrailsUpperThresholdPct = json.optFiniteDouble("guardrailsUpperThresholdPct", fallback.guardrailsUpperThresholdPct),
+                guardrailsLowerThresholdPct = json.optFiniteDouble("guardrailsLowerThresholdPct", fallback.guardrailsLowerThresholdPct),
+                guardrailsCutPct = json.optFiniteDouble("guardrailsCutPct", fallback.guardrailsCutPct),
+                guardrailsBoostPct = json.optFiniteDouble("guardrailsBoostPct", fallback.guardrailsBoostPct),
+                guardrailsFloorPct = json.optFiniteDouble("guardrailsFloorPct", fallback.guardrailsFloorPct),
+                baristaTransitionEnabled = json.optSafeBoolean("baristaTransitionEnabled", fallback.baristaTransitionEnabled),
+                baristaStartYear = json.optSafeInt("baristaStartYear", fallback.baristaStartYear),
+                baristaMonthlyIncome = json.optFiniteDouble("baristaMonthlyIncome", fallback.baristaMonthlyIncome),
+                baristaSavingsMonthly = json.optFiniteDouble("baristaSavingsMonthly", fallback.baristaSavingsMonthly),
+                merchantRulesJson = json.optStringNonNull("merchantRulesJson", fallback.merchantRulesJson),
+                emergencyReserveMode = json.optStringNonNull("emergencyReserveMode", fallback.emergencyReserveMode),
+                emergencyReserveMonthlyOverride = json.optFiniteDouble("emergencyReserveMonthlyOverride", fallback.emergencyReserveMonthlyOverride)
             )
             sanitizeSettings(restored, fallback)
         } catch (_: Exception) {
@@ -322,42 +346,53 @@ object BackupManager {
     }
 
     fun sanitizeSettings(s: SettingsEntity, f: SettingsEntity = SettingsEntity.freshDefaults()): SettingsEntity {
-        val cleanMerchantRules = try {
-            JSONObject(s.merchantRulesJson)
-            s.merchantRulesJson
-        } catch (_: Exception) {
+        val cleanMerchantRules = if (s.merchantRulesJson.length <= MAX_NESTED_JSON_CHARS) {
+            try {
+                JSONObject(s.merchantRulesJson)
+                s.merchantRulesJson
+            } catch (_: Exception) {
+                f.merchantRulesJson
+            }
+        } else {
             f.merchantRulesJson
         }
-        fun cleanArrayJson(raw: String, fallback: String): String = try {
-            org.json.JSONArray(raw)
-            raw
-        } catch (_: Exception) {
-            fallback
-        }
-        fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..1.0e12) v else fallback
+        fun cleanArrayJson(raw: String, fallback: String): String =
+            if (raw.length <= MAX_NESTED_JSON_CHARS) {
+                try {
+                    org.json.JSONArray(raw)
+                    raw
+                } catch (_: Exception) {
+                    fallback
+                }
+            } else {
+                fallback
+            }
+        fun money(v: Double, fallback: Double): Double = if (v.isFinite() && v >= 0.0) v else fallback
         fun pct(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.0..100.0) v else fallback
-        fun swr(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.5..20.0) v else fallback
-        fun growthPct(v: Double, fallback: Double): Double = if (v.isFinite() && v in -50.0..100.0) v else fallback
-        fun year(v: Int, fallback: Int): Int = if (v in 2000..2200) v else fallback
+        fun boundedPct(v: Double, fallback: Double, min: Double, max: Double): Double =
+            if (v.isFinite() && v in min..max) v else fallback
+        fun swr(v: Double, fallback: Double): Double = if (v.isFinite() && v in 0.1..100.0) v else fallback
+        fun growthPct(v: Double, fallback: Double): Double = if (v.isFinite() && v in -99.0..1000.0) v else fallback
+        fun year(v: Int, fallback: Int): Int = if (v in 1950..2200) v else fallback
         return s.copy(
             primaryName = s.primaryName.trim().ifEmpty { f.primaryName },
             spouseName = s.spouseName.trim().ifEmpty { f.spouseName },
-            primaryAge = if (s.primaryAge in 15..100) s.primaryAge else f.primaryAge,
+            primaryAge = if (s.primaryAge in 1..120) s.primaryAge else f.primaryAge,
             baseYear = year(s.baseYear, f.baseYear),
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
             eReturnMonth = if (s.eReturnMonth in 1..12) s.eReturnMonth else f.eReturnMonth,
             lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
-            vStatePensionAge = if (s.vStatePensionAge in 55..75) s.vStatePensionAge else f.vStatePensionAge,
-            eStatePensionAge = if (s.eStatePensionAge in 55..75) s.eStatePensionAge else f.eStatePensionAge,
+            vStatePensionAge = if (s.vStatePensionAge in 40..90) s.vStatePensionAge else f.vStatePensionAge,
+            eStatePensionAge = if (s.eStatePensionAge in 40..90) s.eStatePensionAge else f.eStatePensionAge,
             child1Name = s.child1Name.trim().ifEmpty { f.child1Name },
             child2Name = s.child2Name.trim().ifEmpty { f.child2Name },
             child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
-            childSupportUntilAge = if (s.childSupportUntilAge in 18..35) s.childSupportUntilAge else f.childSupportUntilAge,
+            childSupportUntilAge = if (s.childSupportUntilAge in 0..50) s.childSupportUntilAge else f.childSupportUntilAge,
             prolongChildSupportInFire = s.prolongChildSupportInFire,
-            dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 18..40) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
-            monteCarloN = if (s.monteCarloN in 100..2000) s.monteCarloN else f.monteCarloN,
-            retirementHorizonYears = if (s.retirementHorizonYears in 10..60) s.retirementHorizonYears else f.retirementHorizonYears,
+            dpsYouthAgeLimit = if (s.dpsYouthAgeLimit in 0..100) s.dpsYouthAgeLimit else f.dpsYouthAgeLimit,
+            monteCarloN = if (s.monteCarloN in 10..10_000) s.monteCarloN else f.monteCarloN,
+            retirementHorizonYears = if (s.retirementHorizonYears in 1..100) s.retirementHorizonYears else f.retirementHorizonYears,
             vSalary = money(s.vSalary, f.vSalary),
             vSalaryGrowthPct = growthPct(s.vSalaryGrowthPct, f.vSalaryGrowthPct),
             vMealVouchersMonthly = money(s.vMealVouchersMonthly, f.vMealVouchersMonthly),
@@ -370,7 +405,6 @@ object BackupManager {
             eOtherInflowsMonthly = money(s.eOtherInflowsMonthly, f.eOtherInflowsMonthly),
             vGiftsMonthly = money(s.vGiftsMonthly, f.vGiftsMonthly),
             eGiftsMonthly = money(s.eGiftsMonthly, f.eGiftsMonthly),
-            familyGiftMonthly = money(s.familyGiftMonthly, f.familyGiftMonthly),
             lumpSumAmount = money(s.lumpSumAmount, f.lumpSumAmount),
             liquidPortfolioCurrent = money(s.liquidPortfolioCurrent, f.liquidPortfolioCurrent),
             dpsBalanceCurrent = money(s.dpsBalanceCurrent, f.dpsBalanceCurrent),
@@ -425,7 +459,7 @@ object BackupManager {
             dpsSubsidyRateYouthPct = pct(s.dpsSubsidyRateYouthPct, f.dpsSubsidyRateYouthPct),
             dpsStatutoryFeeCapPct = pct(s.dpsStatutoryFeeCapPct, f.dpsStatutoryFeeCapPct),
             employerRetirementExemptionAnnual = money(s.employerRetirementExemptionAnnual, f.employerRetirementExemptionAnnual),
-            childBonusMinWageMultiplier = if (s.childBonusMinWageMultiplier.isFinite() && s.childBonusMinWageMultiplier in 1.0..20.0) s.childBonusMinWageMultiplier else f.childBonusMinWageMultiplier,
+            childBonusMinWageMultiplier = if (s.childBonusMinWageMultiplier.isFinite() && s.childBonusMinWageMultiplier >= 0.0) s.childBonusMinWageMultiplier else f.childBonusMinWageMultiplier,
             parentalAllowanceTotalBeforeCutoff = money(s.parentalAllowanceTotalBeforeCutoff, f.parentalAllowanceTotalBeforeCutoff),
             parentalAllowanceTotalFromCutoff = money(s.parentalAllowanceTotalFromCutoff, f.parentalAllowanceTotalFromCutoff),
             parentalAllowanceCutoffYear = year(s.parentalAllowanceCutoffYear, f.parentalAllowanceCutoffYear),
@@ -440,12 +474,25 @@ object BackupManager {
             monteCarloVolatilityPct = pct(s.monteCarloVolatilityPct, f.monteCarloVolatilityPct),
             dividendYieldPct = pct(s.dividendYieldPct, f.dividendYieldPct),
             dividendTaxRatePct = pct(s.dividendTaxRatePct, f.dividendTaxRatePct),
+            guardrailsUpperThresholdPct = pct(s.guardrailsUpperThresholdPct, f.guardrailsUpperThresholdPct),
+            guardrailsLowerThresholdPct = boundedPct(s.guardrailsLowerThresholdPct, f.guardrailsLowerThresholdPct, 0.0, 95.0),
+            guardrailsCutPct = pct(s.guardrailsCutPct, f.guardrailsCutPct),
+            guardrailsBoostPct = pct(s.guardrailsBoostPct, f.guardrailsBoostPct),
+            guardrailsFloorPct = pct(s.guardrailsFloorPct, f.guardrailsFloorPct),
+            baristaStartYear = year(s.baristaStartYear, f.baristaStartYear),
+            baristaMonthlyIncome = money(s.baristaMonthlyIncome, f.baristaMonthlyIncome),
+            baristaSavingsMonthly = money(s.baristaSavingsMonthly, f.baristaSavingsMonthly),
             customExpensesJson = cleanArrayJson(s.customExpensesJson, f.customExpensesJson),
             customGoalsJson = cleanArrayJson(s.customGoalsJson, f.customGoalsJson),
             customLumpSumsJson = cleanArrayJson(s.customLumpSumsJson, f.customLumpSumsJson),
             deletedCategoriesJson = cleanArrayJson(s.deletedCategoriesJson, f.deletedCategoriesJson),
             merchantRulesJson = cleanMerchantRules,
-            emergencyReserveMode = if (s.emergencyReserveMode in setOf("3M", "6M", "9M", "12M", "Target")) s.emergencyReserveMode else f.emergencyReserveMode
+            emergencyReserveMode = if (s.emergencyReserveMode in setOf("3M", "6M", "9M", "12M", "Target")) s.emergencyReserveMode else f.emergencyReserveMode,
+            emergencyReserveMonthlyOverride = when {
+                !s.emergencyReserveMonthlyOverride.isFinite() -> f.emergencyReserveMonthlyOverride
+                s.emergencyReserveMonthlyOverride < 0.0 -> -1.0
+                else -> s.emergencyReserveMonthlyOverride
+            }
         )
     }
 
@@ -454,7 +501,8 @@ object BackupManager {
         val ledgerEntries: List<com.example.data.LedgerEntryEntity> = emptyList(),
         val actionStates: List<com.example.data.ActionStateEntity> = emptyList(),
         val importedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
-        val preferences: Map<String, String> = emptyMap()
+        val preferences: Map<String, String> = emptyMap(),
+        val investmentLots: List<com.example.util.UserInvestmentLot> = emptyList()
     )
 
     fun serializeFullBackupToJson(payload: FullBackupPayload): String {
@@ -468,16 +516,16 @@ object BackupManager {
             val o = JSONObject()
             o.put("id", entry.id)
             o.put("yearMonth", entry.yearMonth)
-            o.put("incVaclav", entry.incVaclav)
-            o.put("incEleonora", entry.incEleonora)
-            o.put("incUnforeseen", entry.incUnforeseen)
-            o.put("expRent", entry.expRent)
-            o.put("expGroceries", entry.expGroceries)
-            o.put("expOther", entry.expOther)
+            o.put("incVaclav", safeFinite(entry.incVaclav))
+            o.put("incEleonora", safeFinite(entry.incEleonora))
+            o.put("incUnforeseen", safeFinite(entry.incUnforeseen))
+            o.put("expRent", safeFinite(entry.expRent))
+            o.put("expGroceries", safeFinite(entry.expGroceries))
+            o.put("expOther", safeFinite(entry.expOther))
             o.put("notes", entry.notes)
-            o.put("portfolioBalanceAtMonthEnd", entry.portfolioBalanceAtMonthEnd)
-            o.put("pensionBalanceAtMonthEnd", entry.pensionBalanceAtMonthEnd)
-            o.put("emergencyReserveAtMonthEnd", entry.emergencyReserveAtMonthEnd)
+            o.put("portfolioBalanceAtMonthEnd", safeFinite(entry.portfolioBalanceAtMonthEnd))
+            o.put("pensionBalanceAtMonthEnd", safeFinite(entry.pensionBalanceAtMonthEnd))
+            o.put("emergencyReserveAtMonthEnd", safeFinite(entry.emergencyReserveAtMonthEnd))
             ledgerArr.put(o)
         }
         json.put("ledgerEntries", ledgerArr)
@@ -500,7 +548,7 @@ object BackupManager {
             o.put("yearMonth", tx.yearMonth)
             o.put("bankName", tx.bankName)
             o.put("date", tx.date)
-            o.put("amount", tx.amount)
+            o.put("amount", safeFinite(tx.amount))
             o.put("counterpartyAccount", tx.counterpartyAccount)
             o.put("counterpartyName", tx.counterpartyName)
             o.put("message", tx.message)
@@ -519,91 +567,146 @@ object BackupManager {
         }
         json.put("preferences", prefObj)
 
+        val lotsArr = org.json.JSONArray()
+        for (lot in payload.investmentLots) {
+            val o = JSONObject()
+            o.put("id", lot.id)
+            o.put("batchName", lot.batchName)
+            o.put("instrument", lot.instrument)
+            o.put("purchaseDateStr", lot.purchaseDateStr)
+            o.put("acquisitionCostCzk", safeFinite(lot.acquisitionCostCzk))
+            o.put("currentValueCzk", safeFinite(lot.currentValueCzk))
+            o.put("notes", lot.notes)
+            lotsArr.put(o)
+        }
+        json.put("investmentLots", lotsArr)
+
         return json.toString()
     }
 
     fun deserializeFullBackupFromJson(jsonStr: String, fallback: SettingsEntity): FullBackupPayload? {
+        if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
         return try {
             val root = JSONObject(jsonStr.trim())
-            if (!root.has("settings") && !root.has("schemaVersion")) {
+            val formatTag = root.optString("_format", "").trim()
+            // Settings-only backups ("martinu-settings" without a full-backup "settings" object) MUST NOT
+            // be parsed as FullBackupPayload, otherwise restoring them would wipe ledger, transactions & lots.
+            if (formatTag.equals("martinu-settings", ignoreCase = true) && !root.has("settings")) {
                 return null
             }
-            val settingsJson = if (root.has("settings")) root.getJSONObject("settings").toString() else root.toString()
+            val hasFullBackupEnvelope = root.has("settings") ||
+                formatTag.equals("martinu-full-backup", ignoreCase = true) ||
+                root.has("ledgerEntries") ||
+                root.has("actionStates") ||
+                root.has("importedTransactions")
+            if (!hasFullBackupEnvelope) {
+                return null
+            }
+            val settingsJson = if (root.has("settings")) {
+                val settingsObj = root.optJSONObject("settings") ?: return null
+                settingsObj.toString()
+            } else {
+                root.toString()
+            }
             val restoredSettings = deserializeSettingsFromJson(settingsJson, fallback) ?: return null
 
             val ledgerList = mutableListOf<com.example.data.LedgerEntryEntity>()
-            if (root.has("ledgerEntries")) {
-                val arr = root.getJSONArray("ledgerEntries")
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
+            val ledgerArr = root.optJSONArray("ledgerEntries")
+            if (!root.isNull("ledgerEntries") && ledgerArr != null) {
+                for (i in 0 until ledgerArr.length()) {
+                    val o = ledgerArr.optJSONObject(i) ?: continue
+                    val ym = o.optStringNonNull("yearMonth", "").trim()
+                    if (ym.isBlank()) continue
                     ledgerList.add(
                         com.example.data.LedgerEntryEntity(
-                            id = o.optLong("id", 0L),
-                            yearMonth = o.optString("yearMonth", ""),
-                            incVaclav = o.optDouble("incVaclav", 0.0),
-                            incEleonora = o.optDouble("incEleonora", 0.0),
-                            incUnforeseen = o.optDouble("incUnforeseen", 0.0),
-                            expRent = o.optDouble("expRent", 0.0),
-                            expGroceries = o.optDouble("expGroceries", 0.0),
-                            expOther = o.optDouble("expOther", 0.0),
-                            notes = o.optString("notes", ""),
-                            portfolioBalanceAtMonthEnd = o.optDouble("portfolioBalanceAtMonthEnd", 0.0),
-                            pensionBalanceAtMonthEnd = o.optDouble("pensionBalanceAtMonthEnd", 0.0),
-                            emergencyReserveAtMonthEnd = o.optDouble("emergencyReserveAtMonthEnd", 0.0)
+                            id = o.optSafeLong("id", 0L),
+                            yearMonth = ym,
+                            incVaclav = o.optFiniteDouble("incVaclav", 0.0),
+                            incEleonora = o.optFiniteDouble("incEleonora", 0.0),
+                            incUnforeseen = o.optFiniteDouble("incUnforeseen", 0.0),
+                            expRent = o.optFiniteDouble("expRent", 0.0),
+                            expGroceries = o.optFiniteDouble("expGroceries", 0.0),
+                            expOther = o.optFiniteDouble("expOther", 0.0),
+                            notes = o.optStringNonNull("notes", ""),
+                            portfolioBalanceAtMonthEnd = o.optFiniteDouble("portfolioBalanceAtMonthEnd", 0.0),
+                            pensionBalanceAtMonthEnd = o.optFiniteDouble("pensionBalanceAtMonthEnd", 0.0),
+                            emergencyReserveAtMonthEnd = o.optFiniteDouble("emergencyReserveAtMonthEnd", 0.0)
                         )
                     )
                 }
             }
 
             val actionList = mutableListOf<com.example.data.ActionStateEntity>()
-            if (root.has("actionStates")) {
-                val arr = root.getJSONArray("actionStates")
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
+            val actionArr = root.optJSONArray("actionStates")
+            if (!root.isNull("actionStates") && actionArr != null) {
+                for (i in 0 until actionArr.length()) {
+                    val o = actionArr.optJSONObject(i) ?: continue
+                    val actionKey = o.optStringNonNull("actionKey", "").trim()
+                    if (actionKey.isBlank()) continue
                     actionList.add(
                         com.example.data.ActionStateEntity(
-                            actionKey = o.optString("actionKey", ""),
-                            year = o.optInt("year", 2026),
-                            actionId = o.optString("actionId", ""),
-                            isDone = o.optBoolean("isDone", false)
+                            actionKey = actionKey,
+                            year = o.optSafeInt("year", restoredSettings.baseYear).coerceIn(1900, 2200),
+                            actionId = o.optStringNonNull("actionId", "").trim(),
+                            isDone = o.optSafeBoolean("isDone", false)
                         )
                     )
                 }
             }
 
             val txList = mutableListOf<com.example.data.ImportedBankTransactionEntity>()
-            if (root.has("importedTransactions")) {
-                val arr = root.getJSONArray("importedTransactions")
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
+            val txArr = root.optJSONArray("importedTransactions")
+            if (!root.isNull("importedTransactions") && txArr != null) {
+                for (i in 0 until txArr.length()) {
+                    val o = txArr.optJSONObject(i) ?: continue
+                    val ym = o.optStringNonNull("yearMonth", "").trim()
+                    if (ym.isBlank()) continue
+                    val amount = if (o.has("amount") && !o.isNull("amount")) {
+                        o.optFiniteDoubleOrNull("amount") ?: continue
+                    } else {
+                        0.0
+                    }
                     txList.add(
                         com.example.data.ImportedBankTransactionEntity(
-                            id = o.optLong("id", 0L),
-                            yearMonth = o.optString("yearMonth", ""),
-                            bankName = o.optString("bankName", "GENERIC"),
-                            date = o.optString("date", ""),
-                            amount = o.optDouble("amount", 0.0),
-                            counterpartyAccount = o.optString("counterpartyAccount", ""),
-                            counterpartyName = o.optString("counterpartyName", ""),
-                            message = o.optString("message", ""),
-                            variableSymbol = o.optString("variableSymbol", ""),
-                            category = o.optString("category", "LIFESTYLE_LIVING"),
-                            isNetted = o.optBoolean("isNetted", false),
-                            nettingReason = o.optString("nettingReason", ""),
-                            matchedTxId = if (o.has("matchedTxId")) o.optLong("matchedTxId") else null
+                            id = o.optSafeLong("id", 0L),
+                            yearMonth = ym,
+                            bankName = o.optStringNonNull("bankName", "GENERIC").trim().ifBlank { "GENERIC" },
+                            date = o.optStringNonNull("date", "").trim(),
+                            amount = amount,
+                            counterpartyAccount = o.optStringNonNull("counterpartyAccount", ""),
+                            counterpartyName = o.optStringNonNull("counterpartyName", ""),
+                            message = o.optStringNonNull("message", ""),
+                            variableSymbol = o.optStringNonNull("variableSymbol", ""),
+                            category = o.optStringNonNull("category", "LIFESTYLE_LIVING").trim().ifBlank { "LIFESTYLE_LIVING" },
+                            isNetted = o.optSafeBoolean("isNetted", false),
+                            nettingReason = o.optStringNonNull("nettingReason", ""),
+                            matchedTxId = o.optNullablePositiveLong("matchedTxId")
                         )
                     )
                 }
             }
 
             val prefMap = mutableMapOf<String, String>()
-            if (root.has("preferences")) {
-                val obj = root.getJSONObject("preferences")
-                val keys = obj.keys()
+            val prefObj = root.optJSONObject("preferences")
+            if (!root.isNull("preferences") && prefObj != null) {
+                val keys = prefObj.keys()
                 while (keys.hasNext()) {
                     val k = keys.next()
-                    prefMap[k] = obj.optString(k, "")
+                    if (!prefObj.isNull(k)) {
+                        val v = prefObj.opt(k)
+                        if (v is String || v is Number || v is Boolean) {
+                            prefMap[k] = v.toString()
+                        }
+                    }
                 }
+            }
+
+            val lotsList = mutableListOf<com.example.util.UserInvestmentLot>()
+            val lotsArr = root.optJSONArray("investmentLots")
+            if (!root.isNull("investmentLots") && lotsArr != null) {
+                lotsList.addAll(com.example.util.InvestmentLotManager.parseLotsFromJson(lotsArr.toString()))
+            } else if (prefMap.containsKey("user_investment_lots_json")) {
+                lotsList.addAll(com.example.util.InvestmentLotManager.parseLotsFromJson(prefMap["user_investment_lots_json"] ?: ""))
             }
 
             FullBackupPayload(
@@ -611,10 +714,86 @@ object BackupManager {
                 ledgerEntries = ledgerList,
                 actionStates = actionList,
                 importedTransactions = txList,
-                preferences = prefMap
+                preferences = prefMap,
+                investmentLots = lotsList
             )
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun JSONObject.optStringNonNull(key: String, fallback: String): String {
+        if (!has(key) || isNull(key)) return fallback
+        return when (val v = opt(key)) {
+            is String -> v
+            else -> fallback
+        }
+    }
+
+    private fun JSONObject.optFiniteDoubleOrNull(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        val d = when (val v = opt(key)) {
+            is Number -> v.toDouble()
+            is String -> v.trim().toDoubleOrNull() ?: return null
+            else -> return null
+        }
+        return if (d.isFinite()) d else null
+    }
+
+    private fun JSONObject.optFiniteDouble(key: String, fallback: Double): Double {
+        return optFiniteDoubleOrNull(key) ?: fallback
+    }
+
+    private fun JSONObject.optSafeInt(key: String, fallback: Int): Int {
+        if (!has(key) || isNull(key)) return fallback
+        return when (val v = opt(key)) {
+            is Int -> v
+            is Long -> if (v in Int.MIN_VALUE..Int.MAX_VALUE) v.toInt() else fallback
+            is Number -> {
+                val d = v.toDouble()
+                if (d.isFinite() && d >= Int.MIN_VALUE && d <= Int.MAX_VALUE) d.toInt() else fallback
+            }
+            is String -> {
+                val s = v.trim()
+                s.toIntOrNull() ?: s.toDoubleOrNull()
+                    ?.takeIf { it.isFinite() && it >= Int.MIN_VALUE && it <= Int.MAX_VALUE }
+                    ?.toInt()
+                    ?: fallback
+            }
+            else -> fallback
+        }
+    }
+
+    private fun JSONObject.optSafeLong(key: String, fallback: Long): Long {
+        if (!has(key) || isNull(key)) return fallback
+        return when (val v = opt(key)) {
+            is Long -> v
+            is Int -> v.toLong()
+            is Number -> {
+                val d = v.toDouble()
+                if (d.isFinite() && d >= Long.MIN_VALUE.toDouble() && d <= Long.MAX_VALUE.toDouble()) d.toLong() else fallback
+            }
+            is String -> v.trim().toLongOrNull() ?: fallback
+            else -> fallback
+        }
+    }
+
+    private fun JSONObject.optNullablePositiveLong(key: String): Long? {
+        if (!has(key) || isNull(key)) return null
+        val parsed = optSafeLong(key, -1L)
+        return if (parsed > 0L) parsed else null
+    }
+
+    private fun JSONObject.optSafeBoolean(key: String, fallback: Boolean): Boolean {
+        if (!has(key) || isNull(key)) return fallback
+        return when (val v = opt(key)) {
+            is Boolean -> v
+            is String -> when (v.trim().lowercase(java.util.Locale.ROOT)) {
+                "true" -> true
+                "false" -> false
+                else -> fallback
+            }
+            else -> fallback
         }
     }
 }

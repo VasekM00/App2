@@ -2,21 +2,23 @@ package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,8 +28,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FinancialEngine
@@ -35,9 +42,10 @@ import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
-import com.example.ui.components.MonteCarloFanChart
-import com.example.ui.components.StressComparisonChart
+import com.example.ui.components.charts.MonteCarloFanChart
+import com.example.ui.components.charts.StressComparisonChart
 import com.example.ui.components.infoTapHold
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
@@ -70,10 +78,12 @@ internal fun MonteCarloAndStressSubTab(
         accentColor = BrandTeal
     )
 
+    val guardrailUpperX = 1.0 + state.settings.guardrailsUpperThresholdPct / 100.0
+    val guardrailLowerX = (1.0 - state.settings.guardrailsLowerThresholdPct / 100.0).coerceAtLeast(0.0)
     val guardrailInfo = MetricInfo(
         title = "Guyton-Klinger Spending Guardrails",
         category = "Retirement Withdrawal Rules",
-        formulaOrRule = "Capital Preservation: 10% spending cut if withdrawal rate > 1.2x initial SWR (floored at essential spending). Prosperity Rule: 10% spending increase if withdrawal rate < 0.8x initial SWR.",
+        formulaOrRule = "Capital Preservation: ${state.settings.guardrailsCutPct.roundToInt()}% spending cut if withdrawal rate > ${String.format(java.util.Locale.ROOT, "%.2fx", guardrailUpperX)} initial SWR (+${state.settings.guardrailsUpperThresholdPct.roundToInt()}%, floored at ${state.settings.guardrailsFloorPct.roundToInt()}% essential). Prosperity Rule: ${state.settings.guardrailsBoostPct.roundToInt()}% boost if < ${String.format(java.util.Locale.ROOT, "%.2fx", guardrailLowerX)} initial SWR (-${state.settings.guardrailsLowerThresholdPct.roundToInt()}%).",
         explanation = "In rigid withdrawal models, retirees blindly increase spending by inflation even during prolonged crashes. Guyton-Klinger dynamic rules reduce discretionary spending during market drawdowns while preserving essential living costs, dramatically increasing retirement survival rates.",
         practicalImplication = "Adding flexibility to discretionary expenses provides massive insurance against early retirement sequence-of-returns risk.",
         accentColor = BrandGold
@@ -82,8 +92,9 @@ internal fun MonteCarloAndStressSubTab(
     val taxDragInfo = MetricInfo(
         title = "Czech Dividend Tax Drag",
         category = "Tax Drag Modeling",
-        formulaOrRule = "Drag = Dividend Yield (${state.settings.dividendYieldPct}%) x Dividend Tax Rate (${state.settings.dividendTaxRatePct}%) = ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))} p.a.",
-        explanation = "In the Czech Republic, capital gains on securities held for more than 3 years are fully exempt from income tax under Section 4(1)(u) ZDP. However, dividends (and fund-internal withholding taxes in accumulating UCITS ETFs) incur tax drag under Section 8 ZDP. This drag is modeled on taxable brokerage assets (Portu) reducing net nominal return to ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(state.settings))}%, while tax-sheltered DIP and DPS accounts compound gross.",
+        formulaOrRule = "Drag = Dividend Yield (${state.settings.dividendYieldPct}%) x Dividend Tax Rate (${state.settings.dividendTaxRatePct}%) = ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))}/year",
+        explanation = "In the Czech Republic, capital gains on securities held for more than 3 years are fully exempt from personal income tax. However, dividends (and fund-internal withholding taxes in accumulating UCITS ETFs) incur continuous tax drag. This drag is modeled on taxable brokerage assets (Portu) reducing net nominal return to ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(state.settings))}%, while tax-sheltered DIP and DPS accounts compound gross.",
+        statutoryReference = "Act No. 586/1992 Coll. (ZDP § 4(1)(u) & § 8)",
         practicalImplication = "Even a modest 0.27% annual tax drag compounds significantly over 30+ years, making tax-advantaged accounts like DIP crucial.",
         accentColor = BrandBlue
     )
@@ -109,9 +120,9 @@ internal fun MonteCarloAndStressSubTab(
     val percentileInfo = MetricInfo(
         title = "Multi-Path Percentile Scenarios",
         category = "Stochastic Outcomes",
-        formulaOrRule = "P50 (Median), Top 5% (P95 Bull Market), 95th %ile Conservative (P5 Drawdown)",
-        explanation = "P50 reflects median expected market performance. The conservative 95th percentile simulates persistent economic adversity (high inflation + depressed equity returns in early retirement years).",
-        practicalImplication = "If your plan achieves financial independence even under the conservative 95th percentile run, you possess an immense structural safety margin.",
+        formulaOrRule = "P50 (Median), Top 5% (P95 Bull Market), 5th Percentile Conservative (P5 Drawdown)",
+        explanation = "P50 reflects median expected market performance. The conservative 5th percentile portfolio outcome (95th percentile retirement age) simulates persistent economic adversity (high inflation + depressed equity returns in early retirement years).",
+        practicalImplication = "If your plan achieves financial independence even under the conservative drawdown scenario, you possess an immense structural safety margin.",
         accentColor = BrandBlue
     )
 
@@ -130,9 +141,9 @@ internal fun MonteCarloAndStressSubTab(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = if (isHistoricalMode) "Historical Simulation (1970-2025)" else "Monte Carlo Simulation (${state.settings.monteCarloN} Runs)",
-                    subtitle = if (isHistoricalMode) "Block-bootstrap sequence resampling (Tap for insight)" else "Parametric log-normal distribution (Tap for insight)",
-                    badgeText = "${mc.successRatePct.toInt()}% PROBABILITY",
+                    title = if (isHistoricalMode) "Historical Simulation" else "Monte Carlo (${state.settings.monteCarloN} Runs)",
+                    subtitle = if (isHistoricalMode) "1970–2025 block-bootstrap · Tap for info" else "Parametric log-normal · Tap for info",
+                    badgeText = "${mc.successRatePct.roundToInt()}% PASS",
                     accentColor = BrandTeal,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -140,20 +151,55 @@ internal fun MonteCarloAndStressSubTab(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                val haptic = LocalHapticFeedback.current
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    FilterChip(
-                        selected = !isHistoricalMode,
-                        onClick = { isHistoricalMode = false },
-                        label = { Text("Parametric (Normal)", fontSize = 12.sp) }
-                    )
-                    FilterChip(
-                        selected = isHistoricalMode,
-                        onClick = { isHistoricalMode = true },
-                        label = { Text("Historical (1970-2025)", fontSize = 12.sp) }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val modes = listOf(
+                            false to "Parametric (Normal)",
+                            true to "Historical (1970-2025)"
+                        )
+                        modes.forEach { (modeVal, label) ->
+                            val isSelected = isHistoricalMode == modeVal
+                            Surface(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    isHistoricalMode = modeVal
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                                border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+                                shadowElevation = if (isSelected) 1.dp else 0.dp,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 11.5.sp
+                                        ),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -178,27 +224,27 @@ internal fun MonteCarloAndStressSubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
                     label = "Median FIRE Year (P50)",
-                    value = mc.medianFireAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35y",
+                    value = mc.medianFireAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35 years",
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Best Case FIRE Year (Top 5% market)",
-                    value = mc.bestCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35y",
+                    label = "Fastest Case (5th Percentile)",
+                    value = mc.bestCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35 years",
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Conservative FIRE Year (95th %ile)",
-                    value = mc.worstCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35y",
+                    label = "Conservative (95th Percentile)",
+                    value = mc.worstCaseAge?.let { "${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "Beyond 35 years",
                     info = percentileInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Retirement Sustainability (${survival.horizonYears}-Year Horizon)",
+                    label = "Sustainability (${survival.horizonYears} years)",
                     value = fmtPct(survival.successRatePct),
                     isBold = true,
                     highlightColor = BrandGold,
@@ -207,7 +253,7 @@ internal fun MonteCarloAndStressSubTab(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Dynamic Spending Guardrails",
+                    label = "Guardrails",
                     value = if (survival.guardrailsActive) "Active (${survival.guardrailTriggeredPct.roundToInt()}% cuts)" else "Disabled (Fixed SWR)",
                     isBold = survival.guardrailsActive,
                     highlightColor = if (survival.guardrailsActive) BrandGold else null,
@@ -216,26 +262,28 @@ internal fun MonteCarloAndStressSubTab(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Dividend Tax Drag (Taxable)",
-                    value = "${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))} p.a.",
+                    label = "Dividend Tax Drag",
+                    value = "${fmtPct(FinancialEngine.dividendTaxDragPct(state.settings), 2)}/year",
                     info = taxDragInfo,
                     onShowInfo = onShowInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Median Wealth at Horizon End",
+                    label = "Median End Wealth",
                     value = fmtCZK(survival.medianEndBalanceToday),
                     info = survivalInfo,
                     onShowInfo = onShowInfo
                 )
-                survival.medianDepletionAge?.let { depletionAge ->
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    ProjectionMetricRow(
-                        label = "Median Depletion Year (failing paths)",
-                        value = "${state.settings.baseYear + (depletionAge - state.settings.primaryAge)}",
-                        info = survivalInfo,
-                        onShowInfo = onShowInfo
-                    )
+                if (survival.successRatePct < 100.0) {
+                    survival.medianDepletionAge?.let { depletionAge ->
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        ProjectionMetricRow(
+                            label = "Median Depletion (Failed Runs)",
+                            value = "${state.settings.baseYear + (depletionAge - state.settings.primaryAge)}",
+                            info = survivalInfo,
+                            onShowInfo = onShowInfo
+                        )
+                    }
                 }
             }
         }
@@ -272,7 +320,7 @@ internal fun MonteCarloAndStressSubTab(
             val scenarioInfo = MetricInfo(
                 title = scenario.name,
                 category = "Stress Regime Parameters",
-                formulaOrRule = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.nominalReturnPct)} Nominal Return | ${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.cpiInflationPct)} CPI Inflation",
+                formulaOrRule = "${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.nominalReturnPct)} Nominal Return | ${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.cpiInflationPct)} CPI Inflation",
                 explanation = scenario.description,
                 practicalImplication = "Tests portfolio survivability under non-linear historical stress regimes (such as 1970s stagflation or prolonged tech drawdowns).",
                 accentColor = BadRed
@@ -285,10 +333,14 @@ internal fun MonteCarloAndStressSubTab(
                     .testTag("stress_scenario_card_${scenario.id}"),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (scenario.id == "baseline") MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                    else MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = if (scenario.id == "baseline") BrandTeal.copy(alpha = 0.06f)
+                    else MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                border = BorderStroke(
+                    1.dp,
+                    if (scenario.id == "baseline") BrandTeal.copy(alpha = 0.45f)
+                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
@@ -298,58 +350,78 @@ internal fun MonteCarloAndStressSubTab(
                     ) {
                         Text(
                             text = scenario.name,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
                         )
                         ColorPill(
-                            text = scenario.fireAge?.let { "FIRE: ${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "FIRE: > 35y",
+                            text = scenario.fireAge?.let { "FIRE: ${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "FIRE: > 35 years",
                             color = if (scenario.fireAge != null) GoodGreen else BadRed,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp,
                             info = scenarioInfo,
                             onShowInfo = onShowInfo
                         )
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = scenario.description,
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    ProjectionMetricRow(
-                        label = "Market Return / Inflation:",
-                        value = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.nominalReturnPct)} / ${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.cpiInflationPct)} CPI",
-                        info = scenarioInfo,
-                        onShowInfo = onShowInfo
-                    )
-                    ProjectionMetricRow(
-                        label = "Today's FIRE Target:",
-                        value = fmtCompact(scenario.fireTargetToday),
-                        info = scenarioInfo,
-                        onShowInfo = onShowInfo
-                    )
-                    ProjectionMetricRow(
-                        label = "Monte Carlo Success Rate:",
-                        value = "${String.format(java.util.Locale.getDefault(), "%.1f%%", scenario.successRatePct)}",
-                        info = scenarioInfo,
-                        onShowInfo = onShowInfo
-                    )
-                    ProjectionMetricRow(
-                        label = "Emergency Reserve Survival:",
-                        value = "${String.format(java.util.Locale.getDefault(), "%.1f", scenario.emergencySurvivalMonths)} months",
-                        info = scenarioInfo,
-                        onShowInfo = onShowInfo
-                    )
-                    ProjectionMetricRow(
-                        label = "Net Worth in ${state.settings.baseYear + (60 - state.settings.primaryAge)}:",
-                        value = fmtCompact(scenario.netWorthAt60),
-                        isBold = true,
-                        highlightColor = BrandTeal,
-                        info = scenarioInfo,
-                        onShowInfo = onShowInfo
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            ProjectionMetricRow(
+                                label = "Market Return / Inflation:",
+                                value = "${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.nominalReturnPct)} / ${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.cpiInflationPct)} CPI",
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                            ProjectionMetricRow(
+                                label = "Today's FIRE Target:",
+                                value = fmtCompact(scenario.fireTargetToday),
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                            ProjectionMetricRow(
+                                label = "Monte Carlo Success Rate:",
+                                value = fmtPct(scenario.successRatePct),
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                            ProjectionMetricRow(
+                                label = "Emergency Reserve Survival:",
+                                value = "${String.format(java.util.Locale.ROOT, "%.1f", scenario.emergencySurvivalMonths)} months",
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                            val targetAge60Year = state.settings.baseYear + (60 - state.settings.primaryAge).coerceAtLeast(0)
+                            ProjectionMetricRow(
+                                label = if (state.settings.primaryAge < 60) "Net Worth in $targetAge60Year:" else "Projected Net Worth ($targetAge60Year):",
+                                value = fmtCompact(scenario.netWorthAt60),
+                                isBold = true,
+                                highlightColor = BrandTeal,
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                        }
+                    }
                 }
             }
         }

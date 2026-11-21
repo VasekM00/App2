@@ -5,12 +5,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +36,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,7 +44,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,8 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
@@ -58,15 +62,18 @@ import com.example.domain.FullCalculationState
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.brandSolidContentColor
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import com.example.util.Formatters.roundTo10k
 import com.example.util.Formatters.roundTo1k
+import kotlin.math.roundToInt
 
 private data class MilestoneConfig(
     val milestone: FireMilestone,
@@ -77,11 +84,13 @@ private data class MilestoneConfig(
     val metricInfo: MetricInfo
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FireMilestonesComparisonCard(
     state: FullCalculationState,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    onShowInfo: ((MetricInfo) -> Unit)? = null
+    onShowInfo: ((MetricInfo) -> Unit)? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
     val investableNetWorth = state.currentLiquidPortfolio + state.currentPensionPortfolio
@@ -102,7 +111,7 @@ internal fun FireMilestonesComparisonCard(
             add(
                 MilestoneConfig(
                     milestone = baristaMilestone,
-                    accentColor = Color(0xFF0F766E),
+                    accentColor = BrandTeal,
                     icon = Icons.Default.LocalCafe,
                     shortLabel = "Barista",
                     levelIndex = 2,
@@ -166,9 +175,9 @@ internal fun FireMilestonesComparisonCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             CardHeaderPill(
-                title = "FIRE Milestone Matrix",
-                subtitle = "Capital requirements & passive cash flow comparison",
-                badgeText = "${items.size} TIERS",
+                title = "Independence Milestones",
+                subtitle = "From compound freedom (Coast) to full retirement",
+                badgeText = null,
                 badgeColor = BrandGold,
                 icon = Icons.Default.Flag,
                 accentColor = BrandGold
@@ -208,14 +217,15 @@ internal fun FireMilestonesComparisonCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
 
                     ColorPill(
-                        text = "Net: ${fmtCompact(investableNetWorth)}",
+                        text = "Invested: ${fmtCompact(investableNetWorth)}",
                         color = BrandTeal,
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
@@ -241,7 +251,7 @@ internal fun FireMilestonesComparisonCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1.15f)
+                    modifier = Modifier.weight(1.30f)
                 )
                 Text(
                     text = "TARGET",
@@ -251,17 +261,17 @@ internal fun FireMilestonesComparisonCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1.15f)
+                    modifier = Modifier.weight(1.10f)
                 )
                 Text(
-                    text = "SWR",
+                    text = "MONTHLY",
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1.1f)
+                    modifier = Modifier.weight(1.00f)
                 )
                 Text(
                     text = "STATUS",
@@ -294,6 +304,7 @@ internal fun FireMilestonesComparisonCard(
                     border = if (isSelected) BorderStroke(1.dp, config.accentColor.copy(alpha = 0.6f)) else null,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .clickable {
                             selectedMilestoneId = m.id
@@ -308,7 +319,7 @@ internal fun FireMilestonesComparisonCard(
                         // Tier Name + Icon
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1.15f)
+                            modifier = Modifier.weight(1.30f)
                         ) {
                             Icon(
                                 imageVector = config.icon,
@@ -330,9 +341,12 @@ internal fun FireMilestonesComparisonCard(
                                     text = m.badgeLabel,
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 8.5.sp,
+                                        lineHeight = 10.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    maxLines = 1
+                                    maxLines = 2,
+                                    softWrap = true,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -342,12 +356,12 @@ internal fun FireMilestonesComparisonCard(
                             text = fmtCompact(roundedTarget),
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.5.sp
                             ),
                             maxLines = 1,
-                            modifier = Modifier.weight(1.15f)
+                            modifier = Modifier.weight(1.10f)
                         )
 
                         // SWR
@@ -355,13 +369,13 @@ internal fun FireMilestonesComparisonCard(
                             text = fmtCompact(roundedSWR),
                             textAlign = androidx.compose.ui.text.style.TextAlign.End,
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.5.sp,
                                 color = config.accentColor
                             ),
                             maxLines = 1,
-                            modifier = Modifier.weight(1.1f)
+                            modifier = Modifier.weight(1.00f)
                         )
 
                         // Status / ETA
@@ -405,36 +419,45 @@ internal fun FireMilestonesComparisonCard(
             val progressFloat = (activeM.progressPct / 100.0).toFloat().coerceIn(0f, 1f)
 
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = activeConfig.accentColor.copy(alpha = 0.08f),
                 border = BorderStroke(1.dp, activeConfig.accentColor.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
                             Text(
                                 text = "Active Target: ${activeM.name}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             if (onShowInfo != null) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Info on ${activeM.name}",
-                                    tint = activeConfig.accentColor.copy(alpha = 0.8f),
-                                    modifier = Modifier
-                                        .size(15.dp)
-                                        .clickable { onShowInfo(activeConfig.metricInfo) }
-                                )
+                                IconButton(
+                                    onClick = { onShowInfo(activeConfig.metricInfo) },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Info on ${activeM.name}",
+                                        tint = activeConfig.accentColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.width(6.dp))
                             }
-                            Spacer(modifier = Modifier.width(6.dp))
                             ColorPill(
-                                text = "${activeM.progressPct.toInt()}%",
+                                text = "${activeM.progressPct.roundToInt()}%",
                                 color = if (activeM.isAchieved) GoodGreen else activeConfig.accentColor,
                                 fontSize = 9.5.sp,
                                 horizontalPadding = 6.dp,
@@ -454,12 +477,15 @@ internal fun FireMilestonesComparisonCard(
                             Text(
                                 text = "${fmtCompact(activeGap)} gap",
                                 style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Smooth Continuous Progress Bar (Zero trailing dots)
                     Box(
@@ -484,73 +510,90 @@ internal fun FireMilestonesComparisonCard(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Detail Metrics Summary Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Target Capital",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.5.sp
-                                ),
-                                maxLines = 2,
-                                softWrap = true
-                            )
-                            Text(
-                                text = fmtCZK(activeTarget),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp
-                                ),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "Monthly SWR",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.5.sp
-                                ),
-                                maxLines = 2,
-                                softWrap = true
-                            )
-                            Text(
-                                text = fmtCZK(roundTo1k(activeM.monthlyPassiveIncome)),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp,
-                                    color = activeConfig.accentColor
-                                ),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = if (activeM.isAchieved) "Surplus" else "Remaining Gap",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.5.sp
-                                ),
-                                maxLines = 2,
-                                softWrap = true
-                            )
-                            Text(
-                                text = if (activeM.isAchieved) "+${fmtCZK(investableNetWorth - activeTarget)}" else fmtCZK(activeGap),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp,
-                                    color = if (activeM.isAchieved) GoodGreen else MaterialTheme.colorScheme.onSurface
-                                ),
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val useCompact = maxWidth < 360.dp
+                        val targetText = if (useCompact) fmtCompact(activeTarget) else fmtCZK(activeTarget)
+                        val swrVal = roundTo1k(activeM.monthlyPassiveIncome)
+                        val swrText = if (useCompact) fmtCompact(swrVal) else fmtCZK(swrVal)
+                        val gapVal = if (activeM.isAchieved) investableNetWorth - activeTarget else activeGap
+                        val gapText = (if (activeM.isAchieved) "+" else "") + (if (useCompact) fmtCompact(gapVal) else fmtCZK(gapVal))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Target Capital",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.5.sp
+                                    ),
+                                    maxLines = 2,
+                                    softWrap = true
+                                )
+                                Text(
+                                    text = targetText,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = BodyFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    ),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = true
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Monthly Income",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.5.sp
+                                    ),
+                                    maxLines = 2,
+                                    softWrap = true
+                                )
+                                Text(
+                                    text = swrText,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = BodyFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = activeConfig.accentColor
+                                    ),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = true
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = if (activeM.isAchieved) "Surplus" else "Remaining Gap",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.5.sp
+                                    ),
+                                    maxLines = 2,
+                                    softWrap = true
+                                )
+                                Text(
+                                    text = gapText,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = BodyFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = if (activeM.isAchieved) GoodGreen else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = true
+                                )
+                            }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     val milestoneDetailInfo = MetricInfo(
                         title = "${activeM.name} Strategy & Rules",
@@ -570,15 +613,19 @@ internal fun FireMilestonesComparisonCard(
                         border = BorderStroke(1.dp, activeConfig.accentColor.copy(alpha = 0.25f)),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onShowInfo?.invoke(milestoneDetailInfo) }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Milestone Strategy Details",
@@ -593,7 +640,8 @@ internal fun FireMilestonesComparisonCard(
                                         fontWeight = FontWeight.Medium,
                                         color = activeConfig.accentColor
                                     ),
-                                    maxLines = 1
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Icon(
@@ -605,7 +653,7 @@ internal fun FireMilestonesComparisonCard(
                         }
                     }
 
-                    if (onUpdateSettings != null && activeM.id != "coast") {
+                    if ((onUpdateSettings != null || onReduceSettings != null) && activeM.id != "coast") {
                         val hasManualOverride = state.settings.fireTargetOverride > 0
                         val isCurrentOverride = (hasManualOverride && kotlin.math.abs(state.settings.fireTargetOverride - activeTarget) < 1.0) ||
                                 (!hasManualOverride && activeM.id == "standard")
@@ -614,10 +662,10 @@ internal fun FireMilestonesComparisonCard(
                         HorizontalDivider(color = activeConfig.accentColor.copy(alpha = 0.25f))
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (isCurrentOverride) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -632,8 +680,13 @@ internal fun FireMilestonesComparisonCard(
                                 if (hasManualOverride) {
                                     TextButton(
                                         onClick = {
-                                            onUpdateSettings(state.settings.copy(fireTargetOverride = 0.0))
-                                        }
+                                            com.example.ui.state.dispatchSettingsPatch(
+                                    state.settings,
+                                    onUpdateSettings ?: {},
+                                    onReduceSettings
+                                ) { it.copy(fireTargetOverride = 0.0) }
+                                        },
+                                        modifier = Modifier.heightIn(min = 48.dp)
                                     ) {
                                         Text(
                                             text = "Reset to Auto",
@@ -652,11 +705,18 @@ internal fun FireMilestonesComparisonCard(
                                 )
                                 Button(
                                     onClick = {
-                                        onUpdateSettings(state.settings.copy(fireTargetOverride = activeTarget))
+                                        com.example.ui.state.dispatchSettingsPatch(
+                                    state.settings,
+                                    onUpdateSettings ?: {},
+                                    onReduceSettings
+                                ) { it.copy(fireTargetOverride = activeTarget) }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = activeConfig.accentColor),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = activeConfig.accentColor,
+                                        contentColor = brandSolidContentColor(activeConfig.accentColor)
+                                    ),
                                     shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(32.dp)
+                                    modifier = Modifier.heightIn(min = 48.dp)
                                 ) {
                                     Text(
                                         text = "Set as Primary Goal (${fmtCompact(activeTarget)})",
@@ -670,7 +730,5 @@ internal fun FireMilestonesComparisonCard(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(96.dp))
     }
 }

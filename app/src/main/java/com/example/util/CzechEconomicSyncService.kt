@@ -6,51 +6,107 @@ import com.example.domain.SyncDifferenceItem
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 import kotlin.math.abs
 
 object CzechEconomicSyncService {
 
     private const val CNB_DAILY_RATES_URL = "https://api.cnb.cz/cnbapi/exrates/daily?lang=EN"
     private const val CNB_TXT_FALLBACK_URL = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt"
+    private const val CNB_CACHE_TTL_MS = 15L * 60L * 1000L
+    private const val MAX_CNB_PAYLOAD_CHARS = 1_000_000
+    private const val MAX_REDIRECTS = 3
+
+    private val syncMutex = Mutex()
+    private val ALLOWED_CNB_HOSTS = setOf("api.cnb.cz", "www.cnb.cz", "cnb.cz")
+
+    private val EUR_KEY_VALUE_REGEX = Regex(""""currencyCode"\s*:\s*"EUR"[^}]*?"rate"\s*:\s*([0-9.]+)""")
+    private val EUR_VALUE_KEY_REGEX = Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"EUR"""")
+    private val USD_KEY_VALUE_REGEX = Regex(""""currencyCode"\s*:\s*"USD"[^}]*?"rate"\s*:\s*([0-9.]+)""")
+    private val USD_VALUE_KEY_REGEX = Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"USD"""")
+    private val VALID_FOR_REGEX = Regex(""""validFor"\s*:\s*"([^"]+)"""")
+    private val CNB_TXT_DATE_REGEX = Regex("""^(\d{2}\.\d{2}\.\d{4})\b""")
+
+    private data class CachedCnbResult(
+        val data: CzechRegulatoryData,
+        val fetchedAtMs: Long
+    )
+
+    @Volatile
+    private var cachedCnbSuccess: CachedCnbResult? = null
+
     /**
      * Fetches live official Czech National Bank (ČNB) daily exchange rates and
      * couples them with the verified statutory legal baseline (Act No. 586/1992 Coll. ZDP).
      * Guaranteed to return a valid CzechRegulatoryData object with zero third-party dependencies.
      */
     suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
-        var eurRate = 25.15
-        var usdRate = 23.25
-        var rateDate = ""
-        var sourceDescription = "Verified Czech Statutory Registry"
-        val parsed = localDefaults()
-
-        // 1. Fetch live ČNB exchange rates directly from official CNB API
-        val fxRates = fetchCnbRates()
-        val cnbSuccess = (fxRates.first in 5.0..200.0) && (fxRates.second in 5.0..200.0)
-        if (cnbSuccess) {
-            eurRate = fxRates.first
-            usdRate = fxRates.second
-            if (fxRates.third.isNotBlank()) rateDate = fxRates.third
-            sourceDescription = "Official ČNB Daily API & Statutory Registry"
+        val nowMs = System.currentTimeMillis()
+        cachedCnbSuccess?.let { cached ->
+            val ageMs = nowMs - cached.fetchedAtMs
+            if (ageMs in 0L until CNB_CACHE_TTL_MS) {
+                return@withContext cached.data
+            }
         }
 
-        parsed.copy(
-            timestamp = System.currentTimeMillis(),
-            sourceName = sourceDescription,
-            eurCzkRate = eurRate,
-            usdCzkRate = usdRate,
-            rateDate = rateDate
-        )
+        syncMutex.withLock {
+            val lockedNowMs = System.currentTimeMillis()
+            cachedCnbSuccess?.let { cached ->
+                val ageMs = lockedNowMs - cached.fetchedAtMs
+                if (ageMs in 0L until CNB_CACHE_TTL_MS) {
+                    return@withLock cached.data
+                }
+            }
+
+            var eurRate = FxRateService.DEFAULT_EUR_CZK_RATE
+            var usdRate = FxRateService.DEFAULT_USD_CZK_RATE
+            var rateDate = ""
+            var sourceDescription = "Verified Czech Statutory Registry"
+            val parsed = localDefaults()
+
+            // 1. Fetch live ČNB exchange rates directly from official CNB API
+            val fxRates = fetchCnbRates()
+            val eurValid = fxRates.first.isFinite() && fxRates.first in 5.0..200.0
+            val usdValid = fxRates.second.isFinite() && fxRates.second in 5.0..200.0
+            if (eurValid) eurRate = fxRates.first
+            if (usdValid) usdRate = fxRates.second
+            if (eurValid || usdValid) {
+                if (fxRates.third.isNotBlank()) rateDate = fxRates.third
+                sourceDescription = "Official ČNB Daily API & Statutory Registry"
+                FxRateService.updateFromCnb(
+                    eurRate = if (eurValid) eurRate else 0.0,
+                    usdRate = if (usdValid) usdRate else 0.0
+                )
+            }
+
+            val result = parsed.copy(
+                timestamp = lockedNowMs,
+                sourceName = sourceDescription,
+                eurCzkRate = eurRate,
+                usdCzkRate = usdRate,
+                rateDate = rateDate
+            )
+            if (eurValid && usdValid) {
+                cachedCnbSuccess = CachedCnbResult(data = result, fetchedAtMs = lockedNowMs)
+            }
+            result
+        }
     }
 
     private fun localDefaults() = CzechRegulatoryData()
+
+    private fun differsBy(currentVal: Double, liveVal: Double, tolerance: Double): Boolean {
+        if (!currentVal.isFinite() || !liveVal.isFinite()) return true
+        return abs(currentVal - liveVal) > tolerance
+    }
 
     /**
      * Compares live official data against the user's current settings.
@@ -59,7 +115,7 @@ object CzechEconomicSyncService {
         val list = mutableListOf<SyncDifferenceItem>()
 
         // 1. Inflation & Macro
-        val isCpiDiff = abs(current.cpiInflationPct - live.csuCpiInflationPct) > 0.05
+        val isCpiDiff = differsBy(current.cpiInflationPct, live.csuCpiInflationPct, 0.05)
         list.add(
             SyncDifferenceItem(
                 category = "Macroeconomics",
@@ -72,7 +128,7 @@ object CzechEconomicSyncService {
         )
 
         // 2. Child 1 Tax Bonus
-        val isChild1Diff = abs(current.child1TaxBonusAnnual - live.child1TaxBonusAnnual) > 1.0
+        val isChild1Diff = differsBy(current.child1TaxBonusAnnual, live.child1TaxBonusAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Child Tax Framework",
@@ -85,7 +141,7 @@ object CzechEconomicSyncService {
         )
 
         // 3. Child 2 Tax Bonus
-        val isChild2Diff = abs(current.child2TaxBonusAnnual - live.child2TaxBonusAnnual) > 1.0
+        val isChild2Diff = differsBy(current.child2TaxBonusAnnual, live.child2TaxBonusAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Child Tax Framework",
@@ -98,7 +154,7 @@ object CzechEconomicSyncService {
         )
 
         // 4. Basic Taxpayer Credit
-        val isTaxpayerCreditDiff = abs(current.taxpayerCreditAnnual - live.taxpayerCreditAnnual) > 1.0
+        val isTaxpayerCreditDiff = differsBy(current.taxpayerCreditAnnual, live.taxpayerCreditAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Personal Tax Credits",
@@ -111,7 +167,7 @@ object CzechEconomicSyncService {
         )
 
         // 5. DIP & DPS Combined Tax Deduction Ceiling
-        val isDeductionCeilingDiff = abs(current.taxDeductionCeilingAnnual - live.dipDpsCombinedCeilingAnnual) > 1.0
+        val isDeductionCeilingDiff = differsBy(current.taxDeductionCeilingAnnual, live.dipDpsCombinedCeilingAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Retirement Deductions",
@@ -119,25 +175,25 @@ object CzechEconomicSyncService {
                 currentValueFormatted = fmtCZK(current.taxDeductionCeilingAnnual),
                 liveValueFormatted = fmtCZK(live.dipDpsCombinedCeilingAnnual),
                 isDifferent = isDeductionCeilingDiff,
-                impactHint = "Saves up to 7,200 CZK (15%) or 11,040 CZK (23%) yearly"
+                impactHint = "Saves up to 7 200 Kč (15%) or 11 040 Kč (23%) yearly"
             )
         )
 
         // 6. DPS Subsidy Cap
-        val isYouthSubsidyDiff = abs(current.dpsYouthSubsidyMaxMonthly - live.dpsYouthSubsidyMaxMonthly) > 1.0
+        val isYouthSubsidyDiff = differsBy(current.dpsYouthSubsidyMaxMonthly, live.dpsYouthSubsidyMaxMonthly, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Pension Regulations (DPS)",
                 label = "DPS Subsidy Cap (State Match)",
-                currentValueFormatted = "${fmtCZK(current.dpsYouthSubsidyMaxMonthly)}/mo",
-                liveValueFormatted = "${fmtCZK(live.dpsYouthSubsidyMaxMonthly)}/mo",
+                currentValueFormatted = "${fmtCZK(current.dpsYouthSubsidyMaxMonthly)} monthly",
+                liveValueFormatted = "${fmtCZK(live.dpsYouthSubsidyMaxMonthly)} monthly",
                 isDifferent = isYouthSubsidyDiff,
-                impactHint = "Statutory 20% state match up to 340 CZK/mo under Act No. 427/2011"
+                impactHint = "20% state match up to ${fmtCZK(live.dpsYouthSubsidyMaxMonthly)} monthly"
             )
         )
 
         // 7. Progressive Tax 23% Threshold
-        val isProgThresholdDiff = abs(current.taxSecondBracketThresholdAnnual - live.progressive23ThresholdAnnual) > 1.0
+        val isProgThresholdDiff = differsBy(current.taxSecondBracketThresholdAnnual, live.progressive23ThresholdAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Progressive Tax Threshold",
@@ -145,26 +201,36 @@ object CzechEconomicSyncService {
                 currentValueFormatted = fmtCZK(current.taxSecondBracketThresholdAnnual),
                 liveValueFormatted = fmtCZK(live.progressive23ThresholdAnnual),
                 isDifferent = isProgThresholdDiff,
-                impactHint = "36x statutory national average wage"
+                impactHint = "36x national average wage"
             )
         )
 
         // 8. Parental Allowance Pot
-        val isParentalDiff = abs(current.parentalAllowanceTotalFromCutoff - live.parentalAllowanceTotalFromCutoff) > 1.0 ||
-                abs(current.parentalAllowanceTotalBeforeCutoff - live.parentalAllowanceTotalBeforeCutoff) > 1.0
+        val fromDiffers = differsBy(current.parentalAllowanceTotalFromCutoff, live.parentalAllowanceTotalFromCutoff, 1.0)
+        val beforeDiffers = differsBy(current.parentalAllowanceTotalBeforeCutoff, live.parentalAllowanceTotalBeforeCutoff, 1.0)
+        val isParentalDiff = fromDiffers || beforeDiffers
+        val showBeforeDetail = !fromDiffers && beforeDiffers
         list.add(
             SyncDifferenceItem(
                 category = "Social & Parental Support",
                 label = "Parental Benefit Pot",
-                currentValueFormatted = fmtCZK(current.parentalAllowanceTotalFromCutoff),
-                liveValueFormatted = fmtCZK(live.parentalAllowanceTotalFromCutoff),
+                currentValueFormatted = if (showBeforeDetail) {
+                    "${fmtCZK(current.parentalAllowanceTotalFromCutoff)} (pre-cutoff ${fmtCZK(current.parentalAllowanceTotalBeforeCutoff)})"
+                } else {
+                    fmtCZK(current.parentalAllowanceTotalFromCutoff)
+                },
+                liveValueFormatted = if (showBeforeDetail) {
+                    "${fmtCZK(live.parentalAllowanceTotalFromCutoff)} (pre-cutoff ${fmtCZK(live.parentalAllowanceTotalBeforeCutoff)})"
+                } else {
+                    fmtCZK(live.parentalAllowanceTotalFromCutoff)
+                },
                 isDifferent = isParentalDiff,
-                impactHint = "Statutory 350 000 CZK total pot under Zákon č. 117/1995 Sb."
+                impactHint = "${fmtCZK(live.parentalAllowanceTotalFromCutoff)} total state benefit entitlement"
             )
         )
 
         // 9. Employer Retirement Exemption
-        val isEmployerDiff = abs(current.employerRetirementExemptionAnnual - live.employerRetirementExemptionAnnual) > 1.0
+        val isEmployerDiff = differsBy(current.employerRetirementExemptionAnnual, live.employerRetirementExemptionAnnual, 1.0)
         list.add(
             SyncDifferenceItem(
                 category = "Retirement Tax Shield",
@@ -172,7 +238,7 @@ object CzechEconomicSyncService {
                 currentValueFormatted = "${fmtCZK(current.employerRetirementExemptionAnnual)}/yr",
                 liveValueFormatted = "${fmtCZK(live.employerRetirementExemptionAnnual)}/yr",
                 isDifferent = isEmployerDiff,
-                impactHint = "Tax-exempt employer contribution ceiling under ZDP § 6(9)(m)"
+                impactHint = "Tax-exempt annual employer contribution limit"
             )
         )
 
@@ -228,7 +294,20 @@ object CzechEconomicSyncService {
         return updated
     }
 
+    private fun extractCnbRatesViaRegex(jsonString: String): Triple<Double, Double, String> {
+        val eurMatch = EUR_KEY_VALUE_REGEX.find(jsonString) ?: EUR_VALUE_KEY_REGEX.find(jsonString)
+        val usdMatch = USD_KEY_VALUE_REGEX.find(jsonString) ?: USD_VALUE_KEY_REGEX.find(jsonString)
+        val dateMatch = VALID_FOR_REGEX.find(jsonString)
+        val eur = eurMatch?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+        val usd = usdMatch?.groupValues?.getOrNull(1)?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+        val rateDate = dateMatch?.groupValues?.getOrNull(1)?.trim() ?: ""
+        return Triple(eur, usd, rateDate)
+    }
+
     internal fun parseCnbRatesJson(jsonString: String): Triple<Double, Double, String> {
+        if (jsonString.isBlank() || jsonString.length > MAX_CNB_PAYLOAD_CHARS) {
+            return Triple(0.0, 0.0, "")
+        }
         var eur = 0.0
         var usd = 0.0
         var rateDate = ""
@@ -237,111 +316,164 @@ object CzechEconomicSyncService {
             val ratesArray = json.optJSONArray("rates")
             if (ratesArray != null) {
                 for (i in 0 until ratesArray.length()) {
-                    val item = ratesArray.getJSONObject(i)
-                    val code = item.optString("currencyCode", "")
-                    val rate = item.optDouble("rate", 0.0)
-                    val date = item.optString("validFor", "")
+                    val item = ratesArray.optJSONObject(i) ?: continue
+                    val code = item.optString("currencyCode", "").trim().uppercase(Locale.ROOT)
+                    val rawRate = item.optDouble("rate", Double.NaN)
+                    val amount = if (item.has("amount") && !item.isNull("amount")) {
+                        item.optDouble("amount", Double.NaN)
+                    } else {
+                        1.0
+                    }
+                    val date = if (item.has("validFor") && !item.isNull("validFor")) {
+                        item.optString("validFor", "").trim()
+                    } else {
+                        ""
+                    }
                     if (date.isNotBlank() && rateDate.isBlank()) rateDate = date
-                    if (code.equals("EUR", ignoreCase = true)) eur = rate
-                    if (code.equals("USD", ignoreCase = true)) usd = rate
+                    if (rawRate.isFinite() && rawRate > 0.0 && amount.isFinite() && amount > 0.0) {
+                        val unitRate = rawRate / amount
+                        if (unitRate.isFinite() && unitRate > 0.0) {
+                            if (code == "EUR") eur = unitRate
+                            if (code == "USD") usd = unitRate
+                        }
+                    }
                 }
             }
-        } catch (_: Throwable) {
-            val eurMatch = Regex(""""currencyCode"\s*:\s*"EUR"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
-                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"EUR"""").find(jsonString)
-            val usdMatch = Regex(""""currencyCode"\s*:\s*"USD"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
-                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"USD"""").find(jsonString)
-            val dateMatch = Regex(""""validFor"\s*:\s*"([^"]+)"""").find(jsonString)
-            if (eurMatch != null) eur = eurMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            if (usdMatch != null) usd = usdMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            if (dateMatch != null) rateDate = dateMatch.groupValues[1]
+        } catch (_: Exception) {
+            return extractCnbRatesViaRegex(jsonString)
         }
-        if (eur == 0.0 || usd == 0.0) {
-            val eurMatch = Regex(""""currencyCode"\s*:\s*"EUR"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
-                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"EUR"""").find(jsonString)
-            val usdMatch = Regex(""""currencyCode"\s*:\s*"USD"[^}]*?"rate"\s*:\s*([0-9.]+)""").find(jsonString)
-                ?: Regex(""""rate"\s*:\s*([0-9.]+)[^}]*?"currencyCode"\s*:\s*"USD"""").find(jsonString)
-            val dateMatch = Regex(""""validFor"\s*:\s*"([^"]+)"""").find(jsonString)
-            if (eur == 0.0 && eurMatch != null) eur = eurMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            if (usd == 0.0 && usdMatch != null) usd = usdMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            if (rateDate.isBlank() && dateMatch != null) rateDate = dateMatch.groupValues[1]
+        if (eur == 0.0 || usd == 0.0 || rateDate.isBlank()) {
+            val fallback = extractCnbRatesViaRegex(jsonString)
+            if (eur == 0.0) eur = fallback.first
+            if (usd == 0.0) usd = fallback.second
+            if (rateDate.isBlank()) rateDate = fallback.third
         }
         return Triple(eur, usd, rateDate)
     }
 
     internal fun parseCnbRatesTxt(txtString: String): Triple<Double, Double, String> {
+        if (txtString.isBlank() || txtString.length > MAX_CNB_PAYLOAD_CHARS) {
+            return Triple(0.0, 0.0, "")
+        }
         var eur = 0.0
         var usd = 0.0
         var rateDate = ""
         try {
             val lines = txtString.lines()
-            if (lines.isNotEmpty() && lines[0].contains(".")) {
-                rateDate = lines[0].split(" ")[0].trim()
+            val firstLine = lines.firstOrNull()?.trim().orEmpty()
+            CNB_TXT_DATE_REGEX.find(firstLine)?.let { match ->
+                rateDate = match.groupValues[1]
             }
             lines.forEach { line ->
                 val parts = line.split("|")
                 if (parts.size >= 5) {
-                    val amount = parts[2].trim().toDoubleOrNull() ?: 1.0
-                    val rawRate = parts[4].replace(",", ".").toDoubleOrNull()
-                    if (rawRate != null && amount > 0) {
+                    val amount = parts[2].trim().replace(",", ".").toDoubleOrNull()
+                    val code = parts[3].trim().uppercase(Locale.ROOT)
+                    val rawRate = parts[4].trim().replace(",", ".").toDoubleOrNull()
+                    if (rawRate != null && rawRate.isFinite() && rawRate > 0.0 &&
+                        amount != null && amount.isFinite() && amount > 0.0
+                    ) {
                         val unitRate = rawRate / amount
-                        if (parts[3] == "EUR") eur = unitRate
-                        if (parts[3] == "USD") usd = unitRate
+                        if (unitRate.isFinite() && unitRate > 0.0) {
+                            if (code == "EUR") eur = unitRate
+                            if (code == "USD") usd = unitRate
+                        }
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            // Return whatever valid rates were parsed prior to error
+        }
         return Triple(eur, usd, rateDate)
     }
 
+    private fun isValidRate(rate: Double): Boolean = rate.isFinite() && rate in 5.0..200.0
+
     private fun fetchCnbRates(): Triple<Double, Double, String> {
+        var jsonRates = Triple(0.0, 0.0, "")
         val content = fetchUrlContent(CNB_DAILY_RATES_URL, timeoutMs = 2500)
         if (!content.isNullOrBlank()) {
-            val parsed = parseCnbRatesJson(content)
-            if (parsed.first > 0.0 && parsed.second > 0.0) return parsed
+            jsonRates = parseCnbRatesJson(content)
+            if (isValidRate(jsonRates.first) && isValidRate(jsonRates.second)) {
+                return jsonRates
+            }
         }
 
         val txt = fetchUrlContent(CNB_TXT_FALLBACK_URL, timeoutMs = 2000)
         if (!txt.isNullOrBlank()) {
-            val parsed = parseCnbRatesTxt(txt)
-            if (parsed.first > 0.0 && parsed.second > 0.0) return parsed
+            val txtRates = parseCnbRatesTxt(txt)
+            val mergedEur = if (isValidRate(jsonRates.first)) jsonRates.first else txtRates.first
+            val mergedUsd = if (isValidRate(jsonRates.second)) jsonRates.second else txtRates.second
+            val mergedDate = jsonRates.third.ifBlank { txtRates.third }
+            return Triple(mergedEur, mergedUsd, mergedDate)
         }
-        return Triple(0.0, 0.0, "")
+        return jsonRates
+    }
+
+    private fun isAllowedCnbHttpsUrl(url: URL): Boolean {
+        if (!url.protocol.equals("https", ignoreCase = true)) return false
+        val host = url.host.lowercase(Locale.ROOT)
+        return host in ALLOWED_CNB_HOSTS || host.endsWith(".cnb.cz")
+    }
+
+    private fun isAcceptableContentType(contentType: String?): Boolean {
+        if (contentType.isNullOrBlank()) return true
+        val mime = contentType.substringBefore(';').trim().lowercase(Locale.ROOT)
+        if (mime.contains("html") || mime.contains("xhtml")) return false
+        return mime == "application/json" ||
+            mime == "text/plain" ||
+            mime == "text/csv" ||
+            mime == "application/octet-stream" ||
+            mime.endsWith("+json")
     }
 
     private fun fetchUrlContent(urlString: String, timeoutMs: Int = 3000): String? {
-        var connection: HttpURLConnection? = null
         return try {
-            val url = URL(urlString)
-            connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = timeoutMs
-            connection.readTimeout = timeoutMs
-            connection.setRequestProperty("User-Agent", "MartinufinancialsFIRE/6.0")
-            connection.setRequestProperty("Accept", "*/*")
+            var currentUrl = URL(urlString)
+            for (hop in 0..MAX_REDIRECTS) {
+                if (!isAllowedCnbHttpsUrl(currentUrl)) return null
+                var connection: HttpURLConnection? = null
+                try {
+                    connection = (currentUrl.openConnection() as? HttpURLConnection) ?: return null
+                    connection.instanceFollowRedirects = false
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = timeoutMs
+                    connection.readTimeout = timeoutMs
+                    connection.setRequestProperty("User-Agent", "MartinufinancialsFIRE/6.0")
+                    connection.setRequestProperty("Accept", "application/json, text/plain, */*")
 
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val limit = 1_000_000
-                BufferedReader(InputStreamReader(connection.inputStream, Charsets.UTF_8)).use { reader ->
-                    val sb = StringBuilder()
-                    val buf = CharArray(8192)
-                    var total = 0
-                    while (true) {
-                        val n = reader.read(buf)
-                        if (n < 0) break
-                        total += n
-                        if (total > limit) return null
-                        sb.append(buf, 0, n)
+                    val code = connection.responseCode
+                    if (code in 300..399) {
+                        if (hop == MAX_REDIRECTS) return null
+                        val location = connection.getHeaderField("Location")?.trim()
+                        if (location.isNullOrBlank()) return null
+                        currentUrl = URL(currentUrl, location)
+                        continue
                     }
-                    sb.toString()
+
+                    if (code != HttpURLConnection.HTTP_OK) return null
+                    if (!isAcceptableContentType(connection.contentType)) return null
+
+                    BufferedReader(InputStreamReader(connection.inputStream, Charsets.UTF_8)).use { reader ->
+                        val sb = StringBuilder()
+                        val buf = CharArray(8192)
+                        var total = 0
+                        while (true) {
+                            val n = reader.read(buf)
+                            if (n < 0) break
+                            if (total + n > MAX_CNB_PAYLOAD_CHARS) return null
+                            total += n
+                            sb.append(buf, 0, n)
+                        }
+                        return sb.toString()
+                    }
+                } finally {
+                    connection?.disconnect()
                 }
-            } else {
-                null
             }
-        } catch (e: Exception) {
             null
-        } finally {
-            connection?.disconnect()
+        } catch (_: Exception) {
+            null
         }
     }
 }

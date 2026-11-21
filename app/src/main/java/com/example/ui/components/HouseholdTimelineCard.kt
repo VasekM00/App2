@@ -40,8 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
@@ -52,6 +52,8 @@ import com.example.domain.HouseholdProfile
 import com.example.domain.HouseholdRole
 import com.example.domain.LifeTimelineEvent
 import com.example.domain.TimelineEventType
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -63,37 +65,41 @@ fun HouseholdTimelineCard(
     settings: SettingsEntity,
     state: FullCalculationState? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val profile = HouseholdProfile.fromSettings(settings)
     val totalMembers = 1 + (if (!profile.isSingleHousehold) 1 else 0) + profile.children.size
 
     val income = state?.currentIncome ?: FinancialEngine.householdIncome(settings.baseYear, settings)
-    val totalHouseholdNet = income.totalMonthly
+    val totalHouseholdNet = income.totalMonthly.finiteOrZero()
 
-    val primaryNetTotal = income.vaclavNet + income.vouchers + income.vaclavGifts + income.vaclavOther
+    val primaryNetTotal = (income.vaclavNet + income.vouchers + income.vaclavGifts + income.vaclavOther).finiteOrZero()
 
     val isSpouseActive = !settings.isSingleHousehold
     val spouseNetTotal = if (isSpouseActive) {
-        income.eleonoraSalary + income.benefit + income.lecturing + income.eleonoraGifts + income.eleonoraOther
+        (income.eleonoraSalary + income.benefit + income.lecturing + income.eleonoraGifts + income.eleonoraOther).finiteOrZero()
     } else 0.0
 
     var showEditPrimaryDialog by remember { mutableStateOf(false) }
     var showEditSpouseDialog by remember { mutableStateOf(false) }
 
-    if (showEditPrimaryDialog && onUpdateSettings != null) {
+    val canEdit = onUpdateSettings != null || onReduceSettings != null
+    if (showEditPrimaryDialog && canEdit) {
         EditPrimaryEarnerDialog(
             settings = settings,
             onDismiss = { showEditPrimaryDialog = false },
-            onSave = { updated -> onUpdateSettings(updated) }
+            onSave = { updated -> onUpdateSettings?.invoke(updated) },
+            onSaveTransform = onReduceSettings
         )
     }
 
-    if (showEditSpouseDialog && onUpdateSettings != null) {
+    if (showEditSpouseDialog && canEdit) {
         EditSpouseEarnerDialog(
             settings = settings,
             onDismiss = { showEditSpouseDialog = false },
-            onSave = { updated -> onUpdateSettings(updated) }
+            onSave = { updated -> onUpdateSettings?.invoke(updated) },
+            onSaveTransform = onReduceSettings
         )
     }
 
@@ -141,7 +147,7 @@ fun HouseholdTimelineCard(
                         text = "Household Net Total: ${fmtCZK(totalHouseholdNet)}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = BodyFontFamily,
                         color = BrandTeal,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
@@ -168,11 +174,11 @@ fun HouseholdTimelineCard(
             }
             MemberSummaryRow(
                 member = profile.primaryEarner,
-                displayName = settings.primaryName,
+                displayName = settings.primaryName.ifBlank { "Primary Earner" },
                 baseYear = settings.baseYear,
                 monthlyNetTotal = primaryNetTotal,
                 breakdownSubtitle = primarySubtitle,
-                onEditClick = if (onUpdateSettings != null) { { showEditPrimaryDialog = true } } else null
+                onEditClick = if (canEdit) { { showEditPrimaryDialog = true } } else null
             )
 
             if (profile.spouseEarner != null) {
@@ -204,11 +210,11 @@ fun HouseholdTimelineCard(
                 }
                 MemberSummaryRow(
                     member = profile.spouseEarner,
-                    displayName = settings.spouseName,
+                    displayName = settings.spouseName.ifBlank { "Partner" },
                     baseYear = settings.baseYear,
                     monthlyNetTotal = spouseNetTotal,
                     breakdownSubtitle = spouseSubtitle,
-                    onEditClick = if (onUpdateSettings != null) { { showEditSpouseDialog = true } } else null
+                    onEditClick = if (canEdit) { { showEditSpouseDialog = true } } else null
                 )
             }
 
@@ -218,7 +224,7 @@ fun HouseholdTimelineCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -261,8 +267,10 @@ fun HouseholdTimelineCard(
                             text = fmtCZK(income.lumpSumMonthly),
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 4.dp)
                         )
                     }
@@ -332,7 +340,7 @@ private fun MemberSummaryRow(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Row(
             modifier = Modifier
@@ -366,7 +374,10 @@ private fun MemberSummaryRow(
                         text = displayName,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -376,21 +387,24 @@ private fun MemberSummaryRow(
                             else -> "Age $currentAge (${member.birthYear})"
                         },
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontFamily = BodyFontFamily,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     if (onEditClick != null) {
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
                             onClick = onEditClick,
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(48.dp)
                                 .testTag("edit_member_${member.id}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
                                 contentDescription = "Edit $displayName",
                                 tint = BrandTeal,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -406,6 +420,7 @@ private fun MemberSummaryRow(
                     Text(
                         text = breakdownSubtitle,
                         fontSize = 10.sp,
+                        fontFamily = BodyFontFamily,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                         lineHeight = 13.sp
                     )
@@ -417,8 +432,10 @@ private fun MemberSummaryRow(
                     text = fmtCZK(monthlyNetTotal),
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = BodyFontFamily,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier.padding(start = 6.dp)
                 )
             } else if (member.role == HouseholdRole.DEPENDENT_CHILD) {
@@ -506,20 +523,23 @@ private fun TimelineEventRow(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                if (event.monthlyCashFlowImpact != 0.0 || event.lumpSumCapitalImpact != 0.0) {
+                val safeMonthlyImpact = event.monthlyCashFlowImpact.finiteOrZero()
+                val safeLumpImpact = event.lumpSumCapitalImpact.finiteOrZero()
+                if (safeMonthlyImpact != 0.0 || safeLumpImpact != 0.0) {
                     val impactStr = when {
-                        event.monthlyCashFlowImpact != 0.0 -> {
-                            val prefix = if (event.monthlyCashFlowImpact > 0.0) "+" else ""
-                            "$prefix${fmtCZK(event.monthlyCashFlowImpact)} / mo"
+                        safeMonthlyImpact != 0.0 -> {
+                            val prefix = if (safeMonthlyImpact > 0.0) "+" else ""
+                            "$prefix${fmtCZK(safeMonthlyImpact)} / mo"
                         }
                         else -> {
-                            val prefix = if (event.lumpSumCapitalImpact > 0.0) "+" else ""
-                            "$prefix${fmtCZK(event.lumpSumCapitalImpact)} capital"
+                            val prefix = if (safeLumpImpact > 0.0) "+" else ""
+                            "$prefix${fmtCZK(safeLumpImpact)} capital"
                         }
                     }
                     Text(
                         text = "Impact: $impactStr",
                         fontSize = 10.sp,
+                        fontFamily = BodyFontFamily,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -534,7 +554,7 @@ private fun TimelineEventRow(
                     text = "${event.targetYear}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = BodyFontFamily,
                     color = nodeColor,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )

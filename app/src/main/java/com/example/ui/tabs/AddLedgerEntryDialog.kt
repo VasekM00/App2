@@ -4,16 +4,18 @@ import com.example.util.parseUserAmountOrNull
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,25 +40,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
-import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.ui.components.ColorPill
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtEditableAmount
 import java.util.Locale
 
 fun nextYearMonth(ym: String): String {
@@ -91,6 +94,7 @@ fun prevYearMonth(ym: String): String {
     return ym
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AddLedgerEntryDialog(
     state: FullCalculationState,
@@ -99,17 +103,15 @@ internal fun AddLedgerEntryDialog(
     duplicateFrom: LedgerEntryEntity? = null,
     onDismiss: () -> Unit,
     onTriggerImportCsv: () -> Unit = {},
-    onSave: (String, Double, Double, Double, Double, Double, String, Double, Double, Double) -> Unit
+    onSave: (String, Double, Double, Double, Double, Double, String, Double?, Double?, Double?) -> Unit
 ) {
-    val defaultRent = state.settings.rentMonthly.toInt().toString()
-    val baselineLiving = (state.totalLivingCostMonthly - state.settings.rentMonthly).coerceAtLeast(0.0).toInt().toString()
+    val defaultRent = fmtEditableAmount(state.settings.rentMonthly)
+    val baselineLiving = fmtEditableAmount((state.totalLivingCostMonthly - state.settings.rentMonthly).coerceAtLeast(0.0))
     val isSingle = state.settings.isSingleHousehold
-    val budgetedIncV = (state.currentIncome.vaclavNet + state.currentIncome.vouchers + state.settings.vGiftsMonthly).toInt().toString()
+    val budgetedIncV = fmtEditableAmount(state.currentIncome.vaclavNet)
     val budgetedIncE = if (isSingle) "0" else {
         val base = state.currentIncome.eleonoraSalary.takeIf { it > 0 } ?: state.currentIncome.benefit
-        val lect = if (state.settings.eIncludeLecturing) state.currentIncome.lecturing else 0.0
-        val gift = state.settings.eGiftsMonthly
-        (base + lect + gift).toInt().toString()
+        fmtEditableAmount(base)
     }
 
     val sourceEntry = initialEntry ?: duplicateFrom
@@ -123,46 +125,49 @@ internal fun AddLedgerEntryDialog(
     }
 
     fun fmtVal(v: Double?): String {
-        if (v == null || !v.isFinite() || v <= 0.0) return "0"
-        return if (v % 1.0 == 0.0) v.toLong().toString() else String.format(java.util.Locale.US, "%.2f", v)
+        if (v == null || !v.isFinite() || v < 0.0) return "0"
+        return fmtEditableAmount(v)
     }
 
-    var ym by remember(sourceEntry) { mutableStateOf(defaultYm) }
-    var incV by remember(sourceEntry) { mutableStateOf(sourceEntry?.incVaclav?.let { fmtVal(it) } ?: budgetedIncV) }
-    var incE by remember(sourceEntry) { mutableStateOf(if (isSingle) "0" else (sourceEntry?.incEleonora?.let { fmtVal(it) } ?: budgetedIncE)) }
-    var incU by remember(sourceEntry) { mutableStateOf(sourceEntry?.incUnforeseen?.let { fmtVal(it) } ?: "0") }
-    var expR by remember(sourceEntry) { mutableStateOf(sourceEntry?.expRent?.let { fmtVal(it) } ?: defaultRent) }
-    var expL by remember(sourceEntry) { mutableStateOf(sourceEntry?.let { fmtVal(it.expGroceries + it.expOther) } ?: baselineLiving) }
-    var notes by remember(sourceEntry) { mutableStateOf(sourceEntry?.notes ?: "") }
-    var balPortu by remember(sourceEntry) { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
-    var balPension by remember(sourceEntry) { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
-    var balReserve by remember(sourceEntry) { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it > 0 }?.let { fmtVal(it) } ?: "") }
+    var ym by rememberSaveable(sourceEntry?.id, defaultYm) { mutableStateOf(defaultYm) }
+    var ymErrorText by rememberSaveable(sourceEntry?.id) { mutableStateOf<String?>(null) }
+    var amountErrorText by rememberSaveable(sourceEntry?.id) { mutableStateOf<String?>(null) }
+    var incV by rememberSaveable(sourceEntry?.id, budgetedIncV) { mutableStateOf(sourceEntry?.incVaclav?.let { fmtVal(it) } ?: budgetedIncV) }
+    var incE by rememberSaveable(sourceEntry?.id, isSingle, budgetedIncE) { mutableStateOf(if (isSingle) "0" else (sourceEntry?.incEleonora?.let { fmtVal(it) } ?: budgetedIncE)) }
+    var incU by rememberSaveable(sourceEntry?.id) { mutableStateOf(sourceEntry?.incUnforeseen?.let { fmtVal(it) } ?: "0") }
+    var expR by rememberSaveable(sourceEntry?.id, defaultRent) { mutableStateOf(sourceEntry?.expRent?.let { fmtVal(it) } ?: defaultRent) }
+    var expL by rememberSaveable(sourceEntry?.id, baselineLiving) { mutableStateOf(sourceEntry?.let { fmtVal(it.expGroceries + it.expOther) } ?: baselineLiving) }
+    var notes by rememberSaveable(sourceEntry?.id) { mutableStateOf(sourceEntry?.notes ?: "") }
+    var balPortu by rememberSaveable(sourceEntry?.id) { mutableStateOf(sourceEntry?.portfolioBalanceAtMonthEnd?.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: "") }
+    var balPension by rememberSaveable(sourceEntry?.id) { mutableStateOf(sourceEntry?.pensionBalanceAtMonthEnd?.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: "") }
+    var balReserve by rememberSaveable(sourceEntry?.id) { mutableStateOf(sourceEntry?.emergencyReserveAtMonthEnd?.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: "") }
 
     val latestEntry = remember(entries) { entries.maxByOrNull { it.yearMonth } }
     val primaryName = state.settings.primaryName.ifBlank { "Primary Earner" }
     val spouseName = state.settings.spouseName.ifBlank { "Partner" }
 
     // Live calculations
-    val valIncV = incV.parseUserAmountOrNull() ?: 0.0
-    val valIncE = if (!isSingle) (incE.parseUserAmountOrNull() ?: 0.0) else 0.0
-    val valIncU = incU.parseUserAmountOrNull() ?: 0.0
+    val valIncV = incV.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
+    val valIncE = if (!isSingle) (incE.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0) else 0.0
+    val valIncU = incU.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
     val totalInflows = valIncV + valIncE + valIncU
 
-    val valExpR = expR.parseUserAmountOrNull() ?: 0.0
-    val valExpL = expL.parseUserAmountOrNull() ?: 0.0
+    val valExpR = expR.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
+    val valExpL = expL.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
     val totalExpenses = valExpR + valExpL
 
     val netFlow = totalInflows - totalExpenses
     val baselineExp = state.totalLivingCostMonthly
-    val baselineInc = remember(state.settings) {
-        FinancialEngine.householdIncome(state.settings.baseYear, state.settings).totalMonthly
+    val baselineInc = remember(state.currentIncome, isSingle) {
+        val baseE = if (isSingle) 0.0 else (state.currentIncome.eleonoraSalary.takeIf { it > 0 } ?: state.currentIncome.benefit)
+        state.currentIncome.vaclavNet + baseE
     }
     val baselineSurplus = baselineInc - baselineExp
     val surplusDiff = netFlow - baselineSurplus
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Row(
@@ -170,7 +175,7 @@ internal fun AddLedgerEntryDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = if (initialEntry != null) "Edit Record"
                         else if (duplicateFrom != null) "Duplicate Record"
@@ -187,19 +192,22 @@ internal fun AddLedgerEntryDialog(
                     color = BrandTeal,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = BodyFontFamily,
                     horizontalPadding = 8.dp,
                     verticalPadding = 3.dp
                 )
             }
         },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                ) {
                 // 1. Period Selector & Quick Presets Strip (Spaced for clean mobile ergonomics)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -219,25 +227,32 @@ internal fun AddLedgerEntryDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(
-                                onClick = { ym = prevYearMonth(ym) },
-                                modifier = Modifier.size(32.dp)
+                                onClick = {
+                                    ym = prevYearMonth(ym)
+                                    ymErrorText = null
+                                },
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Previous Month",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                             OutlinedTextField(
                                 value = ym,
-                                onValueChange = { ym = it },
+                                onValueChange = {
+                                    ym = it
+                                    ymErrorText = null
+                                },
                                 singleLine = true,
+                                isError = ymErrorText != null,
                                 shape = RoundedCornerShape(8.dp),
                                 textStyle = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                     fontSize = 13.sp
                                 ),
@@ -247,72 +262,85 @@ internal fun AddLedgerEntryDialog(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             IconButton(
-                                onClick = { ym = nextYearMonth(ym) },
-                                modifier = Modifier.size(32.dp)
+                                onClick = {
+                                    ym = nextYearMonth(ym)
+                                    ymErrorText = null
+                                },
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = "Next Month",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
 
-                        // Presets Chips Row (Dedicated row so labels never crush or truncate)
-                        Row(
+                        if (ymErrorText != null) {
+                            Text(
+                                text = ymErrorText ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                        }
+
+                        // Presets Chips Row (Wraps cleanly on narrow widths)
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (latestEntry != null && initialEntry == null) {
                                 AssistChip(
                                     onClick = {
                                         ym = nextYearMonth(latestEntry.yearMonth)
-                                        incV = latestEntry.incVaclav.toInt().toString()
-                                        incE = latestEntry.incEleonora.toInt().toString()
-                                        incU = latestEntry.incUnforeseen.toInt().toString()
-                                        expR = latestEntry.expRent.toInt().toString()
-                                        expL = (latestEntry.expGroceries + latestEntry.expOther).toInt().toString()
-                                        notes = latestEntry.notes
-                                        balPortu = latestEntry.portfolioBalanceAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
-                                        balPension = latestEntry.pensionBalanceAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
-                                        balReserve = latestEntry.emergencyReserveAtMonthEnd.takeIf { it > 0 }?.toInt()?.toString() ?: ""
+                                        ymErrorText = null
+                                        amountErrorText = null
+                                        incV = fmtVal(latestEntry.incVaclav)
+                                        incE = if (isSingle) "0" else fmtVal(latestEntry.incEleonora)
+                                        incU = fmtVal(latestEntry.incUnforeseen)
+                                        expR = fmtVal(latestEntry.expRent)
+                                        expL = fmtVal(latestEntry.expGroceries + latestEntry.expOther)
+                                        notes = if (latestEntry.notes.startsWith("Imported from", ignoreCase = true)) "" else latestEntry.notes
+                                        balPortu = latestEntry.portfolioBalanceAtMonthEnd.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: ""
+                                        balPension = latestEntry.pensionBalanceAtMonthEnd.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: ""
+                                        balReserve = latestEntry.emergencyReserveAtMonthEnd.takeIf { it.isFinite() && it > 0 }?.let { fmtVal(it) } ?: ""
                                     },
-                                    label = { Text("Copy Prev", fontSize = 10.5.sp, maxLines = 1) },
+                                    label = { Text("Copy Previous", fontSize = 11.sp, maxLines = 2, softWrap = true) },
                                     colors = AssistChipDefaults.assistChipColors(
                                         containerColor = BrandTeal.copy(alpha = 0.12f),
                                         labelColor = BrandTeal
                                     ),
                                     shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(30.dp)
+                                    modifier = Modifier.heightIn(min = 48.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
                             }
                             AssistChip(
                                 onClick = {
+                                    amountErrorText = null
                                     incV = budgetedIncV
                                     incE = budgetedIncE
                                     incU = "0"
                                     expR = defaultRent
                                     expL = baselineLiving
                                 },
-                                label = { Text("Fill Budget", fontSize = 10.5.sp, maxLines = 1) },
+                                label = { Text("Fill Budget", fontSize = 11.sp, maxLines = 1) },
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.height(30.dp)
+                                modifier = Modifier.heightIn(min = 48.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             AssistChip(
                                 onClick = {
                                     onDismiss()
                                     onTriggerImportCsv()
                                 },
-                                label = { Text("Import", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, maxLines = 1) },
+                                label = { Text("Import", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.FileUpload,
                                         contentDescription = null,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 },
                                 colors = AssistChipDefaults.assistChipColors(
@@ -320,7 +348,7 @@ internal fun AddLedgerEntryDialog(
                                     labelColor = BrandGold
                                 ),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.height(30.dp)
+                                modifier = Modifier.heightIn(min = 48.dp)
                             )
                         }
                     }
@@ -350,65 +378,46 @@ internal fun AddLedgerEntryDialog(
                                 color = GoodGreen,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 horizontalPadding = 5.dp,
                                 verticalPadding = 2.dp
                             )
                         }
 
                         if (!isSingle) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = incV,
-                                    onValueChange = { incV = it },
-                                    label = { Text(primaryName, fontSize = 11.sp) },
-                                    suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(8.dp),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("ledger_input_inc_v")
-                                )
-                                OutlinedTextField(
-                                    value = incE,
-                                    onValueChange = { incE = it },
-                                    label = { Text(spouseName, fontSize = 11.sp) },
-                                    suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(8.dp),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("ledger_input_inc_e")
-                                )
-                            }
+                            ResponsiveFieldPair(
+                                first = { mod ->
+                                    LedgerAmountField(
+                                        value = incV,
+                                        onValueChange = { incV = it; amountErrorText = null },
+                                        label = primaryName,
+                                        modifier = mod.testTag("ledger_input_inc_v")
+                                    )
+                                },
+                                second = { mod ->
+                                    LedgerAmountField(
+                                        value = incE,
+                                        onValueChange = { incE = it; amountErrorText = null },
+                                        label = spouseName,
+                                        modifier = mod.testTag("ledger_input_inc_e")
+                                    )
+                                }
+                            )
                         } else {
-                            OutlinedTextField(
+                            LedgerAmountField(
                                 value = incV,
-                                onValueChange = { incV = it },
-                                label = { Text("$primaryName Net", fontSize = 11.sp) },
-                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                onValueChange = { incV = it; amountErrorText = null },
+                                label = "$primaryName Net",
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("ledger_input_inc_v")
                             )
                         }
 
-                        OutlinedTextField(
+                        LedgerAmountField(
                             value = incU,
-                            onValueChange = { incU = it },
-                            label = { Text("Other Inflows / Bonuses (optional)", fontSize = 11.sp) },
-                            suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            onValueChange = { incU = it; amountErrorText = null },
+                            label = "Other Inflows / Bonuses (optional)",
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -438,41 +447,30 @@ internal fun AddLedgerEntryDialog(
                                 color = BadRed,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 horizontalPadding = 5.dp,
                                 verticalPadding = 2.dp
                             )
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = expR,
-                                onValueChange = { expR = it },
-                                label = { Text("Rent / Housing", fontSize = 11.sp) },
-                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("ledger_input_exp_rent")
-                            )
-                            OutlinedTextField(
-                                value = expL,
-                                onValueChange = { expL = it },
-                                label = { Text("Variable Living", fontSize = 11.sp) },
-                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("ledger_input_exp_living")
-                            )
-                        }
+                        ResponsiveFieldPair(
+                            first = { mod ->
+                                LedgerAmountField(
+                                    value = expR,
+                                    onValueChange = { expR = it; amountErrorText = null },
+                                    label = "Rent / Housing",
+                                    modifier = mod.testTag("ledger_input_exp_rent")
+                                )
+                            },
+                            second = { mod ->
+                                LedgerAmountField(
+                                    value = expL,
+                                    onValueChange = { expL = it; amountErrorText = null },
+                                    label = "Variable Living",
+                                    modifier = mod.testTag("ledger_input_exp_living")
+                                )
+                            }
+                        )
                     }
                 }
 
@@ -480,7 +478,7 @@ internal fun AddLedgerEntryDialog(
                 val netColor = if (netFlow >= 0) BrandTeal else BadRed
                 val varianceColor = if (surplusDiff >= 0) GoodGreen else BadRed
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = netColor.copy(alpha = 0.05f),
                     border = BorderStroke(1.dp, netColor.copy(alpha = 0.25f))
                 ) {
@@ -518,7 +516,7 @@ internal fun AddLedgerEntryDialog(
                                 text = (if (netFlow >= 0) "+ " else "") + fmtCZK(netFlow),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     fontSize = 11.5.sp,
                                     color = netColor
                                 )
@@ -542,7 +540,7 @@ internal fun AddLedgerEntryDialog(
                                 color = varianceColor,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 horizontalPadding = 6.dp,
                                 verticalPadding = 2.dp
                             )
@@ -552,7 +550,7 @@ internal fun AddLedgerEntryDialog(
 
                 // 5. Month-End Wealth Snapshot
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.05f),
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.3f))
                 ) {
@@ -560,9 +558,9 @@ internal fun AddLedgerEntryDialog(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val vPortu = balPortu.parseUserAmountOrNull() ?: 0.0
-                        val vPension = balPension.parseUserAmountOrNull() ?: 0.0
-                        val vReserve = balReserve.parseUserAmountOrNull() ?: 0.0
+                        val vPortu = balPortu.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
+                        val vPension = balPension.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
+                        val vReserve = balReserve.parseUserAmountOrNull()?.coerceAtLeast(0.0) ?: 0.0
                         val vTotalNetWorth = vPortu + vPension + vReserve
 
                         Row(
@@ -583,7 +581,7 @@ internal fun AddLedgerEntryDialog(
                                     color = BrandGold,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     horizontalPadding = 5.dp,
                                     verticalPadding = 1.5.dp
                                 )
@@ -598,47 +596,32 @@ internal fun AddLedgerEntryDialog(
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = balPortu,
-                                onValueChange = { balPortu = it },
-                                label = { Text("Portu", fontSize = 11.sp) },
-                                placeholder = { Text("Broker", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
-                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("ledger_input_bal_portu")
-                            )
-                            OutlinedTextField(
-                                value = balReserve,
-                                onValueChange = { balReserve = it },
-                                label = { Text("Reserve", fontSize = 11.sp) },
-                                placeholder = { Text("Cash fund", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
-                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("ledger_input_bal_reserve")
-                            )
-                        }
+                        ResponsiveFieldPair(
+                            first = { mod ->
+                                LedgerAmountField(
+                                    value = balPortu,
+                                    onValueChange = { balPortu = it; amountErrorText = null },
+                                    label = "Portu",
+                                    placeholder = "Broker",
+                                    modifier = mod.testTag("ledger_input_bal_portu")
+                                )
+                            },
+                            second = { mod ->
+                                LedgerAmountField(
+                                    value = balReserve,
+                                    onValueChange = { balReserve = it; amountErrorText = null },
+                                    label = "Reserve",
+                                    placeholder = "Cash fund",
+                                    modifier = mod.testTag("ledger_input_bal_reserve")
+                                )
+                            }
+                        )
 
-                        OutlinedTextField(
+                        LedgerAmountField(
                             value = balPension,
-                            onValueChange = { balPension = it },
-                            label = { Text("Pension (DIP + DPS)", fontSize = 11.sp) },
-                            placeholder = { Text("Combined total", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
-                            suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(8.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            onValueChange = { balPension = it; amountErrorText = null },
+                            label = "Pension (DIP + DPS)",
+                            placeholder = "Combined total",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("ledger_input_bal_pension")
@@ -651,32 +634,84 @@ internal fun AddLedgerEntryDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes & Memos (optional)", fontSize = 11.sp) },
-                    placeholder = { Text("e.g. Travel, bonus, car service...") },
+                    placeholder = { Text("e.g. Travel, bonus, car service") },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+                }
+                if (amountErrorText != null) {
+                    Text(
+                        text = amountErrorText ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .testTag("ledger_amount_error")
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
+                    val trimmedYm = ym.trim()
+                    if (!trimmedYm.matches(Regex("^\\d{4}-(0[1-9]|1[0-2])$"))) {
+                        ymErrorText = "Use YYYY-MM format (e.g. 2026-04)."
+                        return@Button
+                    }
+                    fun parseRequired(raw: String, fieldLabel: String): Double? {
+                        if (raw.isBlank()) return 0.0
+                        val p = raw.parseUserAmountOrNull()
+                        if (p == null || !p.isFinite() || p < 0.0) {
+                            amountErrorText = "$fieldLabel must be a valid non-negative number."
+                            return null
+                        }
+                        return p
+                    }
+                    fun parseOptional(raw: String, fieldLabel: String): Pair<Boolean, Double?> {
+                        if (raw.isBlank()) return true to null
+                        val p = raw.parseUserAmountOrNull()
+                        if (p == null || !p.isFinite() || p < 0.0) {
+                            amountErrorText = "$fieldLabel must be a valid non-negative number."
+                            return false to null
+                        }
+                        return true to p
+                    }
+                    val parsedIncV = parseRequired(incV, primaryName) ?: return@Button
+                    val parsedIncE = if (isSingle) 0.0 else (parseRequired(incE, spouseName) ?: return@Button)
+                    val parsedIncU = parseRequired(incU, "Other inflows") ?: return@Button
+                    val parsedExpR = parseRequired(expR, "Rent / Housing") ?: return@Button
+                    val parsedExpL = parseRequired(expL, "Variable living") ?: return@Button
+                    val (okPortu, parsedBalPortu) = parseOptional(balPortu, "Portu balance")
+                    if (!okPortu) return@Button
+                    val (okPension, parsedBalPension) = parseOptional(balPension, "Pension balance")
+                    if (!okPension) return@Button
+                    val (okReserve, parsedBalReserve) = parseOptional(balReserve, "Reserve balance")
+                    if (!okReserve) return@Button
+
+                    amountErrorText = null
                     onSave(
-                        ym,
-                        incV.parseUserAmountOrNull() ?: 0.0,
-                        if (isSingle) 0.0 else (incE.parseUserAmountOrNull() ?: 0.0),
-                        incU.parseUserAmountOrNull() ?: 0.0,
-                        expR.parseUserAmountOrNull() ?: 0.0,
-                        expL.parseUserAmountOrNull() ?: 0.0,
+                        trimmedYm,
+                        parsedIncV,
+                        parsedIncE,
+                        parsedIncU,
+                        parsedExpR,
+                        parsedExpL,
                         notes,
-                        balPortu.parseUserAmountOrNull() ?: 0.0,
-                        balPension.parseUserAmountOrNull() ?: 0.0,
-                        balReserve.parseUserAmountOrNull() ?: 0.0
+                        parsedBalPortu,
+                        parsedBalPension,
+                        parsedBalReserve
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandTeal,
+                    contentColor = OnBrandTeal
+                ),
                 shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.testTag("save_ledger_entry_button")
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("save_ledger_entry_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -692,7 +727,10 @@ internal fun AddLedgerEntryDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
                 Text("Cancel", fontSize = 13.sp)
             }
         }

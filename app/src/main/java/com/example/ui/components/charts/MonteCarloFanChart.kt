@@ -3,7 +3,7 @@ package com.example.ui.components.charts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +19,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -48,11 +51,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.MonteCarloPoint
 import com.example.ui.components.ColorPill
 import com.example.ui.theme.BadRed
+import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
@@ -60,38 +65,50 @@ import com.example.util.Formatters.fmtCompact
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.round
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MonteCarloFanChart(
     points: List<MonteCarloPoint>,
     cpiPct: Double = 2.8,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentYearMonth: java.time.YearMonth? = null,
 ) {
     if (points.isEmpty()) return
 
     val baseYear = points.first().year
-    val cpiRate = (cpiPct / 100.0).coerceAtLeast(0.0)
+    val safeCpiPct = cpiPct.finiteOrZero().coerceAtLeast(0.0)
+    val cpiRate = safeCpiPct / 100.0
+
     // Deflate every point back to base-year purchasing power
-    val realPoints = remember(points, cpiPct) {
+    val realPoints = remember(points, safeCpiPct) {
         points.map { pt ->
-            val deflator = (1.0 + cpiRate).pow((pt.year - baseYear).toDouble()).coerceAtLeast(1.0)
+            val rawDeflator = (1.0 + cpiRate).pow((pt.year - baseYear).toDouble())
+            val deflator = if (rawDeflator.isFinite() && rawDeflator > 0.0) rawDeflator.coerceAtLeast(1.0) else 1.0
             pt.copy(
-                p5     = pt.p5     / deflator,
-                p50    = pt.p50    / deflator,
-                p95    = pt.p95    / deflator,
-                target = pt.target / deflator
+                p5 = pt.p5.finiteOrZero().coerceAtLeast(0.0) / deflator,
+                p50 = pt.p50.finiteOrZero().coerceAtLeast(0.0) / deflator,
+                p95 = pt.p95.finiteOrZero().coerceAtLeast(0.0) / deflator,
+                target = pt.target.finiteOrZero().coerceAtLeast(0.0) / deflator
             )
         }
     }
 
+    val revealProgress by rememberChartPathReveal(
+        key = Pair(points.size, cpiPct),
+        durationMillis = 800
+    )
+
     val cTeal = BrandTeal
-    val cGreen = GoodGreen
+    val cP95 = BrandBlue
     val cRed = BadRed
     val cGold = BrandGold
     val cCardSurface = MaterialTheme.colorScheme.surface
+    val haptic = LocalHapticFeedback.current
 
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    val safeSelectedIndex = selectedIndex?.takeIf { realPoints.isNotEmpty() }?.coerceIn(0, realPoints.lastIndex)
 
     Card(
         modifier = modifier
@@ -123,63 +140,110 @@ fun MonteCarloFanChart(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "P95 Upper Bound, P50 Median, P5 Lower Bound — real CZK (${String.format(java.util.Locale.getDefault(), "%.1f", cpiPct)}% CPI-deflated to today's buying power)",
+                text = "95th Optimistic, 50th Median, 5th Pessimistic · today's Kč (${com.example.util.Formatters.fmtPct(safeCpiPct, 1)} inflation-adjusted)",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).background(cGreen, CircleShape))
+                    Box(modifier = Modifier.size(8.dp).background(cP95, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "P95", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(
+                        text = "P95",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(cTeal, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "P50", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(
+                        text = "P50",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(cRed, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "P5", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(
+                        text = "P5",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(8.dp).background(cGold, CircleShape))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "FIRE Target", style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+                    Text(
+                        text = "FIRE Target",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val maxVal = ((realPoints.maxOfOrNull { maxOf(it.p95, it.target) } ?: 0.0) * 1.1).coerceAtLeast(100.0)
-            val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f).toArgb()
+            val ySteps = 4
+            val maxVal = remember(realPoints) {
+                val rawMax = realPoints.maxOfOrNull { maxOf(it.p95.finiteOrZero(), it.target.finiteOrZero()) } ?: 0.0
+                computeNiceAxisMax((rawMax * 1.1).coerceAtLeast(100.0), steps = ySteps)
+            }
+            val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
 
-            val paddingTop = 18f
-            val paddingLeft = 85f
-            val paddingRight = 32f
-            val paddingBottom = 50f
-            val textPx = with(LocalDensity.current) { 10.sp.toPx() }
+            val density = LocalDensity.current
+            val textPx = with(density) { 10.sp.toPx() }
 
             val textPaint = remember(textColor, textPx) {
                 android.graphics.Paint().apply {
                     color = textColor
                     textSize = textPx
+                    typeface = android.graphics.Typeface.MONOSPACE
                     isAntiAlias = true
                 }
             }
+            val fillPath = remember { Path() }
+            val p95Path = remember { Path() }
+            val p5Path = remember { Path() }
+            val p50Path = remember { Path() }
+            val targetPath = remember { Path() }
+            val targetDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f) }
+            val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
 
-            val haptic = LocalHapticFeedback.current
+            val maxYLabelW = remember(maxVal, textPaint) {
+                (0..ySteps).maxOf { i -> textPaint.measureText(fmtCompact(maxVal * i / ySteps)) }
+            }
+            val paddingTop = with(density) { 14.dp.toPx() }
+            val paddingLeft = maxOf(with(density) { 56.dp.toPx() }, maxYLabelW + with(density) { 12.dp.toPx() })
+            val paddingRight = with(density) { 16.dp.toPx() }
+            val paddingBottom = maxOf(with(density) { 28.dp.toPx() }, textPx + with(density) { 14.dp.toPx() })
+            val xLabelGap = with(density) { 6.dp.toPx() }
+
             val updateScrubber: (Float, Float) -> Unit = { touchX, width ->
                 val plotW = width - paddingLeft - paddingRight
-                val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
-                val relativeX = touchX - paddingLeft
-                if (stepX > 0f && realPoints.isNotEmpty()) {
-                    val clickedIdx = round(relativeX / stepX).toInt().coerceIn(0, realPoints.size - 1)
+                if (plotW > 0f && realPoints.isNotEmpty()) {
+                    val clickedIdx = if (realPoints.size > 1) {
+                        val stepX = plotW / (realPoints.size - 1).toFloat()
+                        val relativeX = touchX - paddingLeft
+                        if (stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, realPoints.lastIndex) else 0
+                    } else 0
                     if (clickedIdx != selectedIndex) {
                         selectedIndex = clickedIdx
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -196,16 +260,16 @@ fun MonteCarloFanChart(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(240.dp)
-                        .pointerInput(realPoints) {
-                            detectDragGestures(
+                        .pointerInput(realPoints, paddingLeft, paddingRight) {
+                            detectHorizontalDragGestures(
                                 onDragStart = { offset -> updateScrubber(offset.x, size.width.toFloat()) },
-                                onDrag = { change, _ ->
+                                onHorizontalDrag = { change, _ ->
                                     change.consume()
                                     updateScrubber(change.position.x, size.width.toFloat())
                                 }
                             )
                         }
-                        .pointerInput(realPoints) {
+                        .pointerInput(realPoints, paddingLeft, paddingRight) {
                             detectTapGestures(
                                 onTap = { offset -> updateScrubber(offset.x, size.width.toFloat()) }
                             )
@@ -217,148 +281,170 @@ fun MonteCarloFanChart(
                     val plotH = h - paddingBottom
                     val usableH = plotH - paddingTop
                     if (w <= 0f || h <= 0f || plotW <= 0f || usableH <= 0f) return@Canvas
-                    val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else plotW
+                    val stepX = if (realPoints.size > 1) plotW / (realPoints.size - 1).toFloat() else 0f
+                    fun xForIndex(index: Int): Float = if (realPoints.size > 1) {
+                        paddingLeft + (index * stepX)
+                    } else {
+                        paddingLeft + plotW / 2f
+                    }
 
-                    fun yPix(v: Double): Float =
-                        paddingTop + (usableH - usableH * (v / maxVal).coerceIn(0.0, 1.0)).toFloat()
+                    fun yPix(v: Double): Float {
+                        val frac = safeFraction(v.finiteOrZero().coerceAtLeast(0.0), maxVal)
+                        return paddingTop + (usableH - usableH * frac)
+                    }
 
                     // Draw Y-Axis lines and numeric labels
-                    val ySteps = 4
-
                     for (i in 0..ySteps) {
                         val valAtStep = maxVal * i / ySteps
                         val y = yPix(valAtStep)
-
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
                             end = Offset(w - paddingRight, y),
                             strokeWidth = 1.5f
                         )
-
                         drawContext.canvas.nativeCanvas.drawText(
                             fmtCompact(valAtStep),
-                            10f,
-                            y + 8f,
+                            4.dp.toPx(),
+                            (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
                         )
                     }
 
                     // Draw X-Axis Year Labels
                     val xStepCount = 5
+                    var lastDrawnRight = -Float.MAX_VALUE
                     for (i in 0 until realPoints.size step max(1, realPoints.size / xStepCount)) {
                         val pt = realPoints[i]
-                        val x = paddingLeft + (i * stepX)
+                        val x = xForIndex(i)
                         drawLine(
-                            color = if (i == 0) cTeal else gridColor,
+                            color = gridColor,
                             start = Offset(x, plotH),
-                            end = Offset(x, plotH + 8f),
-                            strokeWidth = if (i == 0) 3f else 2f
+                            end = Offset(x, plotH + 5.dp.toPx()),
+                            strokeWidth = 2f
                         )
-                        val labelText = if (i == 0) "${pt.year} (Now)" else "${pt.year}"
+                        val labelText = "${pt.year}"
                         val textWidth = textPaint.measureText(labelText)
-                        drawContext.canvas.nativeCanvas.drawText(
-                            labelText,
-                            (x - textWidth / 2f).coerceIn(paddingLeft, w - paddingRight - textWidth),
-                            plotH + 34f,
-                            textPaint
-                        )
+                        val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
+                        if (drawX >= lastDrawnRight + xLabelGap) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                labelText,
+                                drawX,
+                                plotH + 5.dp.toPx() + textPx,
+                                textPaint
+                            )
+                            lastDrawnRight = drawX + textWidth
+                        }
                     }
 
-                    // Clip plot area
+                    // Clip plot area and apply smooth reveal clip
                     drawContext.canvas.save()
                     drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
-                    // P95 -> P5 Area Shade
-                    val fillPath = Path()
-                    realPoints.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val yP95 = yPix(pt.p95)
-                        if (i == 0) fillPath.moveTo(x, yP95) else fillPath.lineTo(x, yP95)
-                    }
-                    realPoints.reversed().forEachIndexed { i, pt ->
-                        val origIdx = realPoints.size - 1 - i
-                        val x = paddingLeft + (origIdx * stepX)
-                        val yP5 = yPix(pt.p5)
-                        fillPath.lineTo(x, yP5)
-                    }
-                    fillPath.close()
+                    val clampedReveal = revealProgress.finiteOrZero().coerceIn(0f, 1f)
+                    val revealRight = paddingLeft + (w - paddingRight - paddingLeft) * clampedReveal
+                    drawContext.canvas.clipRect(paddingLeft, paddingTop, revealRight, plotH)
 
-                    drawPath(
-                        path = fillPath,
-                        color = cTeal.copy(alpha = 0.18f)
-                    )
+                    if (realPoints.size > 1) {
+                        // P95 -> P5 Area Shade
+                        fillPath.reset()
+                        realPoints.forEachIndexed { i, pt ->
+                            val x = xForIndex(i)
+                            val yP95 = yPix(pt.p95)
+                            if (i == 0) fillPath.moveTo(x, yP95) else fillPath.lineTo(x, yP95)
+                        }
+                        realPoints.reversed().forEachIndexed { i, pt ->
+                            val origIdx = realPoints.size - 1 - i
+                            val x = xForIndex(origIdx)
+                            val yP5 = yPix(pt.p5)
+                            fillPath.lineTo(x, yP5)
+                        }
+                        fillPath.close()
 
-                    // P95 Line (Green)
-                    val p95Path = Path()
-                    realPoints.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val yP95 = yPix(pt.p95)
-                        if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
-                    }
-                    drawPath(p95Path, cGreen, style = Stroke(width = 3f))
-
-                    // P5 Line (Red)
-                    val p5Path = Path()
-                    realPoints.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val yP5 = yPix(pt.p5)
-                        if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
-                    }
-                    drawPath(p5Path, cRed, style = Stroke(width = 3f))
-
-                    // P50 Median Line (Teal Thick)
-                    val p50Path = Path()
-                    realPoints.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val yP50 = yPix(pt.p50)
-                        if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
-                    }
-                    drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
-
-                    // FIRE Target Line (Gold Dashed)
-                    val targetPath = Path()
-                    realPoints.forEachIndexed { i, pt ->
-                        val x = paddingLeft + (i * stepX)
-                        val yTarget = yPix(pt.target)
-                        if (i == 0) targetPath.moveTo(x, yTarget) else targetPath.lineTo(x, yTarget)
-                    }
-                    drawPath(
-                        targetPath,
-                        cGold,
-                        style = Stroke(
-                            width = 3.5f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        drawPath(
+                            path = fillPath,
+                            color = cTeal.copy(alpha = 0.18f)
                         )
-                    )
 
-                    // Draw Current Position (Now / Start Year) Indicator Dot
-                    if (realPoints.isNotEmpty()) {
-                        val curX = paddingLeft + (0 * stepX)
-                        val curY = plotH - (plotH * (realPoints[0].p50 / maxVal)).toFloat()
+                        // P95 Line (Blue — visually distinct from Teal P50)
+                        p95Path.reset()
+                        realPoints.forEachIndexed { i, pt ->
+                            val x = xForIndex(i)
+                            val yP95 = yPix(pt.p95)
+                            if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
+                        }
+                        drawPath(p95Path, cP95, style = Stroke(width = 3f))
+
+                        // P5 Line (Red)
+                        p5Path.reset()
+                        realPoints.forEachIndexed { i, pt ->
+                            val x = xForIndex(i)
+                            val yP5 = yPix(pt.p5)
+                            if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
+                        }
+                        drawPath(p5Path, cRed, style = Stroke(width = 3f))
+
+                        // P50 Median Line (Teal Thick)
+                        p50Path.reset()
+                        realPoints.forEachIndexed { i, pt ->
+                            val x = xForIndex(i)
+                            val yP50 = yPix(pt.p50)
+                            if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
+                        }
+                        drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+
+                        // FIRE Target Line (Gold Dashed)
+                        targetPath.reset()
+                        realPoints.forEachIndexed { i, pt ->
+                            val x = xForIndex(i)
+                            val yTarget = yPix(pt.target)
+                            if (i == 0) targetPath.moveTo(x, yTarget) else targetPath.lineTo(x, yTarget)
+                        }
+                        drawPath(
+                            targetPath,
+                            cGold,
+                            style = Stroke(width = 3.5f, pathEffect = targetDashEffect)
+                        )
+                    } else {
+                        val sx = xForIndex(0)
+                        val pt = realPoints[0]
                         drawLine(
-                            color = cTeal.copy(alpha = 0.35f),
-                            start = Offset(curX, curY),
-                            end = Offset(curX, plotH),
-                            strokeWidth = 2f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                            color = cTeal.copy(alpha = 0.25f),
+                            start = Offset(sx, yPix(pt.p95)),
+                            end = Offset(sx, yPix(pt.p5)),
+                            strokeWidth = 8f
                         )
-                        drawCircle(color = cTeal.copy(alpha = 0.25f), radius = 14f, center = Offset(curX, curY))
-                        drawCircle(color = cTeal, radius = 8f, center = Offset(curX, curY))
-                        drawCircle(color = cCardSurface, radius = 4f, center = Offset(curX, curY))
+                        drawCircle(color = cP95, radius = 6f, center = Offset(sx, yPix(pt.p95)))
+                        drawCircle(color = cRed, radius = 6f, center = Offset(sx, yPix(pt.p5)))
+                        drawCircle(color = cGold, radius = 6f, center = Offset(sx, yPix(pt.target)))
                     }
 
-                    // Highlight selected point marker
-                    selectedIndex?.let { idx ->
-                        val sx = paddingLeft + (idx * stepX)
-                        val sy = plotH - (plotH * (realPoints[idx].p50 / maxVal)).toFloat()
-                        val syTarget = plotH - (plotH * (realPoints[idx].target / maxVal)).toFloat()
+                    // Draw Current Position (Now) Indicator Dot along median trajectory
+                    drawNowMarkerOnSeries(
+                        items = realPoints,
+                        yearOf = { it.year },
+                        valueOf = { it.p50 },
+                        xForFraction = { frac -> if (realPoints.size > 1) paddingLeft + frac * stepX else xForIndex(0) },
+                        yPix = ::yPix,
+                        plotLeft = paddingLeft,
+                        plotRight = w - paddingRight,
+                        plotTop = paddingTop,
+                        plotBottom = plotH,
+                        accentColor = cTeal,
+                        currentYearMonth = currentYearMonth,
+                    )
+
+                    // Highlight selected scrubber point marker
+                    safeSelectedIndex?.let { idx ->
+                        val sx = xForIndex(idx)
+                        val sy = yPix(realPoints[idx].p50)
+                        val syTarget = yPix(realPoints[idx].target)
                         drawLine(
                             color = cTeal.copy(alpha = 0.5f),
-                            start = Offset(sx, 0f),
+                            start = Offset(sx, paddingTop),
                             end = Offset(sx, plotH),
                             strokeWidth = 2f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+                            pathEffect = selDashEffect
                         )
                         drawCircle(color = cTeal, radius = 10f, center = Offset(sx, sy))
                         drawCircle(color = cGold, radius = 6f, center = Offset(sx, syTarget))
@@ -368,13 +454,25 @@ fun MonteCarloFanChart(
                 }
             }
 
-            // Interactive Detail Tooltip Box
-            val activePoint = selectedIndex?.let { realPoints.getOrNull(it) } ?: realPoints.lastOrNull()
-            activePoint?.let { pt ->
+            // Modern Interactive Detail Tooltip & Inspection Card
+            val activeIdx = safeSelectedIndex
+            val activeRealPt = activeIdx?.let { realPoints.getOrNull(it) } ?: realPoints.lastOrNull()
+            val activeNomPt = activeIdx?.let { points.getOrNull(it) } ?: points.lastOrNull()
+
+            if (activeRealPt != null && activeNomPt != null) {
                 Spacer(modifier = Modifier.height(12.dp))
+
+                val safeRealP50 = activeRealPt.p50.finiteOrZero()
+                val safeTarget = activeRealPt.target.finiteOrZero()
+                val targetDelta = safeRealP50 - safeTarget
+                val isFireAchieved = targetDelta >= 0
+                val pctFunded = if (safeTarget > 0.0) ((safeRealP50 / safeTarget) * 100.0).roundToInt() else 100
+                val deltaText = if (isFireAchieved) "+${fmtCompact(targetDelta)}" else fmtCompact(targetDelta)
+
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth().testTag("monte_carlo_tooltip_box")
                 ) {
                     Column(
@@ -382,51 +480,127 @@ fun MonteCarloFanChart(
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        FlowRow(
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Year ${pt.year} (Age ${pt.age}) — real CZK range:",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = "P50: ${fmtCompact(pt.p50)}",
-                                style = MaterialTheme.typography.labelMedium.copy(
+                            FlowRow(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Year ${activeRealPt.year} - Age ${activeRealPt.age}",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 14.sp
+                                    )
+                                )
+                                ColorPill(
+                                    text = if (isFireAchieved) "FIRE REACHED ($pctFunded%)" else "$pctFunded% OF TARGET",
+                                    color = if (isFireAchieved) GoodGreen else BrandGold,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = BrandTeal
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp,
+                                    cornerRadius = 6.dp
                                 )
-                            )
+                            }
+
+                            if (safeSelectedIndex != null) {
+                                IconButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedIndex = null
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear selection",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        FlowRow(
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Metric Pills (2x2 Grid so values never clip on 360dp narrow screens)
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = "P5 (Pessimistic): ${fmtCompact(pt.p5)}",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    color = BadRed,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                            ChartMetricPill(
+                                label = "Nominal P50",
+                                value = fmtCompact(activeNomPt.p50.finiteOrZero()),
+                                color = BrandTeal,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
                             )
-                            Text(
-                                text = "P95 (Optimistic): ${fmtCompact(pt.p95)}",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    color = GoodGreen,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                            ChartMetricPill(
+                                label = "Real P50",
+                                value = fmtCompact(activeRealPt.p50),
+                                color = BrandTeal,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ChartMetricPill(
+                                label = "Target",
+                                value = fmtCompact(activeRealPt.target),
+                                color = BrandGold,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ChartMetricPill(
+                                label = "Delta",
+                                value = deltaText,
+                                color = if (isFireAchieved) GoodGreen else BadRed,
+                                isBold = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Percentile Range Row: P5 Pessimistic & P95 Optimistic
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ChartMetricPill(
+                                label = "P5 (Pessimistic)",
+                                value = fmtCompact(activeRealPt.p5),
+                                color = BadRed,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ChartMetricPill(
+                                label = "P95 (Optimistic)",
+                                value = fmtCompact(activeRealPt.p95),
+                                color = cP95,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Historical bootstrap uses actual MSCI 1970-2025 returns (avg ~12% nominal). Values shown in today's purchasing power (${String.format(java.util.Locale.getDefault(), "%.1f", cpiPct)}% CPI deflated).",
+                            text = "Real values are adjusted to today's purchasing power using ${com.example.util.Formatters.fmtPct(safeCpiPct, 1)} annual inflation.",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.5.sp,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                             )
                         )
@@ -435,4 +609,20 @@ fun MonteCarloFanChart(
             }
         }
     }
+}
+
+/**
+ * Backward-compatible alias for [MonteCarloFanChart].
+ */
+@Composable
+fun FanChart(
+    points: List<MonteCarloPoint>,
+    cpiPct: Double = 2.8,
+    modifier: Modifier = Modifier
+) {
+    MonteCarloFanChart(
+        points = points,
+        cpiPct = cpiPct,
+        modifier = modifier
+    )
 }

@@ -1,9 +1,8 @@
 package com.example.domain
 
-import com.example.data.ELEONORA_BIRTH_YEAR
 import com.example.data.SettingsEntity
-import com.example.data.VACLAV_BIRTH_YEAR
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 enum class HouseholdRole {
@@ -198,11 +197,9 @@ data class HouseholdProfile(
 
             val yearsTo60 = 60 - settings.primaryAge
             if (yearsTo60 > 0) {
-                val pensionCapital = settings.dpsBalanceCurrent + settings.dipBalanceCurrent +
-                    (if (!settings.isSingleHousehold) settings.eDpsBalanceCurrent + settings.eDipBalanceCurrent else 0.0)
-                val nominalRet = FinancialEngine.netTaxableNominalReturnPct(settings) / 100.0
-                val estUnlockCapital = pensionCapital * (1.0 + nominalRet).pow(yearsTo60)
-                val safeEstCapital = if (estUnlockCapital.isFinite()) max(0.0, estUnlockCapital) else pensionCapital
+                val dpsProj = DpsDipEngine.buildDpsProjection(settings)
+                val dipProj = DpsDipEngine.buildDipProjection(settings)
+                val safeEstCapital = (dpsProj.dpsBalance + dipProj.dipBalanceAt60).finiteNonNegative()
                 events.add(
                     LifeTimelineEvent(
                         id = "event_age_60_unlock",
@@ -249,8 +246,9 @@ data class HouseholdProfile(
                 children = children,
                 timelineEvents = events,
                 isSingleHousehold = settings.isSingleHousehold,
-                liquidPortfolioCurrent = settings.liquidPortfolioCurrent + (if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent else 0.0),
-                emergencyReserveCurrent = settings.emergencyReserveCurrent,
+                liquidPortfolioCurrent = settings.liquidPortfolioCurrent.finiteNonNegative() +
+                    (if (!settings.isSingleHousehold) settings.eLiquidPortfolioCurrent.finiteNonNegative() else 0.0),
+                emergencyReserveCurrent = settings.emergencyReserveCurrent.finiteNonNegative(),
                 baseYear = settings.baseYear
             )
         }
@@ -258,16 +256,24 @@ data class HouseholdProfile(
 
     fun toSettings(baseSettings: SettingsEntity = SettingsEntity()): SettingsEntity {
         val c1 = children.firstOrNull { it.id == "child_1" } ?: children.getOrNull(0)
-        val c2 = children.firstOrNull { it.id == "child_2" } ?: (if (children.size > 1) children[1] else null)
+        val c2 = children.firstOrNull { it !== c1 && it.id == "child_2" } ?: children.firstOrNull { it !== c1 }
         val spouse = spouseEarner
-        val spouseLiquid = if (!this.isSingleHousehold) baseSettings.eLiquidPortfolioCurrent else 0.0
-        val primaryLiquid = (this.liquidPortfolioCurrent - spouseLiquid).coerceAtLeast(0.0)
+        val safeProfileLiquid = this.liquidPortfolioCurrent.finiteNonNegative()
+        val prevSpouseLiquid = if (!this.isSingleHousehold && !baseSettings.isSingleHousehold) {
+            baseSettings.eLiquidPortfolioCurrent.finiteNonNegative()
+        } else 0.0
+        val effectiveSpouseLiquid = if (!this.isSingleHousehold) {
+            if (baseSettings.isSingleHousehold) 0.0 else min(safeProfileLiquid, prevSpouseLiquid)
+        } else {
+            baseSettings.eLiquidPortfolioCurrent
+        }
+        val primaryLiquid = (safeProfileLiquid - if (!this.isSingleHousehold) effectiveSpouseLiquid else 0.0).coerceAtLeast(0.0)
 
         return baseSettings.copy(
             isSingleHousehold = this.isSingleHousehold,
             baseYear = this.baseYear,
             primaryAge = max(18, this.baseYear - primaryEarner.birthYear),
-            primaryName = primaryEarner.name,
+            primaryName = if (primaryEarner.name == "Vaclav" && baseSettings.primaryName == "Václav") baseSettings.primaryName else primaryEarner.name,
             spouseName = spouse?.name ?: baseSettings.spouseName,
             vSalary = primaryEarner.currentMonthlyGrossSalary,
             vSalaryGrowthPct = primaryEarner.salaryGrowthPct,
@@ -292,7 +298,8 @@ data class HouseholdProfile(
             child2Name = c2?.name ?: baseSettings.child2Name,
             child2BirthYear = c2?.birthYear ?: baseSettings.child2BirthYear,
             liquidPortfolioCurrent = primaryLiquid,
-            emergencyReserveCurrent = this.emergencyReserveCurrent
+            eLiquidPortfolioCurrent = effectiveSpouseLiquid,
+            emergencyReserveCurrent = this.emergencyReserveCurrent.finiteNonNegative()
         )
     }
 }

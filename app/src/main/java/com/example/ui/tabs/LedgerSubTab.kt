@@ -6,12 +6,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,18 +29,14 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,11 +45,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,63 +58,16 @@ import com.example.domain.FullCalculationState
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.YoYRetrospectiveCard
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCompact
-import com.example.util.Formatters.fmtCZK
 import com.example.util.BankTransactionType
 
-@Composable
-internal fun bankBadgeColor(bankName: String): Color = when {
-    bankName.contains("MONETA", ignoreCase = true) -> BrandTeal
-    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> BrandGold
-    bankName.contains("MBANK", ignoreCase = true) -> Color(0xFFE11D48)
-    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> Color(0xFF2563EB)
-    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> Color(0xFFDC2626)
-    bankName.contains("FIO", ignoreCase = true) -> Color(0xFF16A34A)
-    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> Color(0xFFCA8A04)
-    bankName.contains("AIR_BANK", ignoreCase = true) -> Color(0xFF65A30D)
-    bankName.contains("UNICREDIT", ignoreCase = true) -> Color(0xFF9333EA)
-    bankName.contains("CREDITAS", ignoreCase = true) -> Color(0xFF0D9488)
-    bankName.contains("REVOLUT", ignoreCase = true) -> Color(0xFF0284C7)
-    bankName.contains("WISE", ignoreCase = true) -> Color(0xFF15803D)
-    else -> BrandTeal
-}
-
-internal fun friendlyBankName(bankName: String): String = when {
-    bankName.contains("MONETA", ignoreCase = true) -> "Moneta"
-    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-    bankName.contains("MBANK", ignoreCase = true) -> "mBank"
-    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
-    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
-    bankName.contains("FIO", ignoreCase = true) -> "Fio banka"
-    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
-    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
-    bankName.contains("UNICREDIT", ignoreCase = true) -> "UniCredit"
-    bankName.contains("CREDITAS", ignoreCase = true) -> "Banka Creditas"
-    bankName.contains("REVOLUT", ignoreCase = true) -> "Revolut"
-    bankName.contains("WISE", ignoreCase = true) -> "Wise"
-    else -> bankName
-}
-
-internal fun bankShortBadge(bankName: String): String = when {
-    bankName.contains("MONETA", ignoreCase = true) -> "MON"
-    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-    bankName.contains("MBANK", ignoreCase = true) -> "mB"
-    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
-    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
-    bankName.contains("FIO", ignoreCase = true) -> "Fio"
-    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
-    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air"
-    bankName.contains("UNICREDIT", ignoreCase = true) -> "UC"
-    bankName.contains("CREDITAS", ignoreCase = true) -> "CR"
-    bankName.contains("REVOLUT", ignoreCase = true) -> "Rev"
-    bankName.contains("WISE", ignoreCase = true) -> "Wise"
-    else -> bankName.take(3).uppercase()
-}
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LedgerSubTab(
     state: FullCalculationState,
@@ -162,7 +112,7 @@ internal fun LedgerSubTab(
     var selectedYm by rememberSaveable {
         mutableStateOf("")
     }
-    var showImportGuidanceDialog by remember { mutableStateOf(false) }
+    var showImportGuidanceDialog by rememberSaveable { mutableStateOf(false) }
 
     val effectiveSelectedYm = remember(selectedYm, sortedEntries) {
         if (selectedYm.isNotEmpty() && sortedEntries.any { it.yearMonth == selectedYm }) {
@@ -186,17 +136,17 @@ internal fun LedgerSubTab(
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top Toolbar: Header + Quick Actions
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.align(Alignment.CenterVertically)
             ) {
                 Text(
                     text = "Monthly Ledger",
@@ -207,7 +157,7 @@ internal fun LedgerSubTab(
                 )
                 if (sortedEntries.isNotEmpty()) {
                     ColorPill(
-                        text = "${sortedEntries.size} MO",
+                        text = "${sortedEntries.size} ${if (sortedEntries.size == 1) "MONTH" else "MONTHS"}",
                         color = BrandTeal,
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
@@ -217,61 +167,67 @@ internal fun LedgerSubTab(
                 }
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showImportGuidanceDialog = true
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = BrandTeal
-                    ),
-                    border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .height(32.dp)
-                        .testTag("btn_import_statement")
+            if (sortedEntries.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.FileUpload,
-                        contentDescription = "Import Statement",
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Import",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                    OutlinedButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showImportGuidanceDialog = true
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = BrandTeal
+                        ),
+                        border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("btn_import_statement")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = "Import Statement",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Import",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
 
-                FilledTonalButton(
-                    onClick = onAddClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = BrandTeal.copy(alpha = 0.12f),
-                        contentColor = BrandTeal
-                    ),
-                    modifier = Modifier.testTag("toolbar_add_entry_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New Entry",
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "New",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                    FilledTonalButton(
+                        onClick = onAddClick,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = BrandTeal.copy(alpha = 0.12f),
+                            contentColor = BrandTeal
+                        ),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("toolbar_add_entry_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "New Entry",
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "New",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }
@@ -283,6 +239,7 @@ internal fun LedgerSubTab(
                 border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.35f)),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .padding(horizontal = 16.dp, vertical = 4.dp)
                     .clickable { onTriggerImportCsv() }
             ) {
@@ -351,26 +308,31 @@ internal fun LedgerSubTab(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Track your actual salary and living spending vs budget month-by-month to observe real FIRE velocity.",
+                        text = "Track your actual monthly income and spending against your budget to see your real savings progress.",
                         style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // Action Buttons Side-by-Side
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Action Buttons (Wrap cleanly on narrow screens)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = onAddClick,
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
-                            modifier = Modifier.testTag("log_first_month_button")
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BrandTeal,
+                                contentColor = OnBrandTeal
+                            ),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("log_first_month_button")
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Entry", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
+                            Text("New Entry", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, softWrap = true)
                         }
 
                         OutlinedButton(
@@ -378,11 +340,13 @@ internal fun LedgerSubTab(
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.5.dp, BrandTeal),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandTeal),
-                            modifier = Modifier.testTag("empty_state_import_csv_button")
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("empty_state_import_csv_button")
                         ) {
                             Icon(imageVector = Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import Statement", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
+                            Text("Import Statement", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, softWrap = true)
                         }
                     }
 
@@ -390,7 +354,7 @@ internal fun LedgerSubTab(
 
                     // Supported Bank Statement Formats Guide Card
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
@@ -431,33 +395,33 @@ internal fun LedgerSubTab(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     color = BrandTeal.copy(alpha = 0.12f),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Moneta", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandTeal)
-                                        Text("Václav", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("PDF & CSV", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandTeal, maxLines = 1)
+                                        Text("Official exports", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     color = BrandGold.copy(alpha = 0.12f),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("ČSOB", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandGold)
-                                        Text("Eleonora", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Multi-Bank", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = BrandGold, maxLines = 1)
+                                        Text("Czech & Revolut", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = RoundedCornerShape(8.dp),
                                     color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("mBank", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                                        Text("Shared", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Auto-Netted", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                                        Text("Own transfers", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
@@ -493,25 +457,27 @@ internal fun LedgerSubTab(
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 selectedYm = entry.yearMonth
                             },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                             border = BorderStroke(
                                 1.dp,
                                 if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                             ),
-                            modifier = Modifier.testTag("month_chip_${entry.yearMonth}")
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("month_chip_${entry.yearMonth}")
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
                                     text = entry.yearMonth,
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = BodyFontFamily,
                                         fontSize = 11.5.sp,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                        color = if (isSelected) OnBrandTeal else MaterialTheme.colorScheme.onSurface
                                     )
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -520,8 +486,8 @@ internal fun LedgerSubTab(
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else netColor
+                                        fontFamily = BodyFontFamily,
+                                        color = if (isSelected) OnBrandTeal.copy(alpha = 0.92f) else netColor
                                     )
                                 )
                                 val chipBanks = importedBankSourcesByMonth[entry.yearMonth] ?: emptySet()
@@ -534,7 +500,7 @@ internal fun LedgerSubTab(
                                         chipBanks.sorted().forEach { bank ->
                                             ColorPill(
                                                 text = bankShortBadge(bank),
-                                                color = if (isSelected) Color.White.copy(alpha = 0.9f) else bankBadgeColor(bank),
+                                                color = if (isSelected) OnBrandTeal else bankBadgeColor(bank),
                                                 fontSize = 7.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 horizontalPadding = 3.dp,
@@ -609,119 +575,4 @@ internal fun LedgerSubTab(
             )
         }
     }
-}
-
-@Composable
-private fun BankStatementImportGuidanceDialog(
-    onDismiss: () -> Unit,
-    onSelectFile: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = BrandTeal.copy(alpha = 0.15f),
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.FileUpload,
-                            contentDescription = null,
-                            tint = BrandTeal,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Text(
-                    text = "Import Statement",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = GoodGreen.copy(alpha = 0.1f),
-                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "CSV / TSV Tabular (Recommended)",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoodGreen
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Direct export from online banking (Moneta, ČSOB, mBank, Fio, Air Bank, Raiffeisen, etc.). Guarantees 100% deterministic precision without layout wrapping errors.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "PDF E-Statement (Alternative)",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Parses PDF statements via text extraction heuristics. Recommended when digital CSV exports are unavailable.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onSelectFile,
-                colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.testTag("btn_guidance_select_file")
-            ) {
-                Text("Select Statement File", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("Cancel")
-            }
-        },
-        shape = RoundedCornerShape(18.dp)
-    )
 }

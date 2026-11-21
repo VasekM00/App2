@@ -1,19 +1,21 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -38,7 +40,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,20 +50,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankTransactionType
 import com.example.util.MerchantCategoryManager
 
-fun formatCategoryLabel(cat: BankTransactionType): String = when (cat) {
-    BankTransactionType.SALARY_VACLAV -> "Salary (Vaclav)"
-    BankTransactionType.SALARY_ELEONORA -> "Salary (Eleonora)"
+fun formatCategoryLabel(
+    cat: BankTransactionType,
+    primaryName: String? = null,
+    spouseName: String? = null
+): String = when (cat) {
+    BankTransactionType.SALARY_VACLAV -> primaryName?.takeIf { it.isNotBlank() }?.let { "Salary ($it)" } ?: "Primary Salary"
+    BankTransactionType.SALARY_ELEONORA -> spouseName?.takeIf { it.isNotBlank() }?.let { "Salary ($it)" } ?: "Partner Salary"
     BankTransactionType.PARENTAL_BENEFIT -> "Parental Benefit"
+    BankTransactionType.FAMILY_GIFT -> "Family Gift (Tax-Exempt)"
     BankTransactionType.OTHER_INFLOW -> "Other Inflow"
     BankTransactionType.HOUSING_RENT -> "Housing & Rent"
     BankTransactionType.GROCERIES -> "Groceries"
@@ -86,9 +96,22 @@ fun LearnedMerchantRulesCard(
     rulesJson: String,
     onUpdateRulesJson: (String) -> Unit,
     modifier: Modifier = Modifier,
-    initiallyExpanded: Boolean = false
+    initiallyExpanded: Boolean = false,
+    sectionKey: String? = null,
+    focusedSectionKey: String? = null,
+    focusedSectionTrigger: Int = 0
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    var lastFocusTrigger by rememberSaveable { mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(focusedSectionTrigger, focusedSectionKey) {
+        if (focusedSectionTrigger > lastFocusTrigger &&
+            sectionKey != null &&
+            focusedSectionKey == sectionKey
+        ) {
+            expanded = true
+            lastFocusTrigger = focusedSectionTrigger
+        }
+    }
     var showAddDialog by remember { mutableStateOf(false) }
     var newKeyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(BankTransactionType.GROCERIES) }
@@ -102,7 +125,7 @@ fun LearnedMerchantRulesCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -134,7 +157,8 @@ fun LearnedMerchantRulesCard(
                 ) {
                     ColorPill(
                         text = "${rulesMap.size} RULES",
-                        color = BrandTeal
+                        color = BrandTeal,
+                        fontFamily = BodyFontFamily
                     )
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -148,7 +172,7 @@ fun LearnedMerchantRulesCard(
 
             if (expanded) {
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
@@ -165,9 +189,15 @@ fun LearnedMerchantRulesCard(
                         selectedCategory = BankTransactionType.GROCERIES
                         showAddDialog = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    ),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("add_merchant_rule_button")
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("add_merchant_rule_button")
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -179,7 +209,8 @@ fun LearnedMerchantRulesCard(
                 if (rulesMap.isEmpty()) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -196,9 +227,9 @@ fun LearnedMerchantRulesCard(
                     ) {
                         rulesMap.entries.sortedBy { it.key }.forEach { (keyword, category) ->
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -216,7 +247,7 @@ fun LearnedMerchantRulesCard(
                                         Text(
                                             text = keyword.uppercase(),
                                             style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontFamily = FontFamily.Monospace,
+                                                fontFamily = BodyFontFamily,
                                                 fontWeight = FontWeight.Bold
                                             ),
                                             maxLines = 1,
@@ -259,6 +290,7 @@ fun LearnedMerchantRulesCard(
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
+            shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
                     text = "Add Merchant Rule",
@@ -266,7 +298,13 @@ fun LearnedMerchantRulesCard(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     OutlinedTextField(
                         value = newKeyword,
                         onValueChange = { newKeyword = it },
@@ -320,13 +358,22 @@ fun LearnedMerchantRulesCard(
                         }
                         showAddDialog = false
                     },
-                    modifier = Modifier.testTag("confirm_add_merchant_rule_button")
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    ),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("confirm_add_merchant_rule_button")
                 ) {
                     Text("Save Rule")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) {
+                TextButton(
+                    onClick = { showAddDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text("Cancel")
                 }
             }

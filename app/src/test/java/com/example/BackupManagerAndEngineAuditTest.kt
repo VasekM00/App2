@@ -32,7 +32,7 @@ class BackupManagerAndEngineAuditTest {
             eParentalAllowanceMonthly = 14000.0,
             eLecturingMonthly = 8500.0,
             eIncludeLecturing = false,
-            familyGiftMonthly = 18000.0,
+            vGiftsMonthly = 18000.0,
             lumpSumYear = 2032,
             lumpSumAmount = 750000.0,
             lumpSumInclude = true,

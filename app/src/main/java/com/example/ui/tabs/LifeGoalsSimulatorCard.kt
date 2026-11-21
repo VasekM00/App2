@@ -6,17 +6,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
@@ -29,6 +35,7 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -43,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,18 +68,23 @@ import com.example.domain.parseCustomLifeGoals
 import com.example.domain.serializeCustomLifeGoals
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.parseUserAmountOrNull
+import kotlin.math.roundToInt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LifeGoalsSimulatorCard(
     state: FullCalculationState,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    onShowInfo: (MetricInfo) -> Unit = {}
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val baseYear = state.settings.baseYear
 
@@ -79,7 +92,7 @@ internal fun LifeGoalsSimulatorCard(
         parseCustomLifeGoals(state.settings.customGoalsJson)
     }
 
-    var showAddGoalDialog by remember { mutableStateOf(false) }
+    var showAddGoalDialog by rememberSaveable { mutableStateOf(false) }
 
     // Cash flow feasibility calculations
     val monthlyNetIncome = state.currentIncome.totalMonthly
@@ -144,6 +157,8 @@ internal fun LifeGoalsSimulatorCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onShowInfo(lifeGoalInfo) }
                     ) {
@@ -155,7 +170,10 @@ internal fun LifeGoalsSimulatorCard(
                         )
                         Text(
                             text = "Life Event & Goal Simulator",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -183,10 +201,13 @@ internal fun LifeGoalsSimulatorCard(
                 ) {
                     Text(
                         text = "Goal Commitment vs Net Capacity",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
                     )
                     ColorPill(
-                        text = if (isOverBudget) "Over Capacity" else "${(capacityRatio * 100).toInt()}% Allocated",
+                        text = if (isOverBudget) "Over Capacity" else "${(capacityRatio * 100).roundToInt()}% Allocated",
                         color = if (isOverBudget) MaterialTheme.colorScheme.error else GoodGreen,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -218,17 +239,24 @@ internal fun LifeGoalsSimulatorCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = "Monthly Need: ${fmtCZK(totalRequiredMonthlyGoals)}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = BodyFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
                     )
                     Text(
                         text = "Net Surplus: ${fmtCZK(monthlyNetSurplus)}",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = BodyFontFamily,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
                 }
 
@@ -236,12 +264,13 @@ internal fun LifeGoalsSimulatorCard(
 
                 // FIRE Impact Metric (info-on-touch)
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.12f),
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { onShowInfo(delayInfo) }
                 ) {
                     Row(
@@ -259,11 +288,12 @@ internal fun LifeGoalsSimulatorCard(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (monthlyInvest > 0) {
-                                    "FIRE Delay: ~${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} yrs"
+                                    "FIRE Delay: ~${String.format(java.util.Locale.ROOT, "%.1f", totalFireDelayYears)} years"
                                 } else {
                                     "FIRE Delay: N/A (no DCA flow)"
                                 },
                                 style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -286,7 +316,11 @@ internal fun LifeGoalsSimulatorCard(
             val monthsRemaining = yearsRemaining * 12
             val remainingAmount = (goal.targetAmountCzk - goal.currentSavedCzk).coerceAtLeast(0.0)
             val requiredMonthly = remainingAmount / monthsRemaining
-            val progress = (goal.currentSavedCzk / goal.targetAmountCzk).coerceIn(0.0, 1.0)
+            val progress = if (goal.targetAmountCzk > 0.0) {
+                (goal.currentSavedCzk / goal.targetAmountCzk).coerceIn(0.0, 1.0)
+            } else {
+                1.0
+            }
             val goalFireDelay = if (monthlyInvest > 0) remainingAmount / (monthlyInvest * 12.0) else 0.0
 
             val iconVec = when (goal.iconName) {
@@ -310,7 +344,10 @@ internal fun LifeGoalsSimulatorCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
@@ -323,19 +360,30 @@ internal fun LifeGoalsSimulatorCard(
                             Column {
                                 Text(
                                     text = goal.name,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Target Year: ${goal.targetYear} ($yearsRemaining yrs left)",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    text = "Target Year: ${goal.targetYear} ($yearsRemaining ${if (yearsRemaining == 1) "year" else "years"} left)",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
                         IconButton(
                             onClick = {
-                                val updated = customGoalsList.filterIndexed { i, _ -> i != index }
-                                onUpdateSettings?.invoke(state.settings.copy(customGoalsJson = serializeCustomLifeGoals(updated)))
+                                com.example.ui.state.dispatchSettingsPatch(
+                                    state.settings,
+                                    onUpdateSettings ?: {},
+                                    onReduceSettings
+                                ) { cur ->
+                                    val curList = parseCustomLifeGoals(cur.customGoalsJson)
+                                    val updatedList = curList.filterNot { it.id == goal.id }
+                                    cur.copy(customGoalsJson = serializeCustomLifeGoals(updatedList))
+                                }
                             },
                             modifier = Modifier.testTag("delete_goal_$index")
                         ) {
@@ -357,7 +405,7 @@ internal fun LifeGoalsSimulatorCard(
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        val p = progress.toFloat().coerceIn(0f, 1f)
+                        val p = if (progress.isFinite()) progress.toFloat().coerceIn(0f, 1f) else 0f
                         if (p > 0f) {
                             Box(
                                 modifier = Modifier
@@ -371,25 +419,29 @@ internal fun LifeGoalsSimulatorCard(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "Saved: ${fmtCompact(goal.currentSavedCzk)} / ${fmtCompact(goal.targetAmountCzk)} (${(progress * 100).toInt()}%)",
-                            style = MaterialTheme.typography.bodySmall
+                            text = "Saved: ${fmtCompact(goal.currentSavedCzk)} / ${fmtCompact(goal.targetAmountCzk)} (${(progress * 100).roundToInt()}%)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = BodyFontFamily)
                         )
                         Text(
-                            text = "Need: ${fmtCZK(requiredMonthly)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
+                            text = "Need: ${fmtCZK(requiredMonthly)}/month",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = BodyFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandGold
+                            )
                         )
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     ColorPill(
-                        text = if (monthlyInvest > 0) "+${String.format(java.util.Locale.ROOT, "%.1f", goalFireDelay)} yrs to FIRE" else "No DCA flow",
+                        text = if (monthlyInvest > 0) "+${String.format(java.util.Locale.ROOT, "%.1f", goalFireDelay)} years to FIRE" else "No DCA flow",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -402,26 +454,39 @@ internal fun LifeGoalsSimulatorCard(
     }
 
     if (showAddGoalDialog) {
-        var goalName by remember { mutableStateOf("") }
-        var targetYearStr by remember { mutableStateOf((state.settings.baseYear + 5).toString()) }
-        var targetAmountStr by remember { mutableStateOf("500000") }
-        var currentSavedStr by remember { mutableStateOf("50000") }
+        var goalName by rememberSaveable(state.settings.baseYear) { mutableStateOf("") }
+        var targetYearStr by rememberSaveable(state.settings.baseYear) { mutableStateOf((state.settings.baseYear + 5).toString()) }
+        var targetAmountStr by rememberSaveable(state.settings.baseYear) { mutableStateOf("500000") }
+        var currentSavedStr by rememberSaveable(state.settings.baseYear) { mutableStateOf("50000") }
+        var validationError by rememberSaveable { mutableStateOf<String?>(null) }
 
         AlertDialog(
             onDismissRequest = { showAddGoalDialog = false },
             title = { Text("Add Custom Life Goal", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .imePadding()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedTextField(
                         value = goalName,
-                        onValueChange = { goalName = it },
+                        onValueChange = {
+                            goalName = it
+                            validationError = null
+                        },
                         label = { Text("Goal Name (e.g. Dream Cottage)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = targetYearStr,
-                        onValueChange = { targetYearStr = it },
+                        onValueChange = {
+                            targetYearStr = it
+                            validationError = null
+                        },
                         label = { Text("Target Year", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -429,49 +494,87 @@ internal fun LifeGoalsSimulatorCard(
                     )
                     OutlinedTextField(
                         value = targetAmountStr,
-                        onValueChange = { targetAmountStr = it },
-                        label = { Text("Target Capital", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        onValueChange = {
+                            targetAmountStr = it
+                            validationError = null
+                        },
+                        label = { Text("Target Capital (Kč)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = currentSavedStr,
-                        onValueChange = { currentSavedStr = it },
-                        label = { Text("Current Savings", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        onValueChange = {
+                            currentSavedStr = it
+                            validationError = null
+                        },
+                        label = { Text("Current Savings (Kč)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (validationError != null) {
+                        Text(
+                            text = validationError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val name = goalName.ifBlank { "Custom Life Goal" }
-                        val yr = targetYearStr.toIntOrNull() ?: (state.settings.baseYear + 5)
-                        val targetAmt = targetAmountStr.parseUserAmountOrNull() ?: 500000.0
-                        val savedAmt = currentSavedStr.parseUserAmountOrNull() ?: 0.0
+                        val yr = targetYearStr.trim().toIntOrNull()
+                        val targetAmt = targetAmountStr.parseUserAmountOrNull()
+                        val savedAmt = if (currentSavedStr.isBlank()) 0.0 else currentSavedStr.parseUserAmountOrNull()
 
-                        val newItem = CustomLifeGoalItem(
-                            id = System.currentTimeMillis().toString(),
-                            name = name,
-                            iconName = "flag",
-                            targetYear = yr,
-                            targetAmountCzk = targetAmt,
-                            currentSavedCzk = savedAmt
-                        )
-                        val updated = customGoalsList + newItem
-                        onUpdateSettings?.invoke(state.settings.copy(customGoalsJson = serializeCustomLifeGoals(updated)))
-                        showAddGoalDialog = false
+                        when {
+                            yr == null || yr < state.settings.baseYear || yr > state.settings.baseYear + 80 ->
+                                validationError = "Enter a valid target year (${state.settings.baseYear}-${state.settings.baseYear + 80})."
+                            targetAmt == null || targetAmt <= 0.0 ->
+                                validationError = "Target capital must be greater than 0 Kč."
+                            savedAmt == null || savedAmt < 0.0 ->
+                                validationError = "Current savings must be 0 Kč or greater."
+                            else -> {
+                                val name = goalName.ifBlank { "Custom Life Goal" }
+                                val newItem = CustomLifeGoalItem(
+                                    id = System.currentTimeMillis().toString(),
+                                    name = name,
+                                    iconName = "flag",
+                                    targetYear = yr,
+                                    targetAmountCzk = targetAmt,
+                                    currentSavedCzk = savedAmt
+                                )
+                                com.example.ui.state.dispatchSettingsPatch(
+                                    state.settings,
+                                    onUpdateSettings ?: {},
+                                    onReduceSettings
+                                ) { cur ->
+                                    val curList = parseCustomLifeGoals(cur.customGoalsJson)
+                                    cur.copy(customGoalsJson = serializeCustomLifeGoals(curList + newItem))
+                                }
+                                showAddGoalDialog = false
+                            }
+                        }
                     },
-                    modifier = Modifier.testTag("save_custom_goal_button")
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    ),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("save_custom_goal_button")
                 ) {
                     Text("Add Goal")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddGoalDialog = false }) {
+                TextButton(
+                    onClick = { showAddGoalDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text("Cancel")
                 }
             }

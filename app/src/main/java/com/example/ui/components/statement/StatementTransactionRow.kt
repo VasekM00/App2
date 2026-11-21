@@ -22,15 +22,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.ColorPill
+import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.components.getCategoryColorValue
 import com.example.ui.components.getCategoryDisplayName
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.GoodGreen
 import com.example.util.BankStatementImporter
@@ -45,16 +46,17 @@ fun StatementTransactionRowItem(
     onToggleExclude: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val isPositive = tx.amount > 0
+    val safeAmount = tx.amount.finiteOrZero()
+    val isPositive = safeAmount > 0
     val amountColor = if (isPositive) GoodGreen else BadRed
 
     val categoryColor = getCategoryColorValue(tx.category)
     val categoryLabel = getCategoryDisplayName(tx.category)
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (tx.isExcluded) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, if (tx.isExcluded) BadRed.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+        border = BorderStroke(1.dp, if (tx.isExcluded) BadRed.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = modifier
             .fillMaxWidth()
             .then(if (onClickCategory != null) Modifier.clickable { onClickCategory() } else Modifier)
@@ -75,13 +77,13 @@ fun StatementTransactionRowItem(
                         text = tx.date,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 10.5.sp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = categoryColor.copy(alpha = 0.15f),
                         border = BorderStroke(1.dp, categoryColor.copy(alpha = 0.45f)),
                         modifier = Modifier.then(if (onClickCategory != null) Modifier.clickable { onClickCategory() } else Modifier)
@@ -93,6 +95,8 @@ fun StatementTransactionRowItem(
                                 fontWeight = FontWeight.Bold,
                                 color = categoryColor
                             ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                         )
                     }
@@ -155,7 +159,8 @@ fun StatementTransactionRowItem(
                             color = GoodGreen
                         ),
                         maxLines = 1,
-                        softWrap = false
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -167,22 +172,23 @@ fun StatementTransactionRowItem(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = (if (isPositive) "+" else "") + fmtCZK(tx.amount),
+                    text = (if (isPositive) "+" else "") + fmtCZK(safeAmount),
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = BodyFontFamily,
                         fontSize = 12.5.sp,
                         color = if (tx.isExcluded) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else amountColor,
                         textDecoration = if (tx.isExcluded) TextDecoration.LineThrough else null
                     ),
                     maxLines = 1,
-                    softWrap = false
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 if (onToggleExclude != null) {
                     IconButton(
                         onClick = onToggleExclude,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = if (tx.isExcluded) Icons.Default.AddCircleOutline else Icons.Default.RemoveCircleOutline,

@@ -1,66 +1,59 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.automirrored.filled.TrendingDown
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
-import com.example.ui.theme.BrandGold
-import com.example.ui.theme.BrandGoldDarkTheme
+import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.DisplayFontFamily
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
@@ -70,133 +63,187 @@ import com.example.util.Formatters.fmtPct
 @Composable
 fun HeroHeader(
     state: FullCalculationState,
-    isDarkTheme: Boolean,
-    onToggleDarkTheme: () -> Unit,
-    onOpenExportReportDialog: () -> Unit = {},
-    onOpenSettings: () -> Unit = {},
-    onToggleSearch: (() -> Unit)? = null,
     onNavigateToNetWorth: () -> Unit = {},
     onNavigateToEmergencyReserve: () -> Unit = {},
     onNavigateToSavingsRate: () -> Unit = {},
+    onOpenQuickGuide: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     var showMultiplierDialog by remember { mutableStateOf(false) }
 
+    // Always read unified calculation buckets (includes spouse pensions & active ledger snapshot)
+    val pensionTotal = state.currentPensionPortfolio
+    val liquidTotal = state.currentLiquidPortfolio
+    val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .testTag("hero_header_card"),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.Unspecified
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF0F172A),
-                            Color(0xFF1E293B),
-                            Color(0xFF0F172A)
-                        )
-                    )
-                )
+                .padding(horizontal = 18.dp, vertical = 18.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "TOTAL NET WORTH",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+
+                if (onOpenQuickGuide != null) {
+                    Surface(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onOpenQuickGuide()
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("hero_quick_guide_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                                contentDescription = "Open Quick Guide",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Quick Guide",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Financial Dashboard",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (onToggleSearch != null) {
-                            HeroActionButton(
-                                onClick = onToggleSearch,
-                                icon = Icons.Default.Search,
-                                contentDescription = "Search",
-                                testTag = "hero_search_button"
-                            )
-                        }
-
-                        HeroActionButton(
-                            onClick = onOpenExportReportDialog,
-                            icon = Icons.Default.Description,
-                            contentDescription = "Export Summary Report",
-                            testTag = "export_report_button"
-                        )
-
-                        HeroActionButton(
-                            onClick = onToggleDarkTheme,
-                            icon = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = "Toggle Dark Mode",
-                            testTag = "theme_toggle_button"
-                        )
-
-                        HeroActionButton(
-                            onClick = onOpenSettings,
-                            icon = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            testTag = "open_settings_button"
-                        )
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onNavigateToNetWorth()
                     }
-                }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .testTag("hero_stat_net_worth")
+            ) {
+                Text(
+                    text = fmtCZK(state.netWorthTotal),
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontFamily = DisplayFontFamily,
+                        fontSize = 30.sp,
+                        lineHeight = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.6).sp,
+                        fontFeatureSettings = "tnum",
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxLines = 2,
+                    softWrap = true
+                )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
+                Text(
+                    text = "Invested ${fmtCompact(liquidTotal)}  ·  Pension ${fmtCompact(pensionTotal)}  ·  Cash ${fmtCompact(state.currentEmergencyReserve)}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        fontFeatureSettings = "tnum",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(IntrinsicSize.Max),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .height(IntrinsicSize.Max)
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    MiniStatChip(
-                        label = "Net Worth",
-                        value = fmtCompact(state.netWorthTotal),
-                        accentColor = BrandGoldDarkTheme,
-                        onClick = onNavigateToNetWorth,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .testTag("hero_stat_net_worth")
-                    )
-                    MiniStatChip(
+                    HeroStripMetric(
                         label = "Cash Reserve",
                         value = fmtCompact(state.currentEmergencyReserve),
+                        valueColor = BrandBlue,
                         onClick = onNavigateToEmergencyReserve,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .testTag("hero_stat_emergency_reserve")
                     )
-                    MiniStatChip(
+
+                    VerticalDivider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    HeroStripMetric(
+                        label = "Monthly Leftover",
+                        value = fmtCompact(monthlySurplus),
+                        valueColor = MaterialTheme.colorScheme.onSurface,
+                        onClick = onNavigateToSavingsRate,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+
+                    VerticalDivider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    HeroStripMetric(
                         label = "Savings Rate",
                         value = fmtPct(state.savingsRatePct, 1),
+                        valueColor = GoodGreen,
                         onClick = onNavigateToSavingsRate,
                         modifier = Modifier
                             .weight(1f)
@@ -204,19 +251,20 @@ fun HeroHeader(
                             .testTag("hero_stat_savings_rate")
                     )
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                PerpetualFireMultiplierPill(
-                    multiplier = state.perpetualFireMultiplier,
-                    reductionFor100 = state.fireReductionPer100CzkMonthly,
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMultiplierDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth().testTag("hero_perpetual_multiplier_pill")
-                )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            SavingsImpactRow(
+                reductionFor100 = state.fireReductionPer100CzkMonthly,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showMultiplierDialog = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("hero_perpetual_multiplier_pill")
+            )
         }
     }
 
@@ -229,107 +277,63 @@ fun HeroHeader(
 }
 
 @Composable
-private fun HeroActionButton(
+private fun HeroStripMetric(
+    label: String,
+    value: String,
+    valueColor: Color,
     onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    modifier: Modifier = Modifier,
-    testTag: String? = null
+    modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    Box(
+    Column(
         modifier = modifier
-            .size(34.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.15f))
-            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+            .defaultMinSize(minHeight = 48.dp)
             .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
-            },
-        contentAlignment = Alignment.Center
+            }
+            .padding(horizontal = 6.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color.White,
-            modifier = Modifier.size(17.dp)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            softWrap = true
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontFamily = DisplayFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.5.sp,
+                fontFeatureSettings = "tnum",
+                color = valueColor
+            ),
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            softWrap = true
         )
     }
 }
 
 @Composable
-fun MiniStatChip(
-    label: String,
-    value: String,
-    accentColor: Color = Color.White,
-    onClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color.White.copy(alpha = 0.08f),
-        contentColor = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-        modifier = if (onClick != null) {
-            modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onClick()
-                }
-        } else modifier
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.2.sp,
-                    color = Color.White.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center
-                ),
-                maxLines = 2,
-                softWrap = true,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    color = accentColor,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
-                ),
-                maxLines = 1,
-                softWrap = false
-            )
-        }
-    }
-}
-
-@Composable
-fun PerpetualFireMultiplierPill(
-    multiplier: Double,
+private fun SavingsImpactRow(
     reductionFor100: Double,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color.White.copy(alpha = 0.08f),
-        contentColor = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        color = BrandTeal.copy(alpha = 0.08f),
         modifier = modifier
             .defaultMinSize(minHeight = 48.dp)
             .clip(RoundedCornerShape(14.dp))
@@ -338,67 +342,56 @@ fun PerpetualFireMultiplierPill(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.TrendingDown,
-                    contentDescription = null,
-                    tint = BrandTeal,
-                    modifier = Modifier.size(16.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(BrandTeal.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                        contentDescription = null,
+                        tint = BrandTeal,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
                 Column {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "PERPETUAL FIRE LEVERAGE",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = BrandTeal.copy(alpha = 0.22f),
-                            contentColor = BrandTeal
-                        ) {
-                            Text(
-                                text = "${String.format(java.util.Locale.ROOT, "%.0fx", multiplier)} LEVERAGE",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.3.sp
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
                     Text(
-                        text = "100 CZK/mo saved cuts FIRE target by ${fmtLeverageReduction(reductionFor100)}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                        text = "Savings Impact",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    )
+                    Text(
+                        text = "Every 100\u00A0Kč/month saved trims your goal by ${fmtLeverageReduction(reductionFor100)}",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        maxLines = 2,
+                        softWrap = true
                     )
                 }
             }
 
             Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Leverage details",
-                tint = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.size(15.dp)
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Savings multiplier details",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
             )
         }
     }
@@ -422,7 +415,7 @@ fun PerpetualFireMultiplierDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.TrendingDown, contentDescription = null, tint = BrandTeal)
-                Text("Perpetual FIRE Multiplier", fontWeight = FontWeight.Bold)
+                Text("Savings Multiplier", fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -431,15 +424,15 @@ fun PerpetualFireMultiplierDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Every crown saved in permanent monthly living expenses reduces your required FIRE portfolio by a massive multiple due to the Safe Withdrawal Rate rule.",
+                    text = "Reducing recurring monthly expenses shrinks the investment pot you need for financial independence by a large multiple.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -449,18 +442,21 @@ fun PerpetualFireMultiplierDialog(
                         )
                         Text(
                             text = "(12 months / ${fmtPct(swr)}) * (1 + ${fmtPct(buffer)} buffer) = ${String.format(java.util.Locale.ROOT, "%.1fx", mult)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontFeatureSettings = "tnum"
+                            )
                         )
                     }
                 }
 
                 Text(
-                    text = "Permanent Capital Reduction:",
+                    text = "Goal Reduction Examples:",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                 )
 
                 val examples = listOf(100.0, 500.0, 1000.0, 2500.0, 5000.0)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     examples.forEach { amount ->
                         val savedCapital = amount * mult
                         Row(
@@ -470,13 +466,13 @@ fun PerpetualFireMultiplierDialog(
                         ) {
                             Text(
                                 text = "${fmtCZK(amount)} / month",
-                                style = MaterialTheme.typography.bodySmall
+                                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
                             )
                             Text(
-                                text = "-${fmtCZK(savedCapital)} target",
+                                text = "-${fmtCZK(savedCapital)} goal",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFeatureSettings = "tnum",
                                     color = GoodGreen
                                 )
                             )
@@ -485,7 +481,7 @@ fun PerpetualFireMultiplierDialog(
                 }
 
                 Text(
-                    text = "Tip: Trimming a recurring 1,000 CZK subscription cuts ${fmtLeverageReduction(1000.0 * mult)} from your required FIRE target.",
+                    text = "Tip: Canceling a 1\u00A0000\u00A0Kč/month subscription cuts your required retirement goal by ${fmtLeverageReduction(1000.0 * mult)}.",
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

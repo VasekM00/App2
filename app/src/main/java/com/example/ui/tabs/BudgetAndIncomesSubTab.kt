@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,11 +20,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ImportedBankTransactionEntity
@@ -33,6 +34,8 @@ import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
 import com.example.ui.components.MetricInfo
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.OnBrandTeal
+import com.example.util.BankTransactionType
 
 @Composable
 internal fun BudgetAndIncomesSubTab(
@@ -43,48 +46,57 @@ internal fun BudgetAndIncomesSubTab(
     onDismissSubscription: ((String) -> Unit)? = null,
     onRestoreSubscription: ((String) -> Unit)? = null,
     onClearAllDismissedSubscriptions: (() -> Unit)? = null,
+    onUpdateImportedTransactionCategory: ((Long, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
     onShowInfo: (MetricInfo) -> Unit = {},
-    onUpdateSettings: (SettingsEntity) -> Unit = {}
+    onUpdateSettings: (SettingsEntity) -> Unit = {},
+    externalSelectedSection: Int? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
-    var selectedSection by rememberSaveable { mutableIntStateOf(0) } // 0 = Summary & Allocations, 1 = Income Details, 2 = Expense Details
-    val sections = listOf("Overview", "Incomes", "Expenses")
+    var internalSelectedSection by rememberSaveable { mutableIntStateOf(0) } // 0 = Overview, 1 = Income, 2 = Expenses
+    val selectedSection = (externalSelectedSection ?: internalSelectedSection).coerceIn(0, 2)
+    val sections = listOf("Overview", "Income", "Expenses")
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            sections.forEachIndexed { index, name ->
-                val isSelected = selectedSection == index
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedSection = index
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .testTag("budget_section_$index")
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
+        if (externalSelectedSection == null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                sections.forEachIndexed { index, name ->
+                    val isSelected = selectedSection == index
+                    Surface(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            internalSelectedSection = index
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = if (isSelected) OnBrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("budget_section_$index")
                     ) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 13.sp
-                            ),
-                            maxLines = 1
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                ),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                softWrap = true,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
@@ -99,19 +111,26 @@ internal fun BudgetAndIncomesSubTab(
                 onDismissSubscription = onDismissSubscription,
                 onRestoreSubscription = onRestoreSubscription,
                 onClearAllDismissedSubscriptions = onClearAllDismissedSubscriptions,
-                onShowInfo = onShowInfo
+                onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,
+                onShowInfo = onShowInfo,
+                onUpdateSettings = onUpdateSettings,
+                onReduceSettings = onReduceSettings
             )
             1 -> IncomeSourcesCard(
                 state = state,
                 ledgerEntries = ledgerEntries,
                 onShowInfo = onShowInfo,
-                onUpdateSettings = onUpdateSettings
+                onUpdateSettings = onUpdateSettings,
+                onReduceSettings = onReduceSettings,
+                allImportedTransactions = allImportedTransactions
             )
             2 -> ExpenseCategoriesCard(
                 state = state,
                 ledgerEntries = ledgerEntries,
                 onShowInfo = onShowInfo,
-                onUpdateSettings = onUpdateSettings
+                onUpdateSettings = onUpdateSettings,
+                onReduceSettings = onReduceSettings,
+                allImportedTransactions = allImportedTransactions
             )
         }
     }

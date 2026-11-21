@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.YearMonth
-import java.time.ZoneId
 
 class StatementImportCoordinator(
     private val application: Application,
@@ -32,6 +31,8 @@ class StatementImportCoordinator(
     }
 
     companion object {
+        private val YEAR_MONTH_REGEX = Regex("""\d{4}-\d{2}""")
+
         val OTHER_EXPENSE_TYPES = setOf(
             "LIFESTYLE_LIVING", "DINING_RESTAURANT", "TRANSPORTATION", "SHOPPING_GOODS",
             "HEALTH_DRUGSTORE", "SUBSCRIPTIONS_MEDIA", "SERVICES_UTILITIES", "ATM_CASH",
@@ -40,6 +41,15 @@ class StatementImportCoordinator(
 
         fun isGeneralExpense(cat: String, amount: Double): Boolean =
             cat in OTHER_EXPENSE_TYPES || (cat == BankTransactionType.UNCATEGORIZED.name && amount < 0)
+
+        private fun matchesNormalizedQuery(normalizedHaystack: String, normalizedQuery: String): Boolean {
+            if (normalizedQuery.isBlank() || normalizedHaystack.isBlank()) return false
+            return if (!normalizedQuery.contains(' ') && normalizedQuery.length <= 5) {
+                Regex("""\b${Regex.escape(normalizedQuery)}\b""").containsMatchIn(normalizedHaystack)
+            } else {
+                normalizedHaystack.contains(normalizedQuery)
+            }
+        }
 
         fun matchesMerchantInMonth(
             target: ImportedBankTransactionEntity,
@@ -75,19 +85,21 @@ class StatementImportCoordinator(
             val normQuery = CzechMerchantCatalog.normalize(query)
             if (normQuery.length >= 3) {
                 val otherNorm = CzechMerchantCatalog.normalize("$otherCounterparty $otherMessage")
-                if (otherNorm.contains(normQuery)) return true
+                if (matchesNormalizedQuery(otherNorm, normQuery)) return true
             }
             return false
         }
 
         fun aggregateMonthTransactions(txs: List<ImportedBankTransactionEntity>): AggregatedMonthTotals {
-            val active = txs.filter { !it.isNetted }
+            val active = txs.filter { !it.isNetted && it.amount.isFinite() }
             val incVaclav = active.filter { it.category == BankTransactionType.SALARY_VACLAV.name }.sumOf { it.amount }.coerceAtLeast(0.0)
             val incEleonora = active.filter {
                 it.category == BankTransactionType.SALARY_ELEONORA.name || it.category == BankTransactionType.PARENTAL_BENEFIT.name
             }.sumOf { it.amount }.coerceAtLeast(0.0)
             var incOther = active.filter {
-                it.category == BankTransactionType.OTHER_INFLOW.name || (it.category == BankTransactionType.UNCATEGORIZED.name && it.amount > 0)
+                it.category == BankTransactionType.OTHER_INFLOW.name ||
+                    it.category == BankTransactionType.FAMILY_GIFT.name ||
+                    (it.category == BankTransactionType.UNCATEGORIZED.name && it.amount > 0)
             }.sumOf { it.amount }.coerceAtLeast(0.0)
 
             var rawRent = -active.filter { it.category == BankTransactionType.HOUSING_RENT.name }.sumOf { it.amount }
@@ -168,7 +180,7 @@ class StatementImportCoordinator(
         val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
 
         if (existingEntry != null) {
-            val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from")) {
+            val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from", ignoreCase = true)) {
                 autoNotes
             } else {
                 existingEntry.notes
@@ -183,21 +195,7 @@ class StatementImportCoordinator(
                 notes = preservedNotes
             )
             repository.updateLedgerEntry(updated)
-            syncLedgerToSettingsIfCurrentMonth(targetYm, agg.incVaclav, agg.incEleonora, agg.expRent, 0.0, 0.0, 0.0)
         }
-    }
-
-    private suspend fun syncLedgerToSettingsIfCurrentMonth(
-        yearMonth: String, incVaclav: Double, incEleonora: Double, expRent: Double,
-        portfolioBalance: Double, pensionBalance: Double, emergencyReserve: Double
-    ) {
-        val now = YearMonth.now(ZoneId.of("Europe/Prague")).toString()
-        val latestYm = repository.getAllLedgerEntriesDirect().map { it.yearMonth }.maxOrNull() ?: now
-        val effectiveCurrentYm = if (yearMonth == now || yearMonth >= latestYm) yearMonth else now
-        repository.syncLedgerToSettingsTransaction(
-            yearMonth, effectiveCurrentYm, incVaclav, incEleonora, expRent,
-            portfolioBalance, pensionBalance, emergencyReserve
-        )
     }
 
     data class ConfirmResult(
@@ -212,12 +210,13 @@ class StatementImportCoordinator(
 
         val txsByMonth = activeTransactions.groupBy { tx ->
             val ym = tx.date.take(7)
-            if (ym.matches(Regex("""\d{4}-\d{2}"""))) ym else summary.yearMonth
+            if (YEAR_MONTH_REGEX.matches(ym)) ym else summary.yearMonth
         }
 
         val latestMonth = txsByMonth.keys.maxOrNull() ?: summary.yearMonth
         val affectedMonths = txsByMonth.keys.sorted()
         var latestAuditReport: CrossStatementAuditReport? = null
+        val pendingBankBalanceWrites = mutableMapOf<String, String>()
 
         repository.withTransaction {
             for ((targetYm, monthTxs) in txsByMonth) {
@@ -243,22 +242,47 @@ class StatementImportCoordinator(
 
                 val boundaryTxs = fetchBoundaryTransactions(targetYm)
 
-                // Fix Flaw 5: Assign statement monthEndBalance to summary.yearMonth (the primary statement month),
-                // or latestMonth if summary.yearMonth is not present in the transactions set.
-                if (summary.monthEndBalance != null) {
-                    val isTargetBalanceMonth = (targetYm == summary.yearMonth) || (summary.yearMonth !in txsByMonth.keys && targetYm == latestMonth)
-                    if (isTargetBalanceMonth) {
-                        importPrefs.edit().putString("bank_bal_${targetYm}_${summary.detectedBank.name}", summary.monthEndBalance.toString()).apply()
+                val cur = repository.settingsFlow.first()
+                val householdNames = listOfNotNull(
+                    cur.primaryName.takeIf { it.isNotBlank() },
+                    cur.spouseName.takeIf { !cur.isSingleHousehold && it.isNotBlank() }
+                )
+
+                // Stage per-bank closing balances in memory and persist to SharedPreferences only after DB commit.
+                val storedBalances = getStoredBankBalancesForMonth(targetYm).toMutableMap()
+                val perBankForMonth = summary.monthEndBalancesByBank[targetYm]
+                if (!perBankForMonth.isNullOrEmpty()) {
+                    perBankForMonth.forEach { (bankKey, balVal) ->
+                        if (balVal.isFinite()) {
+                            storedBalances[bankKey] = balVal
+                            pendingBankBalanceWrites["bank_bal_${targetYm}_$bankKey"] = balVal.toString()
+                        }
+                    }
+                } else {
+                    val monthEndBal = summary.monthEndBalance
+                    if (monthEndBal != null && monthEndBal.isFinite()) {
+                        val isTargetBalanceMonth = (targetYm == summary.yearMonth) || (summary.yearMonth !in txsByMonth.keys && targetYm == latestMonth)
+                        if (isTargetBalanceMonth) {
+                            val balBankKey = if (summary.detectedBank != BankType.GENERIC) {
+                                summary.detectedBank.name
+                            } else if (byBank.size == 1) {
+                                byBank.keys.first()
+                            } else {
+                                summary.detectedBank.name
+                            }
+                            storedBalances[balBankKey] = monthEndBal
+                            pendingBankBalanceWrites["bank_bal_${targetYm}_$balBankKey"] = monthEndBal.toString()
+                        }
                     }
                 }
-                val storedBalances = getStoredBankBalancesForMonth(targetYm)
 
                 val allMonthTxs = repository.getImportedTransactionsDirect(targetYm)
                 val reconcileResult = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
                     transactions = allMonthTxs,
                     yearMonth = targetYm,
                     boundaryTransactions = boundaryTxs,
-                    bankBalances = storedBalances
+                    bankBalances = storedBalances,
+                    householdNames = householdNames
                 )
                 val reconciledTxs = reconcileResult.currentMonthTxs
                 val auditReport = reconcileResult.auditReport
@@ -282,15 +306,16 @@ class StatementImportCoordinator(
                 val banksSummary = auditReport.participatingBanks.joinToString(" + ")
                 val nettingNote = if (auditReport.totalNettedAmount > 0) " | ${auditReport.matchedPairs.size} cross-transfers netted (${Formatters.fmtCompact(auditReport.totalNettedAmount)})" else ""
                 val investNote = formatInvestmentNote(agg)
-                val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
+                val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} transactions)$nettingNote$investNote"
 
-                val cur = repository.settingsFlow.first()
                 val isSingle = cur.isSingleHousehold
                 val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
                 val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
+                val parsedReserveBal = auditReport.combinedEmergencyReserve?.takeIf { it.isFinite() && it > 0.0 }
+                val effectiveReserveForLedger = parsedReserveBal ?: cur.emergencyReserveCurrent
 
                 if (existingEntry != null) {
-                    val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from")) {
+                    val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from", ignoreCase = true)) {
                         autoNotes
                     } else {
                         existingEntry.notes
@@ -305,7 +330,7 @@ class StatementImportCoordinator(
                         notes = preservedNotes,
                         portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
                         pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
-                        emergencyReserveAtMonthEnd = if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent
+                        emergencyReserveAtMonthEnd = parsedReserveBal ?: (if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent)
                     )
                     repository.updateLedgerEntry(updated)
                 } else {
@@ -320,25 +345,16 @@ class StatementImportCoordinator(
                         notes = autoNotes,
                         portfolioBalanceAtMonthEnd = snapLiquid,
                         pensionBalanceAtMonthEnd = snapPension,
-                        emergencyReserveAtMonthEnd = cur.emergencyReserveCurrent
+                        emergencyReserveAtMonthEnd = effectiveReserveForLedger
                     )
                     repository.addLedgerEntry(newEntry)
                 }
-
-                syncLedgerToSettingsIfCurrentMonth(
-                    yearMonth = targetYm,
-                    incVaclav = agg.incVaclav,
-                    incEleonora = agg.incEleonora,
-                    expRent = agg.expRent,
-                    portfolioBalance = 0.0,
-                    pensionBalance = 0.0,
-                    emergencyReserve = 0.0
-                )
             }
         }
 
         val now = System.currentTimeMillis()
         importPrefs.edit {
+            pendingBankBalanceWrites.forEach { (k, v) -> putString(k, v) }
             putLong("last_import_all", now)
             putLong("last_import_${summary.detectedBank.name}", now)
         }
@@ -369,7 +385,7 @@ class StatementImportCoordinator(
         if (normQuery.isBlank()) return summary
         val updatedList = summary.transactions.map { tx ->
             val matchText = "${tx.counterpartyName} ${tx.message}"
-            if (CzechMerchantCatalog.normalize(matchText).contains(normQuery)) {
+            if (matchesNormalizedQuery(CzechMerchantCatalog.normalize(matchText), normQuery)) {
                 tx.copy(isExcluded = true)
             } else {
                 tx
@@ -399,17 +415,20 @@ class StatementImportCoordinator(
             MerchantCategoryManager.saveOverride(application, query, newCategory)
             val currentSettings = repository.settingsFlow.first()
             val currentRules = MerchantCategoryManager.parseRulesFromJson(currentSettings.merchantRulesJson).toMutableMap()
-            currentRules[query.trim().lowercase()] = newCategory
-            repository.saveSettings(currentSettings.copy(merchantRulesJson = MerchantCategoryManager.serializeRulesToJson(currentRules)))
+            val canonicalKey = MerchantCategoryManager.canonicalRuleKey(query)
+            if (canonicalKey.isNotBlank()) {
+                currentRules[canonicalKey] = newCategory
+                repository.saveSettings(currentSettings.copy(merchantRulesJson = MerchantCategoryManager.serializeRulesToJson(currentRules)))
+            }
         }
 
-        if ((rememberForMerchant || applyToAllMatching) && query.isNotBlank()) {
+        if (applyToAllMatching && query.isNotBlank()) {
             val normQuery = CzechMerchantCatalog.normalize(query)
             if (normQuery.isNotBlank()) {
                 for (i in updatedTransactions.indices) {
                     val otherTx = updatedTransactions[i]
                     val otherNorm = CzechMerchantCatalog.normalize("${otherTx.counterpartyName} ${otherTx.message}")
-                    if (otherNorm.contains(normQuery)) {
+                    if (matchesNormalizedQuery(otherNorm, normQuery)) {
                         val otherReason = if (isNetted) BankStatementImporter.determineNettingReason(newCategory, otherTx.counterpartyName, otherTx.message) else ""
                         updatedTransactions[i] = otherTx.copy(category = newCategory, isNetted = isNetted, nettingReason = otherReason)
                     }

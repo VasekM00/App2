@@ -11,8 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,18 +37,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.ColorPill
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandTeal
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SankeyDetailPanel(
     selectedNode: SankeyNode?,
@@ -58,9 +63,11 @@ fun SankeyDetailPanel(
         exit = fadeOut() + shrinkVertically()
     ) {
         if (selectedNode != null) {
-            val pctOfTotal = if (totalInflows > 0) (selectedNode.amount / totalInflows * 100.0) else 0.0
+            val safeAmount = selectedNode.amount.finiteOrZero().coerceAtLeast(0.0)
+            val safeTotalInflows = totalInflows.finiteOrZero()
+            val pctOfTotal = if (safeTotalInflows > 0.0) (safeAmount / safeTotalInflows * 100.0) else 0.0
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = selectedNode.color.copy(alpha = 0.08f),
                 border = BorderStroke(1.dp, selectedNode.color.copy(alpha = 0.35f)),
                 modifier = Modifier
@@ -68,67 +75,90 @@ fun SankeyDetailPanel(
                     .testTag("sankey_selected_detail")
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    // Row 1: Stream Color, Full Title (2 lines wrap, no truncation) & Dismiss Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(9.dp)
+                                    .size(10.dp)
                                     .clip(CircleShape)
                                     .background(selectedNode.color)
                             )
-                            Column {
-                                Text(
-                                    text = selectedNode.title,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    maxLines = 1
-                                )
-                                Text(
-                                    text = selectedNode.category,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = selectedNode.color,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    maxLines = 1
-                                )
-                            }
+                            Text(
+                                text = selectedNode.title,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                ),
+                                softWrap = true,
+                                maxLines = 2
+                            )
                         }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("sankey_detail_dismiss_button")
                         ) {
-                            Text(
-                                text = "${fmtCZK(selectedNode.amount)} / mo (${fmtPct(pctOfTotal, 1)})",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = selectedNode.color
-                                )
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear selection",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear selection",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Row 2: Category Badge, Focused Stream Pill & Monthly Amount
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = selectedNode.category,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = selectedNode.color,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            softWrap = true,
+                            maxLines = 2
+                        )
+                        ColorPill(
+                            text = "FOCUSED STREAM",
+                            color = selectedNode.color,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp,
+                            cornerRadius = 6.dp
+                        )
+                        Text(
+                            text = "${fmtCZK(safeAmount)}/month (${fmtPct(pctOfTotal, 1)})",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = BodyFontFamily,
+                                color = selectedNode.color,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = selectedNode.description,
@@ -136,7 +166,8 @@ fun SankeyDetailPanel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.5.sp,
                             lineHeight = 15.5.sp
-                        )
+                        ),
+                        softWrap = true
                     )
 
                     if (selectedNode.statutoryNote.isNotBlank()) {
@@ -152,7 +183,7 @@ fun SankeyDetailPanel(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "CZ LAW",
+                                    text = "RULE",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 9.sp,
@@ -165,8 +196,8 @@ fun SankeyDetailPanel(
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     ),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 4,
+                                    softWrap = true
                                 )
                             }
                         }
@@ -177,25 +208,31 @@ fun SankeyDetailPanel(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SankeyGuidanceBanner(totalInflows: Double) {
+fun SankeyGuidanceBanner(
+    totalInflows: Double,
+    deficitAmount: Double = 0.0
+) {
+    val safeInflows = totalInflows.finiteOrZero().coerceAtLeast(0.0)
+    val safeDeficit = deficitAmount.finiteOrZero().coerceAtLeast(0.0)
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
-                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.align(Alignment.CenterVertically)
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
@@ -215,14 +252,97 @@ fun SankeyGuidanceBanner(totalInflows: Double) {
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            ColorPill(
-                text = "Net ${fmtCompact(totalInflows)}",
-                color = BrandTeal,
-                fontSize = 10.sp,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (safeDeficit > 1.0) {
+                    ColorPill(
+                        text = "-${fmtCompact(safeDeficit)}",
+                        color = BadRed,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = BodyFontFamily,
+                        horizontalPadding = 7.dp,
+                        verticalPadding = 2.5.dp,
+                        cornerRadius = 6.dp
+                    )
+                }
+                ColorPill(
+                    text = "Net ${fmtCompact(safeInflows)}",
+                    color = BrandTeal,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = BodyFontFamily,
+                    horizontalPadding = 7.dp,
+                    verticalPadding = 2.5.dp,
+                    cornerRadius = 6.dp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamColumnHeader(
+    title: String,
+    totalAmount: Double,
+    amountColor: Color,
+    stackVertical: Boolean
+) {
+    val titleText: @Composable (Modifier) -> Unit = { mod ->
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Bold,
-                horizontalPadding = 7.dp,
-                verticalPadding = 2.5.dp
+                fontSize = 10.sp,
+                letterSpacing = 0.3.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            maxLines = 2,
+            softWrap = true,
+            overflow = TextOverflow.Ellipsis,
+            modifier = mod
+        )
+    }
+    val totalText = fmtCompact(totalAmount.finiteOrZero().coerceAtLeast(0.0))
+    val amountText: @Composable () -> Unit = {
+        Text(
+            text = totalText,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontFamily = BodyFontFamily,
+                fontSize = 10.5.sp,
+                color = amountColor
+            ),
+            maxLines = 1,
+            softWrap = true
+        )
+    }
+    if (stackVertical) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            titleText(Modifier.fillMaxWidth())
+            amountText()
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            titleText(
+                Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp)
             )
+            amountText()
         }
     }
 }
@@ -236,38 +356,19 @@ fun SankeyStreamMatrix(
     selectedNodeId: String?,
     onNodeClick: (String) -> Unit
 ) {
+    val stackHeaders = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.4f
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         // Inflow Column
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.5.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 1.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "INFLOW SOURCES",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 8.5.sp,
-                        letterSpacing = 0.3.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                Text(
-                    text = fmtCompact(sumInflows),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 9.sp,
-                        color = BrandTeal
-                    )
-                )
-            }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StreamColumnHeader(
+                title = "INFLOW SOURCES",
+                totalAmount = sumInflows,
+                amountColor = BrandTeal,
+                stackVertical = stackHeaders
+            )
             inflowNodes.forEach { node ->
                 val isSel = selectedNodeId == node.id
                 StreamMatrixItem(
@@ -281,33 +382,13 @@ fun SankeyStreamMatrix(
         }
 
         // Destination Column
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.5.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 1.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "ALLOCATIONS",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 8.5.sp,
-                        letterSpacing = 0.3.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                Text(
-                    text = fmtCompact(sumOutflows),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 9.sp,
-                        color = BadRed
-                    )
-                )
-            }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StreamColumnHeader(
+                title = "ALLOCATIONS",
+                totalAmount = sumOutflows,
+                amountColor = BadRed,
+                stackVertical = stackHeaders
+            )
             outflowNodes.forEach { node ->
                 val isSel = selectedNodeId == node.id
                 StreamMatrixItem(
@@ -330,7 +411,8 @@ private fun StreamMatrixItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(5.dp)
+    val shape = RoundedCornerShape(8.dp)
+    val isLargeFont = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.5f
     Surface(
         shape = shape,
         color = if (isSelected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
@@ -340,47 +422,92 @@ private fun StreamMatrixItem(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 40.dp)
             .clip(shape)
             .clickable(onClick = onClick)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.5.dp),
-                modifier = Modifier.weight(1f)
+        if (isLargeFont) {
+            Column(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(4.5.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 8.8.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
+                    text = fmtCompact(amount.finiteOrZero().coerceAtLeast(0.0)),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = BodyFontFamily,
+                        color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
                     ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2,
+                    softWrap = true
                 )
             }
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                text = fmtCompact(amount),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 9.2.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
-                ),
-                maxLines = 1
-            )
+        } else {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = fmtCompact(amount.finiteOrZero().coerceAtLeast(0.0)),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = BodyFontFamily,
+                        color = if (isSelected) color else MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxLines = 2,
+                    softWrap = true
+                )
+            }
         }
     }
 }

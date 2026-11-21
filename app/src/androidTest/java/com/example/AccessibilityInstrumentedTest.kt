@@ -2,7 +2,6 @@ package com.example
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Settings
@@ -19,13 +18,16 @@ import com.example.ui.components.HeroHeader
 import com.example.ui.theme.MartinuFinancialsTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AccessibilityInstrumentedTest {
 
+    private val composeTestRule = createComposeRule()
+
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val ruleChain: RuleChain = RuleChain.outerRule(WakeDeviceRule()).around(composeTestRule)
 
     /**
      * Validates that semantic content descriptions are properly assigned to Compose UI elements
@@ -41,20 +43,16 @@ class AccessibilityInstrumentedTest {
                     // 1. Hero Header accessibility elements
                     HeroHeader(
                         state = defaultState,
-                        isDarkTheme = false,
-                        onToggleDarkTheme = {},
-                        onOpenExportReportDialog = {},
-                        onOpenSettings = {}
+                        onOpenQuickGuide = {}
                     )
 
-                    // 2. Navigation Bar accessibility elements
+                    // 2. Navigation Bar accessibility elements (4 goal-driven tabs)
                     NavigationBar {
                         val items = listOf(
-                            "Overview" to Icons.Default.Dashboard,
-                            "Cash Flow" to Icons.Default.Payments,
-                            "Projections" to Icons.Default.Assessment,
-                            "Strategy" to Icons.Default.Checklist,
-                            "Settings" to Icons.Default.Settings
+                            "Home" to Icons.Default.Dashboard,
+                            "Budget" to Icons.Default.Payments,
+                            "Wealth" to Icons.Default.Assessment,
+                            "More" to Icons.Default.Settings
                         )
                         items.forEach { (title, icon) ->
                             NavigationBarItem(
@@ -69,36 +67,28 @@ class AccessibilityInstrumentedTest {
             }
         }
 
-        // Verify HeroHeader action buttons have proper content descriptions for accessibility / screen readers
+        // Verify HeroHeader quick guide control has proper content description for screen readers
         composeTestRule
-            .onNodeWithContentDescription("Export Summary Report")
-            .assertExists()
-
-        composeTestRule
-            .onNodeWithContentDescription("Toggle Dark Mode")
-            .assertExists()
-
-        composeTestRule
-            .onNodeWithContentDescription("Settings")
+            .onNodeWithContentDescription("Open Quick Guide")
             .assertExists()
 
         // Verify Navigation items have appropriate content descriptions.
         // NavigationBarItem merges descendant semantics, so the icon's content description
         // is only observable in the unmerged tree.
         composeTestRule
-            .onNodeWithContentDescription("Overview", useUnmergedTree = true)
+            .onNodeWithContentDescription("Home", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Cash Flow", useUnmergedTree = true)
+            .onNodeWithContentDescription("Budget", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Projections", useUnmergedTree = true)
+            .onNodeWithContentDescription("Wealth", useUnmergedTree = true)
             .assertExists()
 
         composeTestRule
-            .onNodeWithContentDescription("Strategy", useUnmergedTree = true)
+            .onNodeWithContentDescription("More", useUnmergedTree = true)
             .assertExists()
     }
 }

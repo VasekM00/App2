@@ -3,14 +3,21 @@ package com.example
 import android.app.Application
 import android.net.Uri
 import android.os.Looper
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.AppDatabase
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.ui.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -28,10 +35,38 @@ class ViewModelLifecycleTest {
     private lateinit var context: Application
     private lateinit var viewModel: MainViewModel
 
+    private fun resetDatabaseSingleton(app: Application) {
+        runCatching {
+            val field = AppDatabase::class.java.getDeclaredField("INSTANCE")
+            field.isAccessible = true
+            val existing = field.get(null) as? AppDatabase
+            existing?.close()
+            field.set(null, null)
+        }
+        app.deleteDatabase("martinu_financials_db")
+    }
+
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext<Application>()
+        resetDatabaseSingleton(context)
         viewModel = MainViewModel(context)
+    }
+
+    @After
+    fun tearDown() {
+        runCatching {
+            val job = viewModel.viewModelScope.coroutineContext[Job]
+            runBlocking {
+                job?.cancel()
+                withTimeoutOrNull(3000) {
+                    job?.join()
+                }
+            }
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(50)
+        }
+        resetDatabaseSingleton(context)
     }
 
     private fun pollUntil(timeoutMs: Long = 8000, condition: () -> Boolean): Boolean {
@@ -47,9 +82,36 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_1_updateSettings() = runTest {
+        val states = CopyOnWriteArrayList<SettingsEntity>()
+        val collectJob = launch(Dispatchers.Default) { viewModel.settingsState.collect { states.add(it) } }
+        pollUntil { states.isNotEmpty() }
+
         val newSettings = SettingsEntity(portfolioNominalReturnPct = 12.34)
         viewModel.updateSettings(newSettings)
-        assertNotNull(viewModel.settingsState.value)
+        val observed = pollUntil { states.any { it.portfolioNominalReturnPct == 12.34 } }
+        collectJob.cancel()
+
+        assertTrue("Updated portfolioNominalReturnPct=12.34 must be observed", observed)
+        assertEquals(12.34, viewModel.settingsState.value.portfolioNominalReturnPct, 0.001)
+    }
+
+    @Test
+    fun test7_1b_concurrentAtomicReduceSettingsDoesNotLoseEdits() = runTest {
+        val states = CopyOnWriteArrayList<SettingsEntity>()
+        val collectJob = launch(Dispatchers.Default) { viewModel.settingsState.collect { states.add(it) } }
+        pollUntil { states.isNotEmpty() }
+
+        viewModel.updateSettings { it.copy(vSalary = 111_000.0) }
+        viewModel.updateSettings { it.copy(vGiftsMonthly = 15_000.0) }
+        viewModel.updateSettings { it.copy(rentMonthly = 28_500.0) }
+
+        val observed = pollUntil {
+            val cur = viewModel.settingsState.value
+            cur.vSalary == 111_000.0 && cur.vGiftsMonthly == 15_000.0 && cur.rentMonthly == 28_500.0
+        }
+        collectJob.cancel()
+
+        assertTrue("All three concurrent reducer patches must persist without overwriting each other", observed)
     }
 
     @Test
@@ -117,16 +179,28 @@ class ViewModelLifecycleTest {
 
     @Test
     fun test7_6_addLedgerEntry() = runTest {
-        viewModel.addLedgerEntry("2024-01", 1000.0, 2000.0, 0.0, 500.0, 300.0, "Test entry")
+        val entries = CopyOnWriteArrayList<List<LedgerEntryEntity>>()
+        val collectJob = launch(Dispatchers.Default) { viewModel.ledgerEntries.collect { entries.add(it) } }
+        pollUntil { entries.isNotEmpty() }
 
-        assertNotNull(viewModel.ledgerEntries.value)
+        viewModel.addLedgerEntry("2024-01", 1000.0, 2000.0, 0.0, 500.0, 300.0, "Test entry")
+        val inserted = pollUntil { entries.any { list -> list.any { it.yearMonth == "2024-01" && it.notes == "Test entry" } } }
+        collectJob.cancel()
+
+        assertTrue("Inserted ledger entry must be persisted and observed", inserted)
     }
 
     @Test
     fun test7_7_toggleAction() = runTest {
-        viewModel.toggleAction(2025, "action_1", false)
+        val states = CopyOnWriteArrayList<Map<String, Boolean>>()
+        val collectJob = launch(Dispatchers.Default) { viewModel.actionStates.collect { states.add(it) } }
+        pollUntil { states.isNotEmpty() }
 
-        assertNotNull(viewModel.actionStates.value)
+        viewModel.toggleAction(2025, "action_1", false)
+        val toggled = pollUntil { states.any { it["2025_action_1"] == true } }
+        collectJob.cancel()
+
+        assertTrue("Toggled action state 2025_action_1=true must be persisted and observed", toggled)
     }
 
     @Test

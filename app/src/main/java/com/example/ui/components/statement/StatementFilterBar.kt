@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.util.ParsedBankTransaction
@@ -60,7 +62,7 @@ fun StatementFilterBar(
                 FilterChip(
                     selected = selectedMonthFilter == null,
                     onClick = { onSelectMonthFilter(null) },
-                    label = { Text("All (${allTransactions.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) },
+                    label = { Text("All (${allTransactions.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = bankColor.copy(alpha = 0.18f),
                         selectedLabelColor = bankColor
@@ -72,7 +74,7 @@ fun StatementFilterBar(
                     FilterChip(
                         selected = selectedMonthFilter == ym,
                         onClick = { onSelectMonthFilter(ym) },
-                        label = { Text("$ym ($mCount)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) },
+                        label = { Text("$ym ($mCount)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = bankColor.copy(alpha = 0.18f),
                             selectedLabelColor = bankColor
@@ -92,7 +94,7 @@ fun StatementFilterBar(
                 FilterChip(
                     selected = activeFilterIndex == index,
                     onClick = { onSelectFilterIndex(index) },
-                    label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false) },
+                    label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = bankColor.copy(alpha = 0.18f),
                         selectedLabelColor = bankColor
@@ -109,7 +111,7 @@ fun StatementFilterBar(
             onValueChange = onSearchQueryChange,
             placeholder = {
                 Text(
-                    text = "Filter by merchant, note, or date...",
+                    text = "Filter by merchant, note, or date",
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -124,11 +126,11 @@ fun StatementFilterBar(
             },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }, modifier = Modifier.size(20.dp)) {
+                    IconButton(onClick = { onSearchQueryChange("") }, modifier = Modifier.size(48.dp)) {
                         Icon(
                             imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            modifier = Modifier.size(13.dp)
+                            contentDescription = "Clear search",
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -141,7 +143,7 @@ fun StatementFilterBar(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
+                .heightIn(min = 48.dp)
                 .testTag("statement_review_search_field")
         )
     }

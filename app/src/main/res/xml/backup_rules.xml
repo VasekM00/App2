@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
    Financial data is user-sensitive and the app provides its own JSON export;
-   exclude the Room database and its WAL/shm sidecars from cloud backups.
+   exclude the Room database, its WAL/shm sidecars, and all SharedPreferences from cloud backups.
 -->
 <full-backup-content>
-    <include domain="sharedpref" path="."/>
     <exclude domain="sharedpref" path="statement_import_prefs.xml"/>
     <exclude domain="sharedpref" path="subscription_auditor_prefs.xml"/>
+    <exclude domain="sharedpref" path="czech_sync_prefs.xml"/>
+    <exclude domain="sharedpref" path="investment_lots_prefs.xml"/>
+    <exclude domain="sharedpref" path="merchant_category_overrides.xml"/>
+    <exclude domain="sharedpref" path="app_preferences.xml"/>
+    <exclude domain="sharedpref" path="app_theme_prefs.xml"/>
     <exclude domain="database" path="martinu_financials_db"/>
     <exclude domain="database" path="martinu_financials_db-wal"/>
     <exclude domain="database" path="martinu_financials_db-shm"/>

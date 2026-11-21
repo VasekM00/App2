@@ -1,22 +1,19 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,23 +44,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ImportedBankTransactionEntity
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
-import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCZK
-import com.example.util.Formatters.fmtCompact
 import java.util.Locale
 
 @Composable
@@ -153,7 +147,10 @@ fun MonthlyTransactionsCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     Surface(
                         shape = CircleShape,
@@ -169,19 +166,22 @@ fun MonthlyTransactionsCard(
                             )
                         }
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
                                 text = "Monthly Transactions",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             ColorPill(
                                 text = "${transactions.size} txs",
                                 color = BrandTeal,
                                 fontSize = 10.sp,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 horizontalPadding = 5.dp,
                                 verticalPadding = 1.dp
@@ -192,14 +192,16 @@ fun MonthlyTransactionsCard(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.5.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 IconButton(
                     onClick = { isExpanded = !isExpanded },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -218,7 +220,7 @@ fun MonthlyTransactionsCard(
                     onValueChange = { searchQuery = it },
                     placeholder = {
                         Text(
-                            text = "Search merchant, note, or category...",
+                            text = "Search merchant, note, or category",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -233,11 +235,11 @@ fun MonthlyTransactionsCard(
                     },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(48.dp)) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
                                     contentDescription = "Clear search",
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
@@ -250,28 +252,25 @@ fun MonthlyTransactionsCard(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("transactions_search_field")
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Filter Strip
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                ChipWrapRow(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     filterLabels.forEachIndexed { index, label ->
                         FilterChip(
                             selected = activeFilterIndex == index,
                             onClick = { selectedFilterIndex = index },
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                             label = {
                                 Text(
                                     text = label,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     softWrap = false
@@ -353,8 +352,12 @@ fun MonthlyTransactionsCard(
                             text = "Showing ${filteredTransactions.size} of ${transactions.size}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
+                                fontFamily = BodyFontFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -373,9 +376,11 @@ fun MonthlyTransactionsCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     color = netColor
-                                )
+                                ),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -409,7 +414,8 @@ private fun TransactionRowItem(
     tx: ImportedBankTransactionEntity,
     onClick: (() -> Unit)? = null
 ) {
-    val isCredit = tx.amount > 0
+    val safeAmount = tx.amount.finiteOrZero()
+    val isCredit = safeAmount > 0
     val amountColor = when {
         tx.isNetted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         isCredit -> GoodGreen
@@ -438,21 +444,22 @@ private fun TransactionRowItem(
     }.getOrElse { MaterialTheme.colorScheme.primary }
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (tx.isNetted) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(
-            0.5.dp,
+            1.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (tx.isNetted) 0.2f else 0.35f)
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
             .clickable { onClick?.invoke() }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 9.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -465,8 +472,8 @@ private fun TransactionRowItem(
                 Text(
                     text = displayDate,
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.5.sp,
+                        fontFamily = BodyFontFamily,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
@@ -475,10 +482,10 @@ private fun TransactionRowItem(
                 ColorPill(
                     text = bankBadgeText,
                     color = bankColor,
-                    fontSize = 8.5.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    horizontalPadding = 3.5.dp,
-                    verticalPadding = 0.5.dp
+                    horizontalPadding = 4.dp,
+                    verticalPadding = 1.dp
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -490,7 +497,7 @@ private fun TransactionRowItem(
                     Text(
                         text = primaryTitle,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.5.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (tx.isNetted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                             textDecoration = if (tx.isNetted) TextDecoration.LineThrough else null
@@ -517,7 +524,7 @@ private fun TransactionRowItem(
                                 Text(
                                     text = if (tx.nettingReason.isNotBlank()) tx.nettingReason else "Netted internal transfer",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 9.5.sp,
+                                        fontSize = 10.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     maxLines = 1,
@@ -532,17 +539,17 @@ private fun TransactionRowItem(
                             ColorPill(
                                 text = catLabel,
                                 color = categoryColor,
-                                fontSize = 8.5.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 horizontalPadding = 4.dp,
-                                verticalPadding = 0.5.dp
+                                verticalPadding = 1.dp
                             )
                             if (tx.message.isNotBlank() && tx.counterpartyName.isNotBlank()) {
                                 Text(
                                     text = tx.message,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 9.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -553,15 +560,15 @@ private fun TransactionRowItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             // Right block: Amount
             Text(
-                text = (if (isCredit) "+" else "") + fmtCZK(tx.amount),
+                text = (if (isCredit) "+" else "") + fmtCZK(safeAmount),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.5.sp,
+                    fontFamily = BodyFontFamily,
+                    fontSize = 12.sp,
                     color = amountColor,
                     textDecoration = if (tx.isNetted) TextDecoration.LineThrough else null
                 ),

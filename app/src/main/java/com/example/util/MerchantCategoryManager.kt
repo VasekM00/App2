@@ -1,8 +1,10 @@
 package com.example.util
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import org.json.JSONObject
+import java.util.Locale
 
 /**
  * Manages persistent user-defined merchant category overrides stored in SharedPreferences.
@@ -13,16 +15,24 @@ object MerchantCategoryManager {
 
     private const val PREFS_NAME = "merchant_category_overrides"
     private const val KEY_OVERRIDES_JSON = "overrides_json"
+    private const val MAX_RULES_JSON_CHARS = 2_000_000
+    private val prefsLock = Any()
+
+    fun canonicalRuleKey(merchantPattern: String): String =
+        CzechMerchantCatalog.normalizeSimple(merchantPattern)
+            .ifBlank { merchantPattern.trim().lowercase(Locale.ROOT) }
 
     fun parseRulesFromJson(jsonStr: String): Map<String, BankTransactionType> {
-        if (jsonStr.isBlank()) return emptyMap()
-        val map = mutableMapOf<String, BankTransactionType>()
+        if (jsonStr.isBlank() || jsonStr.length > MAX_RULES_JSON_CHARS) return emptyMap()
+        val map = linkedMapOf<String, BankTransactionType>()
         try {
             val json = JSONObject(jsonStr)
             val keys = json.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
-                val catName = json.optString(key)
+                if (key.isBlank() || json.isNull(key)) continue
+                val catName = json.optString(key, "").trim()
+                if (catName.isEmpty()) continue
                 try {
                     val cat = BankTransactionType.valueOf(catName)
                     map[key] = cat
@@ -39,48 +49,84 @@ object MerchantCategoryManager {
     fun serializeRulesToJson(rules: Map<String, BankTransactionType>): String {
         val json = JSONObject()
         for ((k, v) in rules) {
-            json.put(k, v.name)
+            if (k.isNotBlank()) {
+                json.put(k, v.name)
+            }
         }
         return json.toString()
     }
 
-    fun getOverrides(context: Context): Map<String, BankTransactionType> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun readOverridesLocked(prefs: SharedPreferences): Map<String, BankTransactionType> {
         val jsonStr = prefs.getString(KEY_OVERRIDES_JSON, null) ?: return emptyMap()
         return parseRulesFromJson(jsonStr)
     }
 
+    fun getOverrides(context: Context): Map<String, BankTransactionType> = synchronized(prefsLock) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        readOverridesLocked(prefs)
+    }
+
     fun saveOverride(context: Context, merchantPattern: String, category: BankTransactionType) {
-        val cleanPattern = CzechMerchantCatalog.normalizeSimple(merchantPattern).ifBlank { merchantPattern.trim().lowercase() }
+        val cleanPattern = canonicalRuleKey(merchantPattern)
         if (cleanPattern.isBlank()) return
 
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val currentMap = getOverrides(context).toMutableMap()
-        currentMap[cleanPattern] = category
-
-        val json = JSONObject()
-        for ((k, v) in currentMap) {
-            json.put(k, v.name)
+        synchronized(prefsLock) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val currentMap = readOverridesLocked(prefs).toMutableMap()
+            currentMap[cleanPattern] = category
+            prefs.edit { putString(KEY_OVERRIDES_JSON, serializeRulesToJson(currentMap)) }
         }
-        prefs.edit { putString(KEY_OVERRIDES_JSON, json.toString()) }
+    }
+
+    fun saveAllOverrides(context: Context, overrides: Map<String, BankTransactionType>) {
+        val normalized = linkedMapOf<String, BankTransactionType>()
+        for ((pattern, category) in overrides) {
+            val cleanPattern = canonicalRuleKey(pattern)
+            if (cleanPattern.isNotBlank()) {
+                normalized[cleanPattern] = category
+            }
+        }
+        synchronized(prefsLock) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit {
+                if (normalized.isEmpty()) {
+                    remove(KEY_OVERRIDES_JSON)
+                } else {
+                    putString(KEY_OVERRIDES_JSON, serializeRulesToJson(normalized))
+                }
+            }
+        }
     }
 
     fun removeOverride(context: Context, merchantPattern: String) {
-        val cleanPattern = CzechMerchantCatalog.normalizeSimple(merchantPattern).ifBlank { merchantPattern.trim().lowercase() }
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val currentMap = getOverrides(context).toMutableMap()
-        currentMap.remove(cleanPattern)
-        currentMap.remove(merchantPattern.trim().lowercase())
-
-        val json = JSONObject()
-        for ((k, v) in currentMap) {
-            json.put(k, v.name)
+        val cleanPattern = canonicalRuleKey(merchantPattern)
+        val rawLower = merchantPattern.trim().lowercase(Locale.ROOT)
+        synchronized(prefsLock) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val currentMap = readOverridesLocked(prefs).toMutableMap()
+            if (cleanPattern.isNotBlank()) {
+                currentMap.remove(cleanPattern)
+            }
+            if (rawLower.isNotBlank()) {
+                currentMap.remove(rawLower)
+            }
+            if (cleanPattern.isNotBlank()) {
+                currentMap.keys.removeAll { existing -> canonicalRuleKey(existing) == cleanPattern }
+            }
+            prefs.edit {
+                if (currentMap.isEmpty()) {
+                    remove(KEY_OVERRIDES_JSON)
+                } else {
+                    putString(KEY_OVERRIDES_JSON, serializeRulesToJson(currentMap))
+                }
+            }
         }
-        prefs.edit { putString(KEY_OVERRIDES_JSON, json.toString()) }
     }
 
     fun clearOverrides(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit { remove(KEY_OVERRIDES_JSON) }
+        synchronized(prefsLock) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit { remove(KEY_OVERRIDES_JSON) }
+        }
     }
 }

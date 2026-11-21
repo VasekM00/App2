@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,17 +33,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.CrossStatementAuditReport
 import com.example.util.Formatters.fmtCZK
 
@@ -50,6 +54,8 @@ fun CrossAccountNettingAuditDialog(
     auditReport: CrossStatementAuditReport,
     onDismiss: () -> Unit
 ) {
+    val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -57,10 +63,13 @@ fun CrossAccountNettingAuditDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
+                .heightIn(max = maxDialogHeight)
+                .imePadding()
                 .padding(vertical = 24.dp)
                 .testTag("cross_account_netting_dialog"),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
@@ -76,7 +85,10 @@ fun CrossAccountNettingAuditDialog(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     ) {
                         Surface(
                             shape = CircleShape,
@@ -92,28 +104,32 @@ fun CrossAccountNettingAuditDialog(
                                 )
                             }
                         }
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Cross-Account Netting Audit",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 17.sp,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${auditReport.yearMonth} · Cross-Statement Reconciliation",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -157,10 +173,10 @@ fun CrossAccountNettingAuditDialog(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = fmtCZK(auditReport.totalNettedAmount),
+                            text = fmtCZK(auditReport.totalNettedAmount.finiteOrZero()),
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = GoodGreen,
                                 fontSize = 22.sp
                             )
@@ -181,7 +197,7 @@ fun CrossAccountNettingAuditDialog(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
@@ -195,15 +211,20 @@ fun CrossAccountNettingAuditDialog(
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp)
                                 )
                                 Text(
-                                    text = fmtCZK(auditReport.combinedEmergencyReserve ?: 0.0),
+                                    text = fmtCZK((auditReport.combinedEmergencyReserve ?: 0.0).finiteOrZero()),
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = BodyFontFamily,
                                         color = BrandTeal
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                             Spacer(modifier = Modifier.height(6.dp))
@@ -212,22 +233,30 @@ fun CrossAccountNettingAuditDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = bank,
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 8.dp)
                                     )
                                     Text(
-                                        text = fmtCZK(bal),
+                                        text = fmtCZK(bal.finiteOrZero()),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 11.5.sp,
-                                            fontFamily = FontFamily.Monospace,
+                                            fontFamily = BodyFontFamily,
                                             fontWeight = FontWeight.Medium
-                                        )
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -268,12 +297,12 @@ fun CrossAccountNettingAuditDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 1. Matched Cross-Account Pairs
-                        items(
+                        itemsIndexed(
                             items = auditReport.matchedPairs,
-                            key = { "${it.debitTx.id}_${it.creditTx.id}" }
-                        ) { pair ->
+                            key = { idx, pair -> "pair_${idx}_${pair.debitTx.id}_${pair.creditTx.id}" }
+                        ) { _, pair ->
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
@@ -286,7 +315,10 @@ fun CrossAccountNettingAuditDialog(
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(end = 8.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.SwapHoriz,
@@ -299,26 +331,31 @@ fun CrossAccountNettingAuditDialog(
                                                 style = MaterialTheme.typography.labelMedium.copy(
                                                     fontWeight = FontWeight.Bold,
                                                     color = MaterialTheme.colorScheme.onSurface
-                                                )
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                         ColorPill(
                                             text = "Matched (±${pair.daysApart}d)",
                                             color = BrandTeal,
                                             fontSize = 9.5.sp,
+                                            fontFamily = BodyFontFamily,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = "Outflow: ${pair.debitTx.date}",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontSize = 10.5.sp,
+                                                    fontFamily = BodyFontFamily,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             )
@@ -326,18 +363,21 @@ fun CrossAccountNettingAuditDialog(
                                                 text = "Inflow: ${pair.creditTx.date}",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     fontSize = 10.5.sp,
+                                                    fontFamily = BodyFontFamily,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             )
                                         }
                                         Text(
-                                            text = fmtCZK(pair.amount),
+                                            text = fmtCZK(pair.amount.finiteOrZero()),
                                             style = MaterialTheme.typography.labelLarge.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                fontFamily = FontFamily.Monospace,
+                                                fontFamily = BodyFontFamily,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 fontSize = 13.sp
-                                            )
+                                            ),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -345,14 +385,14 @@ fun CrossAccountNettingAuditDialog(
                         }
 
                         // 2. Single-Side Self Transfers
-                        items(
+                        itemsIndexed(
                             items = auditReport.singleSideNettedTransfers,
-                            key = { it.id }
-                        ) { tx ->
+                            key = { idx, tx -> "single_${idx}_${tx.id}_${tx.date}" }
+                        ) { _, tx ->
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -370,7 +410,7 @@ fun CrossAccountNettingAuditDialog(
                                             Text(
                                                 text = tx.date,
                                                 style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontFamily = FontFamily.Monospace,
+                                                    fontFamily = BodyFontFamily,
                                                     fontSize = 10.5.sp,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -403,13 +443,15 @@ fun CrossAccountNettingAuditDialog(
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = fmtCZK(kotlin.math.abs(tx.amount)),
+                                        text = fmtCZK(kotlin.math.abs(tx.amount.finiteOrZero())),
                                         style = MaterialTheme.typography.labelLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace,
+                                            fontFamily = BodyFontFamily,
                                             color = MaterialTheme.colorScheme.onSurface,
                                             fontSize = 12.5.sp
-                                        )
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -422,14 +464,18 @@ fun CrossAccountNettingAuditDialog(
                 // Dismiss Button
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandTeal)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandTeal,
+                        contentColor = OnBrandTeal
+                    )
                 ) {
                     Text(
                         text = "Close Audit",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

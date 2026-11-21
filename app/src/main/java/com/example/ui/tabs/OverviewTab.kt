@@ -14,19 +14,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -36,14 +35,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,53 +48,64 @@ import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
+import com.example.ui.components.CapitalGainsTimeTestCard
 import com.example.ui.components.CardHeaderPill
-import com.example.ui.components.ColorPill
 import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.components.KpiCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
-import com.example.ui.components.NetWorthChart
+import com.example.ui.components.charts.NetWorthChart
+import com.example.ui.components.QuickGuideDialog
 import com.example.ui.components.infoTapHold
 import com.example.ui.components.rememberMetricInfoState
-import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.DisplayFontFamily
 import com.example.ui.theme.GoodGreen
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
+import kotlin.math.roundToInt
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OverviewTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity> = emptyList(),
-    actionStates: Map<String, Boolean> = emptyMap(),
-    onToggleAction: ((year: Int, actionId: String, currentIsDone: Boolean) -> Unit)? = null,
     onNavigateToIncome: (() -> Unit)? = null,
     onNavigateToProjections: (() -> Unit)? = null,
-    onNavigateToPlan: (() -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    isDarkTheme: Boolean = false,
-    onToggleDarkTheme: (() -> Unit)? = null,
-    onOpenExportReportDialog: (() -> Unit)? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
-    onToggleSearch: (() -> Unit)? = null,
     onNavigateToNetWorth: (() -> Unit)? = null,
     onNavigateToEmergencyReserve: (() -> Unit)? = null,
     onNavigateToSavingsRate: (() -> Unit)? = null,
+    onNavigateToSandbox: (() -> Unit)? = null,
+    onOpenQuickGuide: (() -> Unit)? = null,
+    scrollToEmergencyReserveTrigger: Int = 0,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
     val infoState = rememberMetricInfoState()
+    var showLocalQuickGuide by remember { mutableStateOf(false) }
+    val emergencyReserveRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(scrollToEmergencyReserveTrigger) {
+        if (scrollToEmergencyReserveTrigger > 0) {
+            emergencyReserveRequester.bringIntoView()
+        }
+    }
 
     val incomeInfo = MetricInfo(
         title = "Household Net Inflows",
         category = "Cash Flow & Inflows",
         formulaOrRule = "Salaries + Benefits + Vouchers + Gifts + Inflows + Lump Sums",
-        explanation = "Measures true monthly cash generation after all personal Czech taxes (15%/23%), social security (7.1%), and health insurance (4.5%). Includes meal vouchers, tax-exempt family gifts (§ 10 ZDP), parental allowance, and lecturing.",
+        explanation = "Measures true monthly cash generation after all personal Czech taxes (15%/23%), social security (7.1%), and health insurance (4.5%). Includes meal vouchers, tax-exempt family gifts, parental allowance, and lecturing.",
         statutoryReference = "Act No. 586/1992 Coll. (Income Tax Act)",
         practicalImplication = "Accurately represents the total disposable cash generated by the household each month for living expenses and DCA investing.",
         accentColor = BrandTeal
@@ -111,10 +119,10 @@ fun OverviewTab(
     val fireTargetInfo = MetricInfo(
         title = "Base FIRE Target Capital",
         category = "Retirement Actuarial Target",
-        formulaOrRule = "Target = (Annual Living Burn - State Pension) / SWR + Bridge Deficit",
-        explanation = "Calculated in today's constant purchasing power (real CZK). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at $pensionAgeDesc.",
+        formulaOrRule = "Target = (Annual Living Burn − State Pension) ÷ SWR + Bridge Deficit",
+        explanation = "Calculated in today's constant purchasing power (real Kč). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at $pensionAgeDesc.",
         statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act)",
-        practicalImplication = "Every 1,000 CZK/month reduction in permanent baseline living expenses reduces required FIRE capital by ~342,000 CZK at a 3.5% SWR.",
+        practicalImplication = "Every 1\u00A0000\u00A0Kč/month reduction in permanent baseline living expenses reduces required FIRE capital by ${fmtCompact(1000.0 * state.perpetualFireMultiplier)} at your current ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR.",
         accentColor = BrandGold
     )
 
@@ -136,10 +144,10 @@ fun OverviewTab(
     val savingsRateInfo = MetricInfo(
         title = "Monthly Investment & Savings Rate",
         category = "Cash Flow & DCA Firepower",
-        formulaOrRule = "Investment Rate = (${fmtCZK(state.investMonthlyTotal)} Invested / ${fmtCZK(state.currentIncome.totalMonthly)} Net Income) = ${fmtPct(state.savingsRatePct, 1)}",
-        explanation = "Measures the percentage of total net household income actively invested each month via automated DCA (${fmtCZK(state.investMonthlyTotal)}/mo). By comparison, your total monthly cash surplus (income minus living expenses) is ${fmtCZK(monthlySurplus)}/mo (${fmtPct(surplusRatePct, 1)} of net inflows).",
-        statutoryReference = "Pure Mathematical Actuarial Lever",
-        practicalImplication = "Channeling a larger share of your ${fmtCZK(monthlySurplus)}/mo surplus into automated ETF and DIP contributions raises your active investment rate and accelerates your FIRE horizon.",
+        formulaOrRule = "Savings Rate = (${fmtCZK(state.investMonthlyTotal)} Invested / ${fmtCZK(state.currentIncome.totalMonthly)} Net Inflows) = ${fmtPct(state.savingsRatePct, 1)}",
+        explanation = "Measures the share of monthly household net cash actively invested through automated DCA (${fmtCZK(state.investMonthlyTotal)} monthly). Your total monthly surplus (inflows minus living expenses) is ${fmtCZK(monthlySurplus)} monthly (${fmtPct(surplusRatePct, 1)} of net inflows).",
+        statutoryReference = "DCA Wealth Building Strategy & DIP Pension Tax Shield",
+        practicalImplication = "Directing a higher share of your monthly surplus (${fmtCZK(monthlySurplus)}) into automated ETF and DIP contributions increases your savings rate and shortens your timeline to financial independence.",
         accentColor = GoodGreen
     )
 
@@ -153,14 +161,10 @@ fun OverviewTab(
         // Pinned Hero Header moved inside scrollable column (UX-01)
         HeroHeader(
             state = state,
-            isDarkTheme = isDarkTheme,
-            onToggleDarkTheme = { onToggleDarkTheme?.invoke() },
-            onOpenExportReportDialog = { onOpenExportReportDialog?.invoke() },
-            onOpenSettings = { onOpenSettings?.invoke() },
-            onToggleSearch = onToggleSearch,
             onNavigateToNetWorth = { onNavigateToNetWorth?.invoke() ?: onNavigateToProjections?.invoke() },
             onNavigateToEmergencyReserve = { onNavigateToEmergencyReserve?.invoke() },
-            onNavigateToSavingsRate = { onNavigateToSavingsRate?.invoke() ?: onNavigateToIncome?.invoke() }
+            onNavigateToSavingsRate = { onNavigateToSavingsRate?.invoke() ?: onNavigateToIncome?.invoke() },
+            onOpenQuickGuide = { onOpenQuickGuide?.invoke() ?: run { showLocalQuickGuide = true } }
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -173,9 +177,9 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Household Net / Mo",
+                title = "Monthly Income",
                 value = fmtCZK(state.currentIncome.totalMonthly),
-                hint = "Combined family income",
+                hint = if (state.settings.isSingleHousehold) "Net monthly income" else "Combined take-home",
                 accentColor = BrandTeal,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_family_net",
@@ -185,9 +189,9 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Base FIRE Target",
+                title = "Freedom Goal",
                 value = fmtCompact(state.fireBaseTargetToday),
-                hint = "Today's purchasing power",
+                hint = "Target in today's Kč",
                 accentColor = BrandGold,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_fire_target",
@@ -206,12 +210,12 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Projected FIRE Year",
+                title = "Target FIRE Year",
                 value = firePoint?.let { "${it.year}" } ?: "${state.settings.baseYear + 35}+",
                 hint = firePoint?.let {
                     val yearsAway = (it.year - state.settings.baseYear).coerceAtLeast(0)
-                    if (yearsAway == 0) "Target reached" else "In $yearsAway years"
-                } ?: "Beyond 35y horizon",
+                    if (yearsAway == 0) "Goal reached" else "In $yearsAway years"
+                } ?: "Beyond 35 years",
                 accentColor = BrandBlue,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_fire_age",
@@ -221,9 +225,9 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Monthly DCA Firepower",
+                title = "Monthly Investing",
                 value = fmtCZK(state.investMonthlyTotal),
-                hint = "${fmtPct(state.savingsRatePct, 1)} savings rate",
+                hint = "${fmtPct(state.savingsRatePct, 1)} of income",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_savings_rate",
@@ -238,8 +242,10 @@ fun OverviewTab(
         // Emergency Reserve & Runway Goal Tracker Widget
         EmergencyReserveWidget(
             state = state,
+            modifier = Modifier.bringIntoViewRequester(emergencyReserveRequester),
             onShowInfo = { infoState.show(it) },
-            onUpdateSettings = onUpdateSettings
+            onUpdateSettings = onUpdateSettings,
+            onReduceSettings = onReduceSettings
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -248,7 +254,8 @@ fun OverviewTab(
         NetWorthChart(
             data = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory,
             cpiInflationPct = state.settings.cpiInflationPct,
-            ledgerEntries = ledgerEntries
+            ledgerEntries = ledgerEntries,
+            onOpenSandbox = onNavigateToSandbox
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -280,18 +287,29 @@ fun OverviewTab(
             title = "Historical Survival Probability",
             category = "Actuarial Longevity & Sequence Risk",
             formulaOrRule = "Survival Rate = Non-depleted Paths / Total Simulated Historical Market Paths",
-            explanation = "Tests your decumulation strategy through 100+ years of historical market cycles and drawdown periods (including the Great Depression, 1970s stagflation, 2000 dot-com bust, and 2008 GFC) with sequence-of-returns risk.",
-            statutoryReference = "Historical Block-Bootstrap Simulation",
+            explanation = "Tests your decumulation strategy through 56 years (1970–2025) of global equity market cycles and drawdown periods (including 1970s stagflation, 2000 dot-com bust, and 2008 global financial crisis) with sequence-of-returns risk.",
+            statutoryReference = "Historical Block-Bootstrap Simulation (1970–2025)",
             practicalImplication = "A rate above 90% provides strong actuarial confidence that your portfolio will outlive you without depleting principal.",
             accentColor = if (survivalRate >= 95.0) GoodGreen else BrandTeal
         )
 
-        val taxRefundTotal = state.taxReturnHelper.totalIncrementalValue
+        val taxHelper = state.taxReturnHelper
+        val taxRefundTotal = taxHelper.totalIncrementalValue
+        val taxReliefParts = buildList {
+            if (taxHelper.spouseCredit > 0.0) add("Partner Credit (${fmtCZK(taxHelper.spouseCredit)})")
+            if (taxHelper.childBonus > 0.0) add("Child Tax Credit (${fmtCZK(taxHelper.childBonus)})")
+            if (taxHelper.dipSaving > 0.0) add("DIP & DPS Tax Deduction (${fmtCZK(taxHelper.dipSaving)})")
+        }
+        val taxFormulaText = if (taxReliefParts.isNotEmpty()) {
+            "Annual Relief = ${taxReliefParts.joinToString(" + ")} (Total: ${fmtCZK(taxRefundTotal)}/year)"
+        } else {
+            "Annual Relief = Partner Credit (${fmtCZK(taxHelper.spouseCredit)}) + Child Tax Credit (${fmtCZK(taxHelper.childBonus)}) + DIP & DPS Tax Deduction (${fmtCZK(taxHelper.dipSaving)}) (Total: ${fmtCZK(taxRefundTotal)}/year)"
+        }
         val taxRefundInfo = MetricInfo(
             title = "Annual Tax Refund & Relief",
             category = "Czech Tax Optimization",
-            formulaOrRule = "Annual Refund = Partner Credit (24 840 Kč) + Child Tax Credit (15 204 Kč) + DIP & DPS Deduction (up to 7 200 Kč)",
-            explanation = "This is not direct money you save from monthly spending. Rather, it is an annual statutory tax refund / cash rebate from the state (daňová vratka / daňový bonus) paid out in spring after your annual tax reconciliation (roční zúčtování daně) or via your tax return (daňové přiznání).",
+            formulaOrRule = taxFormulaText,
+            explanation = "This is not direct money you save from monthly spending. Rather, it is an annual statutory tax refund or cash rebate from the state paid out in spring after your annual employer tax reconciliation or via your personal income tax return.",
             statutoryReference = "§ 15a, § 35ba, § 35c Act No. 586/1992 Coll. (ZDP)",
             practicalImplication = "Because this is an annual cash rebate returned to you by the tax authority, it represents unbudgeted lump-sum liquidity each spring that can be directly invested into your portfolio without reducing your monthly living budget.",
             accentColor = GoodGreen
@@ -303,13 +321,12 @@ fun OverviewTab(
                 .testTag("strategic_highlights_card"),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 CardHeaderPill(
-                    title = "Strategic Highlights",
-                    subtitle = "Executive financial readiness, bridge & resilience · Tap for info",
-                    badgeText = "STRATEGY",
+                    title = "Plan Health & Tax Relief",
+                    subtitle = "Tap any tile to see how it is calculated",
                     accentColor = BrandTeal,
                     icon = Icons.Default.AutoAwesome
                 )
@@ -321,43 +338,37 @@ fun OverviewTab(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Row 1: Pre-60 Liquid Bridge + Coast FIRE
+                    // Row 1: Early-Access Bridge + Coast FIRE
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        val bridgeValue = if (state.isLiquidBridgeFundedToday) "100% Funded" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
-                        val bridgeSub = if (state.isLiquidBridgeFundedToday) "Portu covers pre-60 gap" else "Taxable capital needed"
-                        val bridgeBadge = if (state.isLiquidBridgeFundedToday) "FUNDED" else "BRIDGE GAP"
+                        val bridgeValue = if (state.isLiquidBridgeFundedToday) "Ready (100%)" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
+                        val bridgeSub = if (state.isLiquidBridgeFundedToday) "Covers pre-60 years" else "Needed before age 60"
                         val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
 
                         StrategicMetricTile(
-                            label = "Pre-60 Liquid Bridge",
+                            label = "Early-Access Bridge",
                             value = bridgeValue,
                             subLabel = bridgeSub,
                             accentColor = bridgeColor,
-                            badgeText = bridgeBadge,
-                            badgeColor = bridgeColor,
                             icon = Icons.Default.Shield,
                             info = liquidBridgeInfo,
                             onShowInfo = { infoState.show(it) },
                             modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_bridge")
                         )
 
-                        val coastValue = if (coastMilestone.isAchieved) "Achieved (100%)" else "${fmtPct(coastMilestone.progressPct, 0)} reached"
-                        val coastSub = if (coastMilestone.isAchieved) "Compounding carries to $coastTargetYear" else "Target: ${fmtCompact(coastMilestone.targetAmountToday)}"
-                        val coastBadge = if (coastMilestone.isAchieved) "SECURED" else "IN PROGRESS"
+                        val coastValue = if (coastMilestone.isAchieved) "Achieved" else "${fmtPct(coastMilestone.progressPct, 0)} funded"
+                        val coastSub = if (coastMilestone.isAchieved) "Grows by $coastTargetYear" else "Goal: ${fmtCompact(coastMilestone.targetAmountToday)}"
                         val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
 
                         StrategicMetricTile(
-                            label = "Coast FIRE Milestone",
+                            label = "Coast FIRE",
                             value = coastValue,
                             subLabel = coastSub,
                             accentColor = coastColor,
-                            badgeText = coastBadge,
-                            badgeColor = coastColor,
                             icon = Icons.Default.Star,
                             info = coastFireInfo,
                             onShowInfo = { infoState.show(it) },
@@ -365,7 +376,7 @@ fun OverviewTab(
                         )
                     }
 
-                    // Row 2: Annual Tax Relief + Historical Survival
+                    // Row 2: Annual Tax Relief + Stress Score
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -373,12 +384,10 @@ fun OverviewTab(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         StrategicMetricTile(
-                            label = "Annual Tax Relief",
+                            label = "Annual Tax Refund",
                             value = "+${fmtCZK(taxRefundTotal)}",
-                            subLabel = "Spring statutory cash rebate",
+                            subLabel = "Spring tax rebate",
                             accentColor = GoodGreen,
-                            badgeText = "TAX ALPHA",
-                            badgeColor = GoodGreen,
                             icon = Icons.Default.AccountBalance,
                             info = taxRefundInfo,
                             onShowInfo = { infoState.show(it) },
@@ -386,14 +395,11 @@ fun OverviewTab(
                         )
 
                         val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
-                        val survivalBadge = if (survivalRate >= 95.0) "ROBUST" else "MODERATE"
                         StrategicMetricTile(
-                            label = "100-Yr Resilience",
-                            value = "${survivalRate.toInt()}% Survival",
-                            subLabel = "Sequence risk stress tested",
+                            label = "Market Stress Score",
+                            value = "${survivalRate.roundToInt()}% Pass",
+                            subLabel = "Historical crash test",
                             accentColor = survivalColor,
-                            badgeText = survivalBadge,
-                            badgeColor = survivalColor,
                             icon = Icons.Default.CheckCircle,
                             info = survivalInfo,
                             onShowInfo = { infoState.show(it) },
@@ -404,7 +410,22 @@ fun OverviewTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(96.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Capital Gains 3-Year Time Test Tracker
+        CapitalGainsTimeTestCard(
+            state = state,
+            onShowInfo = { infoState.show(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    if (showLocalQuickGuide && onOpenQuickGuide == null) {
+        QuickGuideDialog(
+            onDismiss = { showLocalQuickGuide = false },
+            onGoToSetup = onOpenSettings
+        )
     }
 
     // Modal Metric Info Dialog
@@ -423,14 +444,12 @@ private fun StrategicMetricTile(
     icon: ImageVector,
     info: MetricInfo,
     onShowInfo: (MetricInfo) -> Unit,
-    badgeText: String? = null,
-    badgeColor: Color = accentColor,
     modifier: Modifier = Modifier
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .infoTapHold(info, onShowInfo)
@@ -440,48 +459,30 @@ private fun StrategicMetricTile(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 12.dp)
         ) {
-            // Header Row: Icon circle on left, Status Badge on right
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(accentColor.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                if (badgeText != null) {
-                    ColorPill(
-                        text = badgeText,
-                        color = badgeColor,
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        horizontalPadding = 6.dp,
-                        verticalPadding = 2.dp
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(15.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Dedicated full-width Title: 2 lines allowed, softWrap = true, NO clipping!
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.5.sp,
-                    lineHeight = 15.sp
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 ),
                 maxLines = 2,
                 softWrap = true,
@@ -493,24 +494,27 @@ private fun StrategicMetricTile(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium.copy(
+                    fontFamily = DisplayFontFamily,
                     fontWeight = FontWeight.Bold,
+                    fontFeatureSettings = "tnum",
                     color = accentColor,
-                    fontSize = 15.sp
+                    fontSize = 16.sp
                 ),
-                maxLines = 1,
+                maxLines = 2,
+                softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = subLabel,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
                 ),
-                maxLines = 2,
+                maxLines = 3,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )

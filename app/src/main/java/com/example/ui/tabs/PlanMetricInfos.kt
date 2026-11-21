@@ -10,7 +10,7 @@ internal object PlanMetricInfos {
         formulaOrRule = "Target / (1 + Real CAGR)^Years_to_Pension",
         explanation = "The amount of invested capital needed today such that, with zero additional contributions, it will compound into your full retirement nest egg by statutory state pension age.",
         practicalImplication = "Reaching Coast FIRE eliminates survival employment pressure; you only need to earn enough to cover current living burn.",
-        accentColor = Color(0xFF0F766E)
+        accentColor = Color(0xFF0D9488)
     )
 
     val baristaFire = MetricInfo(
@@ -19,7 +19,7 @@ internal object PlanMetricInfos {
         formulaOrRule = "(50% Baseline Living Costs) / SWR",
         explanation = "Financial milestone where private portfolio passive returns cover 50% of current household living expenses, with the remaining 50% covered by part-time, low-stress, freelance, or passion work.",
         practicalImplication = "Allows stepping down from high-stress corporate careers significantly earlier while portfolio capital continues compounding toward full FIRE.",
-        accentColor = Color(0xFF0F766E)
+        accentColor = Color(0xFF0D9488)
     )
 
     val leanFire = MetricInfo(
@@ -28,7 +28,7 @@ internal object PlanMetricInfos {
         formulaOrRule = "(75% Baseline Living Costs) / SWR",
         explanation = "Financial independence covering 100% of essential non-negotiable living expenses (housing, utilities, groceries, healthcare) without discretionary lifestyle costs.",
         practicalImplication = "Guarantees absolute basic survival security even in catastrophic economic scenarios.",
-        accentColor = Color(0xFF0F766E)
+        accentColor = Color(0xFF0D9488)
     )
 
     val standardFire = MetricInfo(
@@ -50,48 +50,38 @@ internal object PlanMetricInfos {
     )
 
     val dipDeduction = MetricInfo(
-        title = "DIP (Dlouhodobý investiční produkt)",
+        title = "DIP (Long-Term Investment Product)",
         category = "Retirement Tax Shield",
-        formulaOrRule = "§ 15a ZDP · Up to 48 000 CZK annual personal tax deduction",
-        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48 000 CZK combined with DPS saves 7 200 CZK (15% bracket) or 11 040 CZK (23% bracket) per person annually.\n\n" +
+        formulaOrRule = "Up to 48,000 Kč annual personal tax deduction",
+        explanation = "Czech long-term investment product allowing you to buy global index ETFs with pre-tax income. Up to 48 000 Kč combined with DPS saves 7 200 Kč (15% bracket) or 11 040 Kč (23% bracket) per person annually.\n\n" +
                 "Statutory Deduction Matrix:\n" +
-                "• 1 000 CZK/mo (12 000 CZK) → Saves 1 800 CZK (15%)\n" +
-                "• 2 000 CZK/mo (24 000 CZK) → Saves 3 600 CZK (15%)\n" +
-                "• 3 000 CZK/mo (36 000 CZK) → Saves 5 400 CZK (15%)\n" +
-                "• 4 000 CZK/mo (48 000 CZK) → Max 7 200 CZK (15%) / 11 040 CZK (23%)\n\n" +
-                "In two-income households, both partners can independently claim up to 48 000 CZK each (saving up to 14 400 CZK combined annually). Note: Deductions require personal taxable income (§ 15 ZDP) and cannot be transferred between partners.",
+                "- 1 000 Kč monthly (12 000 Kč) -> Saves 1 800 Kč (15%)\n" +
+                "- 2 000 Kč monthly (24 000 Kč) -> Saves 3 600 Kč (15%)\n" +
+                "- 3 000 Kč monthly (36 000 Kč) -> Saves 5 400 Kč (15%)\n" +
+                "- 4 000 Kč monthly (48 000 Kč) -> Max 7 200 Kč (15%) / 11 040 Kč (23%)\n\n" +
+                "In two-income households, both partners can independently claim up to 48 000 Kč each (saving up to 14 400 Kč combined annually). Note: Deductions require personal taxable income and cannot be transferred between partners.",
         statutoryReference = "§ 15a Act No. 586/1992 Coll. (Income Tax Act)",
         practicalImplication = "Requires maintaining the contract for at least 120 months (10 years) and withdrawing only after age 60 for tax-free maturity without clawbacks.",
-        accentColor = Color(0xFF16A34A)
+        accentColor = Color(0xFF059669)
     )
 
     val dpsLepsiPenzijko = MetricInfo(
-        title = "DPS 'Lepší Penzijko' Reform (Proposed 2027)",
+        title = "DPS Pension Reform (Proposed 2027)",
         category = "State Subsidy & Pension",
-        formulaOrRule = "20% state match up to 340 CZK/mo on deposits up to 1,700 CZK/mo",
-        explanation = "State supplementary pension savings. Current statutory law provides a 20% flat match (up to 340 CZK/mo) on monthly contributions up to 1,700 CZK/mo.",
+        formulaOrRule = "20% state match up to 340 Kč monthly on deposits up to 1,700 Kč monthly",
+        explanation = "State supplementary pension savings. Current statutory law provides a 20% flat match (up to 340 Kč monthly) on monthly contributions up to 1,700 Kč monthly.",
         statutoryReference = "Act No. 427/2011 Coll.",
-        practicalImplication = "Under current statutory law, deposits between 500 CZK and 1,700 CZK receive a 20% state subsidy (max 340 CZK/mo).",
-        accentColor = Color(0xFF0F766E)
+        practicalImplication = "Under current statutory law, deposits between 500 Kč and 1,700 Kč receive a 20% state subsidy (max 340 Kč monthly).",
+        accentColor = Color(0xFF0D9488)
     )
 
     val dpsAge36 = MetricInfo(
         title = "Age 36 One-Third DPS Withdrawal (Proposed 2027)",
-        category = "Statutory Liquidity Option",
+        category = "Early Liquidity Option",
         formulaOrRule = "Proposed 2027 Reform · 1/3 penalty-free withdrawal",
         explanation = "Proposed reform feature targeting 1. 1. 2027 effect (not available under current 2026 law). Under the proposal, participants in DPS participation funds who reach age 36 with at least 120 months of contributions can withdraw up to one-third of their accumulated balance without penalty or clawbacks.",
-        statutoryReference = "Government Draft Amending Act No. 427/2011 Coll. (Lepší penzijko, expected 2027)",
+        statutoryReference = "Government Draft Amending Act No. 427/2011 Coll. (Proposed 2027)",
         practicalImplication = "Provides intermediate liquidity for home down payment or major life milestone without forfeiting the pension plan.",
-        accentColor = Color(0xFF0F766E)
-    )
-
-    val etfTimeTest = MetricInfo(
-        title = "3-Year ETF Time Test Exemption",
-        category = "Czech Capital Gains Tax",
-        formulaOrRule = "§ 4 odst. 1 písm. u) ZDP · 3-year holding test",
-        explanation = "Capital gains from selling securities (stocks, ETFs like VWCE/SPPW) held by a natural person for more than 3 years are 100% exempt from Czech personal income tax, health insurance, and social security (subject to 40M CZK annual exempt ceiling under 2025+ consolidation package).",
-        statutoryReference = "§ 4 odst. 1 písm. u) Act No. 586/1992 Coll.",
-        practicalImplication = "Allows broad liquid ETF portfolios to compound and be liquidated during FIRE with completely tax-free cash returns.",
-        accentColor = Color(0xFF16A34A)
+        accentColor = Color(0xFF0D9488)
     )
 }

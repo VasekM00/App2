@@ -34,6 +34,7 @@ enum class BankTransactionType {
     SALARY_VACLAV,
     SALARY_ELEONORA,
     PARENTAL_BENEFIT,
+    FAMILY_GIFT,
     OTHER_INFLOW,
     HOUSING_RENT,
     GROCERIES,
@@ -65,8 +66,15 @@ data class ParsedBankTransaction(
     val isNetted: Boolean = (category == BankTransactionType.INTERNAL_TRANSFER),
     val nettingReason: String = "",
     val bankType: BankType = BankType.GENERIC,
-    val isExcluded: Boolean = false
-) : java.io.Serializable
+    val isExcluded: Boolean = false,
+    val originalCurrency: String? = null,
+    val originalAmount: Double? = null,
+    val exchangeRate: Double? = null
+) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 data class StatementParseSummary(
     val detectedBank: BankType,
@@ -87,8 +95,12 @@ data class StatementParseSummary(
     val totalNettedAmount: Double = 0.0,
     val monthEndBalance: Double? = null,
     val transactions: List<ParsedBankTransaction>,
-    val isPdfSource: Boolean = false
+    val isPdfSource: Boolean = false,
+    val monthEndBalancesByBank: Map<String, Map<String, Double>> = emptyMap()
 ) : java.io.Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
     fun toLedgerEntry(existingNotes: String = ""): LedgerEntryEntity {
         val autoNote = "Imported from ${detectedBank.name}: ${transactions.size} txs"
         val combinedNotes = if (existingNotes.isNotBlank()) "$existingNotes | $autoNote" else autoNote
@@ -124,51 +136,221 @@ object BankStatementImporter {
     /** Hard upper bound for statement imports to avoid OOM on pathological files. */
     const val MAX_STATEMENT_BYTES: Int = 25 * 1024 * 1024
 
+    // Precompiled regexes hoisted to avoid per-row/per-transaction compilation overhead
+    private val MONETA_PERIOD_REGEX = Regex("""(?i)obdob[ií]:?\s*(?:od\s*)?(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*(?:do|-)\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})""")
+    private val MONETA_REPORT_YEAR_REGEX = Regex("""(?i)výpis\s+z\s+účtu\s+č\.\s*(\d{1,2})/(\d{4})""")
+    private val MONETA_MONTH_YEAR_REGEX = Regex("""(?i)měsíc:\s*(\d{1,2})/(\d{4})""")
+    private val MONETA_OPENING_BAL_REGEX = Regex("""(?i)(?:počáteční|pocatecni)\s*(?:účetní\s*)?zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
+    private val MONETA_CLOSING_BAL_REGEX = Regex("""(?i)(?:konečný|konecny|účetní|ucetni)\s*zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
+
+    private val CSOB_PERIOD_REGEX = Regex("""(?i)obdob[ií]:\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})""")
+    private val CSOB_REPORT_YEAR_REGEX = Regex("""(?i)rok/č\.\s*výpisu:\s*(\d{4})/(\d{1,2})""")
+    private val CSOB_CASTKA_LOC_REGEX = Regex("""(?i)\b\d{1,2}\.\d{1,2}\.\d{4}\s+([A-Za-z\u00C0-\u017E].*)""")
+    private val CSOB_MERCHANT_CHARS_REGEX = Regex("""[A-Za-z0-9*._ -]+""")
+    private val CSOB_STRIP_CASTKA_REGEX = Regex("""(?i)\s*č[aá]stka:.*""")
+    private val CSOB_INCOMING_REGEX = Regex("""(?i)^\s*\d{1,2}\.\d{1,2}\.\s+p[rř][ií]choz[ií]\s+[uú]hrada(?:\s+okam[zž]it[aá])?\s+([A-Za-z\u00C0-\u017E].*?)(?:\s+\d{4,}\b|\s+[+-]?\d+,\d{2})""")
+    private val CSOB_OUTGOING_REGEX = Regex("""(?i)^\s*\d{1,2}\.\d{1,2}\.\s+odchoz[ií]\s+[uú]hrada(?:\s+okam[zž]it[aá])?\s+([A-Za-z\u00C0-\u017E].*?)(?:\s+\d{4,}\b|\s+[+-]?\d+,\d{2})""")
+
+    private val MBANK_PERIOD_REGEX = Regex("""(?i)(?:obdob[ií]|za\s+obdob[ií])[:\s]*(\d{1,2})[\./-](\d{1,2})[\./-](\d{4})\s*(?:-|do)\s*(\d{1,2})[\./-](\d{1,2})[\./-](\d{4})""")
+    private val MBANK_MONTH_YEAR_REGEX = Regex("""(?i)(?:za\s+m[eě]s[ií]c|v[yý]pis\s+za)\s*(\d{1,2})/(\d{4})""")
+    private val MBANK_ALT_MONTH_YEAR_REGEX = Regex("""(?i)(?:za\s+obdob[ií]|m[eě]s[ií]c/rok)[:\s]*(\d{4})/(\d{1,2})""")
+    private val MBANK_REPORT_YEAR_REGEX = Regex("""(?i)v[yý]pis\s+[cč]\.?\s*\d+/(\d{4})""")
+    private val MBANK_DATE_PATTERN = Regex("""^\s*(\d{1,2})[\./-](\d{1,2})(?:[\./-](\d{2,4}))?\b""")
+
+    private val YEAR_202X_REGEX = Regex("""\b(202[0-9])\b""")
+    private val TX_START_FULL_DATE_REGEX = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(.*)""")
+    private val TX_START_SHORT_DATE_REGEX = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.\s+(.*)""")
+    private val DIGITS_SPACE_ONLY_REGEX = Regex("""^\d+(\s+\d+)*$""")
+    private val DATE_BLOCKS_START_REGEX = Regex("""^\s*(\d{1,4})[\./-]\s*(\d{1,2})(?:[\./-]\s*(\d{2,4}))?\b""")
+    private val DATE_BLOCKS_ANY_REGEX = Regex("""\b(\d{1,4})[\./-]\s*(\d{1,2})[\./-]\s*(\d{2,4})\b""")
+
+    private val AMOUNT_REGEX = Regex(
+        """(?<!\w)([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})*(?:,\d{2}|\.\d{2}(?![.\d]))|\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,3}(?:,\d{3})+\.\d{2}(?![.\d])|\d+(?:,\d{2}|\.\d{2}(?![.\d]))))\s*(CZK|Kč|EUR|€|USD|\$)?\s*([+\-\u2212\u2013\u2014])?(?!\w)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val WHOLE_CURRENCY_REGEX = Regex(
+        """(?<!\w)([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})+|\d+))\s*(?:CZK|Kč|EUR|€|USD|\$)(?!\w)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val ACC_SLASH_REGEX = Regex("""\b(?:\d{1,6}-)?\d{1,10}/\d{4}\b""")
+    private val IBAN_SPACED_REGEX = Regex("""\b(CZ\d{2})[\s\u00A0]*(\d{4})[\s\u00A0]*(\d{6})[\s\u00A0]*(\d{10})\b""", RegexOption.IGNORE_CASE)
+    private val IBAN_GENERIC_REGEX = Regex("""\bCZ\d{22}\b""", RegexOption.IGNORE_CASE)
+    private val VS_EXTRACT_REGEX = Regex("""(?i)\b(?:vs|v\.s\.|var(?:iabiln[ií])?\s*symbol)[:\s]*(\d{1,10})\b""")
+
+    private val BOILERPLATE_PATTERNS = listOf(
+        Regex("""(?i)\bplatba\s+kartou\s+v\s+[čc]r\b"""),
+        Regex("""(?i)\bplatba\s+kartou\s+v\s+zahrani[čc][ií]\b"""),
+        Regex("""(?i)\bplatba\s+kartou\s+online\b"""),
+        Regex("""(?i)\bplatba\s+kartou\b"""),
+        Regex("""(?i)\btransakce\s+platebn[ií]\s+kartou\b"""),
+        Regex("""(?i)\bplatba\s+na\s+internetu\b"""),
+        Regex("""(?i)\bplatba\s+mobilem\b"""),
+        Regex("""(?i)\bbezhotovostn[ií]\s+platba\b"""),
+        Regex("""(?i)\bokam[zž]it[aá]\s+platba\b"""),
+        Regex("""(?i)\bp[rř][ií]choz[ií]\s+[uú]hrada\b"""),
+        Regex("""(?i)\bodchoz[ií]\s+[uú]hrada\b"""),
+        Regex("""(?i)\bp[rř][ií]choz[ií]\s+platba\b"""),
+        Regex("""(?i)\bodchoz[ií]\s+platba\b"""),
+        Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz\s+k\s+[uú]hrad[eě]:?\b"""),
+        Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz:?\b"""),
+        Regex("""(?i)\bp[rř][ií]kazce:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
+        Regex("""(?i)\bpl[aá]tce:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
+        Regex("""(?i)\bp[rř][ií]kazce:?\b"""),
+        Regex("""(?i)\bpl[aá]tce:?\b"""),
+        Regex("""(?i)\bmajitel\s+[uú][cč]tu:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
+        Regex("""(?i)\bmajitel\s+[uú][cč]tu:?\b"""),
+        Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+pl[aá]tce:?\b"""),
+        Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+p[rř][ií]kazce:?\b"""),
+        Regex("""(?i)\bzpr[aá]va\s+pro\s+p[rř][ií]jemce:?\b"""),
+        Regex("""(?i)\bpopis\s+transakce:?\b"""),
+        Regex("""(?i)\bdetaily\s+platby:?\b"""),
+        Regex("""(?i)\bn[aá]zev\s+proti[uú][cč]tu:?\b"""),
+        Regex("""(?i)\bm[ií]sto:?\b"""),
+        Regex("""(?i)\bn[aá]kup:?\b"""),
+        Regex("""(?i)\b[cč][ií]slo\s+karty:?\b"""),
+        Regex("""(?i)\bdatum\s+a\s+[cč]as:?\b""")
+    )
+    private val TERMINAL_SEQ_REGEX = Regex("""\b\d{6}[A-Za-z0-9]\d{8,}\b""")
+    private val ZERO_PREFIX_TOKEN_REGEX = Regex("""\b0{3,}\d*\b""")
+    private val LONG_CARD_DIGITS_REGEX = Regex("""\b\d{12,}\b""")
+    private val TIME_TOKEN_REGEX = Regex("""\b\d{1,2}:\d{2}(?::\d{2})?\b""")
+    private val INLINE_DATE_REGEX = Regex("""\b\d{1,2}[\./-]\d{1,2}(?:[\./-]\d{2,4})?\b""")
+    private val INLINE_CURRENCY_REGEX = Regex("""(?i)\b(?:czk|k[čc])\b""")
+    private val LEADING_DAY_MONTH_REGEX = Regex("""^\s*\d{1,2}\s+\d{1,2}\s+""")
+    private val LEADING_PUNCT_REGEX = Regex("""^[\s\-:,./]+""")
+    private val MULTI_SPACE_REGEX = Regex("""\s+""")
+    private val BLOCK_FULL_DATE_REGEX = Regex("""\b\d{1,2}[\./-]\d{1,2}[\./-]\d{4}\b""")
+    private val NUMERIC_WORD_REGEX = Regex("""^[+\-\u2212\u2013\u2014]?\d+([.,]\d+)?$""")
+
+    private val COMBINING_MARKS_REGEX = Regex("""\p{M}+""")
+    private val DATE_TOKEN_IN_CELL_REGEX = Regex("""(\d{1,4}[./-]\s*\d{1,2}[./-]\s*\d{2,4})""")
+    private val DIR_OUT_WORD_REGEX = Regex("""\bout\b""")
+    private val DIR_IN_WORD_REGEX = Regex("""\bin\b""")
+    private val FIO_WORD_REGEX = Regex("""\bfio\b""")
+    private val ACCOUNT_CODE_PATTERNS = listOf(
+        Regex("""/\s*0100\b""") to BankType.KOMERCNI_BANKA,
+        Regex("""/\s*0300\b""") to BankType.CSOB,
+        Regex("""/\s*0600\b""") to BankType.MONETA,
+        Regex("""/\s*0800\b""") to BankType.CESKA_SPORITELNA,
+        Regex("""/\s*2010\b""") to BankType.FIO,
+        Regex("""/\s*2250\b""") to BankType.CREDITAS,
+        Regex("""/\s*2700\b""") to BankType.UNICREDIT,
+        Regex("""/\s*3030\b""") to BankType.AIR_BANK,
+        Regex("""/\s*4000\b""") to BankType.MAX_BANKA,
+        Regex("""/\s*5500\b""") to BankType.RAIFFEISENBANK,
+        Regex("""/\s*5800\b""") to BankType.JT,
+        Regex("""/\s*6000\b""") to BankType.PPF,
+        Regex("""/\s*6100\b""") to BankType.EQUA,
+        Regex("""/\s*6210\b""") to BankType.MBANK,
+        Regex("""/\s*8040\b""") to BankType.OBERBANK
+    )
+
+    private val SALARY_PLAT_REGEX = Regex("""\bplat\b""")
+    private val SALARY_RODP_REGEX = Regex("""\brodp\b""")
+    private val HOUSING_BYT_REGEX = Regex("""\bbyt\b""")
+    private val HOUSING_SVJ_REGEX = Regex("""\bsvj\b""")
+    private val INV_PORTU_WORD_REGEX = Regex("""\bportu\b""")
+    private val INV_XTB_WORD_REGEX = Regex("""\bxtb\b""")
+    private val INV_DIP_WORD_REGEX = Regex("""\bdip\b""")
+    private val INV_DPS_WORD_REGEX = Regex("""\bdps\b""")
+    private val GROCERY_JIP_WORD_REGEX = Regex("""\bjip\b""")
+
+    private val YEAR_MONTH_REGEX = Regex("""\d{4}-\d{2}""")
+    private val AMOUNT_STRIP_WS_REGEX = Regex("""[\p{Z}\s\u200B-\u200D\u00AD\uFEFF]""")
+    // Match 1 or more thousands groups so "1,000" / "1.000" parses as 1000.0 (not 1.0!)
+    private val MULTI_COMMA_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(,\d{3})+$""")
+    private val MULTI_DOT_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(\.\d{3})+$""")
+    private val SUMMARY_FOOTER_REGEX = Regex("""(?:^|\s)(?:pocatecni zustatek|konecny zustatek|ucetni zustatek|celkovy pocet|obraty celkem|celkem obraty|suma obratu|celkem za obdobi|soucet obratu|kreditni obrat|debetni obrat|obrat debet|obrat kredit)(?:\s|$|:)""")
+    private val ISO_TIME_SUFFIX_REGEX = Regex("""(?<=\d)T\d.*$""")
+    private val TRAILING_TIME_REGEX = Regex("""\s+\d{1,2}:\d{2}(:\d{2})?.*$""")
+
+    private fun safeIsoDate(year: Int, month: Int, day: Int): String? {
+        if (year !in 1900..2200 || month !in 1..12 || day !in 1..31) return null
+        return try {
+            java.time.LocalDate.of(year, month, day).toString()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun resolveClosingBalance(
+        balanceWithDates: List<Pair<String, Double>>,
+        transactions: List<ParsedBankTransaction>
+    ): Double? {
+        if (balanceWithDates.isEmpty()) return null
+        val isAscending = if (transactions.size >= 2) {
+            transactions.first().date <= transactions.last().date
+        } else true
+        val maxDate = balanceWithDates.maxOf { it.first }
+        val matching = balanceWithDates.filter { it.first == maxDate }
+        return if (isAscending) matching.last().second else matching.first().second
+    }
+
+    private fun readStreamBounded(inputStream: InputStream): ByteArray? {
+        val buffer = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(16384)
+        var total = 0
+        while (true) {
+            val count = inputStream.read(chunk)
+            if (count <= 0) break
+            total += count
+            if (total > MAX_STATEMENT_BYTES) return null
+            buffer.write(chunk, 0, count)
+        }
+        val result = buffer.toByteArray()
+        return if (isWithinSizeLimit(result.size)) result else null
+    }
+
     fun isWithinSizeLimit(byteCount: Int): Boolean = byteCount in 1..MAX_STATEMENT_BYTES
 
     fun parseStatement(
         bytes: ByteArray,
         knownFamilyAccounts: Set<String> = emptySet(),
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
-    ): StatementParseSummary = parseStatement(java.io.ByteArrayInputStream(bytes), knownFamilyAccounts, userOverrides)
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
+    ): StatementParseSummary {
+        if (!isWithinSizeLimit(bytes.size)) return emptySummary(BankType.GENERIC)
+        return parseStatement(java.io.ByteArrayInputStream(bytes), knownFamilyAccounts, userOverrides, householdNames)
+    }
 
     fun parseStatement(
         inputStream: InputStream,
         knownFamilyAccounts: Set<String> = emptySet(),
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
-        val bytes = inputStream.readBytes()
+        val bytes = readStreamBounded(inputStream) ?: return emptySummary(BankType.GENERIC)
 
         // 1. Route to PDF parser if magic bytes match PDF
         if (PdfTextExtractor.isPdf(bytes)) {
-            return parsePdfStatement(bytes, knownFamilyAccounts, userOverrides)
+            return parsePdfStatement(bytes, knownFamilyAccounts, userOverrides, householdNames)
         }
 
-        // 2. Check for Czech ABO (.gpc / .abo) electronic banking format
+        // 2. Check for Czech ABO (.gpc / .abo) fixed-width format BEFORE CSV quote-splitting
         val content = decodeStatementText(bytes)
-        val lines = splitCsvLines(content)
-
-        if (isAboFormat(lines)) {
-            val abo = parseAboGpc(lines, knownFamilyAccounts, userOverrides)
+        val rawLines = content.lines()
+        if (isAboFormat(rawLines)) {
+            val abo = parseAboGpc(rawLines, knownFamilyAccounts, userOverrides, householdNames)
             if (abo.transactions.isNotEmpty()) return abo
         }
 
         // 3. Otherwise parse as CSV/TSV text (UTF-8 / UTF-16 / Windows-1250 / ISO-8859-2)
+        val lines = splitCsvLines(content)
         val bankType = detectBankType(lines)
 
         // Known-bank layouts keep their dedicated parser; if it yields nothing, or the bank is
         // not one of the legacy three, the universal engine handles any Czech bank CSV/TSV.
         val legacy = when (bankType) {
-            BankType.MONETA -> parseMonetaCsv(lines, knownFamilyAccounts, userOverrides)
-            BankType.CSOB -> parseCsobCsv(lines, knownFamilyAccounts, userOverrides)
-            BankType.MBANK -> parseMbankCsv(lines, knownFamilyAccounts, userOverrides)
+            BankType.MONETA -> parseMonetaCsv(lines, knownFamilyAccounts, userOverrides, householdNames)
+            BankType.CSOB -> parseCsobCsv(lines, knownFamilyAccounts, userOverrides, householdNames)
+            BankType.MBANK -> parseMbankCsv(lines, knownFamilyAccounts, userOverrides, householdNames)
             else -> null
         }
         if (legacy != null && legacy.transactions.isNotEmpty()) return legacy
 
-        val universal = parseUniversalCsv(lines, bankType, knownFamilyAccounts, userOverrides)
+        val universal = parseUniversalCsv(lines, bankType, knownFamilyAccounts, userOverrides, householdNames)
         if (universal.transactions.isNotEmpty()) return universal
-        return legacy ?: parseGenericCsv(lines, knownFamilyAccounts, userOverrides)
+        return legacy ?: parseGenericCsv(lines, knownFamilyAccounts, userOverrides, householdNames)
     }
 
     /**
@@ -208,15 +390,22 @@ object BankStatementImporter {
             return strictUtf8
         }
 
-        if (cp1250Text.isNotBlank() && !cp1250Text.contains('\uFFFD')) {
-            return cp1250Text
-        }
+        val isoCharset = try { java.nio.charset.Charset.forName("ISO-8859-2") } catch (_: Exception) { null }
+        val isoText = if (isoCharset != null) {
+            try { String(bytes, isoCharset) } catch (_: Exception) { "" }
+        } else ""
 
-        return try {
-            String(bytes, java.nio.charset.Charset.forName("ISO-8859-2"))
-        } catch (_: Exception) {
-            String(bytes, Charsets.UTF_8)
+        val cpValid = cp1250Text.isNotBlank() && !cp1250Text.contains('\uFFFD')
+        val isoValid = isoText.isNotBlank() && !isoText.contains('\uFFFD')
+        if (cpValid && isoValid) {
+            val cpScore = countCzechAccents(cp1250Text) - cp1250Text.count { it in "©«®»" } * 2
+            val isoScore = countCzechAccents(isoText)
+            return if (isoScore > cpScore) isoText else cp1250Text
         }
+        if (cpValid) return cp1250Text
+        if (isoValid) return isoText
+
+        return String(bytes, Charsets.UTF_8)
     }
 
     fun countMojibakeSequences(text: String): Int {
@@ -259,14 +448,14 @@ object BankStatementImporter {
         val m = clean.substring(2, 4).toIntOrNull() ?: return null
         val y = clean.substring(4, 6).toIntOrNull() ?: return null
         val fullYear = if (y < 70) 2000 + y else 1900 + y
-        if (d !in 1..31 || m !in 1..12) return null
-        return String.format(Locale.ROOT, "%04d-%02d-%02d", fullYear, m, d)
+        return safeIsoDate(fullYear, m, d)
     }
 
     fun parseAboGpc(
         lines: List<String>,
         familyAccounts: Set<String> = emptySet(),
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         var detectedBank = BankType.GENERIC
         var statementYm: String? = null
@@ -276,7 +465,8 @@ object BankStatementImporter {
         var pendingTransaction: ParsedBankTransaction? = null
 
         for (rawLine in lines) {
-            val line = rawLine.trim()
+            // Preserve fixed-width trailing spaces in ABO/GPC 128-byte records; strip only line endings
+            val line = rawLine.trimEnd('\r', '\n')
             if (line.isBlank()) continue
 
             when {
@@ -313,7 +503,18 @@ object BankStatementImporter {
                     pendingTransaction = null
 
                     if (line.length >= 61) {
-                        val rawCpAcc = line.substring(minOf(19, line.length), minOf(35, line.length)).trim().trimStart('0')
+                        val rawCpField = line.substring(minOf(19, line.length), minOf(35, line.length)).trim()
+                        val rawCpAcc = if (rawCpField.length == 16 && rawCpField.all { it.isDigit() }) {
+                            val prefix = rawCpField.substring(0, 6).trimStart('0')
+                            val accNum = rawCpField.substring(6, 16).trimStart('0')
+                            when {
+                                prefix.isNotEmpty() && accNum.isNotEmpty() -> "$prefix-$accNum"
+                                accNum.isNotEmpty() -> accNum
+                                else -> ""
+                            }
+                        } else {
+                            rawCpField.trimStart('0')
+                        }
                         val rawAmtStr = line.substring(minOf(48, line.length), minOf(60, line.length)).trim()
                         val rawAmt = (rawAmtStr.toLongOrNull() ?: 0L) / 100.0
                         val code = line.getOrNull(60) ?: '1'
@@ -355,7 +556,7 @@ object BankStatementImporter {
                         }
 
                         val cleanDesc = cleanTransactionDescription(rawNote, dateStr, listOf(txAmount), counterpartyAcc, vs)
-                        val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = line)
+                        val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = line, householdNames = householdNames)
                         val isNetted = (cat == BankTransactionType.INTERNAL_TRANSFER)
                         val nettingReason = determineNettingReason(cat, cleanDesc, "")
 
@@ -379,7 +580,7 @@ object BankStatementImporter {
                         val prev = pendingTransaction!!
                         val updatedMsg = if (prev.message.isBlank()) msgText else "${prev.message} $msgText"
                         val updatedDesc = if (prev.counterpartyName.isBlank()) msgText else prev.counterpartyName
-                        val reCat = categorizeTransaction(prev.amount, prev.counterpartyAccount, updatedDesc, updatedMsg, prev.variableSymbol, familyAccounts, userOverrides, rawContext = "$updatedDesc $updatedMsg")
+                        val reCat = categorizeTransaction(prev.amount, prev.counterpartyAccount, updatedDesc, updatedMsg, prev.variableSymbol, familyAccounts, userOverrides, rawContext = "$updatedDesc $updatedMsg", householdNames = householdNames)
                         pendingTransaction = prev.copy(
                             counterpartyName = updatedDesc,
                             message = updatedMsg,
@@ -421,7 +622,8 @@ object BankStatementImporter {
     fun parsePdfStatement(
         pdfBytes: ByteArray,
         knownFamilyAccounts: Set<String> = emptySet(),
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val extractedText = PdfTextExtractor.extractText(pdfBytes)
         if (extractedText.isBlank()) {
@@ -432,10 +634,10 @@ object BankStatementImporter {
         val bankType = detectPdfBankType(extractedText, lines)
 
         val parsed = when (bankType) {
-            BankType.MONETA -> parseMonetaPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
-            BankType.CSOB -> parseCsobPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
-            BankType.MBANK -> parseMbankPdf(lines, extractedText, knownFamilyAccounts, userOverrides)
-            else -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, userOverrides, bankType)
+            BankType.MONETA -> parseMonetaPdf(lines, extractedText, knownFamilyAccounts, userOverrides, householdNames)
+            BankType.CSOB -> parseCsobPdf(lines, extractedText, knownFamilyAccounts, userOverrides, householdNames)
+            BankType.MBANK -> parseMbankPdf(lines, extractedText, knownFamilyAccounts, userOverrides, householdNames)
+            else -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, userOverrides, bankType, householdNames)
         }
         return parsed.copy(isPdfSource = true)
     }
@@ -449,37 +651,34 @@ object BankStatementImporter {
         lines: List<String>,
         fullText: String,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         // 1. Extract statement period from header metadata
-        val periodRegex = Regex("""(?i)obdob[ií]:?\s*(?:od\s*)?(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*(?:do|-)\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})""")
-        val reportYearRegex = Regex("""(?i)výpis\s+z\s+účtu\s+č\.\s*(\d{1,2})/(\d{4})""")
-        val monthYearRegex = Regex("""(?i)měsíc:\s*(\d{1,2})/(\d{4})""")
-
         var statementYear = 0
         var statementMonth = 0
 
-        val periodMatch = periodRegex.find(fullText)
+        val periodMatch = MONETA_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
             statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
             statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
         }
         if (statementYear == 0) {
-            val reportMatch = reportYearRegex.find(fullText)
+            val reportMatch = MONETA_REPORT_YEAR_REGEX.find(fullText)
             if (reportMatch != null) {
                 statementMonth = reportMatch.groupValues[1].toIntOrNull() ?: 0
                 statementYear = reportMatch.groupValues[2].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val myMatch = monthYearRegex.find(fullText)
+            val myMatch = MONETA_MONTH_YEAR_REGEX.find(fullText)
             if (myMatch != null) {
                 statementMonth = myMatch.groupValues[1].toIntOrNull() ?: 0
                 statementYear = myMatch.groupValues[2].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val yearInText = Regex("""\b(202[0-9])\b""").find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: java.time.LocalDate.now().year
         }
 
@@ -487,21 +686,20 @@ object BankStatementImporter {
             String.format(Locale.ROOT, "%04d-%02d", statementYear, statementMonth)
         } else null
 
-        // 2. Extract opening & closing balances
-        val openingRegex = Regex("""(?i)(?:počáteční|pocatecni)\s*(?:účetní\s*)?zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
-        val closingRegex = Regex("""(?i)(?:konečný|konecny|účetní|ucetni)\s*zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
-
+        // 2. Extract opening & closing balances (preserve negative sign for overdrafts)
         var openingBalance: Double? = null
-        val openMatch = openingRegex.find(fullText)
+        val openMatch = MONETA_OPENING_BAL_REGEX.find(fullText)
         if (openMatch != null) {
-            openingBalance = parseCzechAmount(openMatch.groupValues[1])
+            val parsedOpen = parseCzechAmount(openMatch.groupValues[1])
+            if (parsedOpen.isFinite()) openingBalance = parsedOpen
         }
 
         var closingBalance: Double? = extractClosingBalance(fullText, lines)
         if (closingBalance == null) {
-            val closeMatch = closingRegex.find(fullText)
+            val closeMatch = MONETA_CLOSING_BAL_REGEX.find(fullText)
             if (closeMatch != null) {
-                closingBalance = kotlin.math.abs(parseCzechAmount(closeMatch.groupValues[1]))
+                val parsedClose = parseCzechAmount(closeMatch.groupValues[1])
+                if (parsedClose.isFinite()) closingBalance = parsedClose
             }
         }
 
@@ -533,8 +731,8 @@ object BankStatementImporter {
             val detailLines: MutableList<String> = mutableListOf()
         )
 
-        val txStartFullDate = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(.*)""")
-        val txStartShortDate = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.\s+(.*)""")
+        val txStartFullDate = TX_START_FULL_DATE_REGEX
+        val txStartShortDate = TX_START_SHORT_DATE_REGEX
 
         val blocks = mutableListOf<MonetaBlock>()
         var currentBlock: MonetaBlock? = null
@@ -584,13 +782,13 @@ object BankStatementImporter {
             val amounts = extractAllAmounts(blockText)
             if (amounts.isEmpty()) continue
 
-            val txAmount = amounts.firstOrNull { it != 0.0 } ?: continue
+            val txAmount = amounts.firstOrNull { it.isFinite() && it != 0.0 } ?: continue
 
-            val dateStr = String.format(Locale.ROOT, "%04d-%02d-%02d", block.year, block.month, block.day)
+            val dateStr = safeIsoDate(block.year, block.month, block.day) ?: continue
             val counterpartyAcc = extractAccount(blockText)
             val vs = extractVariableSymbol(blockText)
             val cleanDesc = cleanTransactionDescription(blockText, dateStr, amounts, counterpartyAcc, vs)
-            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = blockText)
+            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = blockText, householdNames = householdNames)
             val isNetted = (cat == BankTransactionType.INTERNAL_TRANSFER)
             val nettingReason = determineNettingReason(cat, cleanDesc, "")
 
@@ -612,7 +810,7 @@ object BankStatementImporter {
 
         // Fallback to generic PDF blocks if specialized block extraction found 0
         val finalTransactions = transactions.ifEmpty {
-            extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides)
+            extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides, householdNames)
         }
 
         return buildSummary(BankType.MONETA, finalTransactions, closingBalance, forcedYearMonth = ym)
@@ -622,29 +820,27 @@ object BankStatementImporter {
         lines: List<String>,
         fullText: String,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         // 1. Extract statement year and month from header metadata
-        val periodRegex = Regex("""(?i)obdob[ií]:\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})""")
-        val reportYearRegex = Regex("""(?i)rok/č\.\s*výpisu:\s*(\d{4})/(\d{1,2})""")
-
         var statementYear = 0
         var statementMonth = 0
 
-        val periodMatch = periodRegex.find(fullText)
+        val periodMatch = CSOB_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
             statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
             statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
         }
         if (statementYear == 0) {
-            val reportMatch = reportYearRegex.find(fullText)
+            val reportMatch = CSOB_REPORT_YEAR_REGEX.find(fullText)
             if (reportMatch != null) {
                 statementYear = reportMatch.groupValues[1].toIntOrNull() ?: 0
                 statementMonth = reportMatch.groupValues[2].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val yearInText = Regex("""\b(202[0-9])\b""").find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: java.time.LocalDate.now().year
         }
 
@@ -687,7 +883,7 @@ object BankStatementImporter {
             val detailLines: MutableList<String> = mutableListOf()
         )
 
-        val txStartRegex = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.\s+(.*)""")
+        val txStartRegex = TX_START_SHORT_DATE_REGEX
         val csobCardDetailMarkers = listOf("místo:", "misto:", "původní částka", "puvodni castka", "kurz:", "karta:", "autorizace")
         val blocks = mutableListOf<CsobBlock>()
         var curBlock: CsobBlock? = null
@@ -717,16 +913,19 @@ object BankStatementImporter {
             var txYear = statementYear
             if (statementMonth == 1 && block.month == 12) txYear = statementYear - 1
             else if (statementMonth == 12 && block.month == 1) txYear = statementYear + 1
-            val dateStr = String.format(Locale.ROOT, "%04d-%02d-%02d", txYear, block.month, block.day)
+            val dateStr = safeIsoDate(txYear, block.month, block.day) ?: continue
 
             val headerAmounts = extractAllAmounts(block.headerLine)
             val allBlockAmounts = if (headerAmounts.isNotEmpty()) headerAmounts else extractAllAmounts(block.detailLines.joinToString(" "))
             if (allBlockAmounts.isEmpty()) continue
 
             val txAmount = allBlockAmounts[0]
+            if (!txAmount.isFinite()) continue
             if (allBlockAmounts.size >= 2) {
                 val runningBalance = allBlockAmounts[1]
-                balanceWithDates.add(dateStr to runningBalance)
+                if (runningBalance.isFinite()) {
+                    balanceWithDates.add(dateStr to runningBalance)
+                }
             }
 
             val detailText = block.detailLines.joinToString(" ")
@@ -750,51 +949,53 @@ object BankStatementImporter {
                     it.contains("místo:", ignoreCase = true) || it.contains("misto:", ignoreCase = true)
                 }
                 if (mistoLine != null) {
-                    val rawMisto = if (mistoLine.contains("místo:", ignoreCase = true)) {
-                        mistoLine.substringAfter("místo:").substringAfter("Místo:")
-                    } else {
-                        mistoLine.substringAfter("misto:").substringAfter("Misto:")
-                    }
-                    merchant = rawMisto.substringBefore("Částka:").substringBefore("Castka:").substringBefore("částka:").trim()
+                    val idxMisto = mistoLine.indexOf("místo:", ignoreCase = true)
+                        .takeIf { it >= 0 }
+                        ?: mistoLine.indexOf("misto:", ignoreCase = true)
+                    val rawMisto = if (idxMisto >= 0) mistoLine.substring(idxMisto + 6) else mistoLine
+                    val idxCastka = rawMisto.indexOf("částka:", ignoreCase = true)
+                        .takeIf { it >= 0 }
+                        ?: rawMisto.indexOf("castka:", ignoreCase = true)
+                    merchant = (if (idxCastka >= 0) rawMisto.substring(0, idxCastka) else rawMisto).trim()
                 }
                 if (merchant.isBlank()) {
                     val castkaLine = block.detailLines.firstOrNull { it.startsWith("Částka:", ignoreCase = true) || it.startsWith("Castka:", ignoreCase = true) }
-                    val locMatch = Regex("""(?i)\b\d{1,2}\.\d{1,2}\.\d{4}\s+([A-Za-z\u00C0-\u017E].*)""").find(castkaLine ?: "")
+                    val locMatch = CSOB_CASTKA_LOC_REGEX.find(castkaLine ?: "")
                     if (locMatch != null) {
                         val loc = locMatch.groupValues[1].trim()
-                        val preceding = block.detailLines.firstOrNull { it.matches(Regex("""[A-Za-z0-9*._ -]+""")) && !it.startsWith("Částka", ignoreCase = true) && !it.matches(Regex("""^\d+(\s+\d+)*$""")) }
+                        val preceding = block.detailLines.firstOrNull { CSOB_MERCHANT_CHARS_REGEX.matches(it) && !it.startsWith("Částka", ignoreCase = true) && !DIGITS_SPACE_ONLY_REGEX.matches(it) }
                         merchant = if (preceding != null) "${preceding.trim()} $loc" else loc
                     }
                 }
                 if (merchant.isBlank()) {
                     val meaningfulDetails = block.detailLines.filter { d ->
-                        !d.matches(Regex("""^\d+(\s+\d+)*$""")) &&
+                        !DIGITS_SPACE_ONLY_REGEX.matches(d) &&
                         !d.startsWith("Částka:", ignoreCase = true) &&
                         !d.startsWith("Castka:", ignoreCase = true)
                     }
                     merchant = meaningfulDetails.joinToString(" ").trim()
                 }
-                merchant = merchant.replace(Regex("""(?i)\s*č[aá]stka:.*"""), "").trim()
+                merchant = CSOB_STRIP_CASTKA_REGEX.replace(merchant, "").trim()
             } else if (isIncoming) {
-                val incomingMatch = Regex("""(?i)^\s*\d{1,2}\.\d{1,2}\.\s+p[rř][ií]choz[ií]\s+[uú]hrada(?:\s+okam[zž]it[aá])?\s+([A-Za-z\u00C0-\u017E].*?)(?:\s+\d{4,}\b|\s+[+-]?\d+,\d{2})""").find(block.headerLine)
+                val incomingMatch = CSOB_INCOMING_REGEX.find(block.headerLine)
                 val extractedName = incomingMatch?.groupValues?.get(1)?.trim() ?: ""
-                if (extractedName.isNotBlank() && !extractedName.matches(Regex("""^\d+(\s+\d+)*$"""))) {
+                if (extractedName.isNotBlank() && !DIGITS_SPACE_ONLY_REGEX.matches(extractedName)) {
                     merchant = extractedName
                 }
                 val msgLines = block.detailLines.filter { d ->
                     val acc = extractAccount(d)
-                    acc.isBlank() && !d.matches(Regex("""^\d+(\s+\d+)*$"""))
+                    acc.isBlank() && !DIGITS_SPACE_ONLY_REGEX.matches(d)
                 }
                 message = msgLines.joinToString(" ").trim()
             } else if (isOutgoing) {
-                val outgoingMatch = Regex("""(?i)^\s*\d{1,2}\.\d{1,2}\.\s+odchoz[ií]\s+[uú]hrada(?:\s+okam[zž]it[aá])?\s+([A-Za-z\u00C0-\u017E].*?)(?:\s+\d{4,}\b|\s+[+-]?\d+,\d{2})""").find(block.headerLine)
+                val outgoingMatch = CSOB_OUTGOING_REGEX.find(block.headerLine)
                 val extractedName = outgoingMatch?.groupValues?.get(1)?.trim() ?: ""
-                if (extractedName.isNotBlank() && !extractedName.matches(Regex("""^\d+(\s+\d+)*$"""))) {
+                if (extractedName.isNotBlank() && !DIGITS_SPACE_ONLY_REGEX.matches(extractedName)) {
                     merchant = extractedName
                 }
                 val msgLines = block.detailLines.filter { d ->
                     val acc = extractAccount(d)
-                    acc.isBlank() && !d.matches(Regex("""^\d+(\s+\d+)*$"""))
+                    acc.isBlank() && !DIGITS_SPACE_ONLY_REGEX.matches(d)
                 }
                 message = msgLines.joinToString(" ").trim()
                 if (merchant.isBlank()) {
@@ -803,7 +1004,7 @@ object BankStatementImporter {
             } else if (isStanding) {
                 val msgLines = block.detailLines.filter { d ->
                     val acc = extractAccount(d)
-                    acc.isBlank() && !d.matches(Regex("""^\d+(\s+\d+)*$"""))
+                    acc.isBlank() && !DIGITS_SPACE_ONLY_REGEX.matches(d)
                 }
                 message = msgLines.joinToString(" ").trim()
                 merchant = if (message.isNotBlank()) message else if (counterpartyAcc.isNotBlank()) "Trvalý příkaz $counterpartyAcc" else "Trvalý příkaz"
@@ -826,7 +1027,8 @@ object BankStatementImporter {
                 vs = vs,
                 familyAccounts = familyAccounts,
                 userOverrides = userOverrides,
-                rawContext = blockFullText
+                rawContext = blockFullText,
+                householdNames = householdNames
             )
             val isNetted = (cat == BankTransactionType.INTERNAL_TRANSFER)
             val nettingReason = determineNettingReason(cat, merchant, message)
@@ -847,11 +1049,12 @@ object BankStatementImporter {
         }
 
         val finalTransactions = transactions.ifEmpty {
-            extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides)
+            extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides, householdNames)
         }
 
         if (closingBalance == null && balanceWithDates.isNotEmpty()) {
-            closingBalance = balanceWithDates.lastOrNull()?.second
+            closingBalance = resolveClosingBalance(balanceWithDates, transactions)
+                ?: balanceWithDates.lastOrNull()?.second
         }
 
         return buildSummary(BankType.CSOB, finalTransactions, closingBalance, forcedYearMonth = ym)
@@ -861,44 +1064,40 @@ object BankStatementImporter {
         lines: List<String>,
         fullText: String,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         // 1. Extract statement period (year and month) from mBank header
-        val periodRegex = Regex("""(?i)(?:obdob[ií]|za\s+obdob[ií])[:\s]*(\d{1,2})[\./-](\d{1,2})[\./-](\d{4})\s*(?:-|do)\s*(\d{1,2})[\./-](\d{1,2})[\./-](\d{4})""")
-        val monthYearRegex = Regex("""(?i)(?:za\s+m[eě]s[ií]c|v[yý]pis\s+za)\s*(\d{1,2})/(\d{4})""")
-        val altMonthYearRegex = Regex("""(?i)(?:za\s+obdob[ií]|m[eě]s[ií]c/rok)[:\s]*(\d{4})/(\d{1,2})""")
-        val reportYearRegex = Regex("""(?i)v[yý]pis\s+[cč]\.?\s*\d+/(\d{4})""")
-
         var statementYear = 0
         var statementMonth = 0
 
-        val periodMatch = periodRegex.find(fullText)
+        val periodMatch = MBANK_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
             statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
             statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
         }
         if (statementYear == 0) {
-            val myMatch = monthYearRegex.find(fullText)
+            val myMatch = MBANK_MONTH_YEAR_REGEX.find(fullText)
             if (myMatch != null) {
                 statementMonth = myMatch.groupValues[1].toIntOrNull() ?: 0
                 statementYear = myMatch.groupValues[2].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val altMatch = altMonthYearRegex.find(fullText)
+            val altMatch = MBANK_ALT_MONTH_YEAR_REGEX.find(fullText)
             if (altMatch != null) {
                 statementYear = altMatch.groupValues[1].toIntOrNull() ?: 0
                 statementMonth = altMatch.groupValues[2].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val repMatch = reportYearRegex.find(fullText)
+            val repMatch = MBANK_REPORT_YEAR_REGEX.find(fullText)
             if (repMatch != null) {
                 statementYear = repMatch.groupValues[1].toIntOrNull() ?: 0
             }
         }
         if (statementYear == 0) {
-            val yearInText = Regex("""\b(202[0-9])\b""").find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: java.time.LocalDate.now().year
         }
 
@@ -927,13 +1126,12 @@ object BankStatementImporter {
                     (lower.contains("mbank s.a.") && lower.contains("organizační složka"))
         }
 
-        val datePattern = Regex("""^\s*(\d{1,2})[\./-](\d{1,2})(?:[\./-](\d{2,4}))?\b""")
         val blocks = mutableListOf<MbankBlock>()
         var currentBlock: MbankBlock? = null
 
         for (line in lines) {
             if (isMbankNoise(line)) continue
-            val match = datePattern.find(line)
+            val match = MBANK_DATE_PATTERN.find(line)
             val amounts = extractAllAmounts(line)
             val isDateStart = match != null && !isIgnoredDateContext(line) && amounts.isNotEmpty()
 
@@ -951,10 +1149,13 @@ object BankStatementImporter {
                     }
                     else -> statementYear
                 }
-                val isoDate = String.format(Locale.ROOT, "%04d-%02d-%02d", y, m, d)
-
-                currentBlock?.let { if (it.lines.isNotEmpty()) blocks.add(it) }
-                currentBlock = MbankBlock(isoDate, mutableListOf(line))
+                val isoDate = safeIsoDate(y, m, d)
+                if (isoDate != null) {
+                    currentBlock?.let { if (it.lines.isNotEmpty()) blocks.add(it) }
+                    currentBlock = MbankBlock(isoDate, mutableListOf(line))
+                } else if (currentBlock != null) {
+                    currentBlock.lines.add(line)
+                }
             } else if (currentBlock != null) {
                 currentBlock.lines.add(line)
             }
@@ -975,9 +1176,10 @@ object BankStatementImporter {
             val amounts = extractAllAmounts(blockText)
             if (amounts.isNotEmpty() && dateStr.isNotBlank()) {
                 val txAmount = amounts[0]
+                if (!txAmount.isFinite()) continue
                 if (amounts.size >= 2) {
                     val runningBalance = amounts[1]
-                    if (runningBalance != 0.0) {
+                    if (runningBalance.isFinite()) {
                         balanceWithDates.add(dateStr to runningBalance)
                     }
                 }
@@ -985,7 +1187,7 @@ object BankStatementImporter {
                 val counterpartyAcc = extractAccount(blockText)
                 val vs = extractVariableSymbol(blockText)
                 val cleanDesc = cleanTransactionDescription(blockText, dateStr, amounts, counterpartyAcc, vs)
-                val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = blockText)
+                val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, cleanDesc, vs, familyAccounts, userOverrides, rawContext = blockText, householdNames = householdNames)
                 val isNetted = (cat == BankTransactionType.INTERNAL_TRANSFER)
                 val nettingReason = determineNettingReason(cat, cleanDesc, "")
 
@@ -1006,7 +1208,7 @@ object BankStatementImporter {
         }
 
         if (closingBalance == null && balanceWithDates.isNotEmpty()) {
-            closingBalance = balanceWithDates.maxByOrNull { it.first }?.second
+            closingBalance = resolveClosingBalance(balanceWithDates, transactions)
         }
 
         return buildSummary(BankType.MBANK, transactions, closingBalance, forcedYearMonth = ym)
@@ -1017,10 +1219,11 @@ object BankStatementImporter {
         fullText: String,
         familyAccounts: Set<String>,
         userOverrides: Map<String, BankTransactionType> = emptyMap(),
-        bankType: BankType = BankType.GENERIC
+        bankType: BankType = BankType.GENERIC,
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val closingBalance = extractClosingBalance(fullText, lines)
-        val transactions = extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides)
+        val transactions = extractTransactionsFromPdfBlocks(lines, familyAccounts, userOverrides, householdNames)
         return buildSummary(bankType, transactions, closingBalance)
     }
 
@@ -1069,25 +1272,23 @@ object BankStatementImporter {
     }
 
     private fun groupLinesIntoDateBlocks(lines: List<String>): List<DateBlock> {
-        val dateStartRegex = Regex("""^\s*(\d{1,4})[\./-]\s*(\d{1,2})(?:[\./-]\s*(\d{2,4}))?\b""")
-        val dateAnyRegex = Regex("""\b(\d{1,4})[\./-]\s*(\d{1,2})[\./-]\s*(\d{2,4})\b""")
         val blocks = mutableListOf<DateBlock>()
         var currentDate = ""
         val currentLines = mutableListOf<String>()
 
         val inferredYear = lines.asSequence().mapNotNull { line ->
-            Regex("""\b(202[0-9])\b""").find(line)?.groupValues?.get(1)?.toIntOrNull()
+            YEAR_202X_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull()
         }.firstOrNull() ?: java.time.LocalDate.now().year
 
         val hasDateStartLines = lines.any { line ->
-            dateStartRegex.containsMatchIn(line) && extractAllAmounts(line).isNotEmpty() && !isIgnoredDateContext(line)
+            DATE_BLOCKS_START_REGEX.containsMatchIn(line) && extractAllAmounts(line).isNotEmpty() && !isIgnoredDateContext(line)
         }
 
         for (line in lines) {
             if (isPageHeaderOrFooter(line)) continue
 
             if (hasDateStartLines) {
-                val match = dateStartRegex.find(line)
+                val match = DATE_BLOCKS_START_REGEX.find(line)
                 val amounts = extractAllAmounts(line)
                 val isTxStart = match != null && amounts.isNotEmpty() && !isIgnoredDateContext(line)
 
@@ -1098,12 +1299,12 @@ object BankStatementImporter {
                     }
                     val rawDateMatch = match!!.value.trim()
                     val normalized = normalizeDate(rawDateMatch)
-                    currentDate = if (normalized.isNotBlank()) {
+                    val nextDate = if (normalized.isNotBlank()) {
                         normalized
                     } else {
                         // Short date dd.MM. fallback
-                        val p1 = match.groupValues[1].toIntOrNull() ?: 1
-                        val p2 = match.groupValues[2].toIntOrNull() ?: 1
+                        val p1 = match.groupValues[1].toIntOrNull() ?: 0
+                        val p2 = match.groupValues[2].toIntOrNull() ?: 0
                         val p3 = match.groupValues.getOrNull(3)?.toIntOrNull()
                         val yr = when {
                             p3 != null && p3 in 1000..9999 -> p3
@@ -1111,22 +1312,32 @@ object BankStatementImporter {
                             p1 in 1000..9999 -> p1
                             else -> inferredYear
                         }
-                        val (d, m) = if (p1 in 1000..9999) Pair(match.groupValues.getOrNull(3)?.toIntOrNull() ?: 1, p2) else Pair(p1, p2)
-                        String.format(Locale.ROOT, "%04d-%02d-%02d", yr, m.coerceIn(1, 12), d.coerceIn(1, 31))
+                        val (d, m) = if (p1 in 1000..9999) Pair(match.groupValues.getOrNull(3)?.toIntOrNull() ?: 0, p2) else Pair(p1, p2)
+                        safeIsoDate(yr, m, d) ?: ""
                     }
-                    currentLines.add(line)
+                    if (nextDate.isNotBlank()) {
+                        currentDate = nextDate
+                        currentLines.add(line)
+                    } else {
+                        currentDate = ""
+                    }
                 } else if (currentDate.isNotBlank()) {
                     currentLines.add(line)
                 }
             } else {
-                val match = dateAnyRegex.find(line)
+                val match = DATE_BLOCKS_ANY_REGEX.find(line)
                 if (match != null && !isIgnoredDateContext(line)) {
-                    if (currentDate.isNotBlank() && currentLines.isNotEmpty()) {
-                        blocks.add(DateBlock(currentDate, currentLines.toList()))
-                        currentLines.clear()
+                    val normalized = normalizeDate(match.value)
+                    if (normalized.isNotBlank()) {
+                        if (currentDate.isNotBlank() && currentLines.isNotEmpty()) {
+                            blocks.add(DateBlock(currentDate, currentLines.toList()))
+                            currentLines.clear()
+                        }
+                        currentDate = normalized
+                        currentLines.add(line)
+                    } else if (currentDate.isNotBlank()) {
+                        currentLines.add(line)
                     }
-                    currentDate = normalizeDate(match.value)
-                    currentLines.add(line)
                 } else if (currentDate.isNotBlank()) {
                     currentLines.add(line)
                 }
@@ -1143,7 +1354,8 @@ object BankStatementImporter {
     private fun extractTransactionsFromPdfBlocks(
         lines: List<String>,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): List<ParsedBankTransaction> {
         val blocks = groupLinesIntoDateBlocks(lines)
         val transactions = mutableListOf<ParsedBankTransaction>()
@@ -1169,9 +1381,18 @@ object BankStatementImporter {
             val cleanMsg = cleanPaymentDescription(rawMsg)
             val distinctMsg = if (cleanMsg.isNotBlank() && !cleanMsg.equals(cleanDesc, ignoreCase = true)) cleanMsg else ""
 
-            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, distinctMsg, vs, familyAccounts, userOverrides, rawContext = blockText)
+            val cat = categorizeTransaction(txAmount, counterpartyAcc, cleanDesc, distinctMsg, vs, familyAccounts, userOverrides, rawContext = blockText, householdNames = householdNames)
             val isNetted = (cat == BankTransactionType.INTERNAL_TRANSFER)
             val nettingReason = determineNettingReason(cat, cleanDesc, distinctMsg)
+
+            val pdfCurrency = FxRateService.detectCurrency(blockText)
+            val (pdfOrigCurr, pdfOrigAmt, pdfRate) = if (pdfCurrency != null && pdfCurrency != "CZK") {
+                val rate = FxRateService.getRate(pdfCurrency)
+                val orig = if (rate > 0) txAmount / rate else txAmount
+                Triple(pdfCurrency, orig, rate)
+            } else {
+                Triple(null, null, null)
+            }
 
             transactions.add(
                 ParsedBankTransaction(
@@ -1183,7 +1404,10 @@ object BankStatementImporter {
                     variableSymbol = vs,
                     category = cat,
                     isNetted = isNetted,
-                    nettingReason = nettingReason
+                    nettingReason = nettingReason,
+                    originalCurrency = pdfOrigCurr,
+                    originalAmount = pdfOrigAmt,
+                    exchangeRate = pdfRate
                 )
             )
         }
@@ -1192,14 +1416,13 @@ object BankStatementImporter {
 
     private fun extractAllAmounts(text: String): List<Double> {
         val amounts = mutableListOf<Double>()
-        // Regex matches standard Czech currency formats e.g. -25 000,00, 75 000,00 CZK, - 1 756,99 or English decimal point 1234.56
-        val amountRegex = Regex("""(?<!\w)([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})*|\d+)(?:,\d{2}|\.\d{2}(?![.\d])))\s*(CZK|Kč)?\s*([+\-\u2212\u2013\u2014])?(?!\w)""")
-        val matches = amountRegex.findAll(text)
+        // Regex matches standard Czech and foreign currency formats e.g. -25 000,00, 75 000,00 CZK, 12.50 EUR, 45,00 €
+        val matches = AMOUNT_REGEX.findAll(text)
 
         for (m in matches) {
             val endIdx = m.range.last + 1
             val following = text.substring(endIdx, minOf(text.length, endIdx + 10)).trim().lowercase(Locale.ROOT)
-            if (following.startsWith("eur") || following.startsWith("usd") || following.startsWith("gbp") || following.startsWith("%")) {
+            if (following.startsWith("%")) {
                 continue
             }
 
@@ -1220,7 +1443,16 @@ object BankStatementImporter {
 
             val trailingSign = m.groupValues[3].replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-")
 
-            var parsed = parseCzechAmount(rawNum)
+            val explicitCurr = when {
+                currencyToken.isNotBlank() -> FxRateService.normalizeCurrencyCode(currencyToken)
+                following.startsWith("eur") || following.startsWith("€") -> "EUR"
+                following.startsWith("usd") || following.startsWith("$") -> "USD"
+                following.startsWith("kč") || following.startsWith("czk") -> "CZK"
+                else -> null
+            }
+
+            var parsed = parseCzechAmount(rawNum, explicitCurrency = explicitCurr)
+            if (!parsed.isFinite()) continue
             if (trailingSign == "-" && parsed > 0) {
                 parsed = -parsed
             } else if (trailingSign == "+" && parsed < 0) {
@@ -1258,9 +1490,8 @@ object BankStatementImporter {
             }
         }
 
-        // Fallback for PDFs that print whole-koruna amounts (e.g. "1 234 Kč", "1234 CZK").
+        // Fallback for PDFs that print whole-koruna or foreign amounts (e.g. "1 234 Kč", "1234 CZK", "100 EUR").
         if (amounts.isEmpty()) {
-            val wholeCurrencyRegex = Regex("""(?<!\w)([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})+|\d+))\s*(?:CZK|Kč)(?!\w)""")
             val lower = text.lowercase(Locale.ROOT)
             val isRefund = lower.contains("vrácení") || lower.contains("vraceni") ||
                 lower.contains("vratka") || lower.contains("storno") ||
@@ -1270,8 +1501,9 @@ object BankStatementImporter {
                 lower.contains("ve prospěch") || lower.contains("ve prospech") ||
                 lower.contains("připsáno") || lower.contains("pripsano") ||
                 lower.contains("příjem") || lower.contains("prijem")
-            for (m in wholeCurrencyRegex.findAll(text)) {
-                var parsed = parseCzechAmount(m.groupValues[1])
+            for (m in WHOLE_CURRENCY_REGEX.findAll(text)) {
+                var parsed = parseCzechAmount(m.value)
+                if (!parsed.isFinite() || parsed == 0.0) continue
                 if (amounts.isEmpty() && parsed > 0 && !isRefund && !isExplicitInflow &&
                     (lower.contains("odchozí") || lower.contains("odchozi") ||
                      lower.contains("debet") || lower.contains("debit") ||
@@ -1284,28 +1516,25 @@ object BankStatementImporter {
                      lower.contains("výdej") || lower.contains("vydej"))) {
                     parsed = -parsed
                 }
-                if (parsed != 0.0) amounts.add(parsed)
+                if (parsed.isFinite() && parsed != 0.0) amounts.add(parsed)
             }
         }
         return amounts
     }
 
     fun extractAccount(text: String): String {
-        val accRegex = Regex("""\b(?:\d{1,6}-)?\d{1,10}/\d{4}\b""")
-        val match = accRegex.find(text)
+        val match = ACC_SLASH_REGEX.find(text)
         if (match != null) return match.value.trim()
 
         // Support Czech IBAN formatting e.g. CZ6508000000001234567890 or CZ65 0800 0000 0012 3456 7890
-        val ibanSpacedRegex = Regex("""\b(CZ\d{2})[\s\u00A0]*(\d{4})[\s\u00A0]*(\d{6})[\s\u00A0]*(\d{10})\b""", RegexOption.IGNORE_CASE)
-        val ibanSpacedMatch = ibanSpacedRegex.find(text)
+        val ibanSpacedMatch = IBAN_SPACED_REGEX.find(text)
         if (ibanSpacedMatch != null) {
             val bankCode = ibanSpacedMatch.groupValues[2]
             val prefix = ibanSpacedMatch.groupValues[3].trimStart('0')
             val acc = ibanSpacedMatch.groupValues[4].trimStart('0')
             return if (prefix.isNotBlank()) "$prefix-$acc/$bankCode" else "$acc/$bankCode"
         }
-        val genericIbanRegex = Regex("""\bCZ\d{22}\b""", RegexOption.IGNORE_CASE)
-        val genericMatch = genericIbanRegex.find(text.replace(" ", "").replace("\u00A0", ""))
+        val genericMatch = IBAN_GENERIC_REGEX.find(text.replace(" ", "").replace("\u00A0", ""))
         if (genericMatch != null) {
             val iban = genericMatch.value
             val bankCode = iban.substring(4, 8)
@@ -1317,69 +1546,34 @@ object BankStatementImporter {
     }
 
     private fun extractVariableSymbol(text: String): String {
-        val vsRegex = Regex("""(?i)\b(?:vs|v\.s\.|var(?:iabiln[ií])?\s*symbol)[:\s]*(\d{1,10})\b""")
-        val match = vsRegex.find(text)
+        val match = VS_EXTRACT_REGEX.find(text)
         return match?.groupValues?.getOrNull(1)?.trim() ?: ""
     }
 
     fun cleanPaymentDescription(raw: String): String {
         var text = raw
-        val boilerplatePatterns = listOf(
-            Regex("""(?i)\bplatba\s+kartou\s+v\s+[čc]r\b"""),
-            Regex("""(?i)\bplatba\s+kartou\s+v\s+zahrani[čc][ií]\b"""),
-            Regex("""(?i)\bplatba\s+kartou\s+online\b"""),
-            Regex("""(?i)\bplatba\s+kartou\b"""),
-            Regex("""(?i)\btransakce\s+platebn[ií]\s+kartou\b"""),
-            Regex("""(?i)\bplatba\s+na\s+internetu\b"""),
-            Regex("""(?i)\bplatba\s+mobilem\b"""),
-            Regex("""(?i)\bbezhotovostn[ií]\s+platba\b"""),
-            Regex("""(?i)\bokam[zž]it[aá]\s+platba\b"""),
-            Regex("""(?i)\bp[rř][ií]choz[ií]\s+[uú]hrada\b"""),
-            Regex("""(?i)\bodchoz[ií]\s+[uú]hrada\b"""),
-            Regex("""(?i)\bp[rř][ií]choz[ií]\s+platba\b"""),
-            Regex("""(?i)\bodchoz[ií]\s+platba\b"""),
-            Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz\s+k\s+[uú]hrad[eě]:?\b"""),
-            Regex("""(?i)\btrval[yý]\s+p[rř][ií]kaz:?\b"""),
-            Regex("""(?i)\bp[rř][ií]kazce:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
-            Regex("""(?i)\bpl[aá]tce:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
-            Regex("""(?i)\bp[rř][ií]kazce:?\b"""),
-            Regex("""(?i)\bpl[aá]tce:?\b"""),
-            Regex("""(?i)\bmajitel\s+[uú][cč]tu:\s*(?:(?:v[aá]clav|eleonora)\s+martin[uů]|martin[uů]\s+(?:v[aá]clav|eleonora))?\b"""),
-            Regex("""(?i)\bmajitel\s+[uú][cč]tu:?\b"""),
-            Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+pl[aá]tce:?\b"""),
-            Regex("""(?i)\b[cč][ií]slo\s+[uú][cč]tu\s+p[rř][ií]kazce:?\b"""),
-            Regex("""(?i)\bzpr[aá]va\s+pro\s+p[rř][ií]jemce:?\b"""),
-            Regex("""(?i)\bpopis\s+transakce:?\b"""),
-            Regex("""(?i)\bdetaily\s+platby:?\b"""),
-            Regex("""(?i)\bn[aá]zev\s+proti[uú][cč]tu:?\b"""),
-            Regex("""(?i)\bm[ií]sto:?\b"""),
-            Regex("""(?i)\bn[aá]kup:?\b"""),
-            Regex("""(?i)\b[cč][ií]slo\s+karty:?\b"""),
-            Regex("""(?i)\bdatum\s+a\s+[cč]as:?\b""")
-        )
-
-        for (p in boilerplatePatterns) {
+        for (p in BOILERPLATE_PATTERNS) {
             text = p.replace(text, " ")
         }
 
         // Remove terminal sequence tokens e.g. 260708V115305518803 or 26070926708D4004533
-        text = Regex("""\b\d{6}[A-Za-z0-9]\d{8,}\b""").replace(text, " ")
+        text = TERMINAL_SEQ_REGEX.replace(text, " ")
         // Remove masked terminal card reference digits e.g. 0000009498000494
-        text = Regex("""\b0{3,}\d*\b""").replace(text, " ")
+        text = ZERO_PREFIX_TOKEN_REGEX.replace(text, " ")
         // Remove long card digits
-        text = Regex("""\b\d{12,}\b""").replace(text, " ")
+        text = LONG_CARD_DIGITS_REGEX.replace(text, " ")
         // Remove timestamps e.g. 14:22:05 or 14:22
-        text = Regex("""\b\d{1,2}:\d{2}(?::\d{2})?\b""").replace(text, " ")
+        text = TIME_TOKEN_REGEX.replace(text, " ")
         // Remove dates inside text e.g. 15.09.2026 or 15.09.
-        text = Regex("""\b\d{1,2}[\./-]\d{1,2}(?:[\./-]\d{2,4})?\b""").replace(text, " ")
+        text = INLINE_DATE_REGEX.replace(text, " ")
         // Remove currencies
-        text = Regex("""(?i)\b(?:czk|k[čc])\b""").replace(text, " ")
+        text = INLINE_CURRENCY_REGEX.replace(text, " ")
         // Remove stray terminal numbers at start e.g. "9 32"
-        text = Regex("""^\s*\d{1,2}\s+\d{1,2}\s+""").replace(text, " ")
+        text = LEADING_DAY_MONTH_REGEX.replace(text, " ")
         // Remove leading punctuation symbols
-        text = Regex("""^[\s\-:,./]+""").replace(text, " ")
+        text = LEADING_PUNCT_REGEX.replace(text, " ")
         // Remove multiple spaces
-        text = text.replace(Regex("""\s+"""), " ").trim()
+        text = text.replace(MULTI_SPACE_REGEX, " ").trim()
 
         return text.ifBlank { raw.trim() }
     }
@@ -1392,8 +1586,7 @@ object BankStatementImporter {
         vs: String
     ): String {
         var clean = blockText
-        val dateRegex = Regex("""\b\d{1,2}[\./-]\d{1,2}[\./-]\d{4}\b""")
-        clean = dateRegex.replace(clean, " ")
+        clean = BLOCK_FULL_DATE_REGEX.replace(clean, " ")
         if (account.isNotBlank()) clean = clean.replace(account, " ")
         if (vs.isNotBlank()) clean = clean.replace(vs, " ")
 
@@ -1412,13 +1605,13 @@ object BankStatementImporter {
 
         clean = cleanPaymentDescription(clean)
 
-        val words = clean.split(Regex("""\s+""")).map { it.trim() }.filter { w ->
+        val words = clean.split(MULTI_SPACE_REGEX).map { it.trim() }.filter { w ->
             w.isNotBlank() &&
-                !w.matches(Regex("""^[+\-\u2212\u2013\u2014]?\d+([.,]\d+)?$""")) &&
+                !NUMERIC_WORD_REGEX.matches(w) &&
                 w != "+" && w != "-" && w != "/" && w != "CZK" && w != "Kč"
         }
         val result = words.joinToString(" ").trim()
-        val finalClean = Regex("""^\s*\d{1,2}\s+\d{1,2}\s+""").replace(result, "").trim()
+        val finalClean = LEADING_DAY_MONTH_REGEX.replace(result, "").trim()
         return finalClean.ifBlank {
             if (blockText.contains("trvalý", ignoreCase = true) || blockText.contains("trvaly", ignoreCase = true)) {
                 "Trvalý příkaz"
@@ -1429,7 +1622,6 @@ object BankStatementImporter {
     }
 
     internal fun extractAllAmountsPublic(text: String): List<Double> = extractAllAmounts(text)
-    internal fun extractClosingBalancePublic(fullText: String, lines: List<String>): Double? = extractClosingBalance(fullText, lines)
 
     private fun extractClosingBalance(fullText: String, lines: List<String>): Double? {
         val balanceKeywords = listOf(
@@ -1445,8 +1637,9 @@ object BankStatementImporter {
             val lower = line.lowercase(Locale.ROOT)
             if (balanceKeywords.any { lower.contains(it) }) {
                 val amounts = extractAllAmounts(line)
-                if (amounts.isNotEmpty()) {
-                    return kotlin.math.abs(amounts.last())
+                val bal = amounts.lastOrNull { it.isFinite() }
+                if (bal != null) {
+                    return bal
                 }
             }
         }
@@ -1458,8 +1651,9 @@ object BankStatementImporter {
             if (idx != -1) {
                 val snippet = fullText.substring(idx, (idx + 120).coerceAtMost(fullText.length))
                 val amounts = extractAllAmounts(snippet)
-                if (amounts.isNotEmpty()) {
-                    return kotlin.math.abs(amounts.first())
+                val bal = amounts.firstOrNull { it.isFinite() }
+                if (bal != null) {
+                    return bal
                 }
             }
         }
@@ -1475,6 +1669,7 @@ object BankStatementImporter {
         val lines = mutableListOf<String>()
         val sb = StringBuilder()
         var inQuotes = false
+        var linesInQuote = 0
         var i = 0
         val len = content.length
         while (i < len) {
@@ -1486,6 +1681,7 @@ object BankStatementImporter {
                 }
                 c == '"' -> {
                     inQuotes = !inQuotes
+                    if (!inQuotes) linesInQuote = 0
                     sb.append(c)
                 }
                 (c == '\r' || c == '\n') && !inQuotes -> {
@@ -1497,6 +1693,21 @@ object BankStatementImporter {
                         lines.add(line)
                     }
                     sb.setLength(0)
+                }
+                c == '\n' && inQuotes -> {
+                    linesInQuote++
+                    if (linesInQuote > 25 || sb.length > 65_536) {
+                        // Recover from unclosed quote in malformed CSV instead of swallowing the rest of the file.
+                        inQuotes = false
+                        linesInQuote = 0
+                        val line = sb.toString().trim()
+                        if (line.isNotBlank()) {
+                            lines.add(line)
+                        }
+                        sb.setLength(0)
+                    } else {
+                        sb.append(c)
+                    }
                 }
                 else -> {
                     sb.append(c)
@@ -1560,9 +1771,9 @@ object BankStatementImporter {
     /** Drops diacritics and collapses whitespace so Czech/English headers match reliably. */
     private fun foldHeader(value: String): String {
         val decomposed = java.text.Normalizer.normalize(value.trim().lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD)
-        return decomposed.replace(Regex("\\p{M}+"), "")
+        return COMBINING_MARKS_REGEX.replace(decomposed, "")
             .replace('\u00A0', ' ')
-            .replace(Regex("\\s+"), " ")
+            .replace(MULTI_SPACE_REGEX, " ")
             .trim()
     }
 
@@ -1571,6 +1782,23 @@ object BankStatementImporter {
      * signatures, and only then bank account codes (which can appear as counterparty accounts).
      */
     private fun detectBankFromText(folded: String, lines: List<String>): BankType {
+        val headerIdx = lines.take(15).indexOfFirst { line ->
+            val f = foldHeader(line)
+            (f.contains("datum") || f.contains("date")) &&
+                (f.contains("castka") || f.contains("objem") || f.contains("amount"))
+        }
+        // Only match bank-name signatures against header/preamble lines (before CSV data rows or first PDF tx)
+        // so a counterparty name/note (e.g. "Revolut top-up" inside Moneta/CSOB) never hijacks statement detection.
+        val headerAndPreambleLines = if (headerIdx >= 0) {
+            lines.take(headerIdx + 1)
+        } else {
+            val preTx = lines.take(15).takeWhile { line ->
+                !DATE_BLOCKS_START_REGEX.containsMatchIn(line) || extractAllAmounts(line).isEmpty() || isIgnoredDateContext(line)
+            }
+            preTx.ifEmpty { lines.take(8) }
+        }
+        val nameScanText = foldHeader(headerAndPreambleLines.joinToString(" \n ")).ifBlank { folded }
+
         val nameSignatures = listOf(
             "moneta money bank" to BankType.MONETA,
             "moneta" to BankType.MONETA,
@@ -1581,7 +1809,6 @@ object BankStatementImporter {
             "sporitelna" to BankType.CESKA_SPORITELNA,
             "komercni banka" to BankType.KOMERCNI_BANKA,
             "fio banka" to BankType.FIO,
-            "fio" to BankType.FIO,
             "raiffeisenbank" to BankType.RAIFFEISENBANK,
             "raiffeisen" to BankType.RAIFFEISENBANK,
             "air bank" to BankType.AIR_BANK,
@@ -1601,8 +1828,9 @@ object BankStatementImporter {
             "wise payments" to BankType.WISE
         )
         for ((keyword, bank) in nameSignatures) {
-            if (folded.contains(keyword)) return bank
+            if (nameScanText.contains(keyword)) return bank
         }
+        if (FIO_WORD_REGEX.containsMatchIn(nameScanText)) return BankType.FIO
 
         val headerText = foldHeader(lines.take(30).joinToString(" | "))
         if (headerText.contains("#datum operace") || headerText.contains("#popis transakce")) return BankType.MBANK
@@ -1612,38 +1840,20 @@ object BankStatementImporter {
         if (headerText.contains("cislo uctu protistrany") || headerText.contains("nazev protistrany")) return BankType.CSOB
         if (headerText.contains("cislo uctu") && headerText.contains("smer")) return BankType.CESKA_SPORITELNA
         if (headerText.contains("objem") && headerText.contains("protiucet")) return BankType.FIO
+        if (headerText.contains("started date") && headerText.contains("completed date") && headerText.contains("state") && headerText.contains("currency")) {
+            return BankType.REVOLUT
+        }
 
-        val accountCodes = listOf(
-            "0100" to BankType.KOMERCNI_BANKA,
-            "0300" to BankType.CSOB,
-            "0600" to BankType.MONETA,
-            "0800" to BankType.CESKA_SPORITELNA,
-            "2010" to BankType.FIO,
-            "2250" to BankType.CREDITAS,
-            "2700" to BankType.UNICREDIT,
-            "3030" to BankType.AIR_BANK,
-            "4000" to BankType.MAX_BANKA,
-            "5500" to BankType.RAIFFEISENBANK,
-            "5800" to BankType.JT,
-            "6000" to BankType.PPF,
-            "6100" to BankType.EQUA,
-            "6210" to BankType.MBANK,
-            "8040" to BankType.OBERBANK
-        )
         val preambleLines = lines.take(15).takeWhile { line ->
             val f = foldHeader(line)
             !(f.contains("datum") && (f.contains("castka") || f.contains("objem")))
         }
         val preambleText = foldHeader(preambleLines.joinToString(" "))
-        for ((code, bank) in accountCodes) {
-            if (Regex("/\\s*$code\\b").containsMatchIn(preambleText)) return bank
+        for ((pattern, bank) in ACCOUNT_CODE_PATTERNS) {
+            if (pattern.containsMatchIn(preambleText)) return bank
         }
 
         val delim = detectCsvDelimiter(lines)
-        val headerIdx = lines.take(15).indexOfFirst { line ->
-            val f = foldHeader(line)
-            f.contains("datum") && (f.contains("castka") || f.contains("objem"))
-        }
         val counterpartyColIndices = if (headerIdx >= 0) {
             splitLine(lines[headerIdx], delim).mapIndexedNotNull { idx, col ->
                 val cf = foldHeader(col)
@@ -1661,8 +1871,8 @@ object BankStatementImporter {
             }
         }
         val codeText = foldHeader(filteredLines.joinToString(" "))
-        for ((code, bank) in accountCodes) {
-            if (Regex("/\\s*$code\\b").containsMatchIn(codeText)) return bank
+        for ((pattern, bank) in ACCOUNT_CODE_PATTERNS) {
+            if (pattern.containsMatchIn(codeText)) return bank
         }
         return BankType.GENERIC
     }
@@ -1670,7 +1880,8 @@ object BankStatementImporter {
     private fun parseMonetaCsv(
         lines: List<String>,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
@@ -1686,14 +1897,22 @@ object BankStatementImporter {
         // Use folded headers for column matching — Moneta exports use diacritics that may be
         // encoded as Windows-1250 or UTF-8, so normalizing avoids missed column indices.
         val headers = splitLine(lines[headerIdx], delimiter).map { foldHeader(it) }
+        val roles = inferHeaderRoles(headers)
+        if (roles.debitIdx >= 0 || roles.creditIdx >= 0 || roles.directionIdx >= 0) {
+            return parseUniversalCsv(lines, BankType.MONETA, familyAccounts, userOverrides, householdNames)
+        }
 
         val dateIdx = headers.indexOfFirst { it.contains("datum") }
         val amountIdx = headers.indexOfFirst { h ->
             (h.contains("castka") || h.contains("objem") || h.contains("amount")) &&
                     !h.contains("puvodni") && !h.contains("original")
         }
-        // Moneta: "Číslo protiúčtu" or "Protiúčet"
-        val accIdx = headers.indexOfFirst { it.contains("protiuc") || it.contains("protiucet") }
+        if (dateIdx < 0 || amountIdx < 0) return emptySummary(BankType.MONETA)
+        // Moneta: "Číslo protiúčtu" or "Protiúčet" (exclude name/bank columns)
+        val accIdx = headers.indexOfFirst { h ->
+            (h.contains("protiuc") || h.contains("protiucet")) &&
+                    !h.contains("nazev") && !h.contains("jmeno") && !h.contains("bank")
+        }
         val bankCodeIdx = headers.indexOfFirst { it.contains("kod bank") || it.contains("banka protiuctu") }
         // Moneta: "Název protiúčtu" or "Název účtu příjemce", avoid own "Název účtu"
         val nameIdx = run {
@@ -1707,15 +1926,26 @@ object BankStatementImporter {
         }
         val vsIdx = headers.indexOfFirst { it.contains("variabilni") || it == "vs" }
         val balanceIdx = headers.indexOfFirst { it.contains("zustatek") || it.contains("balance") }
+        val currencyIdx = headers.indexOfFirst { h ->
+            (h.contains("mena") || h.contains("currency")) && !h.contains("puvodni") && !h.contains("original")
+        }
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val tokens = splitLine(lines[i], delimiter)
-            if (tokens.size <= maxOf(dateIdx.coerceAtLeast(0), amountIdx.coerceAtLeast(0))) continue
+            if (tokens.size <= maxOf(dateIdx, amountIdx)) continue
             val dateStr = normalizeDate(tokens.getOrNull(dateIdx) ?: "")
-            val amount = parseCzechAmount(tokens.getOrNull(amountIdx) ?: "")
+
+            val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
+            val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
+            val details = parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            val amount = details.amountInCzk
+            val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
+            val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
+            val usedRate = if (details.originalCurrency != "CZK") details.exchangeRate else null
+
             val rawAcc = tokens.getOrNull(accIdx)?.trim() ?: ""
             val rawBank = if (bankCodeIdx >= 0) tokens.getOrNull(bankCodeIdx)?.trim()?.take(4) ?: "" else ""
             val counterpartyAcc = if (rawAcc.isNotBlank() && rawBank.isNotBlank() && !rawAcc.contains("/")) "$rawAcc/$rawBank" else rawAcc
@@ -1724,18 +1954,19 @@ object BankStatementImporter {
             val vs = tokens.getOrNull(vsIdx)?.trim() ?: ""
 
             if (balanceIdx >= 0 && balanceIdx < tokens.size && dateStr.isNotBlank()) {
-                val bal = parseCzechAmount(tokens[balanceIdx])
-                if (bal != 0.0) balanceWithDates.add(dateStr to bal)
+                val balCell = tokens[balanceIdx]
+                if (balCell.any { it.isDigit() }) {
+                    val bal = parseCzechAmount(balCell, explicitCurrency = currencyToken)
+                    if (bal.isFinite()) balanceWithDates.add(dateStr to bal)
+                }
             }
 
-            // Skip Moneta footer summary rows (totals, opening/closing balance lines)
+            // Skip Moneta footer summary rows (anchored phrases so legitimate words like "obratem" are preserved)
             val rowContext = foldHeader("$counterpartyName $message")
-            if (rowContext.contains("pocatecni zustatek") || rowContext.contains("konecny zustatek") ||
-                rowContext.contains("obrat") || rowContext.contains("celkovy pocet")
-            ) continue
+            if (SUMMARY_FOOTER_REGEX.containsMatchIn(rowContext)) continue
 
-            if (dateStr.isNotBlank() && amount != 0.0) {
-                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides)
+            if (dateStr.isNotBlank() && amount.isFinite() && amount != 0.0) {
+                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, householdNames = householdNames)
                 val cleanName = cleanPaymentDescription(counterpartyName)
                 val cleanMsg = cleanPaymentDescription(message)
                 val distinctMsg = if (cleanMsg.isNotBlank() && !cleanMsg.equals(cleanName, ignoreCase = true)) cleanMsg else ""
@@ -1751,19 +1982,23 @@ object BankStatementImporter {
                         variableSymbol = vs,
                         category = cat,
                         isNetted = isNetted,
-                        nettingReason = nettingReason
+                        nettingReason = nettingReason,
+                        originalCurrency = origCurr,
+                        originalAmount = origAmt,
+                        exchangeRate = usedRate
                     )
                 )
             }
         }
-        val closingBalance = balanceWithDates.maxByOrNull { it.first }?.second
+        val closingBalance = resolveClosingBalance(balanceWithDates, rawTransactions)
         return buildSummary(BankType.MONETA, rawTransactions, closingBalance)
     }
 
     private fun parseCsobCsv(
         lines: List<String>,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
@@ -1783,6 +2018,10 @@ object BankStatementImporter {
         // Use folded (diacritic-stripped) headers for matching so both format variants work.
         val rawHeaders = splitLine(lines[headerIdx], delimiter)
         val headers = rawHeaders.map { foldHeader(it) }
+        val roles = inferHeaderRoles(headers)
+        if (roles.debitIdx >= 0 || roles.creditIdx >= 0 || roles.directionIdx >= 0) {
+            return parseUniversalCsv(lines, BankType.CSOB, familyAccounts, userOverrides, householdNames)
+        }
 
         // Date: prefer "Datum zaúčtování" (v2) over "Datum pohybu"/"Datum splatnosti" (v1).
         val dateIdx = run {
@@ -1796,11 +2035,13 @@ object BankStatementImporter {
             (h.contains("castka") || h.contains("objem") || h.contains("amount")) &&
                     !h.contains("original") && !h.contains("puvodni")
         }
+        if (dateIdx < 0 || amountIdx < 0) return emptySummary(BankType.CSOB)
 
         // Counterparty account: v1 has no dedicated column; v2 has "IBAN / Číslo účtu protistrany"
         val accIdx = headers.indexOfFirst { h ->
-            (h.contains("protistran") && (h.contains("ucet") || h.contains("iban"))) ||
-                    (h.contains("iban") && h.contains("cislo"))
+            ((h.contains("protistran") && (h.contains("ucet") || h.contains("iban"))) ||
+                    (h.contains("iban") && h.contains("cislo"))) &&
+                    !h.contains("nazev") && !h.contains("jmeno")
         }
 
         // Counterparty name: v2 has "Název účtu protistrany"; v1 has "Odesílatel"
@@ -1827,33 +2068,45 @@ object BankStatementImporter {
 
         // Closing balance: "Zůstatek po transakci"
         val balanceIdx = headers.indexOfFirst { it.contains("zustatek") || it.contains("balance") }
+        val currencyIdx = headers.indexOfFirst { h ->
+            (h.contains("mena") || h.contains("currency")) && !h.contains("puvodni") && !h.contains("original")
+        }
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val tokens = splitLine(lines[i], delimiter)
-            if (tokens.size <= maxOf(dateIdx.coerceAtLeast(0), amountIdx.coerceAtLeast(0))) continue
+            if (tokens.size <= maxOf(dateIdx, amountIdx)) continue
             val dateStr = normalizeDate(tokens.getOrNull(dateIdx) ?: "")
-            val amount = parseCzechAmount(tokens.getOrNull(amountIdx) ?: "")
+
+            val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
+            val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
+            val details = parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            val amount = details.amountInCzk
+            val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
+            val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
+            val usedRate = if (details.originalCurrency != "CZK") details.exchangeRate else null
+
             val counterpartyAcc = tokens.getOrNull(accIdx)?.trim() ?: ""
             val counterpartyName = tokens.getOrNull(nameIdx)?.trim() ?: ""
             val message = tokens.getOrNull(msgIdx)?.trim() ?: ""
             val vs = tokens.getOrNull(vsIdx)?.trim() ?: ""
 
             if (balanceIdx >= 0 && balanceIdx < tokens.size && dateStr.isNotBlank()) {
-                val bal = parseCzechAmount(tokens[balanceIdx])
-                if (bal != 0.0) balanceWithDates.add(dateStr to bal)
+                val balCell = tokens[balanceIdx]
+                if (balCell.any { it.isDigit() }) {
+                    val bal = parseCzechAmount(balCell, explicitCurrency = currencyToken)
+                    if (bal.isFinite()) balanceWithDates.add(dateStr to bal)
+                }
             }
 
-            // Skip summary rows that appear at the end of some ČSOB exports
+            // Skip summary rows at the end of ČSOB exports without dropping "obratem" / "Faktura celkem"
             val rowContext = foldHeader("$counterpartyName $message")
-            if (rowContext.contains("pocatecni zustatek") || rowContext.contains("konecny zustatek") ||
-                rowContext.contains("obrat") || rowContext.contains("celkem")
-            ) continue
+            if (SUMMARY_FOOTER_REGEX.containsMatchIn(rowContext)) continue
 
-            if (dateStr.isNotBlank() && amount != 0.0) {
-                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides)
+            if (dateStr.isNotBlank() && amount.isFinite() && amount != 0.0) {
+                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, householdNames = householdNames)
                 val cleanName = cleanPaymentDescription(counterpartyName)
                 val cleanMsg = cleanPaymentDescription(message)
                 val distinctMsg = if (cleanMsg.isNotBlank() && !cleanMsg.equals(cleanName, ignoreCase = true)) cleanMsg else ""
@@ -1869,19 +2122,23 @@ object BankStatementImporter {
                         variableSymbol = vs,
                         category = cat,
                         isNetted = isNetted,
-                        nettingReason = nettingReason
+                        nettingReason = nettingReason,
+                        originalCurrency = origCurr,
+                        originalAmount = origAmt,
+                        exchangeRate = usedRate
                     )
                 )
             }
         }
-        val closingBalance = balanceWithDates.maxByOrNull { it.first }?.second
+        val closingBalance = resolveClosingBalance(balanceWithDates, rawTransactions)
         return buildSummary(BankType.CSOB, rawTransactions, closingBalance)
     }
 
     private fun parseMbankCsv(
         lines: List<String>,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
@@ -1896,6 +2153,10 @@ object BankStatementImporter {
         if (headerIdx == -1) return emptySummary(BankType.MBANK)
         // Strip mBank's '#' prefix from column names before matching.
         val headers = splitLine(lines[headerIdx].replace("#", ""), delimiter).map { foldHeader(it) }
+        val roles = inferHeaderRoles(headers)
+        if (roles.debitIdx >= 0 || roles.creditIdx >= 0 || roles.directionIdx >= 0) {
+            return parseUniversalCsv(lines, BankType.MBANK, familyAccounts, userOverrides, householdNames)
+        }
 
         val dateIdx = headers.indexOfFirst { it.contains("datum") }
         // Prefer the net transaction amount column; exclude "Zůstatek" and "Původní" columns.
@@ -1903,16 +2164,24 @@ object BankStatementImporter {
             (h.contains("castka") || h.contains("objem") || h.contains("amount")) &&
                     !h.contains("zustatek") && !h.contains("puvodni") && !h.contains("original")
         }
+        if (dateIdx < 0 || amountIdx < 0) return emptySummary(BankType.MBANK)
         val descIdx = headers.indexOfFirst { it.contains("popis") }
         val accIdx = headers.indexOfFirst { h ->
-            h.contains("ucet") || h.contains("iban") || h.contains("cislo")
+            (h.contains("protiuc") || h.contains("protistr") || h.contains("iban") ||
+                    (h.contains("ucet") && (h.contains("cislo") || h.contains("prijemce") || h.contains("platce")))) &&
+                    !h.contains("nazev") && !h.contains("jmeno") && !h.contains("vlastni") && !h.contains("majitel")
         }
-        // mBank uses "Plátce/Příjemce" — neither "název" nor "name" appears in their headers.
+        // mBank uses "Plátce/Příjemce" — exclude account number/IBAN columns.
         val nameIdx = headers.indexOfFirst { h ->
-            h.contains("nazev") || h.contains("name") || h.contains("platce") ||
-                    h.contains("prijemce") || h.contains("protistr")
+            (h.contains("nazev") || h.contains("name") || h.contains("platce") ||
+                    h.contains("prijemce") || h.contains("protistr")) &&
+                    !h.contains("cislo") && !h.contains("iban") && !h.contains("vlastni") && !h.contains("majitel")
         }
         val balanceIdx = headers.indexOfFirst { it.contains("zustatek") || it.contains("balance") }
+        val currencyIdx = headers.indexOfFirst { h ->
+            (h.contains("mena") || h.contains("currency")) && !h.contains("puvodni") && !h.contains("original")
+        }
+        val vsIdx = headers.indexOfFirst { it.contains("variabilni") || it == "vs" }
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
@@ -1921,20 +2190,34 @@ object BankStatementImporter {
             val tokens = splitLine(lines[i], delimiter)
             if (tokens.size <= maxOf(dateIdx, amountIdx)) continue
             val dateStr = normalizeDate(tokens.getOrNull(dateIdx) ?: "")
-            val amount = parseCzechAmount(tokens.getOrNull(amountIdx) ?: "")
+            val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
+            val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
+            val details = parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            val amount = details.amountInCzk
+            val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
+            val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
+            val usedRate = if (details.originalCurrency != "CZK") details.exchangeRate else null
+
             val counterpartyAcc = tokens.getOrNull(accIdx)?.trim() ?: ""
             val counterpartyName = tokens.getOrNull(nameIdx)?.trim() ?: ""
             val message = tokens.getOrNull(descIdx)?.trim() ?: ""
+            val vs = tokens.getOrNull(vsIdx)?.trim() ?: ""
 
             if (balanceIdx != -1 && balanceIdx < tokens.size && dateStr.isNotBlank()) {
-                val bal = parseCzechAmount(tokens[balanceIdx])
-                if (bal != 0.0) {
-                    balanceWithDates.add(dateStr to bal)
+                val balCell = tokens[balanceIdx]
+                if (balCell.any { it.isDigit() }) {
+                    val bal = parseCzechAmount(balCell, explicitCurrency = currencyToken)
+                    if (bal.isFinite()) {
+                        balanceWithDates.add(dateStr to bal)
+                    }
                 }
             }
 
-            if (dateStr.isNotBlank() && amount != 0.0) {
-                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, "", familyAccounts, userOverrides)
+            val rowContext = foldHeader("$counterpartyName $message")
+            if (SUMMARY_FOOTER_REGEX.containsMatchIn(rowContext)) continue
+
+            if (dateStr.isNotBlank() && amount.isFinite() && amount != 0.0) {
+                val cat = categorizeTransaction(amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, householdNames = householdNames)
                 val cleanName = cleanPaymentDescription(counterpartyName)
                 val cleanMsg = cleanPaymentDescription(message)
                 val distinctMsg = if (cleanMsg.isNotBlank() && !cleanMsg.equals(cleanName, ignoreCase = true)) cleanMsg else ""
@@ -1947,22 +2230,26 @@ object BankStatementImporter {
                         counterpartyAccount = counterpartyAcc,
                         counterpartyName = cleanName,
                         message = distinctMsg,
-                        variableSymbol = "",
+                        variableSymbol = vs,
                         category = cat,
                         isNetted = isNetted,
-                        nettingReason = nettingReason
+                        nettingReason = nettingReason,
+                        originalCurrency = origCurr,
+                        originalAmount = origAmt,
+                        exchangeRate = usedRate
                     )
                 )
             }
         }
-        val closingBalance = balanceWithDates.maxByOrNull { it.first }?.second
+        val closingBalance = resolveClosingBalance(balanceWithDates, rawTransactions)
         return buildSummary(BankType.MBANK, rawTransactions, closingBalance)
     }
 
     private fun parseGenericCsv(
         lines: List<String>,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val delimiter = detectCsvDelimiter(lines)
         var headerIdx = -1
@@ -1979,6 +2266,7 @@ object BankStatementImporter {
 
         val dateIdx = headers.indexOfFirst { it.contains("date") || it.contains("datum") }
         val amountIdx = headers.indexOfFirst { it.contains("amount") || it.contains("částka") || it.contains("castka") }
+        if (dateIdx < 0 || amountIdx < 0) return emptySummary(BankType.GENERIC)
         val msgIdx = headers.indexOfFirst { it.contains("description") || it.contains("message") || it.contains("popis") || it.contains("zpráva") }
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
@@ -1989,8 +2277,8 @@ object BankStatementImporter {
             val amount = parseCzechAmount(tokens.getOrNull(amountIdx) ?: "")
             val message = tokens.getOrNull(msgIdx)?.trim() ?: ""
 
-            if (dateStr.isNotBlank() && amount != 0.0) {
-                val cat = categorizeTransaction(amount, "", "", message, "", familyAccounts, userOverrides)
+            if (dateStr.isNotBlank() && amount.isFinite() && amount != 0.0) {
+                val cat = categorizeTransaction(amount, "", "", message, "", familyAccounts, userOverrides, householdNames = householdNames)
                 val cleanMsg = cleanPaymentDescription(message)
                 rawTransactions.add(
                     ParsedBankTransaction(
@@ -2029,13 +2317,21 @@ object BankStatementImporter {
      * Handles signed single-amount columns as well as separate debit/credit columns.
      */
     private fun inferHeaderRoles(cells: List<String>): HeaderRoles {
-        fun find(vararg predicates: (String) -> Boolean): Int =
-            cells.indexOfFirst { cell -> cell.isNotBlank() && predicates.any { it(cell) } }
+        fun find(vararg predicates: (String) -> Boolean): Int {
+            for (pred in predicates) {
+                val idx = cells.indexOfFirst { cell -> cell.isNotBlank() && pred(cell) }
+                if (idx >= 0) return idx
+            }
+            return -1
+        }
 
         val dateIdx = find({ it.contains("datum") }, { it.contains("date") }, { it.contains("valuta") }, { it.contains("proved") }, { it.contains("zauc") })
         val balanceIdx = find({ it.contains("zustatek") }, { it.contains("balance") })
         val vsIdx = find({ it.contains("variabil") }, { it == "vs" }, { it.contains("var symbol") }, { it.contains("varsymbol") })
-        val currencyIdx = find({ it.contains("mena") }, { it.contains("currency") })
+        val currencyIdx = find(
+            { it.contains("mena") && !it.contains("puvodni") && !it.contains("original") },
+            { it.contains("currency") && !it.contains("original") && !it.contains("puvodni") }
+        )
         val debitIdx = find(
             { it.contains("debet") && !it.contains("karta") && !it.contains("kartou") },
             { it.contains("debit") && !it.contains("card") },
@@ -2054,9 +2350,10 @@ object BankStatementImporter {
               !it.contains("kredit") && !it.contains("credit") && !it.contains("odeps") && !it.contains("prips") }
         )
         val directionIdx = find(
-            { it == "smer" }, { it.contains("smer") }, { it == "direction" }, { it == "typ" }, { it == "typ pohybu" },
-            { it.contains("druh") }, { it == "d/c" }, { it == "dr/cr" }, { it == "debet/kredit" },
-            { it == "d/k" }, { it == "dr/kr" }, { it.contains("d/k") }, { it.contains("dr/kr") }, { it.contains("d / k") }, { it.contains("d / c") }
+            { it == "smer" }, { it == "direction" }, { it == "typ" }, { it == "typ pohybu" }, { it == "typ operace" }, { it == "typ transakce" },
+            { it == "druh" }, { it == "druh pohybu" }, { it == "d/c" }, { it == "dr/cr" }, { it == "debet/kredit" },
+            { it == "d/k" }, { it == "dr/kr" }, { it.contains("d/k") }, { it.contains("dr/kr") }, { it.contains("d / k") }, { it.contains("d / c") },
+            { it.contains("smer platby") || it.contains("smer pohybu") }
         )
         val messageIdx = find(
             { it.contains("zprava") }, { it.contains("popis") }, { it.contains("message") },
@@ -2065,7 +2362,7 @@ object BankStatementImporter {
         )
         val nameIdx = find(
             { (it.contains("nazev") || it.contains("name") || it.contains("obchodnik") || it.contains("prijemce") || it.contains("platce") || it.contains("protistrana")) &&
-              !it.contains("vlastni") && !it.contains("majitel") && !it.contains("nazev uctu") }
+              !it.contains("vlastni") && !it.contains("majitel") && it != "nazev uctu" && !it.contains("cislo") && !it.contains("iban") }
         )
         val accountIdx = find(
             { (it.contains("protiuc") || it.contains("protistran") || it.contains("iban") || it.contains("account") || it.contains("protiucet") ||
@@ -2079,7 +2376,7 @@ object BankStatementImporter {
     }
 
     private fun extractDateToken(cell: String): String {
-        val match = Regex("""(\d{1,4}[./-]\s*\d{1,2}[./-]\s*\d{2,4})""").find(cell) ?: return ""
+        val match = DATE_TOKEN_IN_CELL_REGEX.find(cell) ?: return ""
         return normalizeDate(match.value.replace(" ", ""))
     }
 
@@ -2087,7 +2384,8 @@ object BankStatementImporter {
         lines: List<String>,
         bankType: BankType,
         familyAccounts: Set<String>,
-        userOverrides: Map<String, BankTransactionType> = emptyMap()
+        userOverrides: Map<String, BankTransactionType> = emptyMap(),
+        householdNames: List<String> = emptyList()
     ): StatementParseSummary {
         val delimiter = detectCsvDelimiter(lines)
 
@@ -2117,32 +2415,66 @@ object BankStatementImporter {
             val dateStr = extractDateToken(tokens.getOrNull(roles.dateIdx) ?: "")
             if (dateStr.isBlank()) continue
 
-            val currencyToken = if (roles.currencyIdx >= 0) tokens.getOrNull(roles.currencyIdx)?.trim()?.uppercase(Locale.ROOT) else null
+            val currencyToken = if (roles.currencyIdx >= 0) {
+                tokens.getOrNull(roles.currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() }
+            } else null
+            val detectedCurrency = currencyToken
+                ?: FxRateService.detectCurrency(tokens.getOrNull(roles.amountIdx) ?: "")
+                ?: (if (roles.debitIdx >= 0) FxRateService.detectCurrency(tokens.getOrNull(roles.debitIdx) ?: "") else null)
+                ?: (if (roles.creditIdx >= 0) FxRateService.detectCurrency(tokens.getOrNull(roles.creditIdx) ?: "") else null)
 
             var amount = 0.0
+            var origAmount: Double? = null
+            var origCurr: String? = null
+            var usedRate: Double? = null
+            val rawAmountCell = if (roles.amountIdx >= 0) tokens.getOrNull(roles.amountIdx) ?: "" else ""
+
             if (roles.debitIdx >= 0 || roles.creditIdx >= 0) {
-                val debit = if (roles.debitIdx >= 0) kotlin.math.abs(parseCzechAmount(tokens.getOrNull(roles.debitIdx) ?: "", explicitCurrency = currencyToken)) else 0.0
-                val credit = if (roles.creditIdx >= 0) kotlin.math.abs(parseCzechAmount(tokens.getOrNull(roles.creditIdx) ?: "", explicitCurrency = currencyToken)) else 0.0
+                val debitDetails = if (roles.debitIdx >= 0) parseCzechAmountDetailed(tokens.getOrNull(roles.debitIdx) ?: "", explicitCurrency = detectedCurrency) else null
+                val creditDetails = if (roles.creditIdx >= 0) parseCzechAmountDetailed(tokens.getOrNull(roles.creditIdx) ?: "", explicitCurrency = detectedCurrency) else null
+                val debit = debitDetails?.amountInCzk?.takeIf { it.isFinite() }?.let { kotlin.math.abs(it) } ?: 0.0
+                val credit = creditDetails?.amountInCzk?.takeIf { it.isFinite() }?.let { kotlin.math.abs(it) } ?: 0.0
                 if (debit > 0.0 || credit > 0.0) {
                     amount = credit - debit
+                    val activeDetails = if (credit > 0.0) creditDetails else debitDetails
+                    if (activeDetails != null && activeDetails.originalCurrency != "CZK") {
+                        origCurr = activeDetails.originalCurrency
+                        origAmount = if (amount < 0) -kotlin.math.abs(activeDetails.originalAmount) else kotlin.math.abs(activeDetails.originalAmount)
+                        usedRate = activeDetails.exchangeRate
+                    }
                 }
             }
             if (amount == 0.0 && roles.amountIdx >= 0) {
-                amount = parseCzechAmount(tokens.getOrNull(roles.amountIdx) ?: "", explicitCurrency = currencyToken)
+                val details = parseCzechAmountDetailed(rawAmountCell, explicitCurrency = detectedCurrency)
+                amount = details.amountInCzk
+                if (details.originalCurrency != "CZK") {
+                    origCurr = details.originalCurrency
+                    origAmount = details.originalAmount
+                    usedRate = details.exchangeRate
+                }
             }
-            if (amount != 0.0 && roles.directionIdx >= 0) {
+            if (amount.isFinite() && amount != 0.0 && roles.directionIdx >= 0) {
                 val direction = foldHeader(tokens.getOrNull(roles.directionIdx) ?: "")
-                val isCardPayment = direction.contains("karta") || direction.contains("kartou")
+                val explicitPositive = rawAmountCell.trimStart().startsWith("+")
+                val isRefundDir = direction.contains("vracen") || direction.contains("vratk") ||
+                    direction.contains("refund") || direction.contains("storn")
+                val isCardPayment = !isRefundDir && (direction.contains("karta") || direction.contains("kartou"))
                 val isDebitSign = direction == "d" || direction == "dr" || direction.startsWith("d ") || direction.endsWith(" d")
                 val isCreditSign = direction == "k" || direction == "c" || direction == "kr" || direction == "cr" || direction.startsWith("k ") || direction.endsWith(" k") || direction.startsWith("c ") || direction.endsWith(" c")
-                val outflow = isDebitSign || isCardPayment || direction.contains("odchoz") || direction.contains("debet") || direction.contains("debit") || direction.contains("vydaj") || direction.contains("vydej") ||
-                    direction.contains("odeps") || direction.contains("na vrub") || Regex("""\bout\b""").containsMatchIn(direction)
-                val inflow = isCreditSign || direction.contains("prichoz") || (!isCardPayment && (direction.contains("kredit") || direction.contains("credit"))) ||
-                    direction.contains("prips") || direction.contains("prijem") || direction.contains("vklad") || Regex("""\bin\b""").containsMatchIn(direction)
-                if (outflow && amount > 0) amount = -amount
-                if (inflow && amount < 0) amount = -amount
+                val outflow = isDebitSign || (isCardPayment && !explicitPositive) || direction.contains("odchoz") || direction.contains("debet") || direction.contains("debit") || direction.contains("vydaj") || direction.contains("vydej") ||
+                    direction.contains("odeps") || direction.contains("na vrub") || DIR_OUT_WORD_REGEX.containsMatchIn(direction)
+                val inflow = isCreditSign || isRefundDir || direction.contains("prichoz") || (!isCardPayment && (direction.contains("kredit") || direction.contains("credit"))) ||
+                    direction.contains("prips") || direction.contains("prijem") || direction.contains("vklad") || DIR_IN_WORD_REGEX.containsMatchIn(direction)
+                if (outflow && !inflow && amount > 0) {
+                    amount = -amount
+                    if (origAmount != null && origAmount > 0) origAmount = -origAmount
+                }
+                if (inflow && amount < 0) {
+                    amount = -amount
+                    if (origAmount != null && origAmount < 0) origAmount = -origAmount
+                }
             }
-            if (amount == 0.0) continue
+            if (!amount.isFinite() || amount == 0.0) continue
 
             val rawCpAcc = tokens.getOrNull(roles.accountIdx)?.trim() ?: ""
             val rawBankCode = if (roles.bankCodeIdx >= 0) tokens.getOrNull(roles.bankCodeIdx)?.trim()?.take(4) ?: "" else ""
@@ -2156,19 +2488,20 @@ object BankStatementImporter {
             val vs = tokens.getOrNull(roles.vsIdx)?.trim() ?: ""
 
             val context = foldHeader("$counterpartyName $message")
-            if (context.contains("konecny zustatek") || context.contains("pocatecni zustatek") ||
-                context.contains("ucetni zustatek") || context.contains("obrat") || context.contains("celkem")
-            ) {
+            if (SUMMARY_FOOTER_REGEX.containsMatchIn(context)) {
                 continue
             }
 
             if (roles.balanceIdx >= 0) {
-                val balance = parseCzechAmount(tokens.getOrNull(roles.balanceIdx) ?: "", explicitCurrency = currencyToken)
-                if (balance != 0.0) balanceWithDates.add(dateStr to balance)
+                val balCell = tokens.getOrNull(roles.balanceIdx) ?: ""
+                if (balCell.any { it.isDigit() }) {
+                    val balance = parseCzechAmount(balCell, explicitCurrency = currencyToken)
+                    if (balance.isFinite()) balanceWithDates.add(dateStr to balance)
+                }
             }
 
             val category = categorizeTransaction(
-                amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, rawContext = line
+                amount, counterpartyAcc, counterpartyName, message, vs, familyAccounts, userOverrides, rawContext = line, householdNames = householdNames
             )
             val cleanName = cleanPaymentDescription(counterpartyName)
             val cleanMsg = cleanPaymentDescription(message)
@@ -2185,19 +2518,15 @@ object BankStatementImporter {
                     category = category,
                     isNetted = isNetted,
                     nettingReason = determineNettingReason(category, cleanName, distinctMsg),
-                    bankType = bankType
+                    bankType = bankType,
+                    originalCurrency = origCurr,
+                    originalAmount = origAmount,
+                    exchangeRate = usedRate
                 )
             )
         }
 
-        val closingBalance = if (balanceWithDates.isNotEmpty()) {
-            val isAscending = if (rawTransactions.size >= 2) {
-                rawTransactions.first().date <= rawTransactions.last().date
-            } else true
-            val maxDate = balanceWithDates.maxOf { it.first }
-            val matching = balanceWithDates.filter { it.first == maxDate }
-            if (isAscending) matching.last().second else matching.first().second
-        } else null
+        val closingBalance = resolveClosingBalance(balanceWithDates, rawTransactions)
         return buildSummary(bankType, rawTransactions, closingBalance)
     }
 
@@ -2213,17 +2542,32 @@ object BankStatementImporter {
         vs: String,
         familyAccounts: Set<String>,
         userOverrides: Map<String, BankTransactionType> = emptyMap(),
-        rawContext: String = ""
+        rawContext: String = "",
+        householdNames: List<String> = emptyList()
     ): BankTransactionType {
         val combinedText = "$counterpartyName $message $rawContext".lowercase(Locale.ROOT)
         val cleanAcc = counterpartyAcc.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)
 
         // 1. Self or family internal transfers have top priority
-        if (CrossStatementReconciliationEngine.isSelfOrFamilyTransfer(counterpartyName, counterpartyAcc, message, familyAccounts, isDebit = amount < 0)) {
+        if (CrossStatementReconciliationEngine.isSelfOrFamilyTransfer(
+                counterpartyName = counterpartyName,
+                counterpartyAccount = counterpartyAcc,
+                message = message,
+                knownFamilyAccounts = familyAccounts,
+                isDebit = amount < 0,
+                householdNames = householdNames
+            )
+        ) {
             return BankTransactionType.INTERNAL_TRANSFER
         }
         if (familyAccounts.any { it.isNotBlank() && cleanAcc.contains(it.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)) }) {
             return BankTransactionType.INTERNAL_TRANSFER
+        }
+
+        // 1b. Explicit user merchant overrides apply across both inflows and outflows.
+        val overrideMatch = CzechMerchantCatalog.matchUserOverrideOnly("$counterpartyName $counterpartyAcc $message $rawContext", userOverrides)
+        if (overrideMatch != null) {
+            return overrideMatch
         }
 
         // 2. Inflows (amount > 0): income unless explicitly marked as a refund/storno
@@ -2233,22 +2577,24 @@ object BankStatementImporter {
 
         if (amount > 0 && !isExplicitRefund) {
             return when {
-                combinedText.contains("rodičov") || combinedText.contains("rodicov") || combinedText.contains("úřad práce") || combinedText.contains("urad prace") ||
-                        combinedText.contains("rodp") || combinedText.contains("úp brno") || combinedText.contains("up brno") ->
+                combinedText.contains("rodičovsk") || combinedText.contains("rodicovsk") || combinedText.contains("úřad práce") || combinedText.contains("urad prace") ||
+                        SALARY_RODP_REGEX.containsMatchIn(combinedText) || combinedText.contains("úp brno") || combinedText.contains("up brno") ->
                     BankTransactionType.PARENTAL_BENEFIT
+                CrossStatementReconciliationEngine.isFamilyGiftContribution(counterpartyName, message) ->
+                    BankTransactionType.FAMILY_GIFT
                 combinedText.contains("eleonora") ->
                     BankTransactionType.SALARY_ELEONORA
                 combinedText.contains("uohs") || combinedText.contains("úřad hosp") || combinedText.contains("urad hosp") ||
                         combinedText.contains("zaměstnavatel") || combinedText.contains("zamestnavatel") ||
-                        combinedText.contains("mzda") || Regex("""\bplat\b""").containsMatchIn(combinedText) || combinedText.contains("výplata") || combinedText.contains("vyplata") || combinedText.contains("odměna") || combinedText.contains("odmena") ->
+                        combinedText.contains("mzda") || SALARY_PLAT_REGEX.containsMatchIn(combinedText) || combinedText.contains("výplata") || combinedText.contains("vyplata") || combinedText.contains("odměna") || combinedText.contains("odmena") ->
                     BankTransactionType.SALARY_VACLAV
                 else ->
                     BankTransactionType.OTHER_INFLOW
             }
         }
 
-        // 3. User custom overrides & merchant catalog
-        val catalogMatch = CzechMerchantCatalog.matchCategory("$counterpartyName $counterpartyAcc $message $rawContext", userOverrides)
+        // 3. Built-in merchant catalog
+        val catalogMatch = CzechMerchantCatalog.matchCategory("$counterpartyName $counterpartyAcc $message $rawContext", emptyMap())
         if (catalogMatch != null) {
             return catalogMatch
         }
@@ -2260,14 +2606,20 @@ object BankStatementImporter {
                 combinedText.contains("sporen") || combinedText.contains("spořen") ||
                 combinedText.contains("investic") || combinedText.contains("cíl") || combinedText.contains("cil") ||
                 combinedText.contains("penzij") || combinedText.contains("staveb") ||
-                combinedText.contains("pojišt") || combinedText.contains("pojist")
+                combinedText.contains("pojišt") || combinedText.contains("pojist") ||
+                combinedText.contains("splatk") || combinedText.contains("splátk") ||
+                combinedText.contains("uver") || combinedText.contains("úvěr") ||
+                combinedText.contains("pujck") || combinedText.contains("půjčk") ||
+                combinedText.contains("leasing") || combinedText.contains("skoln") || combinedText.contains("školn") ||
+                combinedText.contains("daně") || combinedText.contains("dane") ||
+                combinedText.contains("aliment") || combinedText.contains("výživ") || combinedText.contains("vyziv")
             val hasHousingKeyword = !isExcludedFromHousing && (
                 combinedText.contains("nájem") || combinedText.contains("najem") ||
                 combinedText.contains("nájemné") || combinedText.contains("najemne") ||
                 combinedText.contains("činže") || combinedText.contains("cinze") ||
-                combinedText.contains("fond oprav") || combinedText.contains("svj") ||
+                combinedText.contains("fond oprav") || HOUSING_SVJ_REGEX.containsMatchIn(combinedText) ||
                 combinedText.contains("platba najmu") || combinedText.contains("bydleni") ||
-                combinedText.contains("bydlení") || Regex("""\bbyt\b""").containsMatchIn(combinedText) ||
+                combinedText.contains("bydlení") || HOUSING_BYT_REGEX.containsMatchIn(combinedText) ||
                 combinedText.contains("pronájem") || combinedText.contains("pronajem") ||
                 combinedText.contains("pronajímatel") || combinedText.contains("pronajimatel") ||
                 combinedText.contains("najemce") || combinedText.contains("nájemce") ||
@@ -2290,21 +2642,21 @@ object BankStatementImporter {
             combinedText.contains("76788295") || combinedText.contains("7678876788") ||
             combinedText.contains("518746050")
 
-        if (isGeneralInvestmentAcc || combinedText.contains("portu") || combinedText.contains("wood & company") ||
+        if (isGeneralInvestmentAcc || INV_PORTU_WORD_REGEX.containsMatchIn(combinedText) || combinedText.contains("wood & company") ||
             combinedText.contains("wood company") || combinedText.contains("wood retail") ||
-            combinedText.contains("xtb") || combinedText.contains("x-trade") ||
+            INV_XTB_WORD_REGEX.containsMatchIn(combinedText) || combinedText.contains("x-trade") ||
             combinedText.contains("degiro") || combinedText.contains("interactive brokers") ||
             combinedText.contains("trading 212") || combinedText.contains("csob drobne") ||
             combinedText.contains("čsob drobné")
         ) {
             return BankTransactionType.INVESTMENT_PORTU
         }
-        if (combinedText.contains("dip") || combinedText.contains("patria dip") || combinedText.contains("patria finance")) {
+        if (INV_DIP_WORD_REGEX.containsMatchIn(combinedText) || combinedText.contains("patria dip") || combinedText.contains("patria finance")) {
             return BankTransactionType.INVESTMENT_DIP
         }
 
         val isDpsAcc = cleanAcc.contains("5005004433") || combinedText.contains("5005004433")
-        if (isDpsAcc || combinedText.contains("penzij") || combinedText.contains("dps") ||
+        if (isDpsAcc || combinedText.contains("penzij") || INV_DPS_WORD_REGEX.containsMatchIn(combinedText) ||
             combinedText.contains("conseq") || combinedText.contains("generali") ||
             combinedText.contains("allianz") || combinedText.contains("nn penzij") ||
             combinedText.contains("nn penze")
@@ -2315,7 +2667,7 @@ object BankStatementImporter {
         if (combinedText.contains("albert") || combinedText.contains("billa") || combinedText.contains("lidl") ||
             combinedText.contains("tesco") || combinedText.contains("penny") || combinedText.contains("kaufland") ||
             combinedText.contains("rohlík") || combinedText.contains("rohlik") || combinedText.contains("košík") ||
-            combinedText.contains("kosik") || combinedText.contains("globus") || combinedText.contains("jip") ||
+            combinedText.contains("kosik") || combinedText.contains("globus") || GROCERY_JIP_WORD_REGEX.containsMatchIn(combinedText) ||
             combinedText.contains("potraviny") || combinedText.contains("pekarstvi") || combinedText.contains("pekárna") ||
             combinedText.contains("pekarna") || combinedText.contains("řeznictví") || combinedText.contains("reznictvi")
         ) {
@@ -2342,7 +2694,12 @@ object BankStatementImporter {
         summary: StatementParseSummary,
         updatedTransactions: List<ParsedBankTransaction>
     ): StatementParseSummary {
-        return buildSummary(summary.detectedBank, updatedTransactions, summary.monthEndBalance)
+        return buildSummary(
+            bankType = summary.detectedBank,
+            transactions = updatedTransactions,
+            monthEndBalance = summary.monthEndBalance,
+            forcedYearMonth = summary.yearMonth.takeIf { YEAR_MONTH_REGEX.matches(it) }
+        ).copy(isPdfSource = summary.isPdfSource)
     }
 
     private fun buildSummary(
@@ -2354,9 +2711,10 @@ object BankStatementImporter {
         if (transactions.isEmpty()) return emptySummary(bankType)
 
         val effectiveForYm = transactions.filter { !it.isExcluded }.ifEmpty { transactions }
-        val ymCounts = effectiveForYm.map { it.date.take(7) }.filter { it.matches(Regex("""\d{4}-\d{2}""")) }
+        val ymCounts = effectiveForYm.map { it.date.take(7) }.filter { YEAR_MONTH_REGEX.matches(it) }
             .groupingBy { it }.eachCount()
-        val predominantYm = forcedYearMonth ?: ymCounts.maxByOrNull { it.value }?.key ?: "2026-09"
+        val predominantYm = forcedYearMonth ?: ymCounts.maxByOrNull { it.value }?.key
+            ?: java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
 
         var incVaclav = 0.0
         var incEleonora = 0.0
@@ -2381,6 +2739,7 @@ object BankStatementImporter {
                 BankTransactionType.SALARY_VACLAV -> incVaclav += amt
                 BankTransactionType.SALARY_ELEONORA -> incEleonora += amt
                 BankTransactionType.PARENTAL_BENEFIT -> incEleonora += amt
+                BankTransactionType.FAMILY_GIFT -> incOther += amt
                 BankTransactionType.OTHER_INFLOW -> incOther += amt
                 BankTransactionType.HOUSING_RENT -> {
                     if (amt < 0) expRent += -amt else expRent -= amt
@@ -2458,19 +2817,37 @@ object BankStatementImporter {
         )
     }
 
-    fun parseCzechAmount(
+    fun parseCzechAmountDetailed(
         str: String,
         explicitCurrency: String? = null,
-        eurRate: Double = 25.15,
-        usdRate: Double = 23.50
-    ): Double {
+        eurRate: Double = FxRateService.getRate("EUR"),
+        usdRate: Double = FxRateService.getRate("USD")
+    ): FxRateService.CurrencyConversionDetails {
         var clean = str.trim()
-        if (clean.isBlank()) return 0.0
+        if (clean.isBlank()) return FxRateService.CurrencyConversionDetails(0.0, "CZK", 0.0, 1.0)
 
-        val hasEur = explicitCurrency?.equals("EUR", ignoreCase = true) == true ||
-            clean.contains("EUR", ignoreCase = true) || clean.contains("€")
-        val hasUsd = explicitCurrency?.equals("USD", ignoreCase = true) == true ||
-            clean.contains("USD", ignoreCase = true) || clean.contains("$")
+        val detectedFromText = FxRateService.detectCurrency(clean)
+        val targetCurrency = explicitCurrency ?: detectedFromText ?: "CZK"
+        val normCurrency = FxRateService.normalizeCurrencyCode(targetCurrency)
+
+        val hasEur = normCurrency == "EUR"
+        val hasUsd = normCurrency == "USD"
+
+        // Strip currency symbols BEFORE checking accounting parentheses e.g. "(1 500,00 CZK)" or "(£100.00)"
+        clean = clean.replace("CZK", "", ignoreCase = true)
+            .replace("Kč", "", ignoreCase = true)
+            .replace("Kc", "", ignoreCase = true)
+            .replace("EUR", "", ignoreCase = true)
+            .replace("USD", "", ignoreCase = true)
+            .replace("GBP", "", ignoreCase = true)
+            .replace("PLN", "", ignoreCase = true)
+            .replace("CHF", "", ignoreCase = true)
+            .replace("HUF", "", ignoreCase = true)
+            .replace("€", "")
+            .replace("$", "")
+            .replace("£", "")
+            .replace("zł", "", ignoreCase = true)
+            .trim()
 
         // Check for accounting parentheses e.g. (1 500,00) or (1500)
         val isNegativeParentheses = clean.startsWith("(") && clean.endsWith(")")
@@ -2487,45 +2864,62 @@ object BankStatementImporter {
             .replace("\uFF0D", "-")
             .replace("+", "")
 
-        // Strip currency symbols
-        clean = clean.replace("CZK", "", ignoreCase = true)
-            .replace("Kč", "", ignoreCase = true)
-            .replace("Kc", "", ignoreCase = true)
-            .replace("EUR", "", ignoreCase = true)
-            .replace("USD", "", ignoreCase = true)
-            .replace("€", "")
-            .replace("$", "")
+        // Strip all Unicode whitespace categories including zero-width characters & BOM
+        clean = AMOUNT_STRIP_WS_REGEX.replace(clean, "").trim()
 
-        // Strip all Unicode whitespace categories:
-        // \p{Z} (space, line, paragraph separators), \s, \u00A0 (NBSP), \u202F (Narrow NBSP), \u200B (Zero-width), \uFEFF (BOM)
-        clean = clean.replace(Regex("[\\p{Z}\\s\\uFEFF]"), "").trim()
-
-        if (clean.isBlank()) return 0.0
+        if (clean.isBlank()) return FxRateService.CurrencyConversionDetails(0.0, normCurrency, 0.0, 1.0)
 
         val hasTrailingMinus = clean.endsWith("-")
         if (hasTrailingMinus) {
             clean = clean.removeSuffix("-").trim()
         }
 
-        clean = if (clean.contains(',') && clean.contains('.')) {
-            if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
-                clean.replace(".", "").replace(',', '.')
-            } else {
-                clean.replace(",", "")
+        clean = when {
+            clean.contains(',') && clean.contains('.') -> {
+                if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+                    clean.replace(".", "").replace(',', '.')
+                } else {
+                    clean.replace(",", "")
+                }
             }
-        } else {
-            clean.replace(',', '.')
+            MULTI_COMMA_THOUSANDS_REGEX.matches(clean) -> clean.replace(",", "")
+            MULTI_DOT_THOUSANDS_REGEX.matches(clean) -> clean.replace(".", "")
+            else -> clean.replace(',', '.')
         }
 
         var result = clean.toDoubleOrNull() ?: 0.0
+        if (!result.isFinite()) result = 0.0
         if (hasTrailingMinus && result > 0) result = -result
         val signedResult = if (isNegativeParentheses && result > 0) -result else result
 
-        return when {
-            hasEur -> signedResult * eurRate
-            hasUsd -> signedResult * usdRate
-            else -> signedResult
+        val safeEurRate = if (eurRate.isFinite() && eurRate > 0.0) eurRate else 1.0
+        val safeUsdRate = if (usdRate.isFinite() && usdRate > 0.0) usdRate else 1.0
+        val (rawConverted, rate) = when {
+            hasEur -> (signedResult * safeEurRate) to safeEurRate
+            hasUsd -> (signedResult * safeUsdRate) to safeUsdRate
+            normCurrency != "CZK" -> {
+                val otherRate = FxRateService.getRate(normCurrency).takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+                (signedResult * otherRate) to otherRate
+            }
+            else -> signedResult to 1.0
         }
+        val converted = if (rawConverted.isFinite()) rawConverted else 0.0
+
+        return FxRateService.CurrencyConversionDetails(
+            originalAmount = signedResult,
+            originalCurrency = normCurrency,
+            amountInCzk = converted,
+            exchangeRate = rate
+        )
+    }
+
+    fun parseCzechAmount(
+        str: String,
+        explicitCurrency: String? = null,
+        eurRate: Double = FxRateService.getRate("EUR"),
+        usdRate: Double = FxRateService.getRate("USD")
+    ): Double {
+        return parseCzechAmountDetailed(str, explicitCurrency, eurRate, usdRate).amountInCzk
     }
 
     fun normalizeDate(str: String): String {
@@ -2533,10 +2927,10 @@ object BankStatementImporter {
         if (trimmed.isBlank()) return ""
 
         // Strip ISO time suffix if present, e.g. "T14:32:00..."
-        val noIso = if (trimmed.contains('T')) trimmed.substringBefore('T').trim() else trimmed
+        val noIso = ISO_TIME_SUFFIX_REGEX.replace(trimmed, "").trim()
 
         // Strip standard time suffix if present (e.g. " 14:32:00" or " 14:32" or " 14:32:00.123")
-        val dateOnly = noIso.replace(Regex("""\s+\d{1,2}:\d{2}(:\d{2})?.*$"""), "").trim()
+        val dateOnly = TRAILING_TIME_REGEX.replace(noIso, "").trim()
 
         val clean = dateOnly.replace("/", ".").replace("-", ".")
         val parts = clean.split(".").map { it.trim() }.filter { it.isNotBlank() }
@@ -2597,20 +2991,7 @@ object BankStatementImporter {
             if (reportedSize > MAX_STATEMENT_BYTES) return null
 
             val inputStream = contentResolver.openInputStream(uri) ?: return null
-            inputStream.use { stream ->
-                val buffer = java.io.ByteArrayOutputStream()
-                val chunk = ByteArray(16384)
-                var total = 0
-                while (true) {
-                    val count = stream.read(chunk)
-                    if (count <= 0) break
-                    total += count
-                    if (total > MAX_STATEMENT_BYTES) return null
-                    buffer.write(chunk, 0, count)
-                }
-                val result = buffer.toByteArray()
-                if (isWithinSizeLimit(result.size)) result else null
-            }
+            inputStream.use { stream -> readStreamBounded(stream) }
         } catch (_: Exception) {
             null
         }
@@ -2622,12 +3003,23 @@ object BankStatementImporter {
 
         val seen = mutableSetOf<String>()
         val uniqueTxs = mutableListOf<ParsedBankTransaction>()
+        val balancesByMonthAndBank = mutableMapOf<String, MutableMap<String, Double>>()
         for (s in summaries) {
             val summaryCounts = mutableMapOf<String, Int>()
+            if (s.monthEndBalance != null && s.monthEndBalance.isFinite() && YEAR_MONTH_REGEX.matches(s.yearMonth)) {
+                balancesByMonthAndBank.getOrPut(s.yearMonth) { mutableMapOf() }[s.detectedBank.name] = s.monthEndBalance
+            }
+            s.monthEndBalancesByBank.forEach { (ym, bankMap) ->
+                balancesByMonthAndBank.getOrPut(ym) { mutableMapOf() }.putAll(bankMap)
+            }
             for (tx in s.transactions) {
                 val effectiveBank = if (tx.bankType != BankType.GENERIC) tx.bankType else s.detectedBank
-                val taggedTx = if (tx.bankType == BankType.GENERIC && s.detectedBank != BankType.GENERIC) tx.copy(bankType = s.detectedBank) else tx
-                val baseKey = "${tx.date}|${tx.amount}|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
+                val taggedTx = if (tx.bankType == BankType.GENERIC && effectiveBank != BankType.GENERIC) tx.copy(bankType = effectiveBank) else tx
+                val formattedAmount = String.format(Locale.ROOT, "%.2f", tx.amount)
+                // Include explicit bankType in baseKey so same-day purchases parsed from different banks stay distinct,
+                // while GENERIC transactions duplicated across files still deduplicate cleanly.
+                val bankKey = if (tx.bankType != BankType.GENERIC) tx.bankType.name else ""
+                val baseKey = "$bankKey|${tx.date}|$formattedAmount|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
                 val count = summaryCounts[baseKey] ?: 0
                 summaryCounts[baseKey] = count + 1
                 val globalKey = "$baseKey#$count"
@@ -2641,9 +3033,13 @@ object BankStatementImporter {
         val banks = summaries.map { it.detectedBank }.distinct()
         val bankType = if (banks.size == 1) banks[0] else BankType.GENERIC
 
-        val yearMonths = summaries.map { it.yearMonth }.filter { it.matches(Regex("""\d{4}-\d{2}""")) }.distinct().sorted()
+        val yearMonths = summaries.map { it.yearMonth }.filter { YEAR_MONTH_REGEX.matches(it) }.distinct().sorted()
         val latestYm = yearMonths.lastOrNull() ?: summaries.first().yearMonth
-        val latestBalance = summaries.lastOrNull { it.monthEndBalance != null }?.monthEndBalance
+        val latestBalance = balancesByMonthAndBank[latestYm]?.values?.sum()?.takeIf { it.isFinite() }
+            ?: summaries
+                .filter { it.monthEndBalance != null && it.monthEndBalance.isFinite() }
+                .maxWithOrNull(compareBy<StatementParseSummary> { if (YEAR_MONTH_REGEX.matches(it.yearMonth)) it.yearMonth else "" })
+                ?.monthEndBalance
 
         return buildSummary(
             bankType = bankType,
@@ -2651,14 +3047,15 @@ object BankStatementImporter {
             monthEndBalance = latestBalance,
             forcedYearMonth = latestYm
         ).copy(
-            isPdfSource = summaries.any { it.isPdfSource }
+            isPdfSource = summaries.any { it.isPdfSource },
+            monthEndBalancesByBank = balancesByMonthAndBank.mapValues { it.value.toMap() }
         )
     }
 
     private fun emptySummary(bankType: BankType): StatementParseSummary {
         return StatementParseSummary(
             detectedBank = bankType,
-            yearMonth = "2026-09",
+            yearMonth = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString(),
             totalInflows = 0.0,
             incVaclav = 0.0,
             incEleonora = 0.0,

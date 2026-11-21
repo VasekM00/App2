@@ -136,15 +136,18 @@ class FinancialEngineBoundaryFuzzingTest {
     }
 
     @Test
-    fun test15_singleEarnerToggle_statePensionBridgeYearsUsesVaclavOnly() {
-        val settings = SettingsEntity().copy(
-            isSingleHousehold = true,
-            primaryAge = 30,
+    fun test15_singleEarnerToggle_excludesPartnerStatePension() {
+        val dualSettings = SettingsEntity().copy(
+            isSingleHousehold = false,
+            primaryAge = 65,
             vStatePensionAge = 65,
-            eStatePensionAge = 68
+            eStatePensionAge = 65,
+            lifestyleCostAtFireMonthly = 35_000.0,
+            vStatePensionMonthly = 20_000.0,
+            eStatePensionMonthly = 15_000.0
         )
-        val bridge = FinancialEngine.statePensionBridgeYears(30, settings)
-        assertEquals(35, bridge)
+        val singleSettings = dualSettings.copy(isSingleHousehold = true)
+        assertTrue(FinancialEngine.fireTargetBase(singleSettings) > FinancialEngine.fireTargetBase(dualSettings))
     }
 
     @Test

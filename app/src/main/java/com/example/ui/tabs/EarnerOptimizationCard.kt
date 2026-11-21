@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,9 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.ColorPill
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
@@ -33,6 +37,7 @@ import com.example.util.Formatters.fmtCZK
 import kotlin.math.max
 import kotlin.math.min
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EarnerOptimizationCard(
     name: String,
@@ -45,6 +50,7 @@ fun EarnerOptimizationCard(
     taxRatePct: Double = 15.0,
     hasTaxableIncome: Boolean = true,
     maxSubsidyAnnual: Double = 4080.0,
+    annualTaxSavedOverride: Double? = null,
     accentColor: Color = BrandTeal,
     modifier: Modifier = Modifier
 ) {
@@ -53,7 +59,9 @@ fun EarnerOptimizationCard(
     val totalTargetMonthly = subsidyCapMonthly + taxShieldCapMonthly
 
     val subsidyDeposit = min(dpsMonthly, subsidyCapMonthly)
-    val subsidyRatio = (subsidyDeposit / subsidyCapMonthly).toFloat().coerceIn(0f, 1f)
+    val subsidyRatio = if (subsidyCapMonthly > 0.0) {
+        (subsidyDeposit / subsidyCapMonthly).toFloat().coerceIn(0f, 1f)
+    } else 0f
 
     val dpsAbove = max(0.0, dpsMonthly - subsidyCapMonthly)
     val taxShieldMonthly = dipMonthly + dpsAbove
@@ -67,26 +75,30 @@ fun EarnerOptimizationCard(
     val isActive = dpsMonthly > 0.0 || (hasTaxableIncome && dipMonthly > 0.0)
 
     val annualSubsidy = subsidyMonthly * 12.0
-    val annualTaxSaved = if (hasTaxableIncome) taxShieldDeposit * 12.0 * (taxRatePct / 100.0) else 0.0
+    val annualTaxSaved = annualTaxSavedOverride?.coerceAtLeast(0.0)
+        ?: if (hasTaxableIncome) taxShieldDeposit * 12.0 * (taxRatePct / 100.0) else 0.0
     val totalAnnualBenefit = annualSubsidy + annualTaxSaved
     val headroomMonthly = max(0.0, totalTargetMonthly - totalOptimizedMonthly)
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header: Monogram Avatar + Name + Role and Status Pill
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .align(Alignment.CenterVertically)
                 ) {
                     Box(
                         modifier = Modifier
@@ -107,14 +119,18 @@ fun EarnerOptimizationCard(
                     Column {
                         Text(
                             text = name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = roleSubtitle,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.5.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -134,7 +150,7 @@ fun EarnerOptimizationCard(
                     )
                 } else {
                     ColorPill(
-                        text = if (!hasTaxableIncome) "0 / 1 700 Kč · PARENTAL" else "0 / ${fmtCZK(totalTargetMonthly)} · UNUSED",
+                        text = if (!hasTaxableIncome) "0 / ${fmtCZK(subsidyCapMonthly)} · PARENTAL" else "0 / ${fmtCZK(totalTargetMonthly)} · UNUSED",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
@@ -153,7 +169,7 @@ fun EarnerOptimizationCard(
             ) {
                 // Stage 1: DPS State Subsidy
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.08f),
                     border = BorderStroke(0.5.dp, BrandGold.copy(alpha = 0.3f)),
                     modifier = Modifier.weight(1f)
@@ -165,16 +181,20 @@ fun EarnerOptimizationCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "STAGE 1: DPS MATCH",
+                                text = "Stage 1 · Match",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = BrandGold,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             Text(
-                                text = "${String.format(java.util.Locale.getDefault(), "%.0f", subsidyRatio * 100)}%",
+                                text = "${String.format(java.util.Locale.ROOT, "%.0f", subsidyRatio * 100)}%",
                                 style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = BodyFontFamily,
                                     color = BrandGold,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold
@@ -184,24 +204,28 @@ fun EarnerOptimizationCard(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 text = fmtCZK(subsidyDeposit),
                                 style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
+                                    fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface
-                                )
+                                ),
+                                maxLines = 1
                             )
                             Text(
                                 text = "/ ${fmtCZK(subsidyCapMonthly)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = BodyFontFamily,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp
-                                )
+                                    fontSize = 9.5.sp
+                                ),
+                                maxLines = 1
                             )
                         }
 
@@ -237,15 +261,20 @@ fun EarnerOptimizationCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.5.sp
-                                )
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             Text(
                                 text = "+${fmtCZK(subsidyMonthly)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = BodyFontFamily,
                                     color = BrandGold,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
-                                )
+                                ),
+                                maxLines = 1
                             )
                         }
                     }
@@ -253,7 +282,7 @@ fun EarnerOptimizationCard(
 
                 // Stage 2: DIP Tax Shield
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = if (hasTaxableIncome) GoodGreen.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                     border = BorderStroke(0.5.dp, if (hasTaxableIncome) GoodGreen.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                     modifier = Modifier.weight(1f)
@@ -265,17 +294,21 @@ fun EarnerOptimizationCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "STAGE 2: TAX SHIELD",
+                                text = "Stage 2 · Relief",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             if (hasTaxableIncome) {
                                 Text(
-                                    text = "${String.format(java.util.Locale.getDefault(), "%.0f", taxShieldRatio * 100)}%",
+                                    text = "${String.format(java.util.Locale.ROOT, "%.0f", taxShieldRatio * 100)}%",
                                     style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = BodyFontFamily,
                                         color = GoodGreen,
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold
@@ -287,34 +320,41 @@ fun EarnerOptimizationCard(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         if (hasTaxableIncome) {
-                            Row(
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
                                     text = fmtCZK(taxShieldDeposit),
                                     style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = BodyFontFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
+                                        fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    ),
+                                    maxLines = 1
                                 )
                                 Text(
                                     text = "/ ${fmtCZK(taxShieldCapMonthly)}",
                                     style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = BodyFontFamily,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.sp
-                                    )
+                                        fontSize = 9.5.sp
+                                    ),
+                                    maxLines = 1
                                 )
                             }
                         } else {
                             Text(
                                 text = "0 Kč (Paused)",
                                 style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -350,15 +390,20 @@ fun EarnerOptimizationCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.5.sp
-                                )
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             Text(
                                 text = if (hasTaxableIncome) "+${fmtCZK(annualTaxSaved / 12.0)}" else "No tax base",
                                 style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = if (hasTaxableIncome) BodyFontFamily else null,
                                     color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (hasTaxableIncome) FontWeight.Bold else FontWeight.Normal
-                                )
+                                ),
+                                maxLines = 1
                             )
                         }
                     }
@@ -370,16 +415,16 @@ fun EarnerOptimizationCard(
             // Earner Footer Row: Annual Benefit & Headroom in dedicated mini surface
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp, vertical = 7.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -395,6 +440,7 @@ fun EarnerOptimizationCard(
                         Text(
                             text = "+${fmtCZK(totalAnnualBenefit)}",
                             style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = BodyFontFamily,
                                 color = if (totalAnnualBenefit > 0.0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.5.sp
@@ -404,10 +450,13 @@ fun EarnerOptimizationCard(
                     Text(
                         text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}",
                         style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = if (headroomMonthly > 0.5) BodyFontFamily else null,
                             color = if (headroomMonthly <= 0.5) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (headroomMonthly <= 0.5) FontWeight.SemiBold else FontWeight.Normal,
                             fontSize = 10.5.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

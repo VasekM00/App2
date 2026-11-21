@@ -38,9 +38,7 @@ class UiAudit2Test {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
-                    state = state,
-                    isDarkTheme = false,
-                    onToggleDarkTheme = {}
+                    state = state
                 )
             }
         }

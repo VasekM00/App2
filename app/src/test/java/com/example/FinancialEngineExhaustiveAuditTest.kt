@@ -1,6 +1,5 @@
 package com.example
 
-import com.example.data.ActionMeta
 import com.example.data.SettingsEntity
 import com.example.domain.CustomExpenseItem
 import com.example.domain.CustomLifeGoalItem
@@ -12,12 +11,10 @@ import com.example.domain.serializeCustomExpenses
 import com.example.domain.serializeCustomLifeGoals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import kotlin.math.abs
 
 /**
  * Exhaustive audit test suite covering every single input field, variable,
@@ -56,7 +53,7 @@ class FinancialEngineExhaustiveAuditTest {
             vSalary = 45000.0,
             vOtherInflowsMonthly = 5000.0,
             vMealVouchersMonthly = 3000.0,
-            familyGiftMonthly = 20000.0,
+            vGiftsMonthly = 20000.0,
             eReturnYear = 2028,
             eStartingSalary = 30000.0,
             eOtherInflowsMonthly = 2000.0,
@@ -176,13 +173,6 @@ class FinancialEngineExhaustiveAuditTest {
         val targetIn5YearsWithAging = FinancialEngine.fireTargetYear(2031, defaultSettings)
         val expectedWithAging = FinancialEngine.fireTargetBase(defaultSettings, age = 31) * Math.pow(1.0 + defaultSettings.cpiInflationPct / 100.0, 5.0)
         assertEquals(expectedWithAging, targetIn5YearsWithAging, 0.01)
-
-        // Test state pension bridge years
-        val bridgeYearsAt26 = FinancialEngine.statePensionBridgeYears(26, defaultSettings)
-        assertEquals(41, bridgeYearsAt26) // 67 - 26
-
-        val bridgeYearsAt70 = FinancialEngine.statePensionBridgeYears(70, defaultSettings)
-        assertEquals(0, bridgeYearsAt70) // max(0, 67 - 70)
     }
 
     @Test

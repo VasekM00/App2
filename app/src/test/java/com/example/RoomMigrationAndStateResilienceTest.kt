@@ -159,9 +159,9 @@ class RoomMigrationAndStateResilienceTest {
     }
 
     @Test
-    fun test6_databaseVersion_matchesTarget30() {
+    fun test6_databaseVersion_matchesLatest() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(35, version)
+        assertEquals(37, version)
     }
 
     @Test
@@ -321,5 +321,28 @@ class RoomMigrationAndStateResilienceTest {
         assertTrue(columns.contains("baristaStartYear"))
         assertTrue(columns.contains("baristaMonthlyIncome"))
         assertTrue(columns.contains("baristaSavingsMonthly"))
+        assertTrue(columns.contains("emergencyReserveMonthlyOverride"))
+    }
+
+    @Test
+    fun test12_backupManager_emergencyReserveMonthlyOverride_roundTripAndSanitization() {
+        val manualZero = SettingsEntity(emergencyReserveMonthlyOverride = 0.0)
+        val restoredZero = BackupManager.deserializeSettingsFromJson(
+            BackupManager.serializeSettingsToJson(manualZero),
+            fallback = SettingsEntity()
+        )
+        assertNotNull(restoredZero)
+        assertEquals(0.0, restoredZero!!.emergencyReserveMonthlyOverride, 0.001)
+
+        val manualCustom = SettingsEntity(emergencyReserveMonthlyOverride = 4250.0)
+        val restoredCustom = BackupManager.deserializeSettingsFromJson(
+            BackupManager.serializeSettingsToJson(manualCustom),
+            fallback = SettingsEntity()
+        )
+        assertEquals(4250.0, restoredCustom!!.emergencyReserveMonthlyOverride, 0.001)
+
+        val autoInvalidNeg = SettingsEntity(emergencyReserveMonthlyOverride = -99.0)
+        val sanitizedAuto = BackupManager.sanitizeSettings(autoInvalidNeg)
+        assertEquals(-1.0, sanitizedAuto.emergencyReserveMonthlyOverride, 0.001)
     }
 }

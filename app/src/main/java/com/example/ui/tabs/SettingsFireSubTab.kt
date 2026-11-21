@@ -1,34 +1,45 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
-import com.example.data.VACLAV_BIRTH_YEAR
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.ui.components.ChipWrapRow
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
+import com.example.ui.state.dispatchSettingsPatch
+import com.example.ui.theme.BodyFontFamily
+import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
@@ -41,56 +52,73 @@ fun LazyListScope.settingsFireSubTab(
     onUpdateSettings: (SettingsEntity) -> Unit,
     expandTrigger: Int,
     expandTargetState: Boolean?,
-    onShowInfo: (MetricInfo) -> Unit
+    focusedSectionKey: String? = null,
+    focusedSectionTrigger: Int = 0,
+    onShowInfo: (MetricInfo) -> Unit,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val s = state.settings
+    fun patchSettings(transform: (SettingsEntity) -> SettingsEntity) {
+        dispatchSettingsPatch(s, onUpdateSettings, onReduceSettings, transform)
+    }
+    val pName = s.primaryName.ifBlank { "Primary Earner" }
+    val sName = s.spouseName.ifBlank { "Partner" }
 
     // 1. Current Balances & Emergency Reserve
     item {
         SettingsGroupCard(
-            title = "Current Asset Balances & Cash Reserve",
-            subtitle = "Liquid ${fmtCompact(s.liquidPortfolioCurrent + if (s.isSingleHousehold) 0.0 else s.eLiquidPortfolioCurrent)} · Pension ${fmtCompact(s.dipBalanceCurrent + s.dpsBalanceCurrent + if (s.isSingleHousehold) 0.0 else (s.eDipBalanceCurrent + s.eDpsBalanceCurrent))} · Cash ${fmtCompact(s.emergencyReserveCurrent)}",
+            title = "Balances & Cash Reserve",
+            subtitle = "Liquid ${fmtCompact(state.currentLiquidPortfolio)} · Pension ${fmtCompact(state.currentPensionPortfolio)}",
             initiallyExpanded = false,
             badgeText = fmtCZK(state.netWorthTotal),
             badgeColor = BrandTeal,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "balances",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
-            Text(text = "Václav's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
+            Text(text = "$pName's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
             NumberSettingField(
                 label = "Brokerage / ETF Portfolio",
                 value = s.liquidPortfolioCurrent,
-                onValueChange = { onUpdateSettings(s.copy(liquidPortfolioCurrent = it)) },
-                testTagStr = "input_liquid_port"
+                onValueChange = { v -> patchSettings { it.copy(liquidPortfolioCurrent = v) } },
+                testTagStr = "input_liquid_port",
+                fieldKey = "v_bal"
             )
             NumberSettingField(
                 label = "DIP Balance",
                 value = s.dipBalanceCurrent,
-                onValueChange = { onUpdateSettings(s.copy(dipBalanceCurrent = it)) }
+                onValueChange = { v -> patchSettings { it.copy(dipBalanceCurrent = v) } },
+                fieldKey = "v_bal"
             )
             NumberSettingField(
                 label = "DPS Pension Balance",
                 value = s.dpsBalanceCurrent,
-                onValueChange = { onUpdateSettings(s.copy(dpsBalanceCurrent = it)) }
+                onValueChange = { v -> patchSettings { it.copy(dpsBalanceCurrent = v) } },
+                fieldKey = "v_bal"
             )
 
             if (!s.isSingleHousehold) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(text = "Eleonora's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                Text(text = "$sName's Balances", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                 NumberSettingField(
                     label = "Brokerage / ETF Portfolio",
                     value = s.eLiquidPortfolioCurrent,
-                    onValueChange = { onUpdateSettings(s.copy(eLiquidPortfolioCurrent = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eLiquidPortfolioCurrent = v) } },
+                    fieldKey = "e_bal"
                 )
                 NumberSettingField(
                     label = "DIP Balance",
                     value = s.eDipBalanceCurrent,
-                    onValueChange = { onUpdateSettings(s.copy(eDipBalanceCurrent = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eDipBalanceCurrent = v) } },
+                    fieldKey = "e_bal"
                 )
                 NumberSettingField(
                     label = "DPS Pension Balance",
                     value = s.eDpsBalanceCurrent,
-                    onValueChange = { onUpdateSettings(s.copy(eDpsBalanceCurrent = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eDpsBalanceCurrent = v) } },
+                    fieldKey = "e_bal"
                 )
             }
 
@@ -99,20 +127,20 @@ fun LazyListScope.settingsFireSubTab(
             NumberSettingField(
                 label = "Liquid Bank & Savings Accounts",
                 value = s.emergencyReserveCurrent,
-                onValueChange = { onUpdateSettings(s.copy(emergencyReserveCurrent = it)) }
+                onValueChange = { v -> patchSettings { it.copy(emergencyReserveCurrent = v) } }
             )
             if (s.emergencyReserveMode == "Target") {
                 NumberSettingField(
                     label = "Target Reserve Threshold (Manual)",
                     value = s.emergencyReserveTarget,
-                    onValueChange = { onUpdateSettings(s.copy(emergencyReserveTarget = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(emergencyReserveTarget = v) } }
                 )
             } else {
                 val dynamicTarget = FinancialEngine.effectiveEmergencyReserveTarget(s)
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 ) {
                     Row(
@@ -120,20 +148,30 @@ fun LazyListScope.settingsFireSubTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
                                 text = "Dynamic Reserve Target (${s.emergencyReserveMode})",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${s.emergencyReserveMode.removeSuffix("M")} months of baseline living costs",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Text(
                             text = fmtCZK(dynamicTarget),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontFamily = BodyFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandTeal
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -145,87 +183,152 @@ fun LazyListScope.settingsFireSubTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            ChipWrapRow(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                listOf("3M", "6M", "9M", "12M", "Target").forEach { mode ->
+                listOf("3M" to "3 months", "6M" to "6 months", "9M" to "9 months", "12M" to "12 months", "Target" to "Target").forEach { (mode, labelText) ->
                     FilterChip(
                         selected = s.emergencyReserveMode == mode,
-                        onClick = { onUpdateSettings(s.copy(emergencyReserveMode = mode)) },
+                        onClick = { patchSettings { it.copy(emergencyReserveMode = mode) } },
                         label = {
                             Text(
-                                text = mode,
+                                text = labelText,
                                 fontSize = 11.sp,
+                                maxLines = 2,
+                                softWrap = true,
                                 fontWeight = FontWeight.Bold
                             )
                         },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            selectedContainerColor = BrandTeal.copy(alpha = 0.16f),
+                            selectedLabelColor = BrandTeal
                         )
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            val isManualReserveMonthly = s.emergencyReserveMonthlyOverride.isFinite() && s.emergencyReserveMonthlyOverride >= 0.0
+            val autoMonthlyPreview = FinancialEngine.autoEmergencyReserveContribution(s)
+            val resolvedTarget = FinancialEngine.effectiveEmergencyReserveTarget(s)
+            Text(
+                text = "Monthly Reserve Contribution",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            ChipWrapRow(modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = !isManualReserveMonthly,
+                    onClick = { patchSettings { it.copy(emergencyReserveMonthlyOverride = -1.0) } },
+                    label = { Text("Auto (24-month gap)", fontSize = 11.sp, maxLines = 2, softWrap = true, fontWeight = FontWeight.Bold) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = BrandTeal.copy(alpha = 0.16f),
+                        selectedLabelColor = BrandTeal
+                    )
+                )
+                FilterChip(
+                    selected = isManualReserveMonthly,
+                    onClick = {
+                        if (!isManualReserveMonthly) {
+                            patchSettings { it.copy(emergencyReserveMonthlyOverride = kotlin.math.round(FinancialEngine.autoEmergencyReserveContribution(it))) }
+                        }
+                    },
+                    label = { Text("Manual", fontSize = 11.sp, maxLines = 2, softWrap = true, fontWeight = FontWeight.Bold) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = BrandTeal.copy(alpha = 0.16f),
+                        selectedLabelColor = BrandTeal
+                    )
+                )
+            }
+            if (isManualReserveMonthly) {
+                NumberSettingField(
+                    label = "Monthly Emergency Reserve Contribution (Manual)",
+                    value = s.emergencyReserveMonthlyOverride,
+                    onValueChange = { v -> patchSettings { it.copy(emergencyReserveMonthlyOverride = v.coerceAtLeast(0.0)) } }
+                )
+            } else {
+                Text(
+                    text = if (autoMonthlyPreview > 0.0) {
+                        "Auto: (${fmtCZK(resolvedTarget)} target − ${fmtCZK(s.emergencyReserveCurrent)}) ÷ 24 months = ${fmtCZK(autoMonthlyPreview)}/month"
+                    } else {
+                        "Auto: 0 Kč/month (${fmtCZK(resolvedTarget)} target 100% funded)"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 
-    // 2. Monthly Investment Flows (DCA)
+    // 2. Monthly Investing
     item {
         SettingsGroupCard(
-            title = "Monthly Investment Flows (DCA)",
-            subtitle = "ETF ${fmtCZK(s.portuDcaMonthly + if (s.isSingleHousehold) 0.0 else s.ePortuDcaMonthly)} · DIP/DPS ${fmtCZK(s.dipContributionMonthly + s.dpsOwnContributionMonthly + if (s.isSingleHousehold) 0.0 else (s.eDipContributionMonthly + s.eDpsOwnContributionMonthly))} · Growth ${fmtPct(s.dcaAnnualGrowthPct)}/yr",
+            title = "Monthly Investing",
+            subtitle = "ETF ${fmtCompact(s.portuDcaMonthly + if (s.isSingleHousehold) 0.0 else s.ePortuDcaMonthly)} · Pension ${fmtCompact(s.dipContributionMonthly + s.dpsOwnContributionMonthly + if (s.isSingleHousehold) 0.0 else (s.eDipContributionMonthly + s.eDpsOwnContributionMonthly))}",
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.investMonthlyTotal) + "/mo",
+            badgeText = fmtCompact(state.investMonthlyTotal) + "/month",
             badgeColor = GoodGreen,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "dca",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
-            Text(text = "Václav's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
+            Text(text = "$pName's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal))
             NumberSettingField(
                 label = "Monthly Brokerage ETF DCA",
                 value = s.portuDcaMonthly,
-                onValueChange = { onUpdateSettings(s.copy(portuDcaMonthly = it)) }
+                onValueChange = { v -> patchSettings { it.copy(portuDcaMonthly = v) } },
+                fieldKey = "v_dca"
             )
             NumberSettingField(
                 label = "DIP Monthly Contribution",
                 value = s.dipContributionMonthly,
-                onValueChange = { onUpdateSettings(s.copy(dipContributionMonthly = it)) }
+                onValueChange = { v -> patchSettings { it.copy(dipContributionMonthly = v) } },
+                fieldKey = "v_dca"
             )
             NumberSettingField(
                 label = "DPS Monthly Own Contribution",
                 value = s.dpsOwnContributionMonthly,
-                onValueChange = { onUpdateSettings(s.copy(dpsOwnContributionMonthly = it)) }
+                onValueChange = { v -> patchSettings { it.copy(dpsOwnContributionMonthly = v) } },
+                fieldKey = "v_dca"
             )
             NumberSettingField(
-                label = "Employer Pension Match (CZK/mo)",
+                label = "Employer Pension Match (Kč monthly)",
                 value = s.employerRetirementMonthly,
-                onValueChange = { onUpdateSettings(s.copy(employerRetirementMonthly = it)) }
+                onValueChange = { v -> patchSettings { it.copy(employerRetirementMonthly = v) } },
+                fieldKey = "v_dca"
             )
 
             if (!s.isSingleHousehold) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text(text = "Eleonora's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
+                Text(text = "$sName's DCA", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold))
                 NumberSettingField(
                     label = "Monthly Brokerage ETF DCA",
                     value = s.ePortuDcaMonthly,
-                    onValueChange = { onUpdateSettings(s.copy(ePortuDcaMonthly = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(ePortuDcaMonthly = v) } },
+                    fieldKey = "e_dca"
                 )
                 NumberSettingField(
                     label = "DIP Monthly Contribution",
                     value = s.eDipContributionMonthly,
-                    onValueChange = { onUpdateSettings(s.copy(eDipContributionMonthly = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eDipContributionMonthly = v) } },
+                    fieldKey = "e_dca"
                 )
                 NumberSettingField(
                     label = "DPS Monthly Contribution",
                     value = s.eDpsOwnContributionMonthly,
-                    onValueChange = { onUpdateSettings(s.copy(eDpsOwnContributionMonthly = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eDpsOwnContributionMonthly = v) } },
+                    fieldKey = "e_dca"
                 )
                 NumberSettingField(
-                    label = "Employer Pension Match (CZK/mo)",
+                    label = "Employer Pension Match (Kč monthly)",
                     value = s.eEmployerRetirementMonthly,
-                    onValueChange = { onUpdateSettings(s.copy(eEmployerRetirementMonthly = it)) }
+                    onValueChange = { v -> patchSettings { it.copy(eEmployerRetirementMonthly = v) } },
+                    fieldKey = "e_dca"
                 )
             }
 
@@ -233,63 +336,73 @@ fun LazyListScope.settingsFireSubTab(
             NumberSettingField(
                 label = "Annual DCA Contribution Growth (%)",
                 value = s.dcaAnnualGrowthPct,
-                onValueChange = { onUpdateSettings(s.copy(dcaAnnualGrowthPct = it)) }
+                onValueChange = { v -> patchSettings { it.copy(dcaAnnualGrowthPct = v) } }
             )
         }
     }
 
-    // 3. FIRE Targets & Market Assumptions
+    // 3. Targets & Market Assumptions
     item {
         SettingsGroupCard(
-            title = "Planning Assumptions & FIRE Targets",
-            subtitle = "Return ${fmtPct(s.portfolioNominalReturnPct)} · CPI ${fmtPct(s.cpiInflationPct)} · SWR ${fmtPct(s.safeWithdrawalRatePct)} · Pension age ${s.vStatePensionAge}",
+            title = "Targets & Assumptions",
+            subtitle = "Return ${fmtPct(s.portfolioNominalReturnPct)} · CPI ${fmtPct(s.cpiInflationPct)} · Pension age ${s.vStatePensionAge}",
             initiallyExpanded = false,
-            badgeText = "${fmtPct(s.safeWithdrawalRatePct)} SWR",
+            badgeText = "${fmtPct(s.safeWithdrawalRatePct)} draw",
             badgeColor = BrandTeal,
             info = SettingsMetricInfos.swr,
             onShowInfo = onShowInfo,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "assumptions",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
             NumberSettingField(
                 label = "Base Planning Year",
                 value = s.baseYear.toDouble(),
-                minValue = 2000.0,
+                minValue = 1950.0,
                 maxValue = 2200.0,
                 onValueChange = { yr ->
                     val y = yr.toInt()
-                    val newAge = (y - VACLAV_BIRTH_YEAR).coerceIn(15, 80)
-                    onUpdateSettings(s.copy(baseYear = y, primaryAge = newAge))
+                    patchSettings { cur ->
+                        val deltaYears = y - cur.baseYear
+                        val newAge = (cur.primaryAge + deltaYears).coerceIn(1, 120)
+                        cur.copy(baseYear = y, primaryAge = newAge)
+                    }
                 }
             )
             NumberSettingField(
                 label = "Expected CPI Inflation (%)",
                 value = s.cpiInflationPct,
-                minValue = 0.0,
-                maxValue = 20.0,
-                onValueChange = { onUpdateSettings(s.copy(cpiInflationPct = it)) }
+                minValue = -99.0,
+                maxValue = 1000.0,
+                onValueChange = { v -> patchSettings { it.copy(cpiInflationPct = v) } },
+                quickStep = 0.1
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.5, maxValue = 15.0, onValueChange = { onUpdateSettings(s.copy(safeWithdrawalRatePct = it)) })
-            NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, minValue = -20.0, maxValue = 30.0, onValueChange = { onUpdateSettings(s.copy(portfolioNominalReturnPct = it)) })
-            NumberSettingField(label = "Dividend Yield (%)", value = s.dividendYieldPct, minValue = 0.0, maxValue = 15.0, onValueChange = { onUpdateSettings(s.copy(dividendYieldPct = it)) })
-            NumberSettingField(label = "Dividend Tax Rate (%)", value = s.dividendTaxRatePct, minValue = 0.0, maxValue = 35.0, onValueChange = { onUpdateSettings(s.copy(dividendTaxRatePct = it)) })
+            NumberSettingField(label = "Safe Withdrawal Rate SWR (%)", value = s.safeWithdrawalRatePct, minValue = 0.1, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(safeWithdrawalRatePct = v) } }, quickStep = 0.25)
+            NumberSettingField(label = "FIRE Safety Capital Buffer (%)", value = s.safetyBufferPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(safetyBufferPct = v) } }, fieldKey = "safety_buffer")
+            NumberSettingField(label = "Expected Portfolio Nominal Return (%)", value = s.portfolioNominalReturnPct, minValue = -99.0, maxValue = 1000.0, onValueChange = { v -> patchSettings { it.copy(portfolioNominalReturnPct = v) } }, quickStep = 0.5)
+            NumberSettingField(label = "Dividend Yield (%)", value = s.dividendYieldPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(dividendYieldPct = v) } })
+            NumberSettingField(label = "Dividend Tax Rate (%)", value = s.dividendTaxRatePct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(dividendTaxRatePct = v) } })
             val taxDrag = FinancialEngine.dividendTaxDragPct(s)
             Text(
-                text = "Net taxable return: ${String.format(java.util.Locale.getDefault(), "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(s))} (${String.format(java.util.Locale.getDefault(), "%.2f%%", taxDrag)}/yr dividend drag). Capital gains 0% after 3-year time test.",
+                text = "Net taxable return: ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(s))} (${String.format(java.util.Locale.ROOT, "%.2f%%", taxDrag)} annual dividend tax drag). Capital gains exempt after 3-year time test.",
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp
                 ),
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
-            NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { onUpdateSettings(s.copy(dpsGrossReturnPct = it)) })
-            NumberSettingField(label = "DPS Annual Management Fee (%, cap 0.5%)", value = s.dpsAnnualFeePct, minValue = 0.0, maxValue = 5.0, onValueChange = { onUpdateSettings(s.copy(dpsAnnualFeePct = it)) })
-            NumberSettingField(label = "Manual FIRE Target Override (0 = auto)", value = s.fireTargetOverride, onValueChange = { onUpdateSettings(s.copy(fireTargetOverride = it)) })
-            NumberSettingField(label = "Lifestyle Cost at FIRE (CZK/mo)", value = s.lifestyleCostAtFireMonthly, onValueChange = { onUpdateSettings(s.copy(lifestyleCostAtFireMonthly = it)) })
+            NumberSettingField(label = "DPS Gross Return (%)", value = s.dpsGrossReturnPct, onValueChange = { v -> patchSettings { it.copy(dpsGrossReturnPct = v) } })
+            val dpsFeeCap = s.dpsStatutoryFeeCapPct.coerceAtLeast(0.0)
+            val dpsFeeCapLabel = String.format(java.util.Locale.ROOT, "%.2f", dpsFeeCap).trimEnd('0').trimEnd('.')
+            NumberSettingField(label = "DPS Annual Management Fee (%, cap $dpsFeeCapLabel%)", value = s.dpsAnnualFeePct, minValue = 0.0, maxValue = maxOf(dpsFeeCap, 100.0), onValueChange = { v -> patchSettings { it.copy(dpsAnnualFeePct = v) } })
+            NumberSettingField(label = "Manual FIRE Target Override (0 = auto)", value = s.fireTargetOverride, onValueChange = { v -> patchSettings { it.copy(fireTargetOverride = v) } })
+            NumberSettingField(label = "Lifestyle Cost at FIRE (Kč monthly)", value = s.lifestyleCostAtFireMonthly, onValueChange = { v -> patchSettings { it.copy(lifestyleCostAtFireMonthly = v) } })
             if (s.lifestyleCostAtFireMonthly <= 0.0) {
                 Text(
-                    text = "Linked to current living expenses: ${fmtCZK(state.totalLivingCostMonthly)}/mo",
+                    text = "Linked to current living expenses: ${fmtCZK(state.totalLivingCostMonthly)} monthly",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp
@@ -297,11 +410,11 @@ fun LazyListScope.settingsFireSubTab(
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
             }
-            NumberSettingField(label = "Václav's State Pension Monthly", value = s.vStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(vStatePensionMonthly = it)) })
-            NumberSettingField(label = "Václav's State Pension Age", value = s.vStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(vStatePensionAge = it.toInt())) })
+            NumberSettingField(label = "$pName's State Pension Monthly", value = s.vStatePensionMonthly, onValueChange = { v -> patchSettings { it.copy(vStatePensionMonthly = v) } }, fieldKey = "v_pension")
+            NumberSettingField(label = "$pName's State Pension Age", value = s.vStatePensionAge.toDouble(), minValue = 40.0, maxValue = 90.0, onValueChange = { v -> patchSettings { it.copy(vStatePensionAge = v.toInt()) } }, fieldKey = "v_pension", quickStep = 1.0)
             if (!s.isSingleHousehold) {
-                NumberSettingField(label = "Eleonora's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { onUpdateSettings(s.copy(eStatePensionMonthly = it)) })
-                NumberSettingField(label = "Eleonora's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 55.0, maxValue = 75.0, onValueChange = { onUpdateSettings(s.copy(eStatePensionAge = it.toInt())) })
+                NumberSettingField(label = "$sName's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { v -> patchSettings { it.copy(eStatePensionMonthly = v) } }, fieldKey = "e_pension")
+                NumberSettingField(label = "$sName's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 40.0, maxValue = 90.0, onValueChange = { v -> patchSettings { it.copy(eStatePensionAge = v.toInt()) } }, fieldKey = "e_pension", quickStep = 1.0)
             }
         }
     }
@@ -309,18 +422,21 @@ fun LazyListScope.settingsFireSubTab(
     // 4. Advanced: Czech Tax Shield & Statutory Engine
     item {
         SettingsGroupCard(
-            title = "Czech Tax Shield & Statutory Engine",
-            subtitle = "Tax ${fmtPct(s.taxRatePct)}/${fmtPct(s.taxRateSecondPct)} · DIP Shield +${fmtCZK(state.taxReturnHelper.dipSaving)}/yr · Monte Carlo ${s.monteCarloN} runs",
+            title = "Czech Tax Relief",
+            subtitle = "Tax ${fmtPct(s.taxRatePct)}/${fmtPct(s.taxRateSecondPct)} · DIP +${fmtCZK(state.taxReturnHelper.dipSaving)} yearly",
             initiallyExpanded = false,
             badgeText = "ADVANCED",
             badgeColor = BrandGold,
             info = SettingsMetricInfos.partnerCredit,
             onShowInfo = onShowInfo,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "tax_shield",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
@@ -345,25 +461,42 @@ fun LazyListScope.settingsFireSubTab(
                     Spacer(modifier = Modifier.height(10.dp))
                     if (!s.isSingleHousehold) {
                         TaxSummaryRow(
-                            label = "Eleonora Income",
+                            label = "$sName Income",
                             status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
                             isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                         )
                         TaxSummaryRow(
-                            label = "Eleonora Tax Credit Eligible",
+                            label = "$sName Tax Credit Eligible",
                             status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
                             isGood = state.taxReturnHelper.spouseEligible
                         )
                     }
+                    val c1Age = s.baseYear - s.child1BirthYear
+                    val c2Age = s.baseYear - s.child2BirthYear
+                    val c1ActiveNow = s.child1Enabled && c1Age in 0 until s.childSupportUntilAge
+                    val c2ActiveNow = s.child2Enabled && c2Age in 0 until s.childSupportUntilAge
                     TaxSummaryRow(
                         label = "Child 1 Tax Bonus",
-                        status = if (s.child1Enabled) "+${fmtCZK(s.child1TaxBonusAnnual)} (${fmtCZK(s.child1TaxBonusAnnual / 12)} monthly)" else "Disabled",
-                        isGood = s.child1Enabled
+                        status = when {
+                            !s.child1Enabled -> "Disabled"
+                            c1Age < 0 -> "Planned (${s.child1BirthYear})"
+                            c1ActiveNow -> "+${fmtCZK(s.child1TaxBonusAnnual)} (${fmtCZK(s.child1TaxBonusAnnual / 12)} monthly)"
+                            else -> "Aged out"
+                        },
+                        isGood = c1ActiveNow
                     )
                     TaxSummaryRow(
                         label = "Child 2 Tax Bonus",
-                        status = if (s.child2Enabled) "+${fmtCZK(s.child2TaxBonusAnnual)} (${fmtCZK(s.child2TaxBonusAnnual / 12)} monthly)" else "Disabled",
-                        isGood = s.child2Enabled
+                        status = when {
+                            !s.child2Enabled -> "Disabled"
+                            c2Age < 0 -> "Planned (${s.child2BirthYear})"
+                            c2ActiveNow -> {
+                                val child2EffectiveBonus = if (c1ActiveNow) s.child2TaxBonusAnnual else s.child1TaxBonusAnnual
+                                "+${fmtCZK(child2EffectiveBonus)} (${fmtCZK(child2EffectiveBonus / 12)} monthly)"
+                            }
+                            else -> "Aged out"
+                        },
+                        isGood = c2ActiveNow
                     )
                     TaxSummaryRow(
                         label = "Total Child Tax Bonus",
@@ -371,7 +504,7 @@ fun LazyListScope.settingsFireSubTab(
                         isGood = true
                     )
                     TaxSummaryRow(
-                        label = "DIP Annual Tax Saving",
+                        label = "DIP & DPS Annual Tax Saving",
                         status = "+${fmtCZK(state.taxReturnHelper.dipSaving)}",
                         isGood = true
                     )
@@ -380,56 +513,111 @@ fun LazyListScope.settingsFireSubTab(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
             Text(text = "Tax Rates & Brackets", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            NumberSettingField(label = "Base Income Tax Rate (%)", value = s.taxRatePct, onValueChange = { onUpdateSettings(s.copy(taxRatePct = it)) })
-            NumberSettingField(label = "Higher Bracket Tax Rate (%)", value = s.taxRateSecondPct, onValueChange = { onUpdateSettings(s.copy(taxRateSecondPct = it)) })
-            NumberSettingField(label = "Higher Bracket Threshold Annual", value = s.taxSecondBracketThresholdAnnual, onValueChange = { onUpdateSettings(s.copy(taxSecondBracketThresholdAnnual = it)) })
-            NumberSettingField(label = "Basic Taxpayer Credit Annual", value = s.taxpayerCreditAnnual, onValueChange = { onUpdateSettings(s.copy(taxpayerCreditAnnual = it)) })
-            NumberSettingField(label = "Retirement Deduction Ceiling Annual", value = s.taxDeductionCeilingAnnual, onValueChange = { onUpdateSettings(s.copy(taxDeductionCeilingAnnual = it)) })
+            NumberSettingField(label = "Base Income Tax Rate (%)", value = s.taxRatePct, onValueChange = { v -> patchSettings { it.copy(taxRatePct = v) } })
+            NumberSettingField(label = "Higher Bracket Tax Rate (%)", value = s.taxRateSecondPct, onValueChange = { v -> patchSettings { it.copy(taxRateSecondPct = v) } })
+            NumberSettingField(label = "Higher Bracket Threshold Annual", value = s.taxSecondBracketThresholdAnnual, onValueChange = { v -> patchSettings { it.copy(taxSecondBracketThresholdAnnual = v) } })
+            NumberSettingField(label = "Basic Taxpayer Credit Annual", value = s.taxpayerCreditAnnual, onValueChange = { v -> patchSettings { it.copy(taxpayerCreditAnnual = v) } })
+            NumberSettingField(label = "Retirement Deduction Ceiling Annual", value = s.taxDeductionCeilingAnnual, onValueChange = { v -> patchSettings { it.copy(taxDeductionCeilingAnnual = v) } })
             if (!s.isSingleHousehold) {
-                NumberSettingField(label = "Eleonora Tax Credit Annual", value = s.spouseTaxCreditAnnual, onValueChange = { onUpdateSettings(s.copy(spouseTaxCreditAnnual = it)) })
-                NumberSettingField(label = "Eleonora Income Limit Annual", value = s.spouseIncomeLimitAnnual, onValueChange = { onUpdateSettings(s.copy(spouseIncomeLimitAnnual = it)) })
-                BooleanSettingField(label = "Include Eleonora Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { onUpdateSettings(s.copy(includeSpouseCredit = it)) })
+                NumberSettingField(label = "$sName Tax Credit Annual", value = s.spouseTaxCreditAnnual, onValueChange = { v -> patchSettings { it.copy(spouseTaxCreditAnnual = v) } })
+                NumberSettingField(label = "$sName Income Limit Annual", value = s.spouseIncomeLimitAnnual, onValueChange = { v -> patchSettings { it.copy(spouseIncomeLimitAnnual = v) } })
+                BooleanSettingField(label = "Include $sName Tax Credit", checked = s.includeSpouseCredit, onCheckedChange = { v -> patchSettings { it.copy(includeSpouseCredit = v) } })
             }
-            BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { onUpdateSettings(s.copy(hasChildUnder3 = it)) })
-            NumberSettingField(label = "Min Wage Monthly", value = s.minWageMonthly, onValueChange = { onUpdateSettings(s.copy(minWageMonthly = it)) })
-            NumberSettingField(label = "Child 3+ Tax Bonus Annual", value = s.child3PlusTaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child3PlusTaxBonusAnnual = it)) })
+            BooleanSettingField(label = "Has Child Under 3", checked = s.hasChildUnder3, onCheckedChange = { v -> patchSettings { it.copy(hasChildUnder3 = v) } })
+            NumberSettingField(label = "Minimum Wage Monthly", value = s.minWageMonthly, onValueChange = { v -> patchSettings { it.copy(minWageMonthly = v) } })
+            NumberSettingField(label = "Child 3+ Tax Bonus Annual", value = s.child3PlusTaxBonusAnnual, onValueChange = { v -> patchSettings { it.copy(child3PlusTaxBonusAnnual = v) } })
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
             Text(text = "Statutory DPS Pension Subsidies", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            NumberSettingField(label = "DPS Tax Deduction Floor (CZK/mo)", value = s.dpsDeductionThresholdMonthly, onValueChange = { onUpdateSettings(s.copy(dpsDeductionThresholdMonthly = it)) })
-            NumberSettingField(label = "DPS Min Subsidy Deposit (CZK/mo)", value = s.dpsMinDepositForSubsidy, onValueChange = { onUpdateSettings(s.copy(dpsMinDepositForSubsidy = it)) })
-            NumberSettingField(label = "DPS Max Standard Subsidy (CZK/mo)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsStandardSubsidyMaxMonthly = it)) })
-            NumberSettingField(label = "DPS Standard Subsidy Rate (%)", value = s.dpsSubsidyRateStandardPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateStandardPct = it)) })
-            NumberSettingField(label = "DPS Youth Age Limit (Years)", value = s.dpsYouthAgeLimit.toDouble(), onValueChange = { onUpdateSettings(s.copy(dpsYouthAgeLimit = it.toInt())) })
-            NumberSettingField(label = "DPS Max Youth Subsidy (CZK/mo)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { onUpdateSettings(s.copy(dpsYouthSubsidyMaxMonthly = it)) })
-            NumberSettingField(label = "DPS Youth Subsidy Rate (%)", value = s.dpsSubsidyRateYouthPct, onValueChange = { onUpdateSettings(s.copy(dpsSubsidyRateYouthPct = it)) })
-            NumberSettingField(label = "DPS Statutory Fee Cap (%)", value = s.dpsStatutoryFeeCapPct, onValueChange = { onUpdateSettings(s.copy(dpsStatutoryFeeCapPct = it)) })
-            NumberSettingField(label = "Employer Retirement Exemption Cap (CZK/yr)", value = s.employerRetirementExemptionAnnual, onValueChange = { onUpdateSettings(s.copy(employerRetirementExemptionAnnual = it)) })
-            NumberSettingField(label = "Child Bonus Min Wage Multiplier", value = s.childBonusMinWageMultiplier, onValueChange = { onUpdateSettings(s.copy(childBonusMinWageMultiplier = it)) })
-            NumberSettingField(label = "Parental Allowance Pot (Pre-Cutoff CZK)", value = s.parentalAllowanceTotalBeforeCutoff, onValueChange = { onUpdateSettings(s.copy(parentalAllowanceTotalBeforeCutoff = it)) })
-            NumberSettingField(label = "Parental Allowance Pot (Post-Cutoff CZK)", value = s.parentalAllowanceTotalFromCutoff, onValueChange = { onUpdateSettings(s.copy(parentalAllowanceTotalFromCutoff = it)) })
-            NumberSettingField(label = "Parental Allowance Cutoff Year", value = s.parentalAllowanceCutoffYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(parentalAllowanceCutoffYear = it.toInt())) })
+            NumberSettingField(label = "DPS Tax Deduction Floor (Kč monthly)", value = s.dpsDeductionThresholdMonthly, onValueChange = { v -> patchSettings { it.copy(dpsDeductionThresholdMonthly = v) } })
+            NumberSettingField(label = "DPS Minimum Subsidy Deposit (Kč monthly)", value = s.dpsMinDepositForSubsidy, onValueChange = { v -> patchSettings { it.copy(dpsMinDepositForSubsidy = v) } })
+            NumberSettingField(label = "DPS Maximum Standard Subsidy (Kč monthly)", value = s.dpsStandardSubsidyMaxMonthly, onValueChange = { v -> patchSettings { it.copy(dpsStandardSubsidyMaxMonthly = v) } })
+            NumberSettingField(label = "DPS Standard Subsidy Rate (%)", value = s.dpsSubsidyRateStandardPct, onValueChange = { v -> patchSettings { it.copy(dpsSubsidyRateStandardPct = v) } })
+            NumberSettingField(label = "DPS Youth Age Limit (Years)", value = s.dpsYouthAgeLimit.toDouble(), onValueChange = { v -> patchSettings { it.copy(dpsYouthAgeLimit = v.toInt()) } })
+            NumberSettingField(label = "DPS Maximum Youth Subsidy (Kč monthly)", value = s.dpsYouthSubsidyMaxMonthly, onValueChange = { v -> patchSettings { it.copy(dpsYouthSubsidyMaxMonthly = v) } })
+            NumberSettingField(label = "DPS Youth Subsidy Rate (%)", value = s.dpsSubsidyRateYouthPct, onValueChange = { v -> patchSettings { it.copy(dpsSubsidyRateYouthPct = v) } })
+            NumberSettingField(label = "DPS Statutory Fee Cap (%)", value = s.dpsStatutoryFeeCapPct, minValue = 0.0, onValueChange = { cap -> val safeCap = cap.coerceAtLeast(0.0); patchSettings { cur -> cur.copy(dpsStatutoryFeeCapPct = safeCap, dpsAnnualFeePct = cur.dpsAnnualFeePct.coerceAtMost(safeCap)) } })
+            NumberSettingField(label = "Employer Retirement Exemption Cap (Kč yearly)", value = s.employerRetirementExemptionAnnual, onValueChange = { v -> patchSettings { it.copy(employerRetirementExemptionAnnual = v) } })
+            NumberSettingField(label = "Child Bonus Minimum Wage Multiplier", value = s.childBonusMinWageMultiplier, onValueChange = { v -> patchSettings { it.copy(childBonusMinWageMultiplier = v) } })
+            NumberSettingField(label = "Parental Allowance Pot (Pre-Cutoff Kč)", value = s.parentalAllowanceTotalBeforeCutoff, onValueChange = { v -> patchSettings { it.copy(parentalAllowanceTotalBeforeCutoff = v) } })
+            NumberSettingField(label = "Parental Allowance Pot (Post-Cutoff Kč)", value = s.parentalAllowanceTotalFromCutoff, onValueChange = { v -> patchSettings { it.copy(parentalAllowanceTotalFromCutoff = v) } })
+            NumberSettingField(label = "Parental Allowance Cutoff Year", value = s.parentalAllowanceCutoffYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(parentalAllowanceCutoffYear = v.toInt()) } })
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
-            Text(text = "Monte Carlo Stochastic Risk Engine", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, onValueChange = { onUpdateSettings(s.copy(monteCarloVolatilityPct = it)) })
-            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 100.0, maxValue = 400.0, onValueChange = { onUpdateSettings(s.copy(monteCarloN = it.toInt())) })
-            NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 10.0, maxValue = 60.0, onValueChange = { onUpdateSettings(s.copy(retirementHorizonYears = it.toInt())) })
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Monte Carlo Stochastic Risk Engine",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { onShowInfo(SettingsMetricInfos.monteCarloFor(s.monteCarloN, s.monteCarloVolatilityPct, s.useHistoricalBootstrap)) },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Monte Carlo Methodology Details",
+                        tint = BrandTeal,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(monteCarloVolatilityPct = v) } })
+            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 10.0, maxValue = 10000.0, onValueChange = { v -> patchSettings { it.copy(monteCarloN = v.toInt()) } })
+            NumberSettingField(label = "Simulation RNG Seed", value = s.monteCarloSeed.toDouble(), minValue = 0.0, maxValue = 9999999.0, onValueChange = { v -> patchSettings { it.copy(monteCarloSeed = v.toLong()) } }, fieldKey = "mc_seed")
+            NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 1.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(retirementHorizonYears = v.toInt()) } })
             BooleanSettingField(
                 label = "Use Historical 1970–2025 Bootstrap",
                 checked = s.useHistoricalBootstrap,
-                onCheckedChange = { onUpdateSettings(s.copy(useHistoricalBootstrap = it)) },
+                onCheckedChange = { v -> patchSettings { it.copy(useHistoricalBootstrap = v) } },
                 info = SettingsMetricInfos.historicalBootstrap,
                 onShowInfo = onShowInfo
             )
-            BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { onUpdateSettings(s.copy(guardrailsEnabled = it)) })
+            BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { v -> patchSettings { it.copy(guardrailsEnabled = v) } })
             if (s.guardrailsEnabled) {
-                NumberSettingField(label = "Capital Preservation Upper Trigger (+%)", value = s.guardrailsUpperThresholdPct, minValue = 5.0, maxValue = 50.0, onValueChange = { onUpdateSettings(s.copy(guardrailsUpperThresholdPct = it)) })
-                NumberSettingField(label = "Preservation Spending Cut (%)", value = s.guardrailsCutPct, minValue = 5.0, maxValue = 30.0, onValueChange = { onUpdateSettings(s.copy(guardrailsCutPct = it)) })
-                NumberSettingField(label = "Prosperity Lower Trigger (-%)", value = s.guardrailsLowerThresholdPct, minValue = 5.0, maxValue = 50.0, onValueChange = { onUpdateSettings(s.copy(guardrailsLowerThresholdPct = it)) })
-                NumberSettingField(label = "Prosperity Spending Boost (%)", value = s.guardrailsBoostPct, minValue = 5.0, maxValue = 30.0, onValueChange = { onUpdateSettings(s.copy(guardrailsBoostPct = it)) })
-                NumberSettingField(label = "Essential Spending Floor (%)", value = s.guardrailsFloorPct, minValue = 40.0, maxValue = 90.0, onValueChange = { onUpdateSettings(s.copy(guardrailsFloorPct = it)) })
+                NumberSettingField(label = "Capital Preservation Upper Trigger (+%)", value = s.guardrailsUpperThresholdPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsUpperThresholdPct = v) } })
+                NumberSettingField(label = "Preservation Spending Cut (%)", value = s.guardrailsCutPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsCutPct = v) } })
+                NumberSettingField(label = "Prosperity Lower Trigger (-%)", value = s.guardrailsLowerThresholdPct, minValue = 0.0, maxValue = 95.0, onValueChange = { v -> patchSettings { it.copy(guardrailsLowerThresholdPct = v) } })
+                NumberSettingField(label = "Prosperity Spending Boost (%)", value = s.guardrailsBoostPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsBoostPct = v) } })
+                NumberSettingField(label = "Essential Spending Floor (%)", value = s.guardrailsFloorPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsFloorPct = v) } })
             }
         }
+    }
+}
+
+@Composable
+fun TaxSummaryRow(
+    label: String,
+    status: String,
+    isGood: Boolean,
+    pillColor: androidx.compose.ui.graphics.Color? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        com.example.ui.components.ColorPill(
+            text = status,
+            color = pillColor ?: if (isGood) GoodGreen else BadRed,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Bold,
+            horizontalPadding = 7.dp,
+            verticalPadding = 2.5.dp
+        )
     }
 }

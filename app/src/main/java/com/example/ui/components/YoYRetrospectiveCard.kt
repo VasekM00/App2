@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,16 +25,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCompact
+import kotlin.math.roundToInt
 
 data class AnnualLedgerSummary(
     val year: Int,
@@ -61,16 +64,16 @@ fun YoYRetrospectiveCard(
         val allSortedWithNw = ledgerEntries.filter { it.totalNetWorthAtMonthEnd > 0 }.sortedBy { it.yearMonth }
         byYear.keys.sortedDescending().map { yr ->
             val entries = byYear[yr]?.sortedBy { it.yearMonth } ?: emptyList()
-            val totalIn = entries.sumOf { it.incVaclav + it.incEleonora + it.incUnforeseen }
-            val totalExp = entries.sumOf { it.expRent + it.expGroceries + it.expOther }
-            val surplus = totalIn - totalExp
-            val sr = if (totalIn > 0) ((surplus / totalIn) * 100.0).coerceIn(0.0, 100.0) else 0.0
+            val totalIn = entries.sumOf { it.incVaclav.finiteOrZero() + it.incEleonora.finiteOrZero() + it.incUnforeseen.finiteOrZero() }.finiteOrZero()
+            val totalExp = entries.sumOf { it.expRent.finiteOrZero() + it.expGroceries.finiteOrZero() + it.expOther.finiteOrZero() }.finiteOrZero()
+            val surplus = (totalIn - totalExp).finiteOrZero()
+            val sr = if (totalIn > 0) ((surplus / totalIn) * 100.0).finiteOrZero().coerceIn(0.0, 100.0) else 0.0
 
-            val entriesWithNw = entries.filter { it.totalNetWorthAtMonthEnd > 0 }
-            val prevYearEndNw = allSortedWithNw.lastOrNull { (it.yearMonth.take(4).toIntOrNull() ?: 0) < yr }?.totalNetWorthAtMonthEnd
-            val openNw = prevYearEndNw ?: entriesWithNw.firstOrNull()?.totalNetWorthAtMonthEnd ?: 0.0
-            val closeNw = entriesWithNw.lastOrNull()?.totalNetWorthAtMonthEnd ?: 0.0
-            val nwGrowth = if (openNw > 0 && closeNw > 0) closeNw - openNw else 0.0
+            val entriesWithNw = entries.filter { it.totalNetWorthAtMonthEnd.finiteOrZero() > 0 }
+            val prevYearEndNw = allSortedWithNw.lastOrNull { (it.yearMonth.take(4).toIntOrNull() ?: 0) < yr }?.totalNetWorthAtMonthEnd?.finiteOrZero()
+            val openNw = prevYearEndNw ?: entriesWithNw.firstOrNull()?.totalNetWorthAtMonthEnd?.finiteOrZero() ?: 0.0
+            val closeNw = entriesWithNw.lastOrNull()?.totalNetWorthAtMonthEnd?.finiteOrZero() ?: 0.0
+            val nwGrowth = if (openNw > 0 && closeNw > 0) (closeNw - openNw).finiteOrZero() else 0.0
 
             AnnualLedgerSummary(
                 year = yr,
@@ -111,17 +114,21 @@ fun YoYRetrospectiveCard(
 
             // Year Selector Chips if multiple years exist
             if (annualSummaries.size > 1) {
-                Row(
+                ChipWrapRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalSpacing = 8.dp
                 ) {
                     annualSummaries.forEach { summary ->
                         val isSelected = summary.year == selectedYear
                         AssistChip(
                             onClick = { selectedYear = summary.year },
+                            modifier = Modifier.defaultMinSize(minHeight = 48.dp),
                             label = {
                                 Text(
-                                    text = "${summary.year} (${summary.monthsCount}m)",
+                                    text = "${summary.year} (${summary.monthsCount} ${if (summary.monthsCount == 1) "month" else "months"})",
+                                    maxLines = 2,
+                                    softWrap = true,
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     fontSize = 12.sp
                                 )
@@ -134,7 +141,7 @@ fun YoYRetrospectiveCard(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // 4 Metric Grid for the Selected Year
@@ -144,7 +151,7 @@ fun YoYRetrospectiveCard(
             ) {
                 // Total Inflows
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = GoodGreen.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -162,17 +169,19 @@ fun YoYRetrospectiveCard(
                             text = fmtCompact(currentSummary.totalInflows),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = GoodGreen,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 2,
+                            softWrap = true
                         )
                     }
                 }
 
                 // Total Living Outflows
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BadRed.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -190,10 +199,12 @@ fun YoYRetrospectiveCard(
                             text = fmtCompact(currentSummary.totalExpenses),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = BadRed,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 2,
+                            softWrap = true
                         )
                     }
                 }
@@ -207,7 +218,7 @@ fun YoYRetrospectiveCard(
             ) {
                 // Net Savings Surplus
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandTeal.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -223,12 +234,16 @@ fun YoYRetrospectiveCard(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 4.dp)
                             )
                             ColorPill(
-                                text = "${currentSummary.savingsRatePct.toInt()}%",
+                                text = "${currentSummary.savingsRatePct.roundToInt()}%",
                                 color = if (currentSummary.savingsRatePct >= 40) GoodGreen else BrandGold,
                                 fontSize = 9.5.sp,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 horizontalPadding = 4.dp,
                                 verticalPadding = 1.dp
@@ -239,17 +254,19 @@ fun YoYRetrospectiveCard(
                             text = (if (currentSummary.netSurplus >= 0) "+ " else "") + fmtCompact(currentSummary.netSurplus),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = if (currentSummary.netSurplus >= 0) BrandTeal else BadRed,
                                 fontSize = 13.5.sp
-                            )
+                            ),
+                            maxLines = 2,
+                            softWrap = true
                         )
                     }
                 }
 
                 // Net Worth Added / Capital Growth
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.weight(1f)
@@ -268,10 +285,12 @@ fun YoYRetrospectiveCard(
                                 text = (if (currentSummary.netWorthGrowth >= 0) "+ " else "") + fmtCompact(currentSummary.netWorthGrowth),
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     color = if (currentSummary.netWorthGrowth >= 0) GoodGreen else BadRed,
                                     fontSize = 13.5.sp
-                                )
+                                ),
+                                maxLines = 2,
+                                softWrap = true
                             )
                         } else {
                             Text(
@@ -289,9 +308,9 @@ fun YoYRetrospectiveCard(
             // Bottom Summary Strip
             Spacer(modifier = Modifier.height(10.dp))
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
                 Row(
                     modifier = Modifier
@@ -304,18 +323,24 @@ fun YoYRetrospectiveCard(
                         text = "${currentSummary.year} Coverage: ${currentSummary.monthsCount} / 12 months logged",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
+                            fontFamily = BodyFontFamily,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
                     if (currentSummary.closingNetWorth > 0) {
                         Text(
                             text = "Latest Wealth: ${fmtCompact(currentSummary.closingNetWorth)}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 fontSize = 11.sp,
                                 color = BrandTeal
-                            )
+                            ),
+                            maxLines = 2,
+                            softWrap = true
                         )
                     }
                 }

@@ -3,13 +3,10 @@ package com.example
 import com.example.data.ImportedBankTransactionEntity
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
-import com.example.util.BankType
 import com.example.util.CrossStatementReconciliationEngine
 import com.example.util.CzechMerchantCatalog
 import com.example.util.SubscriptionAuditor
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

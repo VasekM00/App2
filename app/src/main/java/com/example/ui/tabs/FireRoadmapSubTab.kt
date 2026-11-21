@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,11 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ActionMeta
@@ -50,11 +53,14 @@ import com.example.ui.components.HouseholdTimelineCard
 import com.example.ui.components.PhasedPreRetirementBaristaCard
 import com.example.ui.components.TwoBucketLiquidityBridgeCard
 import com.example.ui.components.MetricInfo
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.roundTo10k
 import com.example.util.Formatters.roundTo1k
+import kotlin.math.roundToInt
 
 @Composable
 fun RoadmapAndGoalsSubTab(
@@ -62,6 +68,7 @@ fun RoadmapAndGoalsSubTab(
     actionStates: Map<String, Boolean>,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
     onUpdateSettings: ((SettingsEntity) -> Unit)?,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
     onShowInfo: (MetricInfo) -> Unit = {}
 ) {
     var selectedView by rememberSaveable { mutableIntStateOf(0) } // 0 = Action Checklist & Roadmap, 1 = Household Timeline & Goals
@@ -69,48 +76,72 @@ fun RoadmapAndGoalsSubTab(
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp)
         ) {
-            views.forEachIndexed { index, name ->
-                val isSelected = selectedView == index
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedView = index
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .testTag("roadmap_view_$index")
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                views.forEachIndexed { index, name ->
+                    val isSelected = selectedView == index
+                    Surface(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedView = index
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.surface else androidx.compose.ui.graphics.Color.Transparent,
+                        contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+                        shadowElevation = if (isSelected) 1.dp else 0.dp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag("roadmap_view_$index")
                     ) {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 11.5.sp
-                            ),
-                            maxLines = 1
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp
+                                ),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
         }
 
         when (selectedView) {
-            0 -> FireRoadmapSubTab(state, actionStates, onToggleAction, onUpdateSettings, onShowInfo = onShowInfo)
-            1 -> HouseholdTimelineSubTab(state, onUpdateSettings, onShowInfo = onShowInfo)
+            0 -> FireRoadmapSubTab(
+                state,
+                actionStates,
+                onToggleAction,
+                onUpdateSettings,
+                onShowInfo = onShowInfo,
+                onReduceSettings = onReduceSettings
+            )
+            1 -> HouseholdTimelineSubTab(
+                state,
+                onUpdateSettings,
+                onShowInfo = onShowInfo,
+                onReduceSettings = onReduceSettings
+            )
         }
     }
 }
@@ -119,7 +150,8 @@ fun RoadmapAndGoalsSubTab(
 fun HouseholdTimelineSubTab(
     state: FullCalculationState,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    onShowInfo: (MetricInfo) -> Unit = {}
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -130,8 +162,18 @@ fun HouseholdTimelineSubTab(
             .testTag("household_timeline_subtab"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        HouseholdTimelineCard(settings = state.settings, state = state, onUpdateSettings = onUpdateSettings)
-        LifeGoalsSimulatorCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
+        HouseholdTimelineCard(
+            settings = state.settings,
+            state = state,
+            onUpdateSettings = onUpdateSettings,
+            onReduceSettings = onReduceSettings
+        )
+        LifeGoalsSimulatorCard(
+            state = state,
+            onUpdateSettings = onUpdateSettings,
+            onShowInfo = onShowInfo,
+            onReduceSettings = onReduceSettings
+        )
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -142,13 +184,16 @@ fun FireRoadmapSubTab(
     actionStates: Map<String, Boolean>,
     onToggleAction: (year: Int, actionId: String, currentIsDone: Boolean) -> Unit,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    onShowInfo: (MetricInfo) -> Unit = {}
+    onShowInfo: (MetricInfo) -> Unit = {},
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
     val currentYear = state.settings.baseYear
-    val activeFirePoint = if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint
+    val activeFirePoint = state.fireLiquidBridgePoint
+        ?: (if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint)
     val targetSubtitle = if (activeFirePoint != null) {
-        "Target: Year ${activeFirePoint.year} (${activeFirePoint.year - currentYear} yrs to goal)"
+        val yrs = activeFirePoint.year - currentYear
+        "Target: Year ${activeFirePoint.year} ($yrs ${if (yrs == 1) "year" else "years"} to goal)"
     } else {
         "Target: Beyond 35y horizon (${currentYear + 35}+)"
     }
@@ -177,7 +222,7 @@ fun FireRoadmapSubTab(
                 .fillMaxWidth()
                 .testTag("fire_roadmap_hero_card"),
             shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -186,7 +231,10 @@ fun FireRoadmapSubTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
@@ -204,26 +252,31 @@ fun FireRoadmapSubTab(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "FIRE Strategic Plan",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                text = "Your Freedom Plan",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = targetSubtitle,
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
-                                )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = BrandTeal.copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = "${primaryProgress.toInt()}% of Goal",
+                            text = "${primaryProgress.roundToInt()}% of Goal",
                             style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandTeal,
                                 fontSize = 11.sp
@@ -258,70 +311,92 @@ fun FireRoadmapSubTab(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // 3 Core Metrics
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1.05f)) {
-                        Text(
-                            text = "Investable Capital",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 2,
-                            softWrap = true
-                        )
-                        Text(
-                            text = fmtCZK(investableNetWorth),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            ),
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1.05f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Target Capital",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 2,
-                            softWrap = true
-                        )
-                        Text(
-                            text = fmtCZK(targetWorth),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = BrandTeal
-                            ),
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                    Column(modifier = Modifier.weight(0.9f), horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "Monthly SWR",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
-                            maxLines = 2,
-                            softWrap = true
-                        )
-                        Text(
-                            text = fmtCZK(monthlyPassiveIncome),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = GoodGreen
-                            ),
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val useCompact = maxWidth < 360.dp
+                    val investableText = if (useCompact) fmtCompact(investableNetWorth) else fmtCZK(investableNetWorth)
+                    val targetText = if (useCompact) fmtCompact(targetWorth) else fmtCZK(targetWorth)
+                    val swrText = if (useCompact) fmtCompact(monthlyPassiveIncome) else fmtCZK(monthlyPassiveIncome)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1.05f)) {
+                            Text(
+                                text = "Investable Capital",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                                maxLines = 2,
+                                softWrap = true
+                            )
+                            Text(
+                                text = investableText,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = true
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1.05f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Target Capital",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                                maxLines = 2,
+                                softWrap = true
+                            )
+                            Text(
+                                text = targetText,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    color = BrandTeal
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = true
+                            )
+                        }
+                        Column(modifier = Modifier.weight(0.9f), horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Monthly Income",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.5.sp),
+                                maxLines = 2,
+                                softWrap = true
+                            )
+                            Text(
+                                text = swrText,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    color = GoodGreen
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = true
+                            )
+                        }
                     }
                 }
             }
         }
 
         // 2. FIRE Milestones Hierarchy & Two-Bucket Liquidity
-        FireMilestonesComparisonCard(state = state, onUpdateSettings = onUpdateSettings, onShowInfo = onShowInfo)
-        PhasedPreRetirementBaristaCard(state = state, onUpdateSettings = onUpdateSettings)
+        FireMilestonesComparisonCard(
+            state = state,
+            onUpdateSettings = onUpdateSettings,
+            onShowInfo = onShowInfo,
+            onReduceSettings = onReduceSettings
+        )
+        PhasedPreRetirementBaristaCard(
+            state = state,
+            onUpdateSettings = onUpdateSettings,
+            onReduceSettings = onReduceSettings
+        )
         TwoBucketLiquidityBridgeCard(state = state, onShowInfo = onShowInfo)
 
         // 3. High-Leverage Execution Checklist

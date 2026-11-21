@@ -3,13 +3,18 @@ package com.example.ui.tabs
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,13 +42,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +58,7 @@ import com.example.domain.FullCalculationState
 import com.example.ui.components.ColorPill
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.infoTapHold
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
@@ -60,6 +66,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -84,12 +91,10 @@ internal fun ActiveMonthOverviewCard(
     val netFlow = totalInc - totalExp
     val savingsRate = if (totalInc > 0) ((netFlow / totalInc) * 100.0).coerceIn(0.0, 100.0) else 0.0
 
-    val expDiff = totalExp - baselineExp
-    val incDiff = totalInc - baselineInc
     val surplusDiff = netFlow - baselineSurplus
 
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var bankToDelete by remember { mutableStateOf<String?>(null) }
+    var showDeleteDialog by rememberSaveable(entry.id) { mutableStateOf(false) }
+    var bankToDelete by rememberSaveable(entry.id) { mutableStateOf<String?>(null) }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -101,13 +106,17 @@ internal fun ActiveMonthOverviewCard(
                     onClick = {
                         showDeleteDialog = false
                         onDelete()
-                    }
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                TextButton(
+                    onClick = { showDeleteDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text("Cancel")
                 }
             }
@@ -126,13 +135,17 @@ internal fun ActiveMonthOverviewCard(
                     onClick = {
                         onDeleteImportedStatement?.invoke(entry.yearMonth, targetBank)
                         bankToDelete = null
-                    }
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { bankToDelete = null }) {
+                TextButton(
+                    onClick = { bankToDelete = null },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text("Cancel")
                 }
             }
@@ -150,67 +163,68 @@ internal fun ActiveMonthOverviewCard(
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header row with YearMonth, Savings Pill & Actions
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 ) {
                     ColorPill(
                         text = entry.yearMonth,
                         color = BrandTeal,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = BodyFontFamily,
                         horizontalPadding = 8.dp,
                         verticalPadding = 3.dp
                     )
                     ColorPill(
-                        text = "${savingsRate.toInt()}% SAVED",
+                        text = "${savingsRate.roundToInt()}% SURPLUS",
                         color = if (savingsRate >= 40) GoodGreen else BrandGold,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = BodyFontFamily,
                         horizontalPadding = 6.dp,
                         verticalPadding = 2.dp
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onEdit,
-                        modifier = Modifier.size(32.dp).testTag("edit_active_ledger_entry")
+                        modifier = Modifier.size(48.dp).testTag("edit_active_ledger_entry")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Month",
                             tint = BrandTeal,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(
                         onClick = onDuplicate,
-                        modifier = Modifier.size(32.dp).testTag("duplicate_active_ledger_entry")
+                        modifier = Modifier.size(48.dp).testTag("duplicate_active_ledger_entry")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Duplicate Month",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                     IconButton(
                         onClick = { showDeleteDialog = true },
-                        modifier = Modifier.size(32.dp).testTag("delete_active_ledger_entry")
+                        modifier = Modifier.size(48.dp).testTag("delete_active_ledger_entry")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Record",
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
@@ -219,23 +233,30 @@ internal fun ActiveMonthOverviewCard(
             // Bank Badges FlowRow (Safely wraps on narrow screens without squishing headers)
             val activeBanks = importedBankSourcesByMonth[entry.yearMonth] ?: emptySet()
             if (activeBanks.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     activeBanks.sorted().forEach { bank ->
                         val displayName = friendlyBankName(bank)
-                        ColorPill(
-                            text = "$displayName ×",
-                            color = bankBadgeColor(bank),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            horizontalPadding = 5.dp,
-                            verticalPadding = 1.5.dp,
-                            modifier = Modifier.clickable { bankToDelete = bank }
-                        )
+                        Box(
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { bankToDelete = bank },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ColorPill(
+                                text = "$displayName ×",
+                                color = bankBadgeColor(bank),
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                horizontalPadding = 6.dp,
+                                verticalPadding = 2.dp
+                            )
+                        }
                     }
                 }
             }
@@ -243,142 +264,40 @@ internal fun ActiveMonthOverviewCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             // 3-Metric Inflow / Outflow / Net Grid (Tap-Enabled with Info Modals)
+            val netColor = if (netFlow >= 0) BrandTeal else BadRed
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Incomes
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = GoodGreen.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .infoTapHold(CashFlowMetricInfos.ledgerIncomes(entry, baselineInc), onShowInfo)
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Inflows",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = fmtCompact(totalInc),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = GoodGreen,
-                                fontSize = 13.5.sp
-                            ),
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-                    }
-                }
-
-                // Expenses
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = BadRed.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .infoTapHold(CashFlowMetricInfos.ledgerExpenses(entry, baselineExp), onShowInfo)
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Expenses",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = fmtCompact(totalExp),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = BadRed,
-                                fontSize = 13.5.sp
-                            ),
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-                    }
-                }
-
-                // Net Cash Flow
-                val netColor = if (netFlow >= 0) BrandTeal else BadRed
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = netColor.copy(alpha = 0.09f),
-                    border = BorderStroke(1.dp, netColor.copy(alpha = 0.3f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .infoTapHold(CashFlowMetricInfos.ledgerNetFlow(entry, totalInc, totalExp, netFlow, savingsRate), onShowInfo)
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Net Flow",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = (if (netFlow >= 0) "+ " else "") + fmtCompact(netFlow),
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = netColor,
-                                fontSize = 13.5.sp
-                            ),
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-                    }
-                }
+                ActiveMonthSummaryBox(
+                    label = "Inflows",
+                    value = fmtCompact(totalInc),
+                    accentColor = GoodGreen,
+                    fillAlpha = 0.08f,
+                    borderAlpha = 0.28f,
+                    info = CashFlowMetricInfos.ledgerIncomes(entry, baselineInc),
+                    onShowInfo = onShowInfo
+                )
+                ActiveMonthSummaryBox(
+                    label = "Expenses",
+                    value = fmtCompact(totalExp),
+                    accentColor = BadRed,
+                    fillAlpha = 0.08f,
+                    borderAlpha = 0.28f,
+                    info = CashFlowMetricInfos.ledgerExpenses(entry, baselineExp),
+                    onShowInfo = onShowInfo
+                )
+                ActiveMonthSummaryBox(
+                    label = "Net Flow",
+                    value = (if (netFlow >= 0) "+" else "") + fmtCompact(netFlow),
+                    accentColor = netColor,
+                    fillAlpha = 0.09f,
+                    borderAlpha = 0.3f,
+                    info = CashFlowMetricInfos.ledgerNetFlow(entry, totalInc, totalExp, netFlow, savingsRate),
+                    onShowInfo = onShowInfo
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -387,12 +306,12 @@ internal fun ActiveMonthOverviewCard(
             val isSurplusPositive = surplusDiff >= 0
             val varianceColor = if (isSurplusPositive) GoodGreen else BadRed
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = varianceColor.copy(alpha = 0.07f),
                 border = BorderStroke(1.dp, varianceColor.copy(alpha = 0.28f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .infoTapHold(CashFlowMetricInfos.ledgerBudgetVariance(surplusDiff, baselineSurplus, netFlow), onShowInfo)
             ) {
                 Column(
@@ -408,7 +327,8 @@ internal fun ActiveMonthOverviewCard(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f).padding(end = 6.dp)
                         ) {
                             Icon(
                                 imageVector = if (isSurplusPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
@@ -422,7 +342,10 @@ internal fun ActiveMonthOverviewCard(
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 11.5.sp
-                                )
+                                ),
+                                modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Icon(
                                 imageVector = Icons.Default.Info,
@@ -437,7 +360,7 @@ internal fun ActiveMonthOverviewCard(
                             color = varianceColor,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
@@ -447,7 +370,7 @@ internal fun ActiveMonthOverviewCard(
                         text = "Rent ${fmtCompact(entry.expRent)} · Living ${fmtCompact(entry.expGroceries + entry.expOther)}",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 10.5.sp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
@@ -483,7 +406,7 @@ internal fun ActiveMonthOverviewCard(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandBlue.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.28f)),
                     modifier = Modifier.fillMaxWidth()
@@ -496,7 +419,8 @@ internal fun ActiveMonthOverviewCard(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f).padding(end = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.TrendingUp,
@@ -510,14 +434,16 @@ internal fun ActiveMonthOverviewCard(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 11.sp
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Text(
                                 text = invTotalStr,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     color = BrandBlue,
                                     fontSize = 12.sp
                                 )
@@ -536,7 +462,7 @@ internal fun ActiveMonthOverviewCard(
                                         color = BrandBlue,
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Medium,
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = BodyFontFamily,
                                         horizontalPadding = 5.dp,
                                         verticalPadding = 1.5.dp
                                     )
@@ -550,12 +476,12 @@ internal fun ActiveMonthOverviewCard(
             if (entry.totalNetWorthAtMonthEnd > 0) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .infoTapHold(CashFlowMetricInfos.ledgerMonthEndWealth(entry), onShowInfo)
                 ) {
                     Column(
@@ -570,7 +496,8 @@ internal fun ActiveMonthOverviewCard(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f).padding(end = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AccountBalanceWallet,
@@ -584,7 +511,10 @@ internal fun ActiveMonthOverviewCard(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 11.sp
-                                    )
+                                    ),
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Icon(
                                     imageVector = Icons.Default.Info,
@@ -597,7 +527,7 @@ internal fun ActiveMonthOverviewCard(
                                 text = fmtCZK(entry.totalNetWorthAtMonthEnd),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     color = BrandGold,
                                     fontSize = 12.sp
                                 )
@@ -615,7 +545,7 @@ internal fun ActiveMonthOverviewCard(
                                     color = BrandGold,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     horizontalPadding = 5.dp,
                                     verticalPadding = 1.5.dp
                                 )
@@ -626,7 +556,7 @@ internal fun ActiveMonthOverviewCard(
                                     color = BrandGold,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     horizontalPadding = 5.dp,
                                     verticalPadding = 1.5.dp
                                 )
@@ -637,7 +567,7 @@ internal fun ActiveMonthOverviewCard(
                                     color = BrandTeal,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     horizontalPadding = 5.dp,
                                     verticalPadding = 1.5.dp
                                 )
@@ -659,6 +589,7 @@ internal fun ActiveMonthOverviewCard(
                     border = BorderStroke(1.dp, if (isBankImport) BrandTeal.copy(alpha = 0.25f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                         .then(
                             if (isBankImport && onShowAudit != null) {
                                 Modifier
@@ -674,7 +605,7 @@ internal fun ActiveMonthOverviewCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -696,7 +627,8 @@ internal fun ActiveMonthOverviewCard(
                                     fontSize = 11.sp,
                                     fontWeight = if (isBankImport) FontWeight.SemiBold else FontWeight.Normal
                                 ),
-                                maxLines = 1,
+                                maxLines = 2,
+                                softWrap = true,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
@@ -732,7 +664,7 @@ internal fun ActiveMonthOverviewCard(
                                     text = "Info",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 9.5.sp,
-                                        color = BrandTeal.copy(alpha = 0.8f),
+                                        color = BrandTeal,
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
@@ -741,6 +673,60 @@ internal fun ActiveMonthOverviewCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ActiveMonthSummaryBox(
+    label: String,
+    value: String,
+    accentColor: Color,
+    fillAlpha: Float,
+    borderAlpha: Float,
+    info: MetricInfo,
+    onShowInfo: (MetricInfo) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = accentColor.copy(alpha = fillAlpha),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = borderAlpha)),
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .infoTapHold(info, onShowInfo)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = BodyFontFamily,
+                    color = accentColor,
+                    fontSize = 13.sp
+                ),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

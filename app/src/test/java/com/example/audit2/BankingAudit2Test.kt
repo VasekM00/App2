@@ -9,8 +9,6 @@ import com.example.util.ParsedBankTransaction
 import com.example.util.StatementParseSummary
 import com.example.util.SubscriptionAuditor
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.charset.StandardCharsets
@@ -102,9 +100,36 @@ class BankingAudit2Test {
             transactions = listOf(tx1, tx2)
         )
 
-        val merged = BankStatementImporter.mergeSummaries(listOf(summary))
-        assertEquals("Both same-day transactions must be preserved", 2, merged.transactions.size)
-        assertEquals(130.0, merged.totalExpenses, 0.01)
+        val secondSummary = StatementParseSummary(
+            detectedBank = BankType.CSOB,
+            yearMonth = "2026-01",
+            totalInflows = 0.0,
+            incVaclav = 0.0,
+            incEleonora = 0.0,
+            incOther = 0.0,
+            totalExpenses = 50.0,
+            expRent = 0.0,
+            expGroceries = 0.0,
+            expOther = 50.0,
+            totalInvested = 0.0,
+            invPortu = 0.0,
+            invDip = 0.0,
+            invDps = 0.0,
+            internalTransfersCount = 0,
+            transactions = listOf(
+                ParsedBankTransaction(
+                    date = "2026-01-21",
+                    amount = -50.0,
+                    counterpartyName = "Pekárna",
+                    category = BankTransactionType.GROCERIES,
+                    bankType = BankType.CSOB
+                )
+            )
+        )
+
+        val merged = BankStatementImporter.mergeSummaries(listOf(summary, secondSummary))
+        assertEquals("Both same-day transactions from first statement plus second statement tx must be preserved", 3, merged.transactions.size)
+        assertEquals(180.0, merged.totalExpenses, 0.01)
     }
 
     @Test

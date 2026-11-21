@@ -86,9 +86,6 @@ interface ActionStateDao {
 @Dao
 interface ImportedTransactionDao {
     @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth ORDER BY date ASC, id ASC")
-    fun getTransactionsForMonth(yearMonth: String): Flow<List<ImportedBankTransactionEntity>>
-
-    @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth ORDER BY date ASC, id ASC")
     suspend fun getTransactionsForMonthDirect(yearMonth: String): List<ImportedBankTransactionEntity>
 
     @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName ORDER BY date ASC, id ASC")
@@ -121,8 +118,8 @@ interface ImportedTransactionDao {
     @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth")
     suspend fun deleteTransactionsForMonth(yearMonth: String)
 
-    @Query("DELETE FROM imported_bank_transactions WHERE yearMonth NOT IN (SELECT yearMonth FROM ledger_entries)")
-    suspend fun deleteOrphanedTransactions(): Int
+    @Query("UPDATE imported_bank_transactions SET matchedTxId = NULL, isNetted = 0, nettingReason = '' WHERE matchedTxId IS NOT NULL AND matchedTxId NOT IN (SELECT id FROM imported_bank_transactions)")
+    suspend fun clearStaleMatchedTransactionLinks(): Int
 
     @Query("DELETE FROM imported_bank_transactions")
     suspend fun deleteAllTransactions()

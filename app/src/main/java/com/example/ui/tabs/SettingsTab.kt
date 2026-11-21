@@ -1,23 +1,23 @@
-@file:Suppress("InlinedApi")
-
 package com.example.ui.tabs
 
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -28,37 +28,37 @@ import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SettingsEntity
-import com.example.domain.CustomLumpSumItem
 import com.example.domain.FullCalculationState
+import com.example.domain.parseCustomLumpSums
 import com.example.ui.components.LiveSyncDialog
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BrandTeal
 import com.example.util.BackupManager
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 
@@ -75,26 +75,34 @@ fun SettingsTab(
     lastSyncTimestamp: Long? = null,
     initialSubTab: Int = 0,
     onSubTabSelected: ((Int) -> Unit)? = null,
+    focusedSectionKey: String? = null,
+    focusedSectionTrigger: Int = 0,
+    onConsumeFocusedSection: (() -> Unit)? = null,
     ledgerEntries: List<com.example.data.LedgerEntryEntity> = emptyList(),
     actionStates: Map<String, Boolean> = emptyMap(),
     importedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList(),
     onRestoreFullBackup: ((BackupManager.FullBackupPayload) -> Unit)? = null,
     themeMode: String = "SYSTEM",
     onChangeThemeMode: ((String) -> Unit)? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val exportScope = rememberCoroutineScope()
     val s = state.settings
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
-    var showSyncDialog by remember { mutableStateOf(false) }
-    var showResetDialog by remember { mutableStateOf(false) }
-    var showClearDataDialog by remember { mutableStateOf(false) }
-    var showImportJsonDialog by remember { mutableStateOf(false) }
-    var showAddCategoryDialog by remember { mutableStateOf(false) }
-    var showAddLumpSumDialog by remember { mutableStateOf(false) }
-    var editingLumpSumItem by remember { mutableStateOf<CustomLumpSumItem?>(null) }
+    var showSyncDialog by rememberSaveable { mutableStateOf(false) }
+    var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    var showClearDataDialog by rememberSaveable { mutableStateOf(false) }
+    var showImportJsonDialog by rememberSaveable { mutableStateOf(false) }
+    var showAddCategoryDialog by rememberSaveable { mutableStateOf(false) }
+    var showAddLumpSumDialog by rememberSaveable { mutableStateOf(false) }
+    var editingLumpSumId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editingLumpSumItem = if (editingLumpSumId != null) {
+        parseCustomLumpSums(s.customLumpSumsJson).find { it.id == editingLumpSumId }
+    } else null
     val infoState = rememberMetricInfoState()
 
     // Consolidated into 3 high-level cohesive hubs
@@ -105,24 +113,55 @@ fun SettingsTab(
 
     val hubDefinitions = listOf(
         Triple(
-            "Cashflow & Family",
-            "${fmtCompact(state.currentIncome.totalMonthly)}/mo net",
+            "Household",
+            "${fmtCompact(state.currentIncome.totalMonthly)}/month",
             Icons.Default.AccountBalanceWallet
         ),
         Triple(
-            "FIRE & Assets",
-            "${fmtCompact(state.netWorthTotal)} · ${fmtPct(s.safeWithdrawalRatePct)}",
+            "Portfolio & Tax",
+            fmtCompact(state.netWorthTotal),
             Icons.AutoMirrored.Filled.TrendingUp
         ),
         Triple(
-            "Data & System",
-            if (liveRegulatoryData != null) "ČNB Live Synced" else "Sync & Backup",
+            "App & Data",
+            if (liveRegulatoryData != null) "Synced" else "Backup",
             Icons.Default.CloudDownload
         )
     )
 
-    LaunchedEffect(selectedTab) {
-        listState.scrollToItem(0)
+    var lastHandledFocusTrigger by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(selectedTab, focusedSectionTrigger, focusedSectionKey) {
+        val targetIndex = when (selectedTab) {
+            0 -> when (focusedSectionKey) {
+                "income" -> 1
+                "expenses" -> 2
+                "family" -> 3
+                else -> null
+            }
+            1 -> when (focusedSectionKey) {
+                "balances" -> 1
+                "dca" -> 2
+                "assumptions" -> 3
+                "tax_shield" -> 4
+                else -> null
+            }
+            else -> when (focusedSectionKey) {
+                "appearance" -> 1
+                "sync" -> 2
+                "backup" -> 3
+                "merchant_rules" -> 4
+                "danger" -> 5
+                else -> null
+            }
+        }
+        if (focusedSectionTrigger > lastHandledFocusTrigger && targetIndex != null) {
+            lastHandledFocusTrigger = focusedSectionTrigger
+            listState.animateScrollToItem(targetIndex)
+            kotlinx.coroutines.delay(50)
+            onConsumeFocusedSection?.invoke()
+        } else {
+            listState.scrollToItem(0)
+        }
     }
 
     Column(
@@ -130,67 +169,54 @@ fun SettingsTab(
             .fillMaxSize()
             .testTag("settings_tab")
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .height(IntrinsicSize.Max),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
         ) {
-            hubDefinitions.forEachIndexed { index, (title, subLabel, icon) ->
-                val isSelected = selectedTab == index
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        selectedTab = index
-                        onSubTabSelected?.invoke(index)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
-                    border = BorderStroke(
-                        width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .testTag("settings_hub_$index")
-                ) {
-                    Column(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                hubDefinitions.forEachIndexed { index, (title, _, _) ->
+                    val isSelected = selectedTab == index
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.surface
+                                else androidx.compose.ui.graphics.Color.Transparent
+                            )
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.Tab,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedTab = index
+                                    onSubTabSelected?.invoke(index)
+                                }
+                            )
+                            .padding(horizontal = 6.dp, vertical = 8.dp)
+                            .testTag("settings_hub_$index"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.labelMedium.copy(
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 11.5.sp,
-                                textAlign = TextAlign.Center
+                                color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = subLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) BrandTeal.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                                textAlign = TextAlign.Center
-                            ),
-                            maxLines = 1,
+                            maxLines = 2,
+                            softWrap = true,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -202,64 +228,60 @@ fun SettingsTab(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 val (hubSummaryTitle, hubSummaryDetail) = when (selectedTab) {
-                    0 -> "Household Budget & Demographics" to "Inflows ${fmtCZK(state.currentIncome.totalMonthly)} · Burn ${fmtCZK(state.totalLivingCostMonthly)} · Savings ${fmtPct(state.savingsRatePct, 1)}"
-                    1 -> "Portfolio, DCA & Tax Parameters" to "Net Worth ${fmtCZK(state.netWorthTotal)} · DCA ${fmtCZK(state.investMonthlyTotal)} · Return ${fmtPct(s.portfolioNominalReturnPct)}"
-                    else -> "Regulatory Data, Backups & Categorization" to "Base Year ${s.baseYear} · ${if (s.isSingleHousehold) "Single Earner" else "Dual Earner"} · Portable JSON & ČNB Sync"
+                    0 -> "Personalize your household setup" to "Income ${fmtCompact(state.currentIncome.totalMonthly)} · Living ${fmtCompact(state.totalLivingCostMonthly)} · Save ${fmtPct(state.savingsRatePct, 1)}"
+                    1 -> "Portfolio & Freedom parameters" to "Net ${fmtCompact(state.netWorthTotal)} · Investing ${fmtCompact(state.investMonthlyTotal)} · ${fmtPct(s.portfolioNominalReturnPct)} return"
+                    else -> "Preferences, Sync & Backups" to "Base ${s.baseYear} · ${if (s.isSingleHousehold) "Single" else "Dual"} household · JSON & ČNB Sync"
                 }
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
                                 text = hubSummaryTitle,
-                                style = MaterialTheme.typography.labelMedium.copy(
+                                style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = hubSummaryDetail,
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
                         }
                         val nextExpand = !(expandTargetState ?: false)
-                        OutlinedButton(
+                        TextButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 expandTargetState = nextExpand
                                 expandTrigger += 1
                             },
-                            shape = RoundedCornerShape(10.dp)
+                            modifier = Modifier.heightIn(min = 40.dp)
                         ) {
                             Icon(
                                 imageVector = if (nextExpand) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,
                                 contentDescription = null,
-                                modifier = Modifier.size(15.dp)
+                                tint = BrandTeal,
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (nextExpand) "Expand All" else "Collapse",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BrandTeal
                             )
                         }
                     }
@@ -272,25 +294,33 @@ fun SettingsTab(
                     onUpdateSettings = onUpdateSettings,
                     expandTrigger = expandTrigger,
                     expandTargetState = expandTargetState,
+                    focusedSectionKey = focusedSectionKey,
+                    focusedSectionTrigger = focusedSectionTrigger,
                     onShowAddCategory = { showAddCategoryDialog = true },
                     onShowAddLumpSum = { item ->
-                        editingLumpSumItem = item
+                        editingLumpSumId = item?.id
                         showAddLumpSumDialog = true
                     },
-                    onShowInfo = { infoState.show(it) }
+                    onShowInfo = { infoState.show(it) },
+                    onReduceSettings = onReduceSettings
                 )
                 1 -> settingsFireSubTab(
                     state = state,
                     onUpdateSettings = onUpdateSettings,
                     expandTrigger = expandTrigger,
                     expandTargetState = expandTargetState,
-                    onShowInfo = { infoState.show(it) }
+                    focusedSectionKey = focusedSectionKey,
+                    focusedSectionTrigger = focusedSectionTrigger,
+                    onShowInfo = { infoState.show(it) },
+                    onReduceSettings = onReduceSettings
                 )
                 else -> settingsDataSubTab(
                     state = state,
                     onUpdateSettings = onUpdateSettings,
                     expandTrigger = expandTrigger,
                     expandTargetState = expandTargetState,
+                    focusedSectionKey = focusedSectionKey,
+                    focusedSectionTrigger = focusedSectionTrigger,
                     liveRegulatoryData = liveRegulatoryData,
                     onSyncLiveCzechData = onSyncLiveCzechData,
                     lastSyncTimestamp = lastSyncTimestamp,
@@ -302,12 +332,14 @@ fun SettingsTab(
                     onShowClearDataDialog = { showClearDataDialog = true },
                     actionStates = actionStates,
                     ledgerEntries = ledgerEntries,
-                    importedTransactions = importedTransactions
+                    importedTransactions = importedTransactions,
+                    exportScope = exportScope,
+                    onReduceSettings = onReduceSettings
                 )
             }
 
             item {
-                Spacer(modifier = Modifier.height(120.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -323,6 +355,7 @@ fun SettingsTab(
                 showSyncDialog = false
                 Toast.makeText(context, "Official Czech benchmarks applied", Toast.LENGTH_SHORT).show()
             },
+            onRetry = onSyncLiveCzechData,
             lastSyncTimestamp = lastSyncTimestamp
         )
     }
@@ -354,7 +387,8 @@ fun SettingsTab(
         SettingsAddCategoryDialog(
             settings = s,
             onDismiss = { showAddCategoryDialog = false },
-            onUpdateSettings = onUpdateSettings
+            onUpdateSettings = onUpdateSettings,
+            onReduceSettings = onReduceSettings
         )
     }
 
@@ -364,9 +398,10 @@ fun SettingsTab(
             initialItem = editingLumpSumItem,
             onDismiss = {
                 showAddLumpSumDialog = false
-                editingLumpSumItem = null
+                editingLumpSumId = null
             },
-            onUpdateSettings = onUpdateSettings
+            onUpdateSettings = onUpdateSettings,
+            onReduceSettings = onReduceSettings
         )
     }
 

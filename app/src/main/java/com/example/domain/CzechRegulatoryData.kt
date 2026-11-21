@@ -11,15 +11,10 @@ data class CzechRegulatoryData(
     
     // Macroeconomics (ČSÚ & ČNB)
     val csuCpiInflationPct: Double = 2.8,
-    val csuAnnualAverageCpiPct: Double = 2.5,
     val csuNationalAverageWageMonthly: Double = 48967.0,
-    val eurCzkRate: Double = 25.15,
-    val usdCzkRate: Double = 23.25,
+    val eurCzkRate: Double = 25.20,
+    val usdCzkRate: Double = 23.50,
     val rateDate: String = "",
-    
-    // Global Asset Benchmarks (Long-Term Realized Real CAGR)
-    val msciWorld10yCagrPct: Double = 8.9,
-    val sp50010yCagrPct: Double = 12.1,
     
     // Czech Income Tax (Zákon č. 586/1992 Sb. - ZDP)
     val baseTaxRatePct: Double = 15.0,
@@ -45,7 +40,7 @@ data class CzechRegulatoryData(
     val dpsYouthAgeLimit: Int = 30,
     val dpsSubsidyRateStandardPct: Double = 20.0,
     val dpsSubsidyRateYouthPct: Double = 20.0,
-    val dpsStatutoryFeeCapPct: Double = 0.5, // Maximum TER management fee cap
+    val dpsStatutoryFeeCapPct: Double = 1.0, // Statutory dynamic/balanced DPS management fee cap (Act No. 427/2011 Coll. § 60(3))
     val childBonusMinWageMultiplier: Double = 6.0, // ZDP § 35c(4) min wage multiplier
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)
     val parentalAllowanceTotalFromCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)

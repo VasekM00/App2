@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SettingsEntity::class, LedgerEntryEntity::class, ActionStateEntity::class, ImportedBankTransactionEntity::class],
-    version = 35,
+    version = 37,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -173,7 +173,7 @@ abstract class AppDatabase : RoomDatabase() {
 
                 val employerRetirementMonthlyCol = when {
                     columns.contains("employerRetirementMonthly") -> "CASE WHEN employerRetirementMonthly >= 2795.0 AND employerRetirementMonthly <= 2805.0 THEN 233.0 ELSE employerRetirementMonthly END"
-                    columns.contains("employerRetirementAnnual") -> "CASE WHEN employerRetirementAnnual <= 5000.0 THEN (employerRetirementAnnual / 12.0) ELSE (employerRetirementAnnual / 12.0) END"
+                    columns.contains("employerRetirementAnnual") -> "(employerRetirementAnnual / 12.0)"
                     else -> "233.0"
                 }
 
@@ -182,6 +182,8 @@ abstract class AppDatabase : RoomDatabase() {
                     columns.contains("eEmployerRetirementAnnual") -> "(eEmployerRetirementAnnual / 12.0)"
                     else -> "0.0"
                 }
+
+                val defaultGoalsSqlLiteral = "'${SettingsEntity.defaultCustomGoalsJson().replace("'", "''")}'"
 
                 db.execSQL("""
                     INSERT INTO app_settings_new (
@@ -307,7 +309,7 @@ abstract class AppDatabase : RoomDatabase() {
                         ${colOr("monteCarloVolatilityPct", "15.0")},
                         ${colOr("monteCarloSeed", "42")},
                         ${colOr("customExpensesJson", "'[]'")},
-                        ${colOr("customGoalsJson", "'[]'")},
+                        ${colOr("customGoalsJson", defaultGoalsSqlLiteral)},
                         ${colOr("customLumpSumsJson", "'[]'")},
                         ${colOr("deletedCategoriesJson", "'[]'")}
                     FROM app_settings
@@ -424,7 +426,6 @@ abstract class AppDatabase : RoomDatabase() {
                 """)
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_yearMonth ON imported_bank_transactions(yearMonth)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_bankName ON imported_bank_transactions(bankName)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_imported_bank_transactions_date ON imported_bank_transactions(date)")
             }
         }
 
@@ -536,6 +537,112 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS app_settings_new")
+                db.execSQL("""
+                    CREATE TABLE app_settings_new (
+                        `id` INTEGER NOT NULL, `baseYear` INTEGER NOT NULL, `primaryAge` INTEGER NOT NULL,
+                        `primaryName` TEXT NOT NULL, `spouseName` TEXT NOT NULL, `isSingleHousehold` INTEGER NOT NULL,
+                        `dcaAnnualGrowthPct` REAL NOT NULL, `vSalary` REAL NOT NULL, `vSalaryGrowthPct` REAL NOT NULL,
+                        `vMealVouchersMonthly` REAL NOT NULL, `vOtherInflowsMonthly` REAL NOT NULL,
+                        `eReturnYear` INTEGER NOT NULL, `eReturnMonth` INTEGER NOT NULL,
+                        `eStartingSalary` REAL NOT NULL, `eSalaryGrowthPct` REAL NOT NULL, `eReinvestedPct` REAL NOT NULL,
+                        `eParentalAllowanceMonthly` REAL NOT NULL, `eLecturingMonthly` REAL NOT NULL,
+                        `eIncludeLecturing` INTEGER NOT NULL, `eOtherInflowsMonthly` REAL NOT NULL,
+                        `vGiftsMonthly` REAL NOT NULL, `eGiftsMonthly` REAL NOT NULL,
+                        `lumpSumYear` INTEGER NOT NULL, `lumpSumAmount` REAL NOT NULL, `lumpSumInclude` INTEGER NOT NULL,
+                        `liquidPortfolioCurrent` REAL NOT NULL, `dpsBalanceCurrent` REAL NOT NULL, `dipBalanceCurrent` REAL NOT NULL,
+                        `portuDcaMonthly` REAL NOT NULL, `portfolioNominalReturnPct` REAL NOT NULL,
+                        `dpsOwnContributionMonthly` REAL NOT NULL, `dpsGrossReturnPct` REAL NOT NULL, `dpsAnnualFeePct` REAL NOT NULL,
+                        `dipContributionMonthly` REAL NOT NULL, `employerRetirementMonthly` REAL NOT NULL,
+                        `eLiquidPortfolioCurrent` REAL NOT NULL, `ePortuDcaMonthly` REAL NOT NULL,
+                        `eDpsBalanceCurrent` REAL NOT NULL, `eDpsOwnContributionMonthly` REAL NOT NULL,
+                        `eDipBalanceCurrent` REAL NOT NULL, `eDipContributionMonthly` REAL NOT NULL,
+                        `eEmployerRetirementMonthly` REAL NOT NULL, `emergencyReserveCurrent` REAL NOT NULL,
+                        `emergencyReserveTarget` REAL NOT NULL, `lifestyleCostAtFireMonthly` REAL NOT NULL,
+                        `vStatePensionMonthly` REAL NOT NULL, `eStatePensionMonthly` REAL NOT NULL,
+                        `vStatePensionAge` INTEGER NOT NULL, `eStatePensionAge` INTEGER NOT NULL,
+                        `safeWithdrawalRatePct` REAL NOT NULL, `safetyBufferPct` REAL NOT NULL, `cpiInflationPct` REAL NOT NULL,
+                        `fireTargetOverride` REAL NOT NULL, `rentMonthly` REAL NOT NULL, `groceriesMonthly` REAL NOT NULL,
+                        `cafesMonthly` REAL NOT NULL, `therapyMonthly` REAL NOT NULL, `charityMonthly` REAL NOT NULL,
+                        `entertainmentMonthly` REAL NOT NULL, `transportMonthly` REAL NOT NULL,
+                        `subscriptionsMonthly` REAL NOT NULL, `otherDiscretionaryMonthly` REAL NOT NULL,
+                        `taxRatePct` REAL NOT NULL, `taxRateSecondPct` REAL NOT NULL,
+                        `taxSecondBracketThresholdAnnual` REAL NOT NULL, `taxpayerCreditAnnual` REAL NOT NULL,
+                        `taxDeductionCeilingAnnual` REAL NOT NULL, `spouseTaxCreditAnnual` REAL NOT NULL,
+                        `spouseIncomeLimitAnnual` REAL NOT NULL, `includeSpouseCredit` INTEGER NOT NULL,
+                        `hasChildUnder3` INTEGER NOT NULL, `minWageMonthly` REAL NOT NULL,
+                        `dpsDeductionThresholdMonthly` REAL NOT NULL, `dpsStandardSubsidyMaxMonthly` REAL NOT NULL,
+                        `dpsYouthSubsidyMaxMonthly` REAL NOT NULL, `dpsMinDepositForSubsidy` REAL NOT NULL,
+                        `dpsYouthAgeLimit` INTEGER NOT NULL, `dpsSubsidyRateStandardPct` REAL NOT NULL,
+                        `dpsSubsidyRateYouthPct` REAL NOT NULL, `dpsStatutoryFeeCapPct` REAL NOT NULL,
+                        `employerRetirementExemptionAnnual` REAL NOT NULL, `childBonusMinWageMultiplier` REAL NOT NULL,
+                        `parentalAllowanceTotalBeforeCutoff` REAL NOT NULL, `parentalAllowanceTotalFromCutoff` REAL NOT NULL,
+                        `parentalAllowanceCutoffYear` INTEGER NOT NULL, `child1Name` TEXT NOT NULL, `child2Name` TEXT NOT NULL,
+                        `childExpensesEnabled` INTEGER NOT NULL, `currentChildCostsInBaseline` INTEGER NOT NULL,
+                        `child1Enabled` INTEGER NOT NULL, `child1BirthYear` INTEGER NOT NULL,
+                        `child2Enabled` INTEGER NOT NULL, `child2BirthYear` INTEGER NOT NULL,
+                        `child1TaxBonusAnnual` REAL NOT NULL, `child2TaxBonusAnnual` REAL NOT NULL,
+                        `child3PlusTaxBonusAnnual` REAL NOT NULL, `childToddlerMonthly` REAL NOT NULL,
+                        `childPreschoolMonthly` REAL NOT NULL, `childSchoolMonthly` REAL NOT NULL,
+                        `childTeenMonthly` REAL NOT NULL, `childUniMonthly` REAL NOT NULL,
+                        `prolongChildSupportInFire` INTEGER NOT NULL, `childSupportUntilAge` INTEGER NOT NULL,
+                        `rentGrowthPct` REAL NOT NULL, `monteCarloN` INTEGER NOT NULL,
+                        `monteCarloVolatilityPct` REAL NOT NULL, `monteCarloSeed` INTEGER NOT NULL,
+                        `retirementHorizonYears` INTEGER NOT NULL, `dividendYieldPct` REAL NOT NULL,
+                        `dividendTaxRatePct` REAL NOT NULL, `useHistoricalBootstrap` INTEGER NOT NULL,
+                        `guardrailsEnabled` INTEGER NOT NULL, `guardrailsUpperThresholdPct` REAL NOT NULL,
+                        `guardrailsLowerThresholdPct` REAL NOT NULL, `guardrailsCutPct` REAL NOT NULL,
+                        `guardrailsBoostPct` REAL NOT NULL, `guardrailsFloorPct` REAL NOT NULL,
+                        `baristaTransitionEnabled` INTEGER NOT NULL, `baristaStartYear` INTEGER NOT NULL,
+                        `baristaMonthlyIncome` REAL NOT NULL, `baristaSavingsMonthly` REAL NOT NULL,
+                        `customExpensesJson` TEXT NOT NULL, `customGoalsJson` TEXT NOT NULL,
+                        `customLumpSumsJson` TEXT NOT NULL, `deletedCategoriesJson` TEXT NOT NULL,
+                        `merchantRulesJson` TEXT NOT NULL, `emergencyReserveMode` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+                val cols = "id, baseYear, primaryAge, primaryName, spouseName, isSingleHousehold, dcaAnnualGrowthPct, " +
+                    "vSalary, vSalaryGrowthPct, vMealVouchersMonthly, vOtherInflowsMonthly, eReturnYear, eReturnMonth, " +
+                    "eStartingSalary, eSalaryGrowthPct, eReinvestedPct, eParentalAllowanceMonthly, eLecturingMonthly, " +
+                    "eIncludeLecturing, eOtherInflowsMonthly, vGiftsMonthly, eGiftsMonthly, lumpSumYear, lumpSumAmount, " +
+                    "lumpSumInclude, liquidPortfolioCurrent, dpsBalanceCurrent, dipBalanceCurrent, portuDcaMonthly, " +
+                    "portfolioNominalReturnPct, dpsOwnContributionMonthly, dpsGrossReturnPct, dpsAnnualFeePct, " +
+                    "dipContributionMonthly, employerRetirementMonthly, eLiquidPortfolioCurrent, ePortuDcaMonthly, " +
+                    "eDpsBalanceCurrent, eDpsOwnContributionMonthly, eDipBalanceCurrent, eDipContributionMonthly, " +
+                    "eEmployerRetirementMonthly, emergencyReserveCurrent, emergencyReserveTarget, lifestyleCostAtFireMonthly, " +
+                    "vStatePensionMonthly, eStatePensionMonthly, vStatePensionAge, eStatePensionAge, safeWithdrawalRatePct, " +
+                    "safetyBufferPct, cpiInflationPct, fireTargetOverride, rentMonthly, groceriesMonthly, cafesMonthly, " +
+                    "therapyMonthly, charityMonthly, entertainmentMonthly, transportMonthly, subscriptionsMonthly, " +
+                    "otherDiscretionaryMonthly, taxRatePct, taxRateSecondPct, taxSecondBracketThresholdAnnual, " +
+                    "taxpayerCreditAnnual, taxDeductionCeilingAnnual, spouseTaxCreditAnnual, spouseIncomeLimitAnnual, " +
+                    "includeSpouseCredit, hasChildUnder3, minWageMonthly, dpsDeductionThresholdMonthly, " +
+                    "dpsStandardSubsidyMaxMonthly, dpsYouthSubsidyMaxMonthly, dpsMinDepositForSubsidy, dpsYouthAgeLimit, " +
+                    "dpsSubsidyRateStandardPct, dpsSubsidyRateYouthPct, dpsStatutoryFeeCapPct, " +
+                    "employerRetirementExemptionAnnual, childBonusMinWageMultiplier, parentalAllowanceTotalBeforeCutoff, " +
+                    "parentalAllowanceTotalFromCutoff, parentalAllowanceCutoffYear, child1Name, child2Name, " +
+                    "childExpensesEnabled, currentChildCostsInBaseline, child1Enabled, child1BirthYear, child2Enabled, " +
+                    "child2BirthYear, child1TaxBonusAnnual, child2TaxBonusAnnual, child3PlusTaxBonusAnnual, " +
+                    "childToddlerMonthly, childPreschoolMonthly, childSchoolMonthly, childTeenMonthly, childUniMonthly, " +
+                    "prolongChildSupportInFire, childSupportUntilAge, rentGrowthPct, monteCarloN, " +
+                    "monteCarloVolatilityPct, monteCarloSeed, retirementHorizonYears, dividendYieldPct, dividendTaxRatePct, " +
+                    "useHistoricalBootstrap, guardrailsEnabled, guardrailsUpperThresholdPct, guardrailsLowerThresholdPct, " +
+                    "guardrailsCutPct, guardrailsBoostPct, guardrailsFloorPct, baristaTransitionEnabled, baristaStartYear, " +
+                    "baristaMonthlyIncome, baristaSavingsMonthly, customExpensesJson, customGoalsJson, " +
+                    "customLumpSumsJson, deletedCategoriesJson, merchantRulesJson, emergencyReserveMode"
+                db.execSQL("INSERT INTO app_settings_new ($cols) SELECT $cols FROM app_settings")
+                db.execSQL("DROP TABLE app_settings")
+                db.execSQL("ALTER TABLE app_settings_new RENAME TO app_settings")
+            }
+        }
+
+        val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN emergencyReserveMonthlyOverride REAL NOT NULL DEFAULT -1.0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -550,7 +657,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24,
                         MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28,
                         MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
-                        MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35
+                        MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36,
+                        MIGRATION_36_37
                     )
                     .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
                     .fallbackToDestructiveMigrationOnDowngrade(true)

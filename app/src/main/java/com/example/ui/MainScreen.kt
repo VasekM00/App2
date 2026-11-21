@@ -1,28 +1,28 @@
 package com.example.ui
 
-import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,36 +44,42 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.CrossAccountNettingAuditDialog
 import com.example.ui.components.ExportReportDialog
-import com.example.ui.components.HeroHeader
+import com.example.ui.components.QuickGuideDialog
+import com.example.ui.components.StatementImportReviewDialog
 import com.example.ui.tabs.CashFlowTab
 import com.example.ui.tabs.OverviewTab
-import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 data class NavTabItem(
     val title: String,
@@ -84,7 +91,8 @@ data class SearchResult(
     val title: String,
     val category: String,
     val tabIndex: Int,
-    val subTabIndex: Int = 0
+    val subTabIndex: Int = 0,
+    val sectionKey: String? = null
 )
 
 data class SearchIndexEntry(
@@ -92,9 +100,11 @@ data class SearchIndexEntry(
     val category: String,
     val tabIndex: Int,
     val subTabIndex: Int,
-    val keywords: List<String>
+    val keywords: List<String>,
+    val sectionKey: String? = null
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
@@ -104,38 +114,47 @@ fun MainScreen(
     onChangeThemeMode: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val state by viewModel.calculationState.collectAsState()
-    val ledgerEntries by viewModel.ledgerEntries.collectAsState()
-    val actionStates by viewModel.actionStates.collectAsState()
-    val liveRegulatoryData by viewModel.liveRegulatoryData.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
-    val pendingStatementImport by viewModel.pendingStatementImport.collectAsState()
-    val activeAuditReport by viewModel.activeAuditReport.collectAsState()
-    val importedBankSourcesByMonth by viewModel.importedBankSourcesByMonth.collectAsState()
-    val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsState()
-    val lastCzechSyncTimestamp by viewModel.lastCzechSyncTimestamp.collectAsState()
-    val allImportedTransactions by viewModel.allImportedTransactions.collectAsState()
-    val dismissedSubscriptionMerchants by viewModel.dismissedSubscriptionMerchants.collectAsState()
+    val state by viewModel.calculationState.collectAsStateWithLifecycle()
+    val ledgerEntries by viewModel.ledgerEntries.collectAsStateWithLifecycle()
+    val actionStates by viewModel.actionStates.collectAsStateWithLifecycle()
+    val liveRegulatoryData by viewModel.liveRegulatoryData.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val pendingStatementImport by viewModel.pendingStatementImport.collectAsStateWithLifecycle()
+    val activeAuditReport by viewModel.activeAuditReport.collectAsStateWithLifecycle()
+    val importedBankSourcesByMonth by viewModel.importedBankSourcesByMonth.collectAsStateWithLifecycle()
+    val lastImportTimestamp by viewModel.lastImportTimestamp.collectAsStateWithLifecycle()
+    val lastCzechSyncTimestamp by viewModel.lastCzechSyncTimestamp.collectAsStateWithLifecycle()
+    val allImportedTransactions by viewModel.allImportedTransactions.collectAsStateWithLifecycle()
+    val dismissedSubscriptionMerchants by viewModel.dismissedSubscriptionMerchants.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
     var targetProjectionsSubTab by rememberSaveable { mutableIntStateOf(0) }
-    var targetPlanSubTab by rememberSaveable { mutableIntStateOf(0) }
     var targetSettingsSubTab by rememberSaveable { mutableIntStateOf(0) }
+    var targetSettingsSectionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var targetSettingsSectionTrigger by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab != 3 && targetSettingsSectionKey != null) {
+            targetSettingsSectionKey = null
+        }
+    }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportReportDialog by rememberSaveable { mutableStateOf(false) }
+    var showQuickGuideDialog by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val overviewScrollState = androidx.compose.foundation.rememberScrollState()
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val overviewScrollState = rememberScrollState()
+    var scrollToEmergencyReserveTrigger by remember { mutableIntStateOf(0) }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     val haptic = LocalHapticFeedback.current
-    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(Unit) {
-        viewModel.uiEvent.collectLatest { event ->
+        viewModel.uiEvent.collect { event ->
             when (event) {
                 is UiMessage.ShowSnackbar -> {
                     snackbarHostState.showSnackbar(event.message)
@@ -144,37 +163,77 @@ fun MainScreen(
         }
     }
 
-    val tabs = listOf(
-        NavTabItem("Overview", Icons.Default.Dashboard, "nav_overview"),
-        NavTabItem("Cash Flow", Icons.Default.Payments, "nav_cashflow"),
-        NavTabItem("Projections", Icons.Default.Assessment, "nav_projections"),
-        NavTabItem("Strategy", Icons.Default.Checklist, "nav_plan"),
-        NavTabItem("Settings", Icons.Default.Settings, "nav_settings")
-    )
+    val tabs = remember {
+        listOf(
+            NavTabItem("Home", Icons.Default.Dashboard, "nav_overview"),
+            NavTabItem("Budget", Icons.Default.Payments, "nav_cashflow"),
+            NavTabItem("Wealth", Icons.Default.Assessment, "nav_projections"),
+            NavTabItem("More", Icons.Default.Settings, "nav_settings")
+        )
+    }
+    val safeSelectedTab = selectedTab.coerceIn(0, tabs.lastIndex)
+
+    BackHandler(enabled = activeAuditReport != null) {
+        viewModel.clearAuditReport()
+    }
+    BackHandler(enabled = pendingStatementImport != null && activeAuditReport == null) {
+        viewModel.dismissStatementImport()
+    }
+    BackHandler(enabled = showQuickGuideDialog && activeAuditReport == null && pendingStatementImport == null) {
+        showQuickGuideDialog = false
+    }
+    BackHandler(enabled = showExportReportDialog && !showQuickGuideDialog && activeAuditReport == null && pendingStatementImport == null) {
+        showExportReportDialog = false
+    }
+    BackHandler(
+        enabled = (isSearchExpanded || searchQuery.isNotEmpty()) &&
+            !showQuickGuideDialog &&
+            !showExportReportDialog &&
+            pendingStatementImport == null &&
+            activeAuditReport == null
+    ) {
+        isSearchExpanded = false
+        searchQuery = ""
+        focusManager.clearFocus()
+    }
+    BackHandler(
+        enabled = safeSelectedTab != 0 &&
+            !isSearchExpanded &&
+            searchQuery.isEmpty() &&
+            !showQuickGuideDialog &&
+            !showExportReportDialog &&
+            pendingStatementImport == null &&
+            activeAuditReport == null
+    ) {
+        selectedTab = 0
+    }
 
     val searchCatalog = remember {
         listOf(
-            SearchIndexEntry("Emergency Cash Reserve & Runway", "Overview", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
-            SearchIndexEntry("FIRE Milestones & Targets", "Strategy > Roadmap & Timeline", 3, 1, listOf("milestone", "coast", "lean", "standard", "barista", "fat", "overview", "target")),
-            SearchIndexEntry("Subscription & Fixed Debit Auditor", "Cash Flow > Budget & Incomes", 1, 0, listOf("subscription", "recurring", "fixed debit", "auditor", "netflix", "spotify", "dismissed")),
-            SearchIndexEntry("Learned Merchant Rules & Auto-Categorization", "Settings > Data & System", 4, 2, listOf("merchant", "rules", "learned", "category", "override", "keyword", "auto")),
-            SearchIndexEntry("Monthly Budget & Surplus Summary", "Cash Flow > Budget & Incomes", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
-            SearchIndexEntry("Sankey Cash Flow Waterfall & Asset Cascade", "Cash Flow > Budget & Incomes", 1, 0, listOf("sankey", "waterfall", "cash flow", "cascade", "inflow", "allocation", "stream", "journey", "leakage")),
-            SearchIndexEntry("Live Czech Economic & Regulatory Sync", "Settings > Data & System", 4, 2, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp")),
-            SearchIndexEntry("Vaclav & Eleonora Salaries, Raises & Bonuses", "Cash Flow > Budget & Incomes", 1, 0, listOf("income", "salary", "bonus", "raise", "vaclav", "eleonora", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
-            SearchIndexEntry("Living Expenses, Rent & Groceries", "Cash Flow > Budget & Incomes", 1, 0, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
-            SearchIndexEntry("Historical Ledger Records & CSV Import", "Cash Flow > Monthly Records & Ledger", 1, 1, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
-            SearchIndexEntry("FIRE Target, SWR & 35-Year Trajectory", "Projections > Trajectory", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory")),
-            SearchIndexEntry("What-If Live Sandbox & Investment Balances", "Projections > What-If Sandbox", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders")),
-            SearchIndexEntry("Monte Carlo Multi-Run Simulation & Macro Stress Scenarios", "Projections > Monte Carlo & Stress", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
-            SearchIndexEntry("Czech Tax & Pension Regulations, DPS & DIP Tax Shield", "Strategy > Czech Tax & Pension", 3, 0, listOf("pension", "dps", "dip", "tax", "statutory", "youth", "40%", "tax shield", "deduction", "employer match", "early withdrawal")),
-            SearchIndexEntry("FIRE Roadmap, Annual Action Checklist & Life Goals", "Strategy > Roadmap & Timeline", 3, 1, listOf("roadmap", "action", "checklist", "tasks", "phase", "timeline", "life goals", "goal", "down payment", "real estate", "house")),
-            SearchIndexEntry("Base Planning Year, CPI Inflation & FIRE Assumptions", "Settings > FIRE & Assets", 4, 1, listOf("base year", "cpi", "inflation", "settings", "planning year", "macro", "fire assumptions")),
-            SearchIndexEntry("Salary, Raise & Bonus Parameters", "Settings > Cashflow & Family", 4, 0, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings")),
-            SearchIndexEntry("Expense Categories & Custom Budgets", "Settings > Cashflow & Family", 4, 0, listOf("expense settings", "custom category", "delete category", "add category", "rent setting", "groceries setting")),
-            SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "Settings > FIRE & Assets", 4, 1, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings", "swr", "balances")),
-            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "Settings > FIRE & Assets", 4, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "eleonora tax relief", "child tax credit", "czech tax")),
-            SearchIndexEntry("Preset Profiles, CSV Export & Data Management", "Settings > Data & System", 4, 2, listOf("presets", "backup", "restore", "reset", "clear data", "export csv", "import csv", "data"))
+            SearchIndexEntry("Emergency Cash Reserve & Runway", "Home", 0, 0, listOf("emergency", "reserve", "runway", "liquid", "cash", "safety", "buffer")),
+            SearchIndexEntry("Freedom Milestones & Targets", "Wealth > Goals & Roadmap", 2, 4, listOf("milestone", "coast", "lean", "standard", "barista", "fat", "overview", "target", "fire")),
+            SearchIndexEntry("Recurring Bills & Subscriptions", "Budget > Overview", 1, 0, listOf("subscription", "recurring", "fixed debit", "auditor", "netflix", "spotify", "dismissed", "bills")),
+            SearchIndexEntry("Learned Merchant Rules & Auto-Categorization", "More > App & Data", 3, 2, listOf("merchant", "rules", "learned", "category", "override", "keyword", "auto"), sectionKey = "merchant_rules"),
+            SearchIndexEntry("Monthly Budget Summary", "Budget > Overview", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
+            SearchIndexEntry("Where Your Money Goes (Flow Chart)", "Budget > Overview", 1, 0, listOf("sankey", "waterfall", "cash flow", "cascade", "inflow", "allocation", "stream", "journey", "leakage")),
+            SearchIndexEntry("Live Czech Economic & Regulatory Sync", "More > App & Data", 3, 2, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp"), sectionKey = "sync"),
+            SearchIndexEntry("Household Salaries, Raises & Bonuses", "Budget > Income", 1, 1, listOf("income", "salary", "bonus", "raise", "partner", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
+            SearchIndexEntry("Living Expenses, Rent & Groceries", "Budget > Expenses", 1, 2, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
+            SearchIndexEntry("Monthly Records & Bank Ledger", "Budget > Ledger", 1, 3, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
+            SearchIndexEntry("Freedom Goal, SWR & 35-Year Forecast", "Wealth > Forecast", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory", "forecast")),
+            SearchIndexEntry("What-If Simulator & Investment Balances", "Wealth > What-If", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders")),
+            SearchIndexEntry("Monte Carlo Stress Test & Scenarios", "Wealth > Stress Test", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
+            SearchIndexEntry("Czech Tax Relief, DPS & DIP Pensions", "Wealth > Tax & Pension", 2, 3, listOf("pension", "dps", "dip", "tax", "statutory", "youth", "40%", "tax shield", "deduction", "employer match", "early withdrawal")),
+            SearchIndexEntry("Goals, Roadmap & Annual Action Checklist", "Wealth > Goals & Roadmap", 2, 4, listOf("roadmap", "action", "checklist", "tasks", "phase", "timeline", "life goals", "goal", "down payment", "real estate", "house")),
+            SearchIndexEntry("Base Planning Year, Inflation & Assumptions", "More > Portfolio & Tax", 3, 1, listOf("base year", "cpi", "inflation", "settings", "planning year", "macro", "fire assumptions"), sectionKey = "assumptions"),
+            SearchIndexEntry("Salary, Raise & Bonus Parameters", "More > Household", 3, 0, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings"), sectionKey = "income"),
+            SearchIndexEntry("Expense Categories & Custom Budgets", "More > Household", 3, 0, listOf("expense settings", "custom category", "delete category", "add category", "rent setting", "groceries setting"), sectionKey = "expenses"),
+            SearchIndexEntry("Family & Children Expenses & Tax Bonus", "More > Household", 3, 0, listOf("family settings", "children", "child bonus", "kindergarten"), sectionKey = "family"),
+            SearchIndexEntry("Current Investment & Pension Balances", "More > Portfolio & Tax", 3, 1, listOf("starting balance", "portu balance", "dip balance", "dps balance", "emergency cash"), sectionKey = "balances"),
+            SearchIndexEntry("DIP & DPS Contribution Parameters & Returns", "More > Portfolio & Tax", 3, 1, listOf("dip settings", "dps settings", "nominal return", "fee", "dps return", "investment settings", "swr", "balances"), sectionKey = "dca"),
+            SearchIndexEntry("Czech Tax Optimization & Family Relief Settings", "More > Portfolio & Tax", 3, 1, listOf("tax rate", "tax settings", "relief", "deduction ceiling", "tax relief", "child tax credit", "czech tax"), sectionKey = "tax_shield"),
+            SearchIndexEntry("Appearance & Dark Mode Theme", "More > App & Data", 3, 2, listOf("theme", "dark", "light", "appearance", "mode"), sectionKey = "appearance"),
+            SearchIndexEntry("Preset Profiles, CSV Export & Backups", "More > App & Data", 3, 2, listOf("presets", "backup", "restore", "reset", "clear data", "export csv", "import csv", "data"), sectionKey = "backup")
         )
     }
 
@@ -188,7 +247,7 @@ fun MainScreen(
                 entry.category.lowercase().contains(q) ||
                 entry.keywords.any { it.contains(q) }
             }.map {
-                SearchResult(it.title, it.category, it.tabIndex, it.subTabIndex)
+                SearchResult(it.title, it.category, it.tabIndex, it.subTabIndex, it.sectionKey)
             }
         }
     }
@@ -196,27 +255,168 @@ fun MainScreen(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding(),
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        topBar = {
+            if (isSearchExpanded || searchQuery.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search metrics, tabs, settings", style = MaterialTheme.typography.bodyMedium) },
+                        leadingIcon = {
+                            IconButton(onClick = {
+                                isSearchExpanded = false
+                                searchQuery = ""
+                                focusManager.clearFocus()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Close search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("search_input_field")
+                    )
+                }
+            } else {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = tabs[safeSelectedTab].title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (isSyncing) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showQuickGuideDialog = true
+                            },
+                            modifier = Modifier.testTag("action_quick_guide")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                                contentDescription = "How the app works",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isSearchExpanded = true
+                            },
+                            modifier = Modifier.testTag("action_toggle_search")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleDarkTheme()
+                            },
+                            modifier = Modifier.testTag("action_toggle_theme")
+                        ) {
+                            Icon(
+                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showExportReportDialog = true
+                            },
+                            modifier = Modifier.testTag("action_export_report")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = "Export Financial Report",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            }
+        },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .testTag("bottom_navigation_bar")
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                modifier = Modifier.testTag("bottom_navigation_bar")
             ) {
                 tabs.forEachIndexed { index, tab ->
                     NavigationBarItem(
-                        selected = selectedTab == index,
+                        selected = safeSelectedTab == index,
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             selectedTab = index
                         },
                         icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
-                        label = { Text(text = tab.title, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) },
+                        label = {
+                            Text(
+                                text = tab.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
                             indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -231,183 +431,89 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Top App Bar & Collapsible Search Toggle (UX-01)
-                if (isSearchExpanded || searchQuery.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search metrics, tabs, settings", fontSize = 13.sp) },
-                            leadingIcon = {
-                                IconButton(onClick = {
-                                    isSearchExpanded = false
-                                    searchQuery = ""
-                                    focusManager.clearFocus()
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Close search",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+            // Search Results Dropdown Overlay or Main Tab Content
+            if (searchQuery.isNotBlank()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .imePadding()
+                        .animateContentSize(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                ) {
+                    if (searchResults.isEmpty()) {
+                        Text(
+                            text = "No matching metrics or features found.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.padding(8.dp)) {
+                            items(
+                                items = searchResults,
+                                key = { "${it.tabIndex}_${it.subTabIndex}_${it.title}" }
+                            ) { result ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(MaterialTheme.shapes.medium)
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            focusManager.clearFocus()
+                                            selectedTab = result.tabIndex
+                                            when (result.tabIndex) {
+                                                1 -> targetCashFlowSubTab = result.subTabIndex
+                                                2 -> targetProjectionsSubTab = result.subTabIndex
+                                                3 -> {
+                                                    targetSettingsSubTab = result.subTabIndex
+                                                    if (result.sectionKey != null) {
+                                                        targetSettingsSectionKey = result.sectionKey
+                                                        targetSettingsSectionTrigger += 1
+                                                    }
+                                                }
+                                            }
+                                            isSearchExpanded = false
+                                            searchQuery = ""
+                                        }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = result.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 2,
+                                            softWrap = true
+                                        )
+                                        Text(
+                                            text = result.category,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
                                 }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("search_input_field")
-                        )
-                    }
-                } else if (selectedTab != 0 || overviewScrollState.value > 260) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = tabs[selectedTab].title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            if (isSyncing) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isSearchExpanded = true
-                                },
-                                modifier = Modifier.testTag("action_toggle_search")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onToggleDarkTheme()
-                                },
-                                modifier = Modifier.testTag("action_toggle_theme")
-                            ) {
-                                Icon(
-                                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                    contentDescription = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showExportReportDialog = true
-                                },
-                                modifier = Modifier.testTag("action_export_report")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = "Export Financial Report",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
                 }
-
-                // Search Results Dropdown Overlay or Main Tab Content
-                if (searchQuery.isNotBlank()) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-                    ) {
-                        if (searchResults.isEmpty()) {
-                            Text(
-                                text = "No matching metrics or features found.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        } else {
-                            LazyColumn(modifier = Modifier.padding(8.dp)) {
-                                items(searchResults) { result ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                focusManager.clearFocus()
-                                                selectedTab = result.tabIndex
-                                                when (result.tabIndex) {
-                                                    1 -> targetCashFlowSubTab = result.subTabIndex
-                                                    2 -> targetProjectionsSubTab = result.subTabIndex
-                                                    3 -> targetPlanSubTab = result.subTabIndex
-                                                    4 -> targetSettingsSubTab = result.subTabIndex
-                                                }
-                                                searchQuery = ""
-                                            }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(text = result.title, fontWeight = FontWeight.Bold)
-                                            Text(text = result.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Active Tab Content
-                    Box(modifier = Modifier.weight(1f)) {
-                        when (selectedTab) {
+            } else {
+                // Active Tab Content
+                when (safeSelectedTab) {
                             0 -> OverviewTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
-                                actionStates = actionStates,
-                                onToggleAction = { year, id, isDone ->
-                                    viewModel.toggleAction(year, id, isDone)
-                                },
                                 onNavigateToIncome = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     targetCashFlowSubTab = 0
@@ -418,23 +524,21 @@ fun MainScreen(
                                     targetProjectionsSubTab = 0
                                     selectedTab = 2
                                 },
-                                onNavigateToPlan = {
+                                onNavigateToSandbox = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    selectedTab = 3
+                                    targetProjectionsSubTab = 1
+                                    selectedTab = 2
                                 },
                                 onUpdateSettings = { newSettings ->
                                     viewModel.updateSettings(newSettings)
                                 },
-                                isDarkTheme = isDarkTheme,
-                                onToggleDarkTheme = onToggleDarkTheme,
-                                onOpenExportReportDialog = { showExportReportDialog = true },
+                                onReduceSettings = { transform ->
+                                    viewModel.updateSettings(transform = transform)
+                                },
                                 onOpenSettings = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    selectedTab = 4
-                                },
-                                onToggleSearch = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isSearchExpanded = true
+                                    targetSettingsSubTab = 0
+                                    selectedTab = 3
                                 },
                                 onNavigateToNetWorth = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -444,15 +548,15 @@ fun MainScreen(
                                 onNavigateToEmergencyReserve = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 0
-                                    coroutineScope.launch {
-                                        overviewScrollState.animateScrollTo(420)
-                                    }
+                                    scrollToEmergencyReserveTrigger += 1
                                 },
                                 onNavigateToSavingsRate = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     selectedTab = 1
                                     targetCashFlowSubTab = 0
                                 },
+                                onOpenQuickGuide = { showQuickGuideDialog = true },
+                                scrollToEmergencyReserveTrigger = scrollToEmergencyReserveTrigger,
                                 scrollState = overviewScrollState
                             )
                             1 -> CashFlowTab(
@@ -464,27 +568,16 @@ fun MainScreen(
                                 onUpdateLedgerEntry = { entry ->
                                     viewModel.updateLedgerEntry(entry)
                                 },
+                                onAddLedgerEntryWithOptionalBalances = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
+                                    viewModel.addLedgerEntryWithOptionalBalances(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
+                                },
+                                onUpdateLedgerEntryWithSync = { entry, balPortu, balPension, balReserve ->
+                                    viewModel.updateLedgerEntryWithOptionalBalances(entry, balPortu, balPension, balReserve)
+                                },
                                 onDeleteLedgerEntry = { id -> viewModel.deleteLedgerEntry(id) },
                                 onImportCsv = { uri -> viewModel.importCsvData(uri) },
                                 onImportStatements = { uris -> viewModel.importStatements(uris) },
-                                pendingStatementImport = pendingStatementImport,
-                                onConfirmStatementImport = { summary -> viewModel.confirmStatementImport(summary) },
-                                onDismissStatementImport = { viewModel.dismissStatementImport() },
-                                onUpdateTransactionCategory = { idx, cat, remember ->
-                                    viewModel.updatePendingTransactionCategory(idx, cat, remember)
-                                },
-                                onUpdateTransactionCategoryBulk = { idx, cat, remember, applyAll ->
-                                    viewModel.updatePendingTransactionCategory(idx, cat, remember, applyAll)
-                                },
-                                onToggleTransactionExcluded = { idx ->
-                                    viewModel.togglePendingTransactionExcluded(idx)
-                                },
-                                onBulkExcludeMerchant = { query ->
-                                    viewModel.bulkExcludeMerchant(query)
-                                },
-                                activeAuditReport = activeAuditReport,
                                 onShowAuditReport = { ym -> viewModel.loadAuditReportForMonth(ym) },
-                                onDismissAuditReport = { viewModel.clearAuditReport() },
                                 importedBankSourcesByMonth = importedBankSourcesByMonth,
                                 lastImportTimestamp = lastImportTimestamp,
                                 allImportedTransactions = allImportedTransactions,
@@ -501,27 +594,22 @@ fun MainScreen(
                                 onDeleteImportedStatement = { ym, bank -> viewModel.deleteImportedStatement(ym, bank) },
                                 initialSubTab = targetCashFlowSubTab,
                                 onSubTabSelected = { targetCashFlowSubTab = it },
-                                onUpdateSettings = { viewModel.updateSettings(it) }
+                                onUpdateSettings = { viewModel.updateSettings(it) },
+                                onReduceSettings = { transform -> viewModel.updateSettings(transform = transform) }
                             )
                             2 -> ProjectionsTab(
                                 state = state,
                                 ledgerEntries = ledgerEntries,
                                 actionStates = actionStates,
                                 onApplySettings = { viewModel.updateSettings(it) },
-                                initialSubTab = targetProjectionsSubTab,
-                                onSubTabSelected = { targetProjectionsSubTab = it }
-                            )
-                            3 -> PlanTab(
-                                state = state,
-                                actionStates = actionStates,
+                    onReduceSettings = { transform -> viewModel.updateSettings(transform = transform) },
                                 onToggleAction = { year, id, isDone ->
                                     viewModel.toggleAction(year, id, isDone)
                                 },
-                                onUpdateSettings = { viewModel.updateSettings(it) },
-                                initialSubTab = targetPlanSubTab,
-                                onSubTabSelected = { targetPlanSubTab = it }
+                                initialSubTab = targetProjectionsSubTab,
+                                onSubTabSelected = { targetProjectionsSubTab = it }
                             )
-                            4 -> SettingsTab(
+                            3 -> SettingsTab(
                                 state = state,
                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                 onResetDefaults = { viewModel.resetSettingsToDefault() },
@@ -537,11 +625,26 @@ fun MainScreen(
                                 importedTransactions = allImportedTransactions,
                                 onRestoreFullBackup = { viewModel.restoreFullBackup(it) },
                                 themeMode = themeMode,
-                                onChangeThemeMode = onChangeThemeMode
+                                onChangeThemeMode = onChangeThemeMode,
+                                focusedSectionKey = targetSettingsSectionKey,
+                                focusedSectionTrigger = targetSettingsSectionTrigger,
+                                onConsumeFocusedSection = { targetSettingsSectionKey = null },
+                                onReduceSettings = { transform -> viewModel.updateSettings(transform = transform) }
                             )
                         }
                     }
-                }
+
+            if (showQuickGuideDialog) {
+                QuickGuideDialog(
+                    onDismiss = { showQuickGuideDialog = false },
+                    onGoToSetup = {
+                        showQuickGuideDialog = false
+                        targetSettingsSubTab = 0
+                        targetSettingsSectionKey = "income"
+                        targetSettingsSectionTrigger += 1
+                        selectedTab = 3
+                    }
+                )
             }
 
             // Financial Summary Export Report Dialog Modal
@@ -549,6 +652,34 @@ fun MainScreen(
                 ExportReportDialog(
                     state = state,
                     onDismiss = { showExportReportDialog = false }
+                )
+            }
+
+            pendingStatementImport?.let { summary ->
+                StatementImportReviewDialog(
+                    summary = summary,
+                    onConfirm = { viewModel.confirmStatementImport(it) },
+                    onDismiss = { viewModel.dismissStatementImport() },
+                    onShowNettingAudit = { viewModel.loadAuditReportForMonth(summary.yearMonth) },
+                    onUpdateTransactionCategory = { idx, cat, remember ->
+                        viewModel.updatePendingTransactionCategory(idx, cat, remember)
+                    },
+                    onUpdateTransactionCategoryBulk = { idx, cat, remember, applyAll ->
+                        viewModel.updatePendingTransactionCategory(idx, cat, remember, applyAll)
+                    },
+                    onToggleTransactionExcluded = { idx ->
+                        viewModel.togglePendingTransactionExcluded(idx)
+                    },
+                    onBulkExcludeMerchant = { query ->
+                        viewModel.bulkExcludeMerchant(query)
+                    }
+                )
+            }
+
+            activeAuditReport?.let { report ->
+                CrossAccountNettingAuditDialog(
+                    auditReport = report,
+                    onDismiss = { viewModel.clearAuditReport() }
                 )
             }
         }

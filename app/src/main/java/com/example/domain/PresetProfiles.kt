@@ -19,8 +19,8 @@ object PresetProfiles {
 
     private fun scaleDca(s: SettingsEntity, factor: Double): SettingsEntity =
         s.copy(
-            portuDcaMonthly = s.portuDcaMonthly * factor,
-            ePortuDcaMonthly = s.ePortuDcaMonthly * factor
+            portuDcaMonthly = s.portuDcaMonthly.finiteNonNegative() * factor,
+            ePortuDcaMonthly = s.ePortuDcaMonthly.finiteNonNegative() * factor
         )
 
     val PLAN_BASELINE = FireScenarioPreset(
@@ -37,9 +37,11 @@ object PresetProfiles {
         badge = "CAUTION",
         description = "Equity return -1.5pp, inflation +0.5pp, 3.5% withdrawal rate and 18% volatility.",
         transform = { s ->
+            val baseRet = s.portfolioNominalReturnPct.finiteOr(7.0)
+            val baseCpi = s.cpiInflationPct.finiteOr(2.8)
             s.copy(
-                portfolioNominalReturnPct = (s.portfolioNominalReturnPct - 1.5).coerceAtLeast(1.0),
-                cpiInflationPct = (s.cpiInflationPct + 0.5).coerceAtMost(10.0),
+                portfolioNominalReturnPct = minOf(baseRet, (baseRet - 1.5).coerceAtLeast(1.0)),
+                cpiInflationPct = maxOf(baseCpi, (baseCpi + 0.5).coerceAtMost(10.0)),
                 safeWithdrawalRatePct = 3.5,
                 monteCarloVolatilityPct = 18.0
             )
@@ -52,9 +54,11 @@ object PresetProfiles {
         badge = "BULL",
         description = "Equity return +1.5pp, inflation -0.25pp and 12% volatility.",
         transform = { s ->
+            val baseRet = s.portfolioNominalReturnPct.finiteOr(7.0)
+            val baseCpi = s.cpiInflationPct.finiteOr(2.8)
             s.copy(
-                portfolioNominalReturnPct = (s.portfolioNominalReturnPct + 1.5).coerceAtMost(15.0),
-                cpiInflationPct = (s.cpiInflationPct - 0.25).coerceAtLeast(0.0),
+                portfolioNominalReturnPct = maxOf(baseRet, (baseRet + 1.5).coerceAtMost(15.0)),
+                cpiInflationPct = minOf(baseCpi, (baseCpi - 0.25).coerceAtLeast(0.0)),
                 monteCarloVolatilityPct = 12.0
             )
         }
@@ -99,8 +103,8 @@ object PresetProfiles {
         description = "Moves state-pension age three years out, shrinking the private bridge period.",
         transform = { s ->
             s.copy(
-                vStatePensionAge = (s.vStatePensionAge + 3).coerceAtMost(75),
-                eStatePensionAge = (s.eStatePensionAge + 3).coerceAtMost(75)
+                vStatePensionAge = maxOf(s.vStatePensionAge, (s.vStatePensionAge + 3).coerceAtMost(75)),
+                eStatePensionAge = maxOf(s.eStatePensionAge, (s.eStatePensionAge + 3).coerceAtMost(75))
             )
         }
     )
@@ -111,8 +115,9 @@ object PresetProfiles {
         badge = "MACRO",
         description = "Global ETF return -1.0pp from CZK currency appreciation, domestic inflation 3.5%, and 3.25% SWR.",
         transform = { s ->
+            val baseRet = s.portfolioNominalReturnPct.finiteOr(7.0)
             s.copy(
-                portfolioNominalReturnPct = (s.portfolioNominalReturnPct - 1.0).coerceAtLeast(1.0),
+                portfolioNominalReturnPct = minOf(baseRet, (baseRet - 1.0).coerceAtLeast(1.0)),
                 cpiInflationPct = 3.5,
                 safeWithdrawalRatePct = 3.25,
                 monteCarloVolatilityPct = 17.0

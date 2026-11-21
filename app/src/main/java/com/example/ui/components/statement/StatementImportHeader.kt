@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,14 +27,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.ColorPill
+import com.example.ui.tabs.friendlyBankName
+import com.example.ui.theme.BodyFontFamily
+import com.example.ui.theme.BrandGold
 import com.example.ui.theme.GoodGreen
 import com.example.util.StatementParseSummary
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatementImportHeader(
     summary: StatementParseSummary,
@@ -51,7 +56,10 @@ fun StatementImportHeader(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
             ) {
                 Surface(
                     shape = CircleShape,
@@ -67,38 +75,36 @@ fun StatementImportHeader(
                         )
                     }
                 }
-                Column {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = summary.detectedBank.name,
+                            text = friendlyBankName(summary.detectedBank.name),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = bankColor
                             )
                         )
                         if (distinctMonths.size > 1) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                distinctMonths.forEach { ym ->
-                                    ColorPill(
-                                        text = ym,
-                                        color = bankColor,
-                                        fontSize = 10.5.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        horizontalPadding = 5.dp,
-                                        verticalPadding = 2.dp
-                                    )
-                                }
+                            distinctMonths.forEach { ym ->
+                                ColorPill(
+                                    text = ym,
+                                    color = bankColor,
+                                    fontSize = 10.5.sp,
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    horizontalPadding = 5.dp,
+                                    verticalPadding = 2.dp
+                                )
                             }
                         } else {
                             ColorPill(
                                 text = summary.yearMonth,
                                 color = bankColor,
                                 fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 horizontalPadding = 6.dp,
                                 verticalPadding = 2.dp
@@ -106,9 +112,9 @@ fun StatementImportHeader(
                         }
                         ColorPill(
                             text = if (summary.isPdfSource) "PDF EXTRACTED" else "CSV TABULAR",
-                            color = if (summary.isPdfSource) Color(0xFFD97706) else GoodGreen,
+                            color = if (summary.isPdfSource) BrandGold else GoodGreen,
                             fontSize = 9.5.sp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             fontWeight = FontWeight.Bold,
                             horizontalPadding = 5.dp,
                             verticalPadding = 2.dp
@@ -130,7 +136,7 @@ fun StatementImportHeader(
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(48.dp)
                     .testTag("dismiss_statement_review")
             ) {
                 Icon(
@@ -145,9 +151,9 @@ fun StatementImportHeader(
         if (summary.isPdfSource) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFD97706).copy(alpha = 0.08f),
-                border = BorderStroke(1.dp, Color(0xFFD97706).copy(alpha = 0.25f)),
+                shape = RoundedCornerShape(12.dp),
+                color = BrandGold.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(

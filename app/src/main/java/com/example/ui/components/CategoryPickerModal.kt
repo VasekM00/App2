@@ -3,19 +3,22 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -47,18 +50,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
-import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.LocalIsDarkTheme
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.CzechMerchantCatalog
@@ -106,6 +115,7 @@ fun CategoryPickerModal(
             BankTransactionType.SALARY_VACLAV,
             BankTransactionType.SALARY_ELEONORA,
             BankTransactionType.PARENTAL_BENEFIT,
+            BankTransactionType.FAMILY_GIFT,
             BankTransactionType.OTHER_INFLOW,
             BankTransactionType.INVESTMENT_PORTU,
             BankTransactionType.INVESTMENT_DIP,
@@ -114,17 +124,22 @@ fun CategoryPickerModal(
         ).map { it to formatCategoryLabel(it) }
     }
 
+    val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
+    val isDark = LocalIsDarkTheme.current
+    val safeAmount = tx.amount.finiteOrZero()
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .heightIn(max = 680.dp)
+                .heightIn(max = maxDialogHeight)
+                .imePadding()
                 .padding(vertical = 16.dp)
                 .testTag("category_picker_dialog")
         ) {
@@ -160,7 +175,7 @@ fun CategoryPickerModal(
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -171,27 +186,31 @@ fun CategoryPickerModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Transaction Summary Card
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(10.dp),
+                            .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
                             Text(
                                 text = tx.date,
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
@@ -199,38 +218,44 @@ fun CategoryPickerModal(
                                 Text(
                                     text = tx.counterpartyAccount,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
+                                        fontFamily = BodyFontFamily,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                    )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
                         Text(
-                            text = (if (tx.amount > 0) "+" else "") + fmtCZK(tx.amount),
+                            text = (if (safeAmount > 0) "+" else "") + fmtCZK(safeAmount),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = when {
-                                    tx.amount > 0 -> GoodGreen
-                                    tx.amount < 0 -> BadRed
+                                    safeAmount > 0 -> GoodGreen
+                                    safeAmount < 0 -> BadRed
                                     else -> MaterialTheme.colorScheme.onSurface
                                 }
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Online Merchant Lookup Action
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandTeal.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.25f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -247,7 +272,7 @@ fun CategoryPickerModal(
                                 Text(
                                     text = if (searchQuery.isNotBlank()) "Query: $searchQuery" else "Search database",
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     maxLines = 1,
@@ -266,17 +291,21 @@ fun CategoryPickerModal(
                                     onClick = {
                                         isSearchingOnline = true
                                         coroutineScope.launch {
-                                            val res = MerchantLookupService.lookupMerchant(cleanTitle)
-                                            onlineLookupResult = res
-                                            if (res.suggestedCategory != null) {
-                                                selectedCategory = res.suggestedCategory
+                                            try {
+                                                val res = MerchantLookupService.lookupMerchant(cleanTitle)
+                                                onlineLookupResult = res
+                                                if (res.suggestedCategory != null) {
+                                                    selectedCategory = res.suggestedCategory
+                                                }
+                                            } finally {
+                                                isSearchingOnline = false
                                             }
-                                            isSearchingOnline = false
                                         }
                                     },
                                     shape = RoundedCornerShape(6.dp),
                                     border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.5f)),
-                                    modifier = Modifier.height(28.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.heightIn(min = 48.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
@@ -287,7 +316,7 @@ fun CategoryPickerModal(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "Search",
-                                        fontSize = 10.5.sp,
+                                        fontSize = 11.sp,
                                         color = BrandTeal,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -308,10 +337,10 @@ fun CategoryPickerModal(
                                     text = if (res.suggestedCategory != null) {
                                         "Found: ${res.snippet} -> ${getCategoryDisplayName(res.suggestedCategory)}"
                                     } else {
-                                        "No exact match found online"
+                                        "No exact match found in offline catalog"
                                     },
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.sp,
+                                        fontSize = 11.sp,
                                         color = if (res.suggestedCategory != null) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     maxLines = 2,
@@ -347,7 +376,12 @@ fun CategoryPickerModal(
                     ) {
                         availableCategories.forEach { (catType, label) ->
                             val isSelected = selectedCategory == catType
-                            val catColor = getCategoryColorValue(catType)
+                            val rawCatColor = getCategoryColorValue(catType)
+                            val catColor = if (isDark && rawCatColor.luminance() < 0.22f) {
+                                lerp(rawCatColor, Color.White, 0.45f)
+                            } else {
+                                rawCatColor
+                            }
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -357,11 +391,13 @@ fun CategoryPickerModal(
                                     if (isSelected) catColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                                 ),
                                 modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .heightIn(min = 48.dp)
                                     .clickable { selectedCategory = catType }
                                     .testTag("category_option_${catType.name}")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
@@ -378,7 +414,7 @@ fun CategoryPickerModal(
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) catColor else MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 11.sp
+                                            fontSize = 12.sp
                                         )
                                     )
                                 }
@@ -387,7 +423,7 @@ fun CategoryPickerModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Bulk merchant match checkbox
                 if (matchingMerchantCount > 1 && searchQuery.isNotBlank()) {
@@ -395,12 +431,17 @@ fun CategoryPickerModal(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { applyToAllMatching = !applyToAllMatching }
-                            .padding(vertical = 2.dp)
+                            .defaultMinSize(minHeight = 48.dp)
+                            .toggleable(
+                                value = applyToAllMatching,
+                                onValueChange = { applyToAllMatching = it },
+                                role = Role.Checkbox
+                            )
+                            .padding(vertical = 4.dp)
                     ) {
                         Checkbox(
                             checked = applyToAllMatching,
-                            onCheckedChange = { applyToAllMatching = it },
+                            onCheckedChange = null,
                             colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
                             modifier = Modifier.size(24.dp)
                         )
@@ -425,12 +466,17 @@ fun CategoryPickerModal(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { rememberChoice = !rememberChoice }
-                            .padding(vertical = 2.dp)
+                            .defaultMinSize(minHeight = 48.dp)
+                            .toggleable(
+                                value = rememberChoice,
+                                onValueChange = { rememberChoice = it },
+                                role = Role.Checkbox
+                            )
+                            .padding(vertical = 4.dp)
                     ) {
                         Checkbox(
                             checked = rememberChoice,
-                            onCheckedChange = { rememberChoice = it },
+                            onCheckedChange = null,
                             colors = CheckboxDefaults.colors(checkedColor = BrandTeal),
                             modifier = Modifier.size(24.dp)
                         )
@@ -445,11 +491,11 @@ fun CategoryPickerModal(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Dialog Buttons
                 Row(
@@ -459,9 +505,11 @@ fun CategoryPickerModal(
                     OutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
                     ) {
-                        Text("Cancel", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                        Text("Cancel", fontSize = 12.sp, maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
                     }
 
                     Button(
@@ -469,10 +517,15 @@ fun CategoryPickerModal(
                             onSelectCategory(selectedCategory, rememberChoice, applyToAllMatching)
                         },
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandTeal),
-                        modifier = Modifier.weight(1.4f)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BrandTeal,
+                            contentColor = OnBrandTeal
+                        ),
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .heightIn(min = 48.dp)
                     ) {
-                        Text("Apply Category", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        Text("Apply Category", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
                     }
                 }
 
@@ -491,7 +544,9 @@ fun CategoryPickerModal(
                                 contentColor = if (tx.isExcluded) GoodGreen else BadRed
                             ),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
                         ) {
                             Icon(
                                 imageVector = if (tx.isExcluded) Icons.Default.CheckCircle else Icons.Default.Block,
@@ -502,7 +557,10 @@ fun CategoryPickerModal(
                             Text(
                                 text = if (tx.isExcluded) "Include in Import" else "Exclude Transaction",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -514,12 +572,17 @@ fun CategoryPickerModal(
                                 },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = BadRed),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
                             ) {
                                 Text(
                                     text = "Exclude All ($matchingMerchantCount)",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -534,6 +597,7 @@ fun getCategoryColorValue(type: BankTransactionType): Color = when (type) {
     BankTransactionType.SALARY_VACLAV,
     BankTransactionType.SALARY_ELEONORA,
     BankTransactionType.PARENTAL_BENEFIT,
+    BankTransactionType.FAMILY_GIFT,
     BankTransactionType.OTHER_INFLOW -> Color(0xFF16A34A)
     BankTransactionType.HOUSING_RENT -> Color(0xFFEA580C)
     BankTransactionType.GROCERIES -> Color(0xFFDC2626)
@@ -551,7 +615,7 @@ fun getCategoryColorValue(type: BankTransactionType): Color = when (type) {
     BankTransactionType.INTERNAL_TRANSFER -> Color(0xFF64748B)
     BankTransactionType.GENERAL_EXPENSE,
     BankTransactionType.LIFESTYLE_LIVING,
-    BankTransactionType.UNCATEGORIZED -> Color(0xFF94A3B8)
+    BankTransactionType.UNCATEGORIZED -> Color(0xFF475569)
 }
 
 fun getCategoryDisplayName(type: BankTransactionType): String = formatCategoryLabel(type)

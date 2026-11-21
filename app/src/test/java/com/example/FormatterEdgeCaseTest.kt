@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.util.Formatters
+import com.example.util.parseUserAmountOrNull
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -132,20 +133,46 @@ class FormatterEdgeCaseTest {
     @Test
     fun test5_18_fmtLeverageReduction_typicalValues() {
         val r1 = Formatters.fmtLeverageReduction(18860.0)
-        assertEquals("19k\u00A0CZK", r1)
+        assertEquals("19k\u00A0Kč", r1)
 
         val r2 = Formatters.fmtLeverageReduction(33000.0)
-        assertEquals("33k\u00A0CZK", r2)
+        assertEquals("33k\u00A0Kč", r2)
 
         val r3 = Formatters.fmtLeverageReduction(37714.0)
-        assertEquals("38k\u00A0CZK", r3)
+        assertEquals("38k\u00A0Kč", r3)
     }
 
     @Test
     fun test5_19_fmtLeverageReduction_edgeCases() {
         assertEquals("--", Formatters.fmtLeverageReduction(Double.NaN))
         assertEquals("--", Formatters.fmtLeverageReduction(Double.POSITIVE_INFINITY))
-        assertTrue(Formatters.fmtLeverageReduction(500.0).contains("CZK"))
-        assertEquals("1.2M\u00A0CZK", Formatters.fmtLeverageReduction(1_200_000.0))
+        assertTrue(Formatters.fmtLeverageReduction(500.0).contains("Kč"))
+        assertEquals("1,2M\u00A0Kč", Formatters.fmtLeverageReduction(1_200_000.0))
+    }
+
+    @Test
+    fun test5_20_fmtEditableAmount_and_parseUserAmountOrNull() {
+        assertEquals("0", Formatters.fmtEditableAmount(Double.NaN))
+        assertEquals("0", Formatters.fmtEditableAmount(Double.POSITIVE_INFINITY))
+        assertEquals("0", Formatters.fmtEditableAmount(-0.0))
+        assertEquals("75000", Formatters.fmtEditableAmount(75000.0))
+        assertEquals("1234.5", Formatters.fmtEditableAmount(1234.50))
+        assertEquals("0.3", Formatters.fmtEditableAmount(0.1 + 0.2))
+
+        // Czech decimal comma with 3 digits must not be misread as thousands
+        assertEquals(1.234, "1,234".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(2.5, "2,500".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(1234.56, "1,234.56".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(1234.56, "1.234,56".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(1234.56, "1 234,56".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(1_000_000.0, "1.000.000".parseUserAmountOrNull()!!, 1e-6)
+        assertEquals(1_000_000.0, "1,000,000".parseUserAmountOrNull()!!, 1e-6)
+    }
+
+    @Test
+    fun test5_21_fmtCZK_largeValuesDoNotSaturateToLongMax() {
+        val formatted = Formatters.fmtCZK(1e20)
+        assertTrue("Large finite values must still contain Kč: $formatted", formatted.contains("Kč"))
+        assertTrue("Large values must not saturate to Long.MAX_VALUE: $formatted", !formatted.contains("9\u00A0223\u00A0372\u00A0036"))
     }
 }

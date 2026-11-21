@@ -3,51 +3,55 @@ package com.example.ui.tabs
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
-import com.example.ui.components.CrossAccountNettingAuditDialog
 import com.example.ui.components.MetricInfoDialog
-import com.example.ui.components.StatementImportReviewDialog
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BrandTeal
+import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankTransactionType
-import com.example.util.CrossStatementAuditReport
-import com.example.util.StatementParseSummary
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CashFlowTab(
     state: FullCalculationState,
@@ -57,16 +61,7 @@ fun CashFlowTab(
     onDeleteLedgerEntry: (Long) -> Unit,
     onImportCsv: (Uri) -> Unit = {},
     onImportStatements: (List<Uri>) -> Unit = { uris -> uris.firstOrNull()?.let(onImportCsv) },
-    pendingStatementImport: StatementParseSummary? = null,
-    onConfirmStatementImport: (StatementParseSummary) -> Unit = {},
-    onDismissStatementImport: () -> Unit = {},
-    onUpdateTransactionCategory: ((Int, BankTransactionType, Boolean) -> Unit)? = null,
-    onUpdateTransactionCategoryBulk: ((Int, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
-    onToggleTransactionExcluded: ((Int) -> Unit)? = null,
-    onBulkExcludeMerchant: ((String) -> Unit)? = null,
-    activeAuditReport: CrossStatementAuditReport? = null,
     onShowAuditReport: ((String) -> Unit)? = null,
-    onDismissAuditReport: () -> Unit = {},
     importedBankSourcesByMonth: Map<String, Set<String>> = emptyMap(),
     lastImportTimestamp: Long? = null,
     allImportedTransactions: List<ImportedBankTransactionEntity> = emptyList(),
@@ -80,6 +75,9 @@ fun CashFlowTab(
     initialSubTab: Int = 0,
     onSubTabSelected: ((Int) -> Unit)? = null,
     onUpdateSettings: (SettingsEntity) -> Unit = {},
+    onAddLedgerEntryWithOptionalBalances: ((String, Double, Double, Double, Double, Double, String, Double?, Double?, Double?) -> Unit)? = null,
+    onUpdateLedgerEntryWithSync: ((LedgerEntryEntity, Double?, Double?, Double?) -> Unit)? = null,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val supportedMimeTypes = arrayOf(
@@ -98,11 +96,13 @@ fun CashFlowTab(
         }
     }
 
-    var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 1)) }
-    val subTabs = listOf("Budget & Incomes", "Monthly Ledger")
-    var showAddDialog by remember { mutableStateOf(false) }
-    var duplicateFromEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
-    var editingEntry by remember { mutableStateOf<LedgerEntryEntity?>(null) }
+    var selectedSubTab by rememberSaveable(initialSubTab) { mutableIntStateOf(initialSubTab.coerceIn(0, 3)) }
+    val subTabs = listOf("Overview", "Income", "Expenses", "Ledger")
+    var showAddDialog by rememberSaveable { mutableStateOf(false) }
+    var duplicateFromId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val duplicateFromEntry = duplicateFromId?.let { id -> ledgerEntries.firstOrNull { it.id == id } }
+    val editingEntry = editingEntryId?.let { id -> ledgerEntries.firstOrNull { it.id == id } }
     val infoState = rememberMetricInfoState()
 
     val haptic = LocalHapticFeedback.current
@@ -113,34 +113,67 @@ fun CashFlowTab(
             .testTag("cashflow_tab")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            SecondaryTabRow(
-                selectedTabIndex = selectedSubTab,
-                modifier = Modifier.fillMaxWidth()
+            // Single clean Neobank segmented control (eliminates stacked 3-tier navigation)
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                subTabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedSubTab == index,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedSubTab = index
-                            onSubTabSelected?.invoke(index)
-                        },
-                        text = {
-                            Text(
-                                text = title,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                maxLines = 2,
-                                softWrap = true
-                            )
-                        },
-                        modifier = Modifier.testTag("cashflow_subtab_$index")
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    subTabs.forEachIndexed { index, title ->
+                        val isSelected = selectedSubTab == index
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+                            shadowElevation = if (isSelected) 1.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.Tab,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        selectedSubTab = index
+                                        onSubTabSelected?.invoke(index)
+                                    }
+                                )
+                                .testTag("cashflow_subtab_$index")
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = title,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                    softWrap = true,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            when (selectedSubTab) {
-                0 -> BudgetAndIncomesSubTab(
+            if (selectedSubTab in 0..2) {
+                BudgetAndIncomesSubTab(
                     state = state,
                     ledgerEntries = ledgerEntries,
                     allImportedTransactions = allImportedTransactions,
@@ -148,21 +181,25 @@ fun CashFlowTab(
                     onDismissSubscription = onDismissSubscription,
                     onRestoreSubscription = onRestoreSubscription,
                     onClearAllDismissedSubscriptions = onClearAllDismissedSubscriptions,
+                    onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,
                     onShowInfo = { infoState.show(it) },
-                    onUpdateSettings = onUpdateSettings
+                    onUpdateSettings = onUpdateSettings,
+                    externalSelectedSection = selectedSubTab,
+                    onReduceSettings = onReduceSettings
                 )
-                1 -> LedgerSubTab(
+            } else {
+                LedgerSubTab(
                     state = state,
                     entries = ledgerEntries,
                     onAddClick = {
-                        duplicateFromEntry = null
+                        duplicateFromId = null
                         showAddDialog = true
                     },
                     onDuplicateEntry = { entry ->
-                        duplicateFromEntry = entry
+                        duplicateFromId = entry.id
                         showAddDialog = true
                     },
-                    onEditEntry = { entry -> editingEntry = entry },
+                    onEditEntry = { entry -> editingEntryId = entry.id },
                     onDelete = onDeleteLedgerEntry,
                     onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
                     onShowInfo = { infoState.show(it) },
@@ -177,15 +214,15 @@ fun CashFlowTab(
             }
         }
 
-        if (selectedSubTab == 1 && ledgerEntries.isNotEmpty()) {
+        if (selectedSubTab == 3 && ledgerEntries.isNotEmpty()) {
             FloatingActionButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    duplicateFromEntry = null
+                    duplicateFromId = null
                     showAddDialog = true
                 },
                 containerColor = BrandTeal,
-                contentColor = Color.White,
+                contentColor = OnBrandTeal,
                 shape = CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -209,13 +246,17 @@ fun CashFlowTab(
             duplicateFrom = duplicateFromEntry,
             onDismiss = {
                 showAddDialog = false
-                duplicateFromEntry = null
+                duplicateFromId = null
             },
             onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
             onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
-                onAddLedgerEntry(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
+                if (onAddLedgerEntryWithOptionalBalances != null) {
+                    onAddLedgerEntryWithOptionalBalances(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
+                } else {
+                    onAddLedgerEntry(ym, incV, incE, incU, expR, expL, notes, balPortu ?: 0.0, balPension ?: 0.0, balReserve ?: 0.0)
+                }
                 showAddDialog = false
-                duplicateFromEntry = null
+                duplicateFromId = null
             }
         )
     }
@@ -225,7 +266,7 @@ fun CashFlowTab(
             state = state,
             entries = ledgerEntries,
             initialEntry = entry,
-            onDismiss = { editingEntry = null },
+            onDismiss = { editingEntryId = null },
             onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
             onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
                 val prevTotalLiving = entry.expGroceries + entry.expOther
@@ -236,22 +277,25 @@ fun CashFlowTab(
                 } else {
                     expL to 0.0
                 }
-                onUpdateLedgerEntry(
-                    entry.copy(
-                        yearMonth = ym,
-                        incVaclav = incV,
-                        incEleonora = incE,
-                        incUnforeseen = incU,
-                        expRent = expR,
-                        expGroceries = newGroceries,
-                        expOther = newOther,
-                        notes = notes,
-                        portfolioBalanceAtMonthEnd = balPortu,
-                        pensionBalanceAtMonthEnd = balPension,
-                        emergencyReserveAtMonthEnd = balReserve
-                    )
+                val updatedEntry = entry.copy(
+                    yearMonth = ym,
+                    incVaclav = incV,
+                    incEleonora = incE,
+                    incUnforeseen = incU,
+                    expRent = expR,
+                    expGroceries = newGroceries,
+                    expOther = newOther,
+                    notes = notes,
+                    portfolioBalanceAtMonthEnd = balPortu ?: 0.0,
+                    pensionBalanceAtMonthEnd = balPension ?: 0.0,
+                    emergencyReserveAtMonthEnd = balReserve ?: 0.0
                 )
-                editingEntry = null
+                if (onUpdateLedgerEntryWithSync != null) {
+                    onUpdateLedgerEntryWithSync(updatedEntry, balPortu, balPension, balReserve)
+                } else {
+                    onUpdateLedgerEntry(updatedEntry)
+                }
+                editingEntryId = null
             }
         )
     }
@@ -260,26 +304,4 @@ fun CashFlowTab(
         info = infoState.currentInfo,
         onDismiss = { infoState.dismiss() }
     )
-
-    pendingStatementImport?.let { summary ->
-        StatementImportReviewDialog(
-            summary = summary,
-            onConfirm = onConfirmStatementImport,
-            onDismiss = onDismissStatementImport,
-            onShowNettingAudit = {
-                onShowAuditReport?.invoke(summary.yearMonth)
-            },
-            onUpdateTransactionCategory = onUpdateTransactionCategory,
-            onUpdateTransactionCategoryBulk = onUpdateTransactionCategoryBulk,
-            onToggleTransactionExcluded = onToggleTransactionExcluded,
-            onBulkExcludeMerchant = onBulkExcludeMerchant
-        )
-    }
-
-    activeAuditReport?.let { report ->
-        CrossAccountNettingAuditDialog(
-            auditReport = report,
-            onDismiss = onDismissAuditReport
-        )
-    }
 }

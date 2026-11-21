@@ -46,7 +46,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
@@ -55,13 +54,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRedDark
+import com.example.ui.theme.BrandBlueDarkTheme
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandGoldDarkTheme
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.BrandTealDark
 import com.example.ui.theme.GoodGreenDark
-import com.example.ui.theme.SurfaceDark
+import com.example.ui.theme.LocalIsDarkTheme
 import com.example.util.Formatters
 
 /**
@@ -108,13 +109,14 @@ fun MetricInfoDialog(
     onDismiss: () -> Unit
 ) {
     if (info == null) return
-    val isDark = MaterialTheme.colorScheme.surface == SurfaceDark
+    val isDark = LocalIsDarkTheme.current
     val rawAccent = info.accentColor ?: BrandTeal
     val effectiveAccent = if (isDark) {
         when (rawAccent) {
             Color(0xFF0F766E) -> BrandTealDark
             Color(0xFFD97706), Color(0xFFB45309) -> BrandGoldDarkTheme
-            Color(0xFF16A34A) -> GoodGreenDark
+            Color(0xFF16A34A), Color(0xFF059669) -> GoodGreenDark
+            Color(0xFF2563EB) -> BrandBlueDarkTheme
             Color(0xFFDC2626) -> BadRedDark
             else -> rawAccent
         }
@@ -133,7 +135,7 @@ fun MetricInfoDialog(
                 .testTag("metric_info_dialog"),
             shape = RoundedCornerShape(22.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
@@ -192,7 +194,7 @@ fun MetricInfoDialog(
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -230,7 +232,7 @@ fun MetricInfoDialog(
                             Text(
                                 text = Formatters.formatTypographicBlock(info.formulaOrRule),
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -306,7 +308,9 @@ fun MetricInfoDialog(
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        modifier = Modifier.testTag("dismiss_metric_info")
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("dismiss_metric_info")
                     ) {
                         Text("Understood", fontWeight = FontWeight.Bold)
                     }

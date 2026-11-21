@@ -54,7 +54,9 @@ class AuditRegressionVerificationTest {
         for (i in 0 until maxRetries) {
             shadowOf(Looper.getMainLooper()).idle()
             if (condition()) return true
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                kotlinx.coroutines.delay(25)
+            }
         }
         shadowOf(Looper.getMainLooper()).idle()
         return condition()
@@ -233,14 +235,13 @@ class AuditRegressionVerificationTest {
         viewModel.deleteImportedStatement(yearMonth = ym, bankName = null)
         val successAllDelete = drainAsync {
             repository.getImportedTransactionsDirect(ym).isEmpty() &&
-                repository.getLedgerEntryByYearMonth(ym)?.expGroceries == 0.0
+                repository.getLedgerEntryByYearMonth(ym) == null
         }
         assertTrue(successAllDelete)
 
+        // Imported-only ledger row must be deleted cleanly so stale balance snapshots cannot survive
         val finalEntry = repository.getLedgerEntryByYearMonth(ym)
-        assertNotNull(finalEntry)
-        assertEquals(0.0, finalEntry!!.expGroceries, 0.001)
-        assertEquals("", finalEntry.notes)
+        assertNull(finalEntry)
         assertNull(viewModel.activeAuditReport.value)
     }
 
@@ -292,7 +293,6 @@ class AuditRegressionVerificationTest {
             baseYear = 2026,
             vSalary = 33500.0,
             vMealVouchersMonthly = 2090.0,
-            familyGiftMonthly = 16000.0,
             vGiftsMonthly = 16000.0,
             eStartingSalary = 25000.0,
             eParentalAllowanceMonthly = 13000.0,

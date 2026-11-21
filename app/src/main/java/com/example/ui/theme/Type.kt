@@ -5,36 +5,21 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.googlefonts.GoogleFont
-import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.font.Font
 import com.example.R
 
-val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
-)
-
-val displayFontName = GoogleFont("Outfit")
-val bodyFontName = GoogleFont("Inter")
-
 val DisplayFontFamily = FontFamily(
-    Font(googleFont = displayFontName, fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = displayFontName, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = displayFontName, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = displayFontName, fontProvider = provider, weight = FontWeight.Bold)
+    Font(R.font.outfit_regular, FontWeight.Normal),
+    Font(R.font.outfit_medium, FontWeight.Medium),
+    Font(R.font.outfit_semibold, FontWeight.SemiBold),
+    Font(R.font.outfit_bold, FontWeight.Bold)
 )
 
 val BodyFontFamily = FontFamily(
-    Font(googleFont = bodyFontName, fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = bodyFontName, fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = bodyFontName, fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = bodyFontName, fontProvider = provider, weight = FontWeight.Bold)
-)
-
-val TabularNumStyle = TextStyle(
-    fontFamily = BodyFontFamily,
-    fontFeatureSettings = "tnum"
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold)
 )
 
 val Typography = Typography(

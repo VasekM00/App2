@@ -8,7 +8,6 @@ import com.example.util.BackupManager
 import com.example.util.CzechEconomicSyncService
 import com.example.util.Formatters
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

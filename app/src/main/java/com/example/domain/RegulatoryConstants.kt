@@ -14,13 +14,11 @@ object RegulatoryConstants {
     // --- ZDP § 35ba odst. 1 písm. a) - Základní sleva na poplatníka ---
     // Roční sleva na poplatníka: 30 840 Kč (od roku 2022 dosud stabilní)
     const val STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026 = 30840.0
-    const val STATUTORY_TAXPAYER_CREDIT_LAW_REF = "ZDP § 35ba odst. 1 písm. a) (30 840 Kč/rok)"
 
     // --- ZDP § 35ba odst. 1 písm. b) - Sleva na manžela / manželku ---
     // Sleva 24 840 Kč ročně, podmíněna vyživovaným dítětem do 3 let věku a vlastním příjmem druhého manžela do 68 000 Kč ročně (konsolidační balíček 2024+)
     const val STATUTORY_SPOUSE_CREDIT_ANNUAL_2026 = 24840.0
     const val STATUTORY_SPOUSE_INCOME_LIMIT_ANNUAL_2026 = 68000.0
-    const val STATUTORY_SPOUSE_CREDIT_LAW_REF = "ZDP § 35ba odst. 1 písm. b) (24 840 Kč/rok při příjmu ≤ 68 000 Kč a dítěti < 3 roky)"
 
     // --- ZDP § 35c - Daňové zvýhodnění na vyživované dítě ---
     // 1. dítě: 15 204 Kč/rok (1 267 Kč/měsíc)
@@ -29,21 +27,17 @@ object RegulatoryConstants {
     const val STATUTORY_CHILD_1_BONUS_ANNUAL_2026 = 15204.0
     const val STATUTORY_CHILD_2_BONUS_ANNUAL_2026 = 22320.0
     const val STATUTORY_CHILD_3_PLUS_BONUS_ANNUAL_2026 = 27840.0
-    const val STATUTORY_CHILD_BONUS_LAW_REF = "ZDP § 35c (1. dítě 15 204 Kč, 2. dítě 22 320 Kč, 3.+ dítě 27 840 Kč/rok)"
 
     // --- ZDP § 15 odst. 5, 6 a ZDP § 15a - Odpočet na produkty spoření na stáří (DPS + DIP + ŽP) ---
     // Sloučený limit daňového odpočtu: 48 000 Kč ročně na poplatníka (konsolidační balíček 2024+)
     // DPS: odpočet platí pro částky nad měsíční příspěvek se státní podporou (nad 1 700 Kč/měsíc)
     const val STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026 = 48000.0
     const val STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026 = 1700.0
-    const val STATUTORY_RETIREMENT_DEDUCTION_LAW_REF = "ZDP § 15 a § 15a (sdružený strop 48 000 Kč/rok pro DPS a DIP)"
 
-    // Zvýšená progresivní sazba: 23 % pro příjem nad 36násobek průměrné mzdy (1 762 812 Kč pro rok 2026, 1 676 052 Kč pro rok 2025)
+    // Zvýšená progresivní sazba: 23 % pro příjem nad 36násobek průměrné mzdy (1 762 812 Kč pro rok 2026)
     const val STATUTORY_INCOME_TAX_RATE_BASE_PCT = 15.0
     const val STATUTORY_INCOME_TAX_RATE_HIGH_PCT = 23.0
-    const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2025 = 1676052.0
     const val STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026 = 1762812.0
-    const val STATUTORY_INCOME_TAX_LAW_REF = "ZDP § 16 (15 % základní pásmo, 23 % nad 36× průměrné mzdy)"
 
     // --- STÁTNÍ PŘÍSPĚVEK DPS (zákon č. 427/2011 Sb., o doplňkovém penzijním spoření) ---
     // Státní příspěvek: 20 % z vkladu, max 340 Kč/měsíc při úložce 1 700 Kč/měsíc (min vklad 500 Kč/měsíc)
@@ -53,33 +47,68 @@ object RegulatoryConstants {
     const val LEPSI_PENZIJKO_YOUTH_AGE_LIMIT = 30
     const val LEPSI_PENZIJKO_YOUTH_SUBSIDY_RATE_PCT = 20.0
     const val LEPSI_PENZIJKO_YOUTH_MAX_SUBSIDY_MONTHLY = 340.0
-    const val LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT = 0.5
+    // Statutory management fee cap for dynamic/balanced DPS funds (Act No. 427/2011 Coll. § 60(3)): 1.0% p.a.
+    const val LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT = 1.0
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE = 36
     const val LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT = 100.0 / 3.0
     const val LEPSI_PENZIJKO_EFFECTIVE_YEAR = 2027
-    const val LEPSI_PENZIJKO_LAW_REF = "Zákon č. 427/2011 Sb., o doplňkovém penzijním spoření (strop 340 Kč/měsíc)"
 
     // --- Minimální mzda v ČR ---
     const val STATUTORY_MIN_WAGE_MONTHLY_2026 = 22400.0
-    const val STATUTORY_MIN_WAGE_LAW_REF = "Nařízení vlády o minimální mzdě 2026 (22 400 Kč/měsíc)"
+
+    // --- Zákon č. 187/2006 Sb., § 7a - Rozhodná částka pro účast na nemocenském/sociálním pojištění u DPP ---
+    // DPP podléhá odvodům SP/ZP od 12 000 Kč/měsíc (osvobozeno pouze při výdělku < 12 000 Kč/měsíc)
+    const val STATUTORY_DPP_INSURANCE_THRESHOLD_MONTHLY_2026 = 12000.0
 
     // --- ZDP § 6 odst. 9 písm. m) - Osvobozený příspěvek zaměstnavatele na penzijní/životní spoření ---
     // Zaměstnavatelský příspěvek do výše 50 000 Kč ročně je osvobozen od daně z příjmů a pojistného
     const val STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL = 50000.0
-    const val STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_LAW_REF = "ZDP § 6 odst. 9 písm. m) (50 000 Kč/rok osvobozeno)"
 
     // --- ZDP § 35c odst. 4 - Minimální příjem pro daňový bonus na dítě ---
     // Pro uplatnění daňového bonusu musí poplatník dosáhnout alespoň 6násobku minimální mzdy za rok
     const val STATUTORY_CHILD_BONUS_MIN_WAGE_MULTIPLIER = 6.0
-    const val STATUTORY_CHILD_BONUS_MIN_WAGE_LAW_REF = "ZDP § 35c odst. 4 (min. příjem 6× minimální mzda ročně)"
-
-    // --- ČSÚ Live CPI Benchmark (default for fresh installs; overwritten by Live Sync) ---
-    // Meziroční inflace dle ČSÚ pro rok 2025/2026 (aktualizováno při Live Sync)
-    const val DEFAULT_CPI_BENCHMARK_PCT = 2.8
 
     // --- Rodičovský příspěvek (zákon č. 117/1995 Sb., o státní sociální podpoře) ---
     // Celková částka je určena na každé narozené dítě: 350 000 Kč
     const val PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF = 350000.0
     const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 350000.0
     const val PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR = 2027
+
+    // --- ZDP § 15 odst. 3 & 4 - Odpočet úroků z hypotečního úvěru na bytové potřeby ---
+    // Pro smlouvy uzavřené od 1. 1. 2021: max. 150 000 Kč ročně na domácnost (daňová úspora až 22 500 Kč při 15 %)
+    const val STATUTORY_MORTGAGE_INTEREST_DEDUCTION_ANNUAL_CAP = 150000.0
+
+    // --- ZDP § 4 odst. 1 písm. u) a w) - Osvobození příjmů z prodeje cenných papírů a podílů ---
+    // 3letý časový test (přesáhne dobu 3 let) pro cenné papíry a ETF dle § 4 odst. 1 písm. u) ZDP
+    // Roční limit úhrnu všech příjmů z prodeje cenných papírů do 100 000 Kč dle § 4 odst. 1 písm. w) ZDP
+    const val STATUTORY_SECURITIES_TIME_TEST_YEARS = 3
+    const val STATUTORY_SECURITIES_TIME_TEST_MONTHS = 36
+    const val STATUTORY_SECURITIES_ANNUAL_EXEMPTION_LIMIT_CZK = 100000.0
 }
+
+/**
+ * Shared domain numeric sanitization helpers to prevent NaN / Infinity propagation
+ * and inconsistent clamping across financial and tax calculation engines.
+ */
+internal fun Double.finiteOr(fallback: Double = 0.0): Double =
+    if (this.isFinite()) this else fallback
+
+internal fun Double.finiteNonNegative(fallback: Double = 0.0): Double {
+    val v = if (this.isFinite()) this else fallback
+    return if (v > 0.0) v else 0.0
+}
+
+internal fun Double.finiteAtLeast(minValue: Double, fallback: Double = minValue): Double {
+    val safeFallback = if (fallback.isFinite()) fallback else minValue
+    val v = if (this.isFinite()) this else safeFallback
+    return maxOf(v, minValue)
+}
+
+internal fun Double.finiteIn(minValue: Double, maxValue: Double, fallback: Double = minValue): Double {
+    val lo = minOf(minValue, maxValue)
+    val hi = maxOf(minValue, maxValue)
+    val safeFallback = if (fallback.isFinite()) fallback else lo
+    val v = if (this.isFinite()) this else safeFallback
+    return v.coerceIn(lo, hi)
+}
+

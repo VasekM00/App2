@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.example.data.SettingsEntity
@@ -16,8 +19,9 @@ import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.tabs.CashFlowTab
 import com.example.ui.tabs.OverviewTab
-import com.example.ui.tabs.PlanTab
 import com.example.ui.tabs.ProjectionsTab
+import com.example.ui.tabs.SettingsAddCategoryDialog
+import com.example.ui.tabs.SettingsAddLumpSumDialog
 import com.example.ui.tabs.SettingsTab
 import com.example.ui.theme.MartinuFinancialsTheme
 import org.junit.Assert.assertTrue
@@ -43,10 +47,7 @@ class MobileErgonomicsAndImeTest {
             CompositionLocalProvider(LocalDensity provides Density(density = 2.0f, fontScale = 2.0f)) {
                 MartinuFinancialsTheme {
                     HeroHeader(
-                        state = defaultCalcState,
-                        isDarkTheme = false,
-                        onToggleDarkTheme = {},
-                        onOpenSettings = {}
+                        state = defaultCalcState
                     )
                 }
             }
@@ -99,20 +100,21 @@ class MobileErgonomicsAndImeTest {
     }
 
     @Test
-    fun test5_fontScale_200Percent_planTabRendersWithoutCrash() {
+    fun test5_fontScale_200Percent_projectionsGoalsTabRendersWithoutCrash() {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 2.0f, fontScale = 2.0f)) {
                 MartinuFinancialsTheme {
-                    PlanTab(
+                    ProjectionsTab(
                         state = defaultCalcState,
                         actionStates = emptyMap(),
                         onToggleAction = { _, _, _ -> },
-                        onUpdateSettings = {}
+                        onApplySettings = {},
+                        initialSubTab = 4
                     )
                 }
             }
         }
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 
     @Test
@@ -152,12 +154,12 @@ class MobileErgonomicsAndImeTest {
             CompositionLocalProvider(LocalDensity provides Density(density = 1.5f, fontScale = 0.85f)) {
                 MartinuFinancialsTheme {
                     OverviewTab(state = defaultCalcState)
-                    PlanTab(state = defaultCalcState, actionStates = emptyMap(), onToggleAction = { _, _, _ -> }, onUpdateSettings = {})
+                    ProjectionsTab(state = defaultCalcState, initialSubTab = 3)
                 }
             }
         }
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 
     @Test
@@ -191,54 +193,51 @@ class MobileErgonomicsAndImeTest {
     }
 
     @Test
-    fun test11_splitScreen_lowHeight_400dpHeight_planTabRendersWithoutCrash() {
+    fun test11_splitScreen_lowHeight_400dpHeight_projectionsGoalsRendersWithoutCrash() {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 Box(modifier = Modifier.size(width = 380.dp, height = 400.dp)) {
-                    PlanTab(
+                    ProjectionsTab(
                         state = defaultCalcState,
                         actionStates = emptyMap(),
                         onToggleAction = { _, _, _ -> },
-                        onUpdateSettings = {}
+                        onApplySettings = {},
+                        initialSubTab = 4
                     )
                 }
             }
         }
-        composeTestRule.onNodeWithTag("plan_tab").assertExists()
+        composeTestRule.onNodeWithTag("projections_tab").assertExists()
     }
 
     @Test
     fun test12_touchTarget_heroHeaderButtons_clickable() {
-        var settingsOpened = false
+        var quickGuideOpened = false
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
                     state = defaultCalcState,
-                    isDarkTheme = false,
-                    onToggleDarkTheme = {},
-                    onOpenSettings = { settingsOpened = true }
+                    onOpenQuickGuide = { quickGuideOpened = true }
                 )
             }
         }
-        composeTestRule.onNodeWithTag("open_settings_button").performClick()
-        assertTrue(settingsOpened)
+        composeTestRule.onNodeWithTag("hero_quick_guide_button").performClick()
+        assertTrue(quickGuideOpened)
     }
 
     @Test
-    fun test13_touchTarget_themeToggleButton_clickable() {
-        var themeToggled = false
+    fun test13_touchTarget_heroNetWorthShortcut_clickable() {
+        var netWorthOpened = false
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
                     state = defaultCalcState,
-                    isDarkTheme = false,
-                    onToggleDarkTheme = { themeToggled = true },
-                    onOpenSettings = {}
+                    onNavigateToNetWorth = { netWorthOpened = true }
                 )
             }
         }
-        composeTestRule.onNodeWithTag("theme_toggle_button").performClick()
-        assertTrue(themeToggled)
+        composeTestRule.onNodeWithTag("hero_stat_net_worth").performClick()
+        assertTrue(netWorthOpened)
     }
 
     @Test
@@ -264,5 +263,40 @@ class MobileErgonomicsAndImeTest {
         }
         composeTestRule.onNodeWithTag("overview_tab").assertExists()
         composeTestRule.onNodeWithTag("projections_tab").assertExists()
+    }
+
+    @Test
+    fun test16_addLumpSumDialog_quickPresetsWrapWithoutClippingOn360dpPhone() {
+        composeTestRule.setContent {
+            MartinuFinancialsTheme {
+                SettingsAddLumpSumDialog(
+                    settings = defaultSettings,
+                    initialItem = null,
+                    onDismiss = {},
+                    onUpdateSettings = {}
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Add Planned Lump Sum").assertIsDisplayed()
+        composeTestRule.onNodeWithText("+50k").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("+1000k").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("+1000k").performClick()
+        composeTestRule.onNodeWithText("1000000").assertExists()
+    }
+
+    @Test
+    fun test17_addCategoryDialog_presetsWrapWithoutClippingOn360dpPhone() {
+        composeTestRule.setContent {
+            MartinuFinancialsTheme {
+                SettingsAddCategoryDialog(
+                    settings = defaultSettings,
+                    onDismiss = {},
+                    onUpdateSettings = {}
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Add Expense Category").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pets & Vet").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Home Improvement").assertIsDisplayed()
     }
 }

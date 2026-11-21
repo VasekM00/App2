@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,11 +44,14 @@ import com.example.domain.serializeCustomExpenses
 import com.example.domain.serializeCustomLumpSums
 import com.example.domain.serializeDeletedCategories
 import com.example.ui.components.MetricInfo
+import com.example.ui.state.dispatchSettingsPatch
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 
 fun LazyListScope.settingsHouseholdSubTab(
@@ -55,43 +59,81 @@ fun LazyListScope.settingsHouseholdSubTab(
     onUpdateSettings: (SettingsEntity) -> Unit,
     expandTrigger: Int,
     expandTargetState: Boolean?,
+    focusedSectionKey: String? = null,
+    focusedSectionTrigger: Int = 0,
     onShowAddCategory: () -> Unit,
     onShowAddLumpSum: (CustomLumpSumItem?) -> Unit,
-    onShowInfo: (MetricInfo) -> Unit
+    onShowInfo: (MetricInfo) -> Unit,
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val s = state.settings
+    fun patchSettings(transform: (SettingsEntity) -> SettingsEntity) {
+        dispatchSettingsPatch(s, onUpdateSettings, onReduceSettings, transform)
+    }
+    val pName = s.primaryName.ifBlank { "Primary Earner" }
+    val sName = s.spouseName.ifBlank { "Partner" }
 
     // 1. Earned & Side Incomes
     item {
+        val eCurrentMonthly = state.currentIncome.eleonoraSalary +
+            state.currentIncome.benefit +
+            state.currentIncome.lecturing +
+            state.currentIncome.eleonoraOther +
+            s.eGiftsMonthly
         SettingsGroupCard(
             title = "Earned & Side Incomes",
             subtitle = if (s.isSingleHousehold) {
-                "Václav ${fmtCZK(s.vSalary)}/mo · Growth ${fmtPct(s.vSalaryGrowthPct)}/yr · Single household mode"
+                "$pName ${fmtCZK(s.vSalary)} · +${fmtPct(s.vSalaryGrowthPct)}"
             } else {
-                "Václav ${fmtCZK(s.vSalary)}/mo · Eleonora ${fmtCZK(s.eStartingSalary)}/mo · Return ${s.eReturnMonth}/${s.eReturnYear}"
+                "$pName ${fmtCZK(s.vSalary)} · $sName ${fmtCZK(eCurrentMonthly)}"
             },
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.currentIncome.totalMonthly) + "/mo",
+            badgeText = fmtCZK(state.currentIncome.totalMonthly) + " monthly",
             badgeColor = GoodGreen,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "income",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
             BooleanSettingField(
                 label = "Single Earner Household",
                 checked = s.isSingleHousehold,
-                onCheckedChange = { onUpdateSettings(s.copy(isSingleHousehold = it)) }
+                onCheckedChange = { v -> patchSettings { it.copy(isSingleHousehold = v) } }
             )
+            TextSettingField(
+                label = "Primary Earner Name",
+                value = s.primaryName,
+                onValueChange = { v -> patchSettings { it.copy(primaryName = v) } },
+                fieldKey = "primary_profile"
+            )
+            NumberSettingField(
+                label = "$pName's Current Age",
+                value = s.primaryAge.toDouble(),
+                minValue = 1.0,
+                maxValue = 120.0,
+                onValueChange = { v -> patchSettings { it.copy(primaryAge = v.toInt()) } },
+                fieldKey = "primary_age"
+            )
+            if (!s.isSingleHousehold) {
+                TextSettingField(
+                    label = "Partner Name",
+                    value = s.spouseName,
+                    onValueChange = { v -> patchSettings { it.copy(spouseName = v) } },
+                    fieldKey = "spouse_profile"
+                )
+            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             Text(
-                text = "Václav's Incomes",
+                text = "$pName's Incomes",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
             )
-            NumberSettingField(label = "Net Salary", value = s.vSalary, onValueChange = { onUpdateSettings(s.copy(vSalary = it)) })
-            NumberSettingField(label = "Annual Salary Growth (%)", value = s.vSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(vSalaryGrowthPct = it)) })
-            NumberSettingField(label = "Meal Vouchers Monthly", value = s.vMealVouchersMonthly, onValueChange = { onUpdateSettings(s.copy(vMealVouchersMonthly = it)) })
-            NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.vOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(vOtherInflowsMonthly = it)) })
-            NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.vGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(vGiftsMonthly = it, familyGiftMonthly = it + s.eGiftsMonthly)) })
+            NumberSettingField(label = "Net Salary", value = s.vSalary, onValueChange = { v -> patchSettings { it.copy(vSalary = v) } }, fieldKey = "v_income")
+            NumberSettingField(label = "Annual Salary Growth (%)", value = s.vSalaryGrowthPct, onValueChange = { v -> patchSettings { it.copy(vSalaryGrowthPct = v) } }, fieldKey = "v_income")
+            NumberSettingField(label = "Meal Vouchers Monthly", value = s.vMealVouchersMonthly, onValueChange = { v -> patchSettings { it.copy(vMealVouchersMonthly = v) } }, fieldKey = "v_income")
+            NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.vOtherInflowsMonthly, onValueChange = { v -> patchSettings { it.copy(vOtherInflowsMonthly = v) } }, fieldKey = "v_income")
+            NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.vGiftsMonthly, onValueChange = { v -> patchSettings { it.copy(vGiftsMonthly = v) } }, fieldKey = "v_income")
 
             if (!s.isSingleHousehold) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
@@ -104,46 +146,51 @@ fun LazyListScope.settingsHouseholdSubTab(
 
                 if (isAlreadyEmployed) {
                     Text(
-                        text = "Eleonora's Incomes (Employed)",
+                        text = "$sName's Incomes (Employed)",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                     )
-                    NumberSettingField(label = "Net Salary", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
-                    NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(eOtherInflowsMonthly = it)) })
-                    NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
-                    NumberSettingField(label = "Annual Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
-                    NumberSettingField(label = "Reinvested Share of Salary (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                    NumberSettingField(label = "Net Salary", value = s.eStartingSalary, onValueChange = { v -> patchSettings { it.copy(eStartingSalary = v) } }, fieldKey = "e_income")
+                    NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { v -> patchSettings { it.copy(eOtherInflowsMonthly = v) } }, fieldKey = "e_income")
+                    NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.eGiftsMonthly, onValueChange = { v -> patchSettings { it.copy(eGiftsMonthly = v) } }, fieldKey = "e_income")
+                    NumberSettingField(label = "Annual Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { v -> patchSettings { it.copy(eSalaryGrowthPct = v) } }, fieldKey = "e_income")
+                    NumberSettingField(label = "Reinvested Share of Salary (%)", value = s.eReinvestedPct, onValueChange = { v -> patchSettings { it.copy(eReinvestedPct = v) } }, fieldKey = "e_income")
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     YearMonthSettingField(
                         label = "Planned Return",
                         yearValue = s.eReturnYear,
                         monthValue = s.eReturnMonth,
-                        onValueChange = { yr, mo -> onUpdateSettings(s.copy(eReturnYear = yr, eReturnMonth = mo)) }
+                        onValueChange = { yr, mo -> patchSettings { it.copy(eReturnYear = yr, eReturnMonth = mo) } },
+                        fieldKey = "e_return_employed"
                     )
                 } else {
                     Text(
-                        text = "Eleonora's Incomes (Parental Leave until $returnMonthLabel)",
+                        text = "$sName's Incomes (Parental Leave until $returnMonthLabel)",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandGold)
                     )
-                    NumberSettingField(label = "Parental Allowance Monthly", value = s.eParentalAllowanceMonthly, onValueChange = { onUpdateSettings(s.copy(eParentalAllowanceMonthly = it)) })
-                    NumberSettingField(label = "Lecturing Monthly", value = s.eLecturingMonthly, onValueChange = { onUpdateSettings(s.copy(eLecturingMonthly = it)) })
-                    NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { onUpdateSettings(s.copy(eOtherInflowsMonthly = it)) })
-                    NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.eGiftsMonthly, onValueChange = { onUpdateSettings(s.copy(eGiftsMonthly = it, familyGiftMonthly = s.vGiftsMonthly + it)) })
+                    NumberSettingField(label = "Parental Allowance Monthly", value = s.eParentalAllowanceMonthly, onValueChange = { v -> patchSettings { it.copy(eParentalAllowanceMonthly = v) } }, fieldKey = "e_parental")
+                    BooleanSettingField(label = "Include Lecturing Income", checked = s.eIncludeLecturing, onCheckedChange = { v -> patchSettings { it.copy(eIncludeLecturing = v) } })
+                    if (s.eIncludeLecturing) {
+                        NumberSettingField(label = "Lecturing Monthly", value = s.eLecturingMonthly, onValueChange = { v -> patchSettings { it.copy(eLecturingMonthly = v) } }, fieldKey = "e_parental")
+                    }
+                    NumberSettingField(label = "Other Monthly Inflows / Side Income", value = s.eOtherInflowsMonthly, onValueChange = { v -> patchSettings { it.copy(eOtherInflowsMonthly = v) } }, fieldKey = "e_parental")
+                    NumberSettingField(label = "Tax-Exempt Gifts Monthly", value = s.eGiftsMonthly, onValueChange = { v -> patchSettings { it.copy(eGiftsMonthly = v) } }, fieldKey = "e_parental")
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text(
-                        text = "Eleonora's Future Return to Work ($returnMonthLabel+)",
+                        text = "$sName's Future Return to Work ($returnMonthLabel+)",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
                     )
                     YearMonthSettingField(
                         label = "Planned Return",
                         yearValue = s.eReturnYear,
                         monthValue = s.eReturnMonth,
-                        onValueChange = { yr, mo -> onUpdateSettings(s.copy(eReturnYear = yr, eReturnMonth = mo)) }
+                        onValueChange = { yr, mo -> patchSettings { it.copy(eReturnYear = yr, eReturnMonth = mo) } },
+                        fieldKey = "e_return_parental"
                     )
-                    NumberSettingField(label = "Future Starting Salary Net", value = s.eStartingSalary, onValueChange = { onUpdateSettings(s.copy(eStartingSalary = it)) })
-                    NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { onUpdateSettings(s.copy(eSalaryGrowthPct = it)) })
-                    NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { onUpdateSettings(s.copy(eReinvestedPct = it)) })
+                    NumberSettingField(label = "Future Starting Salary Net", value = s.eStartingSalary, onValueChange = { v -> patchSettings { it.copy(eStartingSalary = v) } }, fieldKey = "e_future")
+                    NumberSettingField(label = "Future Salary Growth (%)", value = s.eSalaryGrowthPct, onValueChange = { v -> patchSettings { it.copy(eSalaryGrowthPct = v) } }, fieldKey = "e_future")
+                    NumberSettingField(label = "Future Reinvested Share (%)", value = s.eReinvestedPct, onValueChange = { v -> patchSettings { it.copy(eReinvestedPct = v) } }, fieldKey = "e_future")
                 }
             }
 
@@ -159,10 +206,10 @@ fun LazyListScope.settingsHouseholdSubTab(
                 text = "Primary Planned Lump Sum",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
             )
-            BooleanSettingField(label = "Include Primary Lump Sum", checked = s.lumpSumInclude, onCheckedChange = { onUpdateSettings(s.copy(lumpSumInclude = it)) })
+            BooleanSettingField(label = "Include Primary Lump Sum", checked = s.lumpSumInclude, onCheckedChange = { v -> patchSettings { it.copy(lumpSumInclude = v) } })
             if (s.lumpSumInclude) {
-                NumberSettingField(label = "Planned Year", value = s.lumpSumYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(lumpSumYear = it.toInt())) })
-                NumberSettingField(label = "Planned Amount", value = s.lumpSumAmount, onValueChange = { onUpdateSettings(s.copy(lumpSumAmount = it)) })
+                NumberSettingField(label = "Planned Year", value = s.lumpSumYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(lumpSumYear = v.toInt()) } })
+                NumberSettingField(label = "Planned Amount", value = s.lumpSumAmount, onValueChange = { v -> patchSettings { it.copy(lumpSumAmount = v) } })
             }
 
             val customLumpSums = remember(s.customLumpSumsJson) { parseCustomLumpSums(s.customLumpSumsJson) }
@@ -175,9 +222,9 @@ fun LazyListScope.settingsHouseholdSubTab(
                 customLumpSums.forEach { item ->
                     key(item.id) {
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         ) {
                             Row(
@@ -196,17 +243,23 @@ fun LazyListScope.settingsHouseholdSubTab(
                                     )
                                     Text(
                                         text = fmtCZK(item.amount),
-                                        style = MaterialTheme.typography.bodySmall.copy(color = GoodGreen, fontWeight = FontWeight.SemiBold)
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontFamily = BodyFontFamily,
+                                            color = GoodGreen,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     )
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Switch(
                                         checked = item.enabled,
                                         onCheckedChange = { enabledState ->
-                                            val updated = customLumpSums.map {
-                                                if (it.id == item.id) it.copy(enabled = enabledState) else it
+                                            patchSettings { cur ->
+                                                val updated = parseCustomLumpSums(cur.customLumpSumsJson).map {
+                                                    if (it.id == item.id) it.copy(enabled = enabledState) else it
+                                                }
+                                                cur.copy(customLumpSumsJson = serializeCustomLumpSums(updated))
                                             }
-                                            onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
                                         },
                                         modifier = Modifier.scale(0.8f)
                                     )
@@ -217,21 +270,23 @@ fun LazyListScope.settingsHouseholdSubTab(
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Edit lump sum",
-                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
                                     IconButton(
                                         onClick = {
-                                            val updated = customLumpSums.filter { it.id != item.id }
-                                            onUpdateSettings(s.copy(customLumpSumsJson = serializeCustomLumpSums(updated)))
+                                            patchSettings { cur ->
+                                                val updated = parseCustomLumpSums(cur.customLumpSumsJson).filter { it.id != item.id }
+                                                cur.copy(customLumpSumsJson = serializeCustomLumpSums(updated))
+                                            }
                                         },
                                         modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,
                                             contentDescription = "Delete lump sum",
-                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                            tint = MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
@@ -245,7 +300,9 @@ fun LazyListScope.settingsHouseholdSubTab(
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedButton(
                 onClick = { onShowAddLumpSum(null) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -260,24 +317,28 @@ fun LazyListScope.settingsHouseholdSubTab(
         val customCategories = remember(s.customExpensesJson) { parseCustomExpenses(s.customExpensesJson) }
         val deletedSet = remember(s.deletedCategoriesJson) { parseDeletedCategories(s.deletedCategoriesJson) }
 
-        fun deleteBuiltInKey(key: String, newSettings: SettingsEntity): SettingsEntity {
-            val newSet = deletedSet + key
-            return newSettings.copy(deletedCategoriesJson = serializeDeletedCategories(newSet))
+        fun deleteBuiltInKey(key: String, currentSettings: SettingsEntity): SettingsEntity {
+            val newSet = parseDeletedCategories(currentSettings.deletedCategoriesJson) + key
+            return currentSettings.copy(deletedCategoriesJson = serializeDeletedCategories(newSet))
         }
 
         SettingsGroupCard(
-            title = "Monthly Living Expenses",
-            subtitle = "Rent ${fmtCZK(s.rentMonthly)} · Groceries ${fmtCZK(s.groceriesMonthly)} · Cafes ${fmtCZK(s.cafesMonthly)}",
+            title = "Living Expenses",
+            subtitle = "Rent ${fmtCompact(s.rentMonthly)} · Food ${fmtCompact(s.groceriesMonthly)}",
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.totalLivingCostMonthly) + "/mo",
+            badgeText = fmtCZK(state.totalLivingCostMonthly) + " monthly",
             badgeColor = BadRed,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "expenses",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
             if (!deletedSet.contains("rent")) {
-                NumberSettingField(label = "Rent / Housing", value = s.rentMonthly, onValueChange = { onUpdateSettings(s.copy(rentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("rent", s.copy(rentMonthly = 0.0))) })
+                NumberSettingField(label = "Rent / Housing", value = s.rentMonthly, onValueChange = { v -> patchSettings { it.copy(rentMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("rent", it.copy(rentMonthly = 0.0)) } })
+                NumberSettingField(label = "Annual Rent Growth (%)", value = s.rentGrowthPct, minValue = -99.0, maxValue = 1000.0, onValueChange = { v -> patchSettings { it.copy(rentGrowthPct = v) } }, fieldKey = "rent_growth", quickStep = 0.5)
                 Text(
-                    text = "Indexed annually each July to ČSÚ CPI inflation (${s.cpiInflationPct}%)",
+                    text = "Indexed annually each July (Rent growth: ${fmtPct(s.rentGrowthPct, 1)} · CPI: ${fmtPct(s.cpiInflationPct, 1)})",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp
@@ -286,28 +347,28 @@ fun LazyListScope.settingsHouseholdSubTab(
                 )
             }
             if (!deletedSet.contains("groceries")) {
-                NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly, onValueChange = { onUpdateSettings(s.copy(groceriesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("groceries", s.copy(groceriesMonthly = 0.0))) })
+                NumberSettingField(label = "Groceries & Daily Living", value = s.groceriesMonthly, onValueChange = { v -> patchSettings { it.copy(groceriesMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("groceries", it.copy(groceriesMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("cafes")) {
-                NumberSettingField(label = "Cafes & Restaurants", value = s.cafesMonthly, onValueChange = { onUpdateSettings(s.copy(cafesMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("cafes", s.copy(cafesMonthly = 0.0))) })
+                NumberSettingField(label = "Cafes & Restaurants", value = s.cafesMonthly, onValueChange = { v -> patchSettings { it.copy(cafesMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("cafes", it.copy(cafesMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("therapy")) {
-                NumberSettingField(label = "Therapy / Physio", value = s.therapyMonthly, onValueChange = { onUpdateSettings(s.copy(therapyMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("therapy", s.copy(therapyMonthly = 0.0))) })
+                NumberSettingField(label = "Therapy / Physio", value = s.therapyMonthly, onValueChange = { v -> patchSettings { it.copy(therapyMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("therapy", it.copy(therapyMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("charity")) {
-                NumberSettingField(label = "Charity", value = s.charityMonthly, onValueChange = { onUpdateSettings(s.copy(charityMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("charity", s.copy(charityMonthly = 0.0))) })
+                NumberSettingField(label = "Charity", value = s.charityMonthly, onValueChange = { v -> patchSettings { it.copy(charityMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("charity", it.copy(charityMonthly = 0.0)) } })
             }
-            if (!deletedSet.contains("other_discretionary") && s.otherDiscretionaryMonthly > 0.0) {
-                NumberSettingField(label = "Other Discretionary", value = s.otherDiscretionaryMonthly, onValueChange = { onUpdateSettings(s.copy(otherDiscretionaryMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("other_discretionary", s.copy(otherDiscretionaryMonthly = 0.0))) })
+            if (!deletedSet.contains("other_discretionary")) {
+                NumberSettingField(label = "Other Discretionary", value = s.otherDiscretionaryMonthly, onValueChange = { v -> patchSettings { it.copy(otherDiscretionaryMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("other_discretionary", it.copy(otherDiscretionaryMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("entertainment")) {
-                NumberSettingField(label = "Entertainment", value = s.entertainmentMonthly, onValueChange = { onUpdateSettings(s.copy(entertainmentMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("entertainment", s.copy(entertainmentMonthly = 0.0))) })
+                NumberSettingField(label = "Entertainment", value = s.entertainmentMonthly, onValueChange = { v -> patchSettings { it.copy(entertainmentMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("entertainment", it.copy(entertainmentMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("transport")) {
-                NumberSettingField(label = "Transport", value = s.transportMonthly, onValueChange = { onUpdateSettings(s.copy(transportMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("transport", s.copy(transportMonthly = 0.0))) })
+                NumberSettingField(label = "Transport", value = s.transportMonthly, onValueChange = { v -> patchSettings { it.copy(transportMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("transport", it.copy(transportMonthly = 0.0)) } })
             }
             if (!deletedSet.contains("subscriptions")) {
-                NumberSettingField(label = "Subscriptions", value = s.subscriptionsMonthly, onValueChange = { onUpdateSettings(s.copy(subscriptionsMonthly = it)) }, onDelete = { onUpdateSettings(deleteBuiltInKey("subscriptions", s.copy(subscriptionsMonthly = 0.0))) })
+                NumberSettingField(label = "Subscriptions", value = s.subscriptionsMonthly, onValueChange = { v -> patchSettings { it.copy(subscriptionsMonthly = v) } }, onDelete = { patchSettings { deleteBuiltInKey("subscriptions", it.copy(subscriptionsMonthly = 0.0)) } })
             }
 
             if (customCategories.isNotEmpty()) {
@@ -317,14 +378,18 @@ fun LazyListScope.settingsHouseholdSubTab(
                             label = item.name,
                             value = item.amount,
                             onValueChange = { updatedVal ->
-                                val updatedList = customCategories.map {
-                                    if (it.id == item.id) it.copy(amount = updatedVal) else it
+                                patchSettings { cur ->
+                                    val updatedList = parseCustomExpenses(cur.customExpensesJson).map {
+                                        if (it.id == item.id) it.copy(amount = updatedVal) else it
+                                    }
+                                    cur.copy(customExpensesJson = serializeCustomExpenses(updatedList))
                                 }
-                                onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
                             },
                             onDelete = {
-                                val updatedList = customCategories.filter { it.id != item.id }
-                                onUpdateSettings(s.copy(customExpensesJson = serializeCustomExpenses(updatedList)))
+                                patchSettings { cur ->
+                                    val updatedList = parseCustomExpenses(cur.customExpensesJson).filter { it.id != item.id }
+                                    cur.copy(customExpensesJson = serializeCustomExpenses(updatedList))
+                                }
                             }
                         )
                     }
@@ -337,6 +402,7 @@ fun LazyListScope.settingsHouseholdSubTab(
                 onClick = onShowAddCategory,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .testTag("add_custom_category_button"),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -351,21 +417,24 @@ fun LazyListScope.settingsHouseholdSubTab(
     item {
         SettingsGroupCard(
             title = "Family & Children",
-            subtitle = "${if (s.child1Enabled) "${s.child1Name} (${s.child1BirthYear})" else "No Child 1"}${if (s.child2Enabled) " · ${s.child2Name} (${s.child2BirthYear})" else ""} · Bonus +${fmtCZK(state.taxReturnHelper.childBonus)}/yr",
+            subtitle = "Bonus +${fmtCZK(state.taxReturnHelper.childBonus)} yearly",
             initiallyExpanded = false,
             badgeText = if (s.childExpensesEnabled) "ACTIVE" else "OFF",
             badgeColor = BrandTeal,
             info = SettingsMetricInfos.childBonus,
             onShowInfo = onShowInfo,
             externalExpandTrigger = expandTrigger,
-            externalExpandState = expandTargetState
+            externalExpandState = expandTargetState,
+            sectionKey = "family",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
         ) {
-            BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { onUpdateSettings(s.copy(childExpensesEnabled = it)) })
+            BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { v -> patchSettings { it.copy(childExpensesEnabled = v) } })
             if (s.childExpensesEnabled) {
                 BooleanSettingField(
                     label = "Current Child Costs in Monthly Budget",
                     checked = s.currentChildCostsInBaseline,
-                    onCheckedChange = { onUpdateSettings(s.copy(currentChildCostsInBaseline = it)) }
+                    onCheckedChange = { v -> patchSettings { it.copy(currentChildCostsInBaseline = v) } }
                 )
                 Text(
                     text = if (s.currentChildCostsInBaseline) {
@@ -383,34 +452,42 @@ fun LazyListScope.settingsHouseholdSubTab(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { onUpdateSettings(s.copy(child1Enabled = it)) })
+            BooleanSettingField(label = "Include Child 1", checked = s.child1Enabled, onCheckedChange = { v -> patchSettings { it.copy(child1Enabled = v) } })
             if (s.child1Enabled) {
-                TextSettingField(label = "Child 1 Name", value = s.child1Name, onValueChange = { onUpdateSettings(s.copy(child1Name = it)) })
-                NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child1BirthYear = it.toInt())) })
-                NumberSettingField(label = "Child 1 Tax Bonus Annual", value = s.child1TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child1TaxBonusAnnual = it)) })
+                TextSettingField(label = "Child 1 Name", value = s.child1Name, onValueChange = { v -> patchSettings { it.copy(child1Name = v) } })
+                NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(child1BirthYear = v.toInt()) } })
+                NumberSettingField(label = "Child 1 Tax Bonus Annual", value = s.child1TaxBonusAnnual, onValueChange = { v -> patchSettings { it.copy(child1TaxBonusAnnual = v) } })
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = "Stage Expense Estimates (per Child)", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
-                NumberSettingField(label = "Toddler Monthly", value = s.childToddlerMonthly, onValueChange = { onUpdateSettings(s.copy(childToddlerMonthly = it)) })
-                NumberSettingField(label = "Preschool Monthly", value = s.childPreschoolMonthly, onValueChange = { onUpdateSettings(s.copy(childPreschoolMonthly = it)) })
-                NumberSettingField(label = "School Monthly", value = s.childSchoolMonthly, onValueChange = { onUpdateSettings(s.copy(childSchoolMonthly = it)) })
-                NumberSettingField(label = "Teen Monthly", value = s.childTeenMonthly, onValueChange = { onUpdateSettings(s.copy(childTeenMonthly = it)) })
-                NumberSettingField(label = "Uni Monthly", value = s.childUniMonthly, onValueChange = { onUpdateSettings(s.copy(childUniMonthly = it)) })
+                NumberSettingField(label = "Toddler Monthly", value = s.childToddlerMonthly, onValueChange = { v -> patchSettings { it.copy(childToddlerMonthly = v) } })
+                NumberSettingField(label = "Preschool Monthly", value = s.childPreschoolMonthly, onValueChange = { v -> patchSettings { it.copy(childPreschoolMonthly = v) } })
+                NumberSettingField(label = "School Monthly", value = s.childSchoolMonthly, onValueChange = { v -> patchSettings { it.copy(childSchoolMonthly = v) } })
+                NumberSettingField(label = "Teen Monthly", value = s.childTeenMonthly, onValueChange = { v -> patchSettings { it.copy(childTeenMonthly = v) } })
+                NumberSettingField(label = "University Monthly", value = s.childUniMonthly, onValueChange = { v -> patchSettings { it.copy(childUniMonthly = v) } })
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            BooleanSettingField(label = "Include Planned Child 2 Milestone", checked = s.child2Enabled, onCheckedChange = { onUpdateSettings(s.copy(child2Enabled = it)) })
+            BooleanSettingField(label = "Include Planned Child 2 Milestone", checked = s.child2Enabled, onCheckedChange = { v -> patchSettings { it.copy(child2Enabled = v) } })
             if (s.child2Enabled) {
-                TextSettingField(label = "Child 2 Name", value = s.child2Name, onValueChange = { onUpdateSettings(s.copy(child2Name = it)) })
-                NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { onUpdateSettings(s.copy(child2BirthYear = it.toInt())) })
-                NumberSettingField(label = "Child 2 Tax Bonus Annual", value = s.child2TaxBonusAnnual, onValueChange = { onUpdateSettings(s.copy(child2TaxBonusAnnual = it)) })
+                TextSettingField(label = "Child 2 Name", value = s.child2Name, onValueChange = { v -> patchSettings { it.copy(child2Name = v) } })
+                NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(child2BirthYear = v.toInt()) } })
+                NumberSettingField(label = "Child 2 Tax Bonus Annual", value = s.child2TaxBonusAnnual, onValueChange = { v -> patchSettings { it.copy(child2TaxBonusAnnual = v) } })
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            NumberSettingField(
+                label = "Child Support Until Age (Years)",
+                value = s.childSupportUntilAge.toDouble(),
+                minValue = 0.0,
+                maxValue = 50.0,
+                onValueChange = { v -> patchSettings { it.copy(childSupportUntilAge = v.toInt()) } },
+                fieldKey = "child_support_age"
+            )
             BooleanSettingField(
                 label = "Prolong Child Support into FIRE Target",
                 checked = s.prolongChildSupportInFire,
-                onCheckedChange = { onUpdateSettings(s.copy(prolongChildSupportInFire = it)) },
+                onCheckedChange = { v -> patchSettings { it.copy(prolongChildSupportInFire = v) } },
                 info = SettingsMetricInfos.prolongChildSupport,
                 onShowInfo = onShowInfo
             )

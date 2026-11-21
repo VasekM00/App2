@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,12 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.ColorPill
+import com.example.ui.components.charts.finiteOrZero
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
@@ -43,10 +45,23 @@ fun StatementSummaryBar(
     summary: StatementParseSummary,
     categoryTotals: Map<BankTransactionType, Double>,
     onShowNettingAudit: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    primaryName: String = "Primary",
+    partnerName: String = "Partner"
 ) {
-    val netFlow = summary.totalInflows - summary.totalExpenses
+    val safeInflows = summary.totalInflows.finiteOrZero()
+    val safeExpenses = summary.totalExpenses.finiteOrZero()
+    val netFlow = safeInflows - safeExpenses
     val netColor = if (netFlow >= 0) GoodGreen else BadRed
+    val safeEndBalance = summary.monthEndBalance?.takeIf { it.isFinite() }
+    val safeNettedAmount = summary.totalNettedAmount.finiteOrZero()
+    val safePrimaryInc = summary.incVaclav.finiteOrZero()
+    val safePartnerInc = summary.incEleonora.finiteOrZero()
+    val safeGroceries = summary.expGroceries.finiteOrZero()
+    val safePortu = summary.invPortu.finiteOrZero()
+    val safeDps = summary.invDps.finiteOrZero()
+    val primaryLabel = primaryName.ifBlank { "Primary" }
+    val partnerLabel = partnerName.ifBlank { "Partner" }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // 4-Card Summary Grid (2x2): Row 1: Inflows & Expenses | Row 2: Net Result & End Balance
@@ -61,7 +76,7 @@ fun StatementSummaryBar(
             ) {
                 // Inflows Tile
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = GoodGreen.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -78,10 +93,10 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = fmtCZK(summary.totalInflows),
+                            text = fmtCZK(safeInflows),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = GoodGreen,
                                 fontSize = 13.5.sp
                             ),
@@ -94,7 +109,7 @@ fun StatementSummaryBar(
 
                 // Expenses Tile
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BadRed.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BadRed.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -111,10 +126,10 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = fmtCZK(summary.totalExpenses),
+                            text = fmtCZK(safeExpenses),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = BadRed,
                                 fontSize = 13.5.sp
                             ),
@@ -133,7 +148,7 @@ fun StatementSummaryBar(
             ) {
                 // Net Flow Tile
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = netColor.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, netColor.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -153,7 +168,7 @@ fun StatementSummaryBar(
                             text = (if (netFlow >= 0) "+" else "") + fmtCZK(netFlow),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = netColor,
                                 fontSize = 13.5.sp
                             ),
@@ -166,7 +181,7 @@ fun StatementSummaryBar(
 
                 // Closing Balance Tile
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = BrandGold.copy(alpha = 0.08f),
                     border = BorderStroke(1.dp, BrandGold.copy(alpha = 0.25f)),
                     modifier = Modifier.weight(1f)
@@ -183,10 +198,10 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = summary.monthEndBalance?.let { fmtCZK(it) } ?: "--",
+                            text = safeEndBalance?.let { fmtCZK(it) } ?: "--",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = BodyFontFamily,
                                 color = BrandGold,
                                 fontSize = 13.5.sp
                             ),
@@ -203,9 +218,9 @@ fun StatementSummaryBar(
 
         // Breakdown Highlight Strip (Salary, Groceries, Portu, Netting)
         Surface(
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -222,19 +237,24 @@ fun StatementSummaryBar(
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
-                        )
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
                     if (summary.internalTransfersCount > 0) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = GoodGreen.copy(alpha = 0.12f),
                             border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.35f)),
-                            modifier = Modifier.clickable(enabled = onShowNettingAudit != null) {
-                                onShowNettingAudit?.invoke()
-                            }
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 36.dp)
+                                .clickable(enabled = onShowNettingAudit != null) {
+                                    onShowNettingAudit?.invoke()
+                                }
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -245,10 +265,11 @@ fun StatementSummaryBar(
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Text(
-                                    text = "${summary.internalTransfersCount} netted (${fmtCompact(summary.totalNettedAmount)})",
+                                    text = "${summary.internalTransfersCount} netted (${fmtCompact(safeNettedAmount)})",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = GoodGreen,
                                         fontSize = 10.sp,
+                                        fontFamily = BodyFontFamily,
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
@@ -263,153 +284,153 @@ fun StatementSummaryBar(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (summary.incVaclav > 0) {
+                    if (safePrimaryInc > 0) {
                         ColorPill(
-                            text = "Václav: " + fmtCompact(summary.incVaclav),
+                            text = "$primaryLabel: " + fmtCompact(safePrimaryInc),
                             color = GoodGreen,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    if (summary.incEleonora > 0) {
+                    if (safePartnerInc > 0) {
                         ColorPill(
-                            text = "Eleonora: " + fmtCompact(summary.incEleonora),
+                            text = "$partnerLabel: " + fmtCompact(safePartnerInc),
                             color = GoodGreen,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    if (summary.expGroceries > 0) {
+                    if (safeGroceries > 0) {
                         ColorPill(
-                            text = "Groceries: " + fmtCompact(summary.expGroceries),
+                            text = "Groceries: " + fmtCompact(safeGroceries),
                             color = BadRed,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val diningTotal = categoryTotals[BankTransactionType.DINING_RESTAURANT] ?: 0.0
+                    val diningTotal = (categoryTotals[BankTransactionType.DINING_RESTAURANT] ?: 0.0).finiteOrZero()
                     if (diningTotal > 0) {
                         ColorPill(
                             text = "Dining: " + fmtCompact(diningTotal),
                             color = Color(0xFFD97706),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val shoppingTotal = categoryTotals[BankTransactionType.SHOPPING_GOODS] ?: 0.0
+                    val shoppingTotal = (categoryTotals[BankTransactionType.SHOPPING_GOODS] ?: 0.0).finiteOrZero()
                     if (shoppingTotal > 0) {
                         ColorPill(
                             text = "Shopping: " + fmtCompact(shoppingTotal),
                             color = Color(0xFF6366F1),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val transportTotal = categoryTotals[BankTransactionType.TRANSPORTATION] ?: 0.0
+                    val transportTotal = (categoryTotals[BankTransactionType.TRANSPORTATION] ?: 0.0).finiteOrZero()
                     if (transportTotal > 0) {
                         ColorPill(
                             text = "Transport: " + fmtCompact(transportTotal),
                             color = Color(0xFF0284C7),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val subsTotal = categoryTotals[BankTransactionType.SUBSCRIPTIONS_MEDIA] ?: 0.0
+                    val subsTotal = (categoryTotals[BankTransactionType.SUBSCRIPTIONS_MEDIA] ?: 0.0).finiteOrZero()
                     if (subsTotal > 0) {
                         ColorPill(
                             text = "Subs: " + fmtCompact(subsTotal),
                             color = Color(0xFF0D9488),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val healthTotal = categoryTotals[BankTransactionType.HEALTH_DRUGSTORE] ?: 0.0
+                    val healthTotal = (categoryTotals[BankTransactionType.HEALTH_DRUGSTORE] ?: 0.0).finiteOrZero()
                     if (healthTotal > 0) {
                         ColorPill(
                             text = "Health: " + fmtCompact(healthTotal),
                             color = Color(0xFFE11D48),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val utilTotal = categoryTotals[BankTransactionType.SERVICES_UTILITIES] ?: 0.0
+                    val utilTotal = (categoryTotals[BankTransactionType.SERVICES_UTILITIES] ?: 0.0).finiteOrZero()
                     if (utilTotal > 0) {
                         ColorPill(
                             text = "Utilities: " + fmtCompact(utilTotal),
                             color = Color(0xFF64748B),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val atmTotal = categoryTotals[BankTransactionType.ATM_CASH] ?: 0.0
+                    val atmTotal = (categoryTotals[BankTransactionType.ATM_CASH] ?: 0.0).finiteOrZero()
                     if (atmTotal > 0) {
                         ColorPill(
                             text = "ATM: " + fmtCompact(atmTotal),
                             color = Color(0xFF78716C),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    val charityTotal = categoryTotals[BankTransactionType.CHARITY_DONATION] ?: 0.0
+                    val charityTotal = (categoryTotals[BankTransactionType.CHARITY_DONATION] ?: 0.0).finiteOrZero()
                     if (charityTotal > 0) {
                         ColorPill(
                             text = "Charity: " + fmtCompact(charityTotal),
                             color = Color(0xFFEC4899),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    if (summary.invPortu > 0) {
+                    if (safePortu > 0) {
                         ColorPill(
-                            text = "Portu: " + fmtCompact(summary.invPortu),
+                            text = "Portu: " + fmtCompact(safePortu),
                             color = BrandGold,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
                     }
-                    if (summary.invDps > 0) {
+                    if (safeDps > 0) {
                         ColorPill(
-                            text = "DPS: " + fmtCompact(summary.invDps),
+                            text = "DPS: " + fmtCompact(safeDps),
                             color = BrandTeal,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = BodyFontFamily,
                             horizontalPadding = 6.dp,
                             verticalPadding = 2.dp
                         )
