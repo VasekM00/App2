@@ -172,10 +172,29 @@ object BackupManager {
         if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
         return try {
             val rawJson = JSONObject(jsonStr.trim())
+            val rootFormat = rawJson.optString("_format", "").trim()
+            if (rawJson.has("_format")) {
+                val isSettingsFormat = rootFormat.equals("martinu-settings", ignoreCase = true)
+                val isFullFormat = (rootFormat.equals("martinu-financials-full-backup", ignoreCase = true) ||
+                    rootFormat.equals("martinu-full-backup", ignoreCase = true)) && rawJson.has("settings")
+                if (!isSettingsFormat && !isFullFormat) {
+                    return null
+                }
+            }
+            if (rawJson.has("_schema")) {
+                val rootSchema = rawJson.optInt("_schema", -1)
+                val allowedRange = if (rootFormat.equals("martinu-settings", ignoreCase = true) || !rawJson.has("settings")) 1..1 else 1..2
+                if (rootSchema !in allowedRange) {
+                    return null
+                }
+            }
             val json = if (rawJson.has("settings")) {
                 rawJson.optJSONObject("settings") ?: return null
             } else {
                 rawJson
+            }
+            if (json !== rawJson && json.has("_schema") && json.optInt("_schema", -1) != 1) {
+                return null
             }
             val restoredVGifts = json.optFiniteDouble(
                 "vGiftsMonthly",
@@ -598,6 +617,15 @@ object BackupManager {
             // Settings-only backups ("martinu-settings" without a full-backup "settings" object) MUST NOT
             // be parsed as FullBackupPayload, otherwise restoring them would wipe ledger, transactions & lots.
             if (formatTag.equals("martinu-settings", ignoreCase = true) && !root.has("settings")) {
+                return null
+            }
+            if (root.has("_format") &&
+                !formatTag.equals("martinu-financials-full-backup", ignoreCase = true) &&
+                !formatTag.equals("martinu-full-backup", ignoreCase = true)
+            ) {
+                return null
+            }
+            if (root.has("_schema") && root.optInt("_schema", -1) !in 1..2) {
                 return null
             }
             val hasFullBackupEnvelope = root.has("settings") ||
