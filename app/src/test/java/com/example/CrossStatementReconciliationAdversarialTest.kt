@@ -67,7 +67,8 @@ class CrossStatementReconciliationAdversarialTest {
         val result = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
             transactions = listOf(debitPair, creditPair, singleDebit),
             yearMonth = "2026-09",
-            boundaryTransactions = emptyList()
+            boundaryTransactions = emptyList(),
+            householdNames = listOf("Vaclav Martinu")
         )
 
         assertEquals(1, result.auditReport.matchedPairs.size)
@@ -86,7 +87,8 @@ class CrossStatementReconciliationAdversarialTest {
         val result = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
             transactions = listOf(debitMonthEnd),
             yearMonth = "2026-09",
-            boundaryTransactions = listOf(creditBoundary)
+            boundaryTransactions = listOf(creditBoundary),
+            householdNames = listOf("Vaclav Martinu")
         )
 
         assertEquals(1, result.auditReport.matchedPairs.size)

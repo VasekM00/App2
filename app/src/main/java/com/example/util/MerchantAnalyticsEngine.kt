@@ -31,6 +31,40 @@ object MerchantAnalyticsEngine {
         BankTransactionType.INTERNAL_TRANSFER
     )
 
+    private val NOISE_WORDS = setOf(
+        "hypermarket", "supermarket", "market", "potraviny", "prodejna",
+        "store", "obchod", "cerpaci", "stanice", "phm", "benzin", "express", "city"
+    )
+
+    private val KNOWN_CHAINS = listOf(
+        "albert", "billa", "lidl", "tesco", "kaufland", "penny", "globus", "coop", "zabka",
+        "rohlik", "kosik", "cez", "pre", "eon", "innogy", "shell", "orlen", "benzina", "mol", "omv",
+        "alza", "datart", "ikea", "mcdonald", "mcdonalds", "kfc", "dm", "rossmann", "teta", "notino"
+    )
+
+    private val PRETTY_BRANDS = mapOf(
+        "albert" to "Albert",
+        "rohlik" to "Rohlík.cz",
+        "kosik" to "Košík.cz",
+        "billa" to "Billa",
+        "lidl" to "Lidl",
+        "tesco" to "Tesco",
+        "kaufland" to "Kaufland",
+        "penny" to "Penny Market",
+        "globus" to "Globus",
+        "cez" to "ČEZ",
+        "eon" to "E.ON",
+        "pre" to "PRE",
+        "innogy" to "Innogy",
+        "shell" to "Shell",
+        "orlen" to "Orlen",
+        "mol" to "MOL",
+        "omv" to "OMV",
+        "alza" to "Alza.cz",
+        "datart" to "Datart",
+        "ikea" to "IKEA"
+    )
+
     enum class MerchantDriftTimeframe {
         DAYS_30,
         DAYS_90,
@@ -118,7 +152,12 @@ object MerchantAnalyticsEngine {
         totalBudget: Double? = null
     ): List<MerchantSpendingStat> {
         if (limit <= 0) return emptyList()
-        val debits = transactions.filter { it.amount.isFinite() && it.amount < 0 && !it.isNetted }
+        val debits = transactions.filter {
+            it.amount.isFinite() &&
+                it.amount < 0 &&
+                !it.isNetted &&
+                parseCategorySafely(it.category) !in NON_EXPENSE_CATEGORIES
+        }
         if (debits.isEmpty()) return emptyList()
 
         val validBudget = totalBudget?.takeIf { it.isFinite() && it > 0.0 }
@@ -340,7 +379,12 @@ object MerchantAnalyticsEngine {
         minimumChargeThreshold: Double = 100.0
     ): List<OutlierTransaction> {
         if (!multiplier.isFinite() || multiplier <= 0.0 || !minimumChargeThreshold.isFinite()) return emptyList()
-        val debits = transactions.filter { it.amount.isFinite() && it.amount < 0 && !it.isNetted }
+        val debits = transactions.filter {
+            it.amount.isFinite() &&
+                it.amount < 0 &&
+                !it.isNetted &&
+                parseCategorySafely(it.category) !in NON_EXPENSE_CATEGORIES
+        }
         if (debits.isEmpty()) return emptyList()
 
         val latestDate = debits.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.maxOrNull()
@@ -542,56 +586,25 @@ object MerchantAnalyticsEngine {
         val words = norm.split(" ").filter { it.isNotBlank() }
         val simpleWords = simple.split(" ").filter { it.isNotBlank() }
         val simplePadded = " $simple "
-        val noiseWords = setOf(
-            "hypermarket", "supermarket", "market", "potraviny", "prodejna",
-            "store", "obchod", "cerpaci", "stanice", "phm", "benzin", "express", "city"
-        )
         if (simplePadded.contains(" e on ") || words.contains("eon") || simpleWords.contains("eon")) {
             return "eon"
         }
         if (simplePadded.contains(" h m ") || simpleWords.contains("hm")) {
             return "h m"
         }
-        val knownChains = listOf(
-            "albert", "billa", "lidl", "tesco", "kaufland", "penny", "globus", "coop", "zabka",
-            "rohlik", "kosik", "cez", "pre", "eon", "innogy", "shell", "orlen", "benzina", "mol", "omv",
-            "alza", "datart", "ikea", "mcdonald", "mcdonalds", "kfc", "dm", "rossmann", "teta", "notino"
-        )
-        for (chain in knownChains) {
+        for (chain in KNOWN_CHAINS) {
             if (words.contains(chain) || simpleWords.contains(chain)) {
                 return if (chain == "mcdonalds") "mcdonald" else chain
             }
         }
-        val cleanWords = words.filter { it !in noiseWords }
+        val cleanWords = words.filter { it !in NOISE_WORDS }
         if (cleanWords.isNotEmpty()) return cleanWords.joinToString(" ")
-        val cleanSimple = simpleWords.filter { it !in noiseWords }
+        val cleanSimple = simpleWords.filter { it !in NOISE_WORDS }
         return if (cleanSimple.isNotEmpty()) cleanSimple.joinToString(" ") else baseKey
     }
 
     private fun resolveDisplayName(txs: List<ImportedBankTransactionEntity>, merchantKey: String): String {
-        val prettyBrands = mapOf(
-            "albert" to "Albert",
-            "rohlik" to "Rohlík.cz",
-            "kosik" to "Košík.cz",
-            "billa" to "Billa",
-            "lidl" to "Lidl",
-            "tesco" to "Tesco",
-            "kaufland" to "Kaufland",
-            "penny" to "Penny Market",
-            "globus" to "Globus",
-            "cez" to "ČEZ",
-            "eon" to "E.ON",
-            "pre" to "PRE",
-            "innogy" to "Innogy",
-            "shell" to "Shell",
-            "orlen" to "Orlen",
-            "mol" to "MOL",
-            "omv" to "OMV",
-            "alza" to "Alza.cz",
-            "datart" to "Datart",
-            "ikea" to "IKEA"
-        )
-        prettyBrands[merchantKey]?.let { return it }
+        PRETTY_BRANDS[merchantKey]?.let { return it }
 
         for (tx in txs) {
             val candidate = tx.counterpartyName.ifBlank { tx.message }

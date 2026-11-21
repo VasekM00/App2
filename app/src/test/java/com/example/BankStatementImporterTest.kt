@@ -50,7 +50,10 @@ class BankStatementImporterTest {
             20.10.2026;777888/2010;Generali Penzijní společnost;-1 700,00;CZK;DPS Penzijko
         """.trimIndent()
 
-        val summary = BankStatementImporter.parseStatement(csobCsv.byteInputStream(Charsets.UTF_8))
+        val summary = BankStatementImporter.parseStatement(
+            csobCsv.byteInputStream(Charsets.UTF_8),
+            householdNames = listOf("Václav", "Eleonora")
+        )
 
         assertEquals(BankType.CSOB, summary.detectedBank)
         assertEquals("2026-10", summary.yearMonth)
@@ -165,7 +168,10 @@ class BankStatementImporterTest {
         )
 
         val pdfBytes = createSyntheticPdf(pdfLines)
-        val summary = BankStatementImporter.parseStatement(pdfBytes.inputStream())
+        val summary = BankStatementImporter.parseStatement(
+            pdfBytes.inputStream(),
+            householdNames = listOf("Václav", "Eleonora")
+        )
 
         assertEquals(BankType.MONETA, summary.detectedBank)
         assertEquals("2026-09", summary.yearMonth)
@@ -196,7 +202,10 @@ class BankStatementImporterTest {
         )
 
         val pdfBytes = createSyntheticPdf(pdfLines)
-        val summary = BankStatementImporter.parseStatement(pdfBytes.inputStream())
+        val summary = BankStatementImporter.parseStatement(
+            pdfBytes.inputStream(),
+            householdNames = listOf("Václav", "Eleonora")
+        )
 
         assertEquals(BankType.CSOB, summary.detectedBank)
         assertEquals("2026-10", summary.yearMonth)
@@ -220,7 +229,10 @@ class BankStatementImporterTest {
         )
 
         val pdfBytes = createSyntheticPdf(pdfLines)
-        val summary = BankStatementImporter.parseStatement(pdfBytes.inputStream())
+        val summary = BankStatementImporter.parseStatement(
+            pdfBytes.inputStream(),
+            householdNames = listOf("Václav", "Eleonora")
+        )
 
         assertEquals(BankType.MBANK, summary.detectedBank)
         assertEquals("2026-11", summary.yearMonth)
@@ -244,7 +256,10 @@ class BankStatementImporterTest {
         )
 
         val pdfBytes = createSyntheticPdf(pdfLines)
-        val summary = BankStatementImporter.parseStatement(pdfBytes.inputStream())
+        val summary = BankStatementImporter.parseStatement(
+            pdfBytes.inputStream(),
+            householdNames = listOf("Václav", "Eleonora")
+        )
 
         assertEquals(BankType.MBANK, summary.detectedBank)
         assertEquals("2026-11", summary.yearMonth)

@@ -206,6 +206,7 @@ class IncomeReactivityAndGiftTaxExemptionTest {
             bankName = "CSOB",
             date = "2026-11-05",
             amount = 16_000.0,
+            counterpartyAccount = "777888999/0300",
             counterpartyName = "Andrea Martinů",
             message = "Příspěvek na bydlení - převod z účtu",
             category = BankTransactionType.OTHER_INFLOW.name
@@ -213,11 +214,17 @@ class IncomeReactivityAndGiftTaxExemptionTest {
         val (reconciled, _) = CrossStatementReconciliationEngine.reconcileTransactions(
             transactions = listOf(parentGiftTx),
             yearMonth = "2026-11",
-            householdNames = listOf("Václav", "Martinů", "Eleonora")
+            householdNames = listOf("Václav", "Martinů", "Eleonora"),
+            knownParentalGiftAccounts = setOf("777888999/0300")
         )
         assertFalse(
             "Family gift from parent must never be netted as an internal transfer",
             reconciled.first().isNetted
+        )
+        assertEquals(
+            "Known parental gift account credit must be promoted to FAMILY_GIFT",
+            BankTransactionType.FAMILY_GIFT.name,
+            reconciled.first().category
         )
     }
 

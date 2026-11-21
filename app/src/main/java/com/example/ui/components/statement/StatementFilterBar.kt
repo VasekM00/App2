@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +51,9 @@ fun StatementFilterBar(
     allTransactions: List<ParsedBankTransaction>,
     modifier: Modifier = Modifier
 ) {
+    val monthCounts = remember(allTransactions, distinctMonths) {
+        distinctMonths.associateWith { ym -> allTransactions.count { it.date.startsWith(ym) } }
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -70,7 +74,7 @@ fun StatementFilterBar(
                     shape = RoundedCornerShape(8.dp)
                 )
                 distinctMonths.forEach { ym ->
-                    val mCount = allTransactions.count { it.date.startsWith(ym) }
+                    val mCount = monthCounts[ym] ?: 0
                     FilterChip(
                         selected = selectedMonthFilter == ym,
                         onClick = { onSelectMonthFilter(ym) },

@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -112,16 +113,18 @@ fun StatementTransactionRowItem(
                     }
                 }
 
-                val rawTitle = if (tx.counterpartyName.isNotBlank()) tx.counterpartyName else tx.message.ifBlank { "Transaction" }
-                val cleanTitle = BankStatementImporter.cleanPaymentDescription(rawTitle)
-
-                val cleanMessage = BankStatementImporter.cleanPaymentDescription(tx.message)
-                val distinctMessage = if (cleanMessage.isNotBlank() && !cleanMessage.equals(cleanTitle, ignoreCase = true)) cleanMessage else ""
-                val subtitle = when {
-                    tx.counterpartyAccount.isNotBlank() && distinctMessage.isNotBlank() -> "${tx.counterpartyAccount} · $distinctMessage"
-                    tx.counterpartyAccount.isNotBlank() -> tx.counterpartyAccount
-                    distinctMessage.isNotBlank() -> distinctMessage
-                    else -> ""
+                val (cleanTitle, subtitle) = remember(tx.counterpartyName, tx.message, tx.counterpartyAccount) {
+                    val rawTitle = if (tx.counterpartyName.isNotBlank()) tx.counterpartyName else tx.message.ifBlank { "Transaction" }
+                    val resolvedTitle = BankStatementImporter.cleanPaymentDescription(rawTitle)
+                    val cleanMessage = BankStatementImporter.cleanPaymentDescription(tx.message)
+                    val distinctMessage = if (cleanMessage.isNotBlank() && !cleanMessage.equals(resolvedTitle, ignoreCase = true)) cleanMessage else ""
+                    val resolvedSubtitle = when {
+                        tx.counterpartyAccount.isNotBlank() && distinctMessage.isNotBlank() -> "${tx.counterpartyAccount} · $distinctMessage"
+                        tx.counterpartyAccount.isNotBlank() -> tx.counterpartyAccount
+                        distinctMessage.isNotBlank() -> distinctMessage
+                        else -> ""
+                    }
+                    resolvedTitle to resolvedSubtitle
                 }
 
                 Text(

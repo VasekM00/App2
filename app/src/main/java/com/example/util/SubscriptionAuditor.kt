@@ -88,7 +88,7 @@ object SubscriptionAuditor {
         "metro music bar", "hvezdarna", "planetarium", "scala"
     )
 
-    private val VERIFIED_RECURRING_PROVIDERS = listOf(
+    private val PRE_NORMALIZED_VERIFIED_PROVIDERS: List<String> = listOf(
         // Media, Streaming & Cloud
         "spotify", "netflix", "youtube", "google", "apple", "disney", "hbo", "voyo", "prima plus",
         "skyshowtime", "canal plus", "canal+", "o2 tv", "sledovanitv", "lepsi tv", "kuki", "skylink",
@@ -108,7 +108,7 @@ object SubscriptionAuditor {
         // Insurance
         "kooperativa", "generali", "ceska pojistovna", "allianz", "uniqa", "pillow", "direct",
         "slavia", "vzp", "ozp", "vozp", "cpzp", "rbp", "pvzp", "pojisteni", "pojist", "povinne ruceni", "havarijni"
-    )
+    ).map { CzechMerchantCatalog.normalizeSimple(it) }.filter { it.isNotBlank() }.distinct()
 
     private val RECURRING_TEXT_HINTS = listOf(
         "predplatne", "pausal", "inkaso", "trvaly", "clenstvi", "clenske",
@@ -120,7 +120,7 @@ object SubscriptionAuditor {
         for (candidate in candidates) {
             if (candidate.isBlank()) continue
             val cleaned = BankStatementImporter.cleanPaymentDescription(candidate)
-            val query = CzechMerchantCatalog.suggestMerchantSearchQuery(cleaned)
+            val query = CzechMerchantCatalog.suggestMerchantSearchQueryFromCleaned(cleaned)
             val norm = if (query.isNotBlank()) CzechMerchantCatalog.normalize(query) else CzechMerchantCatalog.normalize(cleaned)
             val simple = if (query.isNotBlank()) CzechMerchantCatalog.normalizeSimple(query) else CzechMerchantCatalog.normalizeSimple(cleaned)
             if (simple == "e on") return "e on"
@@ -175,8 +175,7 @@ object SubscriptionAuditor {
         val rawWords = SPLIT_ALNUM_REGEX.split(simpleRaw).filter { it.isNotBlank() }
         val paddedKey = " $simpleKey "
         val paddedRaw = " $simpleRaw "
-        return VERIFIED_RECURRING_PROVIDERS.any { provider ->
-            val cleanProv = CzechMerchantCatalog.normalizeSimple(provider)
+        return PRE_NORMALIZED_VERIFIED_PROVIDERS.any { cleanProv ->
             when {
                 cleanProv.contains(' ') -> paddedKey.contains(" $cleanProv ") || paddedRaw.contains(" $cleanProv ")
                 cleanProv.length <= 4 -> keyWords.contains(cleanProv) || rawWords.contains(cleanProv)

@@ -11,6 +11,7 @@ import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
 import com.example.util.BankStatementImporter
+import com.example.util.BankType
 import com.example.util.FxRateService
 import com.example.util.InvestmentLotManager
 import com.example.util.MerchantCategoryManager
@@ -134,7 +135,7 @@ internal suspend fun runOneTimeMigrationsInternal(
     }
     if (!preferencesRepository.isFlagSet("merchant_rules_unified_v1")) {
         val curSettings = repository.settingsFlow.first()
-        val spRules = MerchantCategoryManager.getOverrides(application)
+        val spRules = MerchantCategoryManager.getOverrides(application, preferencesRepository.storeName)
         val dbRules = MerchantCategoryManager.parseRulesFromJson(curSettings.merchantRulesJson)
         if (spRules.isNotEmpty() || dbRules.isNotEmpty()) {
             val merged = spRules + dbRules
@@ -142,7 +143,7 @@ internal suspend fun runOneTimeMigrationsInternal(
             if (mergedJson != curSettings.merchantRulesJson) {
                 repository.saveSettings(curSettings.copy(merchantRulesJson = mergedJson))
             }
-            MerchantCategoryManager.saveAllOverrides(application, merged)
+            MerchantCategoryManager.saveAllOverrides(application, merged, preferencesRepository.storeName)
         }
         preferencesRepository.markFlag("merchant_rules_unified_v1", true)
     }
@@ -302,10 +303,11 @@ internal fun readStatementUrisSafely(
 
 internal fun buildSyntheticAuditTransactions(pending: StatementParseSummary): List<ImportedBankTransactionEntity> {
     return pending.transactions.mapIndexed { idx, pt ->
+        val txBank = if (pt.bankType != BankType.GENERIC) pt.bankType else pending.detectedBank
         ImportedBankTransactionEntity(
             id = -(idx + 1L),
             yearMonth = pending.yearMonth,
-            bankName = pending.detectedBank.name,
+            bankName = txBank.name,
             date = pt.date,
             amount = pt.amount,
             counterpartyAccount = pt.counterpartyAccount,
@@ -347,8 +349,8 @@ internal suspend fun clearAuxiliaryStoresInternal(
     preferencesRepository: AppPreferencesRepository
 ) {
     preferencesRepository.clearAllUserData()
-    MerchantCategoryManager.clearOverrides(application)
-    InvestmentLotManager.clearAll(application)
+    MerchantCategoryManager.clearOverrides(application, preferencesRepository.storeName)
+    InvestmentLotManager.clearAll(application, preferencesRepository.storeName)
     ReportShareHelper.clearExportCache(application)
     FxRateService.resetRates()
 }

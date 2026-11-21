@@ -2,8 +2,12 @@ package com.example
 
 import android.app.Application
 import android.net.Uri
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.data.AppDatabase
+import com.example.data.AppPreferencesRepository
+import com.example.data.FinancialRepository
 import com.example.ui.MainViewModel
 import com.example.util.BankType
 import kotlinx.coroutines.flow.first
@@ -17,23 +21,38 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.util.UUID
 
 /**
  * End-to-end verification of the real user flow: pick a bank statement file ->
  * preview parse summary -> confirm -> categorized ledger entry + bank badge persisted.
- * Runs against a real Room database on the device.
+ * Uses an isolated in-memory Room database and test preferences store so real app data is untouched.
  */
 @RunWith(AndroidJUnit4::class)
 class StatementImportInstrumentedTest {
 
     private lateinit var application: Application
+    private lateinit var db: AppDatabase
+    private lateinit var prefsName: String
     private lateinit var viewModel: MainViewModel
     private var tempFile: File? = null
 
     @Before
     fun setUp() {
         application = ApplicationProvider.getApplicationContext()
-        viewModel = MainViewModel(application)
+        db = Room.inMemoryDatabaseBuilder(application, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        prefsName = "test_statement_import_${UUID.randomUUID()}"
+        val repository = FinancialRepository(
+            db, db.settingsDao(), db.ledgerDao(), db.actionStateDao(), db.importedTransactionDao()
+        )
+        val preferencesRepository = AppPreferencesRepository(application, prefsName)
+        viewModel = MainViewModel(
+            application = application,
+            repository = repository,
+            preferencesRepository = preferencesRepository
+        )
     }
 
     @Test
@@ -92,5 +111,7 @@ class StatementImportInstrumentedTest {
     @After
     fun tearDown() {
         tempFile?.let { if (it.exists()) it.delete() }
+        runCatching { db.close() }
+        runCatching { application.deleteSharedPreferences(prefsName) }
     }
 }

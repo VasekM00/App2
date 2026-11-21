@@ -49,13 +49,13 @@ import com.example.ui.components.statement.StatementFilterBar
 import com.example.ui.components.statement.StatementImportHeader
 import com.example.ui.components.statement.StatementSummaryBar
 import com.example.ui.components.statement.StatementTransactionRowItem
-import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.OnBrandTeal
+import com.example.ui.tabs.bankBadgeColor
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
-import com.example.util.BankType
 import com.example.util.StatementParseSummary
+import com.example.util.statement.StatementTextDecoder
 
 private val YEAR_MONTH_REGEX = Regex("""\d{4}-\d{2}""")
 
@@ -72,28 +72,7 @@ fun StatementImportReviewDialog(
 ) {
     var editingTxIndex by remember { mutableStateOf<Int?>(null) }
 
-    val bankColor = when (summary.detectedBank) {
-        BankType.MONETA -> BrandTeal
-        BankType.CSOB -> BrandGold
-        BankType.MBANK -> Color(0xFFE11D48)
-        BankType.CESKA_SPORITELNA -> Color(0xFF2563EB)
-        BankType.KOMERCNI_BANKA -> Color(0xFFDC2626)
-        BankType.FIO -> Color(0xFF3B82F6)
-        BankType.RAIFFEISENBANK -> Color(0xFFD97706)
-        BankType.AIR_BANK -> Color(0xFF00A0E3)
-        BankType.UNICREDIT -> Color(0xFFE4002B)
-        BankType.CREDITAS -> Color(0xFF0D9488)
-        BankType.MAX_BANKA -> Color(0xFF9333EA)
-        BankType.PARTNERS -> Color(0xFF00838F)
-        BankType.PPF -> Color(0xFF0284C7)
-        BankType.JT -> Color(0xFFA1887F)
-        BankType.EQUA -> Color(0xFFEF6C00)
-        BankType.ING -> Color(0xFFFF6200)
-        BankType.OBERBANK -> Color(0xFF0D9488)
-        BankType.REVOLUT -> Color(0xFF3B82F6)
-        BankType.WISE -> Color(0xFF7BB661)
-        BankType.GENERIC -> MaterialTheme.colorScheme.primary
-    }
+    val bankColor = bankBadgeColor(summary.detectedBank.name)
 
     val distinctMonths = remember(summary.transactions) {
         summary.transactions.map { it.date.take(7) }.filter { it.matches(YEAR_MONTH_REGEX) }.distinct().sorted()
@@ -146,6 +125,14 @@ fun StatementImportReviewDialog(
         summary.transactions.mapIndexed { idx, tx -> idx to tx }
     }
 
+    val foldedSearchHaystacks = remember(summary.transactions) {
+        summary.transactions.map { tx ->
+            StatementTextDecoder.foldHeader(
+                "${tx.counterpartyName} ${tx.message} ${tx.category.name} ${tx.date} ${tx.counterpartyAccount}"
+            )
+        }
+    }
+
     val categoryTotals = remember(summary.transactions) {
         val active = summary.transactions.filter { !it.isExcluded }
         mapOf(
@@ -160,7 +147,7 @@ fun StatementImportReviewDialog(
         )
     }
 
-    val filteredTransactions = remember(activeFilterIndex, selectedMonthFilter, searchQuery, indexedTransactions) {
+    val filteredTransactions = remember(activeFilterIndex, selectedMonthFilter, searchQuery, indexedTransactions, foldedSearchHaystacks) {
         val baseList = if (selectedMonthFilter != null) {
             indexedTransactions.filter { (_, tx) -> tx.date.startsWith(selectedMonthFilter!!) }
         } else {
@@ -185,15 +172,12 @@ fun StatementImportReviewDialog(
             6 -> baseList.filter { (_, tx) -> !tx.isExcluded && tx.category == BankTransactionType.UNCATEGORIZED }
             else -> baseList
         }
-        if (searchQuery.isBlank()) {
+        val foldedQuery = StatementTextDecoder.foldHeader(searchQuery)
+        if (foldedQuery.isBlank()) {
             categoryFiltered
         } else {
-            val q = searchQuery.trim().lowercase(java.util.Locale.ROOT)
-            categoryFiltered.filter { (_, tx) ->
-                tx.counterpartyName.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    tx.message.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    tx.category.name.lowercase(java.util.Locale.ROOT).contains(q) ||
-                    tx.date.contains(q)
+            categoryFiltered.filter { (origIdx, _) ->
+                foldedSearchHaystacks.getOrNull(origIdx)?.contains(foldedQuery) == true
             }
         }
     }

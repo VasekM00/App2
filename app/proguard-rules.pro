@@ -33,8 +33,12 @@
 -keep class com.example.data.** { *; }
 -keep class com.example.domain.** { *; }
 
-# Manifest-declared FileProvider and Serializable / Enum banking models
+# Manifest-declared FileProvider, ViewModel constructors, and Serializable / Enum banking models
 -keep class androidx.core.content.FileProvider { *; }
+-keepclassmembers class com.example.ui.MainViewModel {
+    public <init>(android.app.Application);
+    public <init>(android.app.Application, androidx.lifecycle.SavedStateHandle);
+}
 -keep class com.example.util.ParsedBankTransaction { *; }
 -keep class com.example.util.StatementParseSummary { *; }
 -keep class com.example.util.BankType { *; }

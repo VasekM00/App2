@@ -135,51 +135,53 @@ object InvestmentLotManager {
         return if (parsed != null && parsed.isFinite()) parsed else fallback
     }
 
-    fun getLots(context: Context): List<UserInvestmentLot> = synchronized(prefsLock) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun getLots(context: Context, prefsName: String = PREFS_NAME): List<UserInvestmentLot> = synchronized(prefsLock) {
+        val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         val raw = if (prefs.contains(KEY_LOTS_JSON)) {
             try {
                 prefs.getString(KEY_LOTS_JSON, null)
             } catch (_: ClassCastException) {
                 null
             }
-        } else {
+        } else if (prefsName == PREFS_NAME) {
             val legacy = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
             try {
                 legacy.getString(KEY_LOTS_JSON, null)
             } catch (_: ClassCastException) {
                 null
             }
+        } else {
+            null
         }
         val jsonStr = raw ?: return emptyList()
         return parseLotsFromJson(jsonStr)
     }
 
-    fun saveLot(context: Context, lot: UserInvestmentLot) = synchronized(prefsLock) {
+    fun saveLot(context: Context, lot: UserInvestmentLot, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
         val safeLot = sanitizeLot(lot)
-        val current = getLots(context).toMutableList()
+        val current = getLots(context, prefsName).toMutableList()
         val index = current.indexOfFirst { it.id == safeLot.id }
         if (index != -1) {
             current[index] = safeLot
         } else {
             current.add(safeLot)
         }
-        persistLots(context, current)
+        persistLots(context, current, prefsName)
     }
 
-    fun deleteLot(context: Context, lotId: String) = synchronized(prefsLock) {
-        val current = getLots(context).filterNot { it.id == lotId }
-        persistLots(context, current)
+    fun deleteLot(context: Context, lotId: String, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
+        val current = getLots(context, prefsName).filterNot { it.id == lotId }
+        persistLots(context, current, prefsName)
     }
 
-    fun persistLots(context: Context, lots: List<UserInvestmentLot>) = synchronized(prefsLock) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun persistLots(context: Context, lots: List<UserInvestmentLot>, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
+        val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         prefs.edit { putString(KEY_LOTS_JSON, serializeLotsToJson(lots.map(::sanitizeLot))) }
     }
 
-    fun clearAll(context: Context) = synchronized(prefsLock) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit { clear() }
+    fun clearAll(context: Context, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
+        val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        prefs.edit { remove(KEY_LOTS_JSON) }
     }
 
     fun parseLotsFromJson(jsonStr: String): List<UserInvestmentLot> {

@@ -52,51 +52,34 @@ internal fun bankBadgeColor(bankName: String): Color {
     return when {
         bankName.contains("MONETA", ignoreCase = true) -> BrandTeal
         bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> BrandGold
-        bankName.contains("MBANK", ignoreCase = true) -> if (isDark) Color(0xFFFB7185) else Color(0xFFBE123C)
-        bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8)
-        bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> if (isDark) Color(0xFFF87171) else Color(0xFFB91C1C)
-        bankName.contains("FIO", ignoreCase = true) -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
-        bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> if (isDark) Color(0xFFFACC15) else Color(0xFFA16207)
-        bankName.contains("AIR_BANK", ignoreCase = true) -> if (isDark) Color(0xFFA3E635) else Color(0xFF4D7C0F)
-        bankName.contains("UNICREDIT", ignoreCase = true) -> if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE)
-        bankName.contains("CREDITAS", ignoreCase = true) -> if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E)
-        bankName.contains("REVOLUT", ignoreCase = true) -> if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
-        bankName.contains("WISE", ignoreCase = true) -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
-        else -> BrandTeal
+        else -> {
+            val resolved = runCatching { com.example.util.BankType.valueOf(bankName.trim().uppercase(java.util.Locale.ROOT)) }
+                .getOrElse {
+                    when {
+                        bankName.contains("MBANK", ignoreCase = true) -> com.example.util.BankType.MBANK
+                        bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> com.example.util.BankType.CESKA_SPORITELNA
+                        bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> com.example.util.BankType.KOMERCNI_BANKA
+                        bankName.contains("FIO", ignoreCase = true) -> com.example.util.BankType.FIO
+                        bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> com.example.util.BankType.RAIFFEISENBANK
+                        bankName.contains("AIR_BANK", ignoreCase = true) -> com.example.util.BankType.AIR_BANK
+                        bankName.contains("UNICREDIT", ignoreCase = true) -> com.example.util.BankType.UNICREDIT
+                        bankName.contains("CREDITAS", ignoreCase = true) -> com.example.util.BankType.CREDITAS
+                        bankName.contains("REVOLUT", ignoreCase = true) -> com.example.util.BankType.REVOLUT
+                        bankName.contains("WISE", ignoreCase = true) -> com.example.util.BankType.WISE
+                        else -> com.example.util.BankType.GENERIC
+                    }
+                }
+            if (resolved == com.example.util.BankType.GENERIC) BrandTeal
+            else Color(com.example.util.statement.BankDetector.bankColorHex(resolved, isDark))
+        }
     }
 }
 
-internal fun friendlyBankName(bankName: String): String = when {
-    bankName.contains("MONETA", ignoreCase = true) -> "Moneta"
-    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-    bankName.contains("MBANK", ignoreCase = true) -> "mBank"
-    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "Česká spořitelna"
-    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "Komerční banka"
-    bankName.contains("FIO", ignoreCase = true) -> "Fio banka"
-    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "Raiffeisenbank"
-    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air Bank"
-    bankName.contains("UNICREDIT", ignoreCase = true) -> "UniCredit"
-    bankName.contains("CREDITAS", ignoreCase = true) -> "Banka Creditas"
-    bankName.contains("REVOLUT", ignoreCase = true) -> "Revolut"
-    bankName.contains("WISE", ignoreCase = true) -> "Wise"
-    else -> bankName
-}
+internal fun friendlyBankName(bankName: String): String =
+    com.example.util.statement.BankDetector.friendlyBankName(bankName)
 
-internal fun bankShortBadge(bankName: String): String = when {
-    bankName.contains("MONETA", ignoreCase = true) -> "MON"
-    bankName.contains("CSOB", ignoreCase = true) || bankName.contains("ČSOB", ignoreCase = true) -> "ČSOB"
-    bankName.contains("MBANK", ignoreCase = true) -> "mB"
-    bankName.contains("CESKA_SPORITELNA", ignoreCase = true) -> "ČS"
-    bankName.contains("KOMERCNI_BANKA", ignoreCase = true) -> "KB"
-    bankName.contains("FIO", ignoreCase = true) -> "Fio"
-    bankName.contains("RAIFFEISENBANK", ignoreCase = true) -> "RB"
-    bankName.contains("AIR_BANK", ignoreCase = true) -> "Air"
-    bankName.contains("UNICREDIT", ignoreCase = true) -> "UC"
-    bankName.contains("CREDITAS", ignoreCase = true) -> "CR"
-    bankName.contains("REVOLUT", ignoreCase = true) -> "Rev"
-    bankName.contains("WISE", ignoreCase = true) -> "Wise"
-    else -> bankName.take(3).uppercase(java.util.Locale.ROOT)
-}
+internal fun bankShortBadge(bankName: String): String =
+    com.example.util.statement.BankDetector.bankShortBadge(bankName)
 
 @Composable
 internal fun BankStatementImportGuidanceDialog(

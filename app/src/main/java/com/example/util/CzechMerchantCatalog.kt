@@ -74,14 +74,38 @@ object CzechMerchantCatalog {
 
     private const val MIN_OVERRIDE_PATTERN_LENGTH = 3
 
-    /**
-     * Matches a transaction description against user custom overrides first,
-     * then against the built-in merchant intelligence catalog.
-     *
-     * @param rawDescription The raw description, counterparty name, or message.
-     * @param userOverrides User-defined overrides mapping merchant keywords/patterns to categories.
-     * @return The identified BankTransactionType, or null if no catalog match is found.
-     */
+    data class CompiledOverrideRule(
+        val normPattern: String,
+        val simplePattern: String,
+        val category: BankTransactionType
+    )
+
+    data class CompiledOverrides(
+        val rules: List<CompiledOverrideRule>
+    ) {
+        fun isEmpty(): Boolean = rules.isEmpty()
+
+        companion object {
+            val EMPTY = CompiledOverrides(emptyList())
+        }
+    }
+
+    fun compileOverrides(userOverrides: Map<String, BankTransactionType>): CompiledOverrides {
+        if (userOverrides.isEmpty()) return CompiledOverrides.EMPTY
+        val rules = userOverrides.entries
+            .sortedByDescending { it.key.trim().length }
+            .mapNotNull { (pattern, category) ->
+                val normPattern = normalize(pattern)
+                val simplePattern = normalizeSimple(pattern)
+                if (normPattern.isBlank() && simplePattern.isBlank()) {
+                    null
+                } else {
+                    CompiledOverrideRule(normPattern, simplePattern, category)
+                }
+            }
+        return CompiledOverrides(rules)
+    }
+
     private fun findUserOverrideMatch(
         norm: String,
         simpleNorm: String,
@@ -89,14 +113,10 @@ object CzechMerchantCatalog {
         simpleTokenSet: Set<String>,
         padded: String,
         simplePadded: String,
-        userOverrides: Map<String, BankTransactionType>
+        compiledOverrides: CompiledOverrides
     ): BankTransactionType? {
-        if (userOverrides.isEmpty()) return null
-        val sortedOverrides = userOverrides.entries.sortedByDescending { it.key.trim().length }
-        for ((pattern, category) in sortedOverrides) {
-            val normPattern = normalize(pattern)
-            val simplePattern = normalizeSimple(pattern)
-            if (normPattern.isBlank() && simplePattern.isBlank()) continue
+        if (compiledOverrides.isEmpty()) return null
+        for ((normPattern, simplePattern, category) in compiledOverrides.rules) {
             val tokenMatch = (normPattern.length >= 2 && normTokenSet.contains(normPattern)) ||
                 (simplePattern.length >= 2 && simpleTokenSet.contains(simplePattern))
             val phraseMatch = (normPattern.contains(' ') && padded.contains(" $normPattern ")) ||
@@ -115,6 +135,14 @@ object CzechMerchantCatalog {
         userOverrides: Map<String, BankTransactionType>
     ): BankTransactionType? {
         if (userOverrides.isEmpty()) return null
+        return matchUserOverrideOnly(rawDescription, compileOverrides(userOverrides))
+    }
+
+    fun matchUserOverrideOnly(
+        rawDescription: String,
+        compiledOverrides: CompiledOverrides
+    ): BankTransactionType? {
+        if (compiledOverrides.isEmpty()) return null
         val norm = normalize(rawDescription)
         val simpleNorm = normalizeSimple(rawDescription)
         if (norm.isBlank() && simpleNorm.isBlank()) return null
@@ -128,13 +156,18 @@ object CzechMerchantCatalog {
             simpleTokenSet = simpleTokenSet,
             padded = " $norm ",
             simplePadded = " $simpleNorm ",
-            userOverrides = userOverrides
+            compiledOverrides = compiledOverrides
         )
     }
 
     fun matchCategory(
         rawDescription: String,
         userOverrides: Map<String, BankTransactionType> = emptyMap()
+    ): BankTransactionType? = matchCategory(rawDescription, compileOverrides(userOverrides))
+
+    fun matchCategory(
+        rawDescription: String,
+        compiledOverrides: CompiledOverrides
     ): BankTransactionType? {
         val norm = normalize(rawDescription)
         val simpleNorm = normalizeSimple(rawDescription)
@@ -147,8 +180,6 @@ object CzechMerchantCatalog {
         val padded = " $norm "
         val simplePadded = " $simpleNorm "
 
-        // 1. Check user custom overrides longest-first (allow 2-letter isolated tokens like "o2", "dm", "cd",
-        //    multi-word 2+ char patterns as phrase boundaries, and 3+ char patterns via substring).
         findUserOverrideMatch(
             norm = norm,
             simpleNorm = simpleNorm,
@@ -156,10 +187,9 @@ object CzechMerchantCatalog {
             simpleTokenSet = simpleTokenSet,
             padded = padded,
             simplePadded = simplePadded,
-            userOverrides = userOverrides
+            compiledOverrides = compiledOverrides
         )?.let { return it }
 
-        // 2. Check precompiled built-in merchant rules, favoring more specific multi-word matches over single fallback words
         var bestCategory: BankTransactionType? = null
         var bestScore = 0
         for (rule in CATALOG_RULES) {
@@ -177,8 +207,12 @@ object CzechMerchantCatalog {
      * Clean a raw transaction description to extract a concise search query for online lookup.
      */
     fun suggestMerchantSearchQuery(rawText: String): String {
-        val clean = BankStatementImporter.cleanPaymentDescription(rawText)
-        var result = CORP_AND_CITY_SUGGEST_REGEX.replace(clean, " ")
+        val clean = com.example.util.statement.PaymentDescriptionCleaner.cleanPaymentDescription(rawText)
+        return suggestMerchantSearchQueryFromCleaned(clean)
+    }
+
+    fun suggestMerchantSearchQueryFromCleaned(cleanedText: String): String {
+        var result = CORP_AND_CITY_SUGGEST_REGEX.replace(cleanedText, " ")
         if (result.any { it.isLetter() }) {
             result = MID_NUMBERS_REGEX.replace(result, " ")
             result = TRAILING_NUM_REGEX.replace(result, " ")

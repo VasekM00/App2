@@ -50,9 +50,9 @@ object FxRateService {
     private val EUR_DETECT_REGEX = Regex("""(?<![\p{L}])eur(?![\p{L}])""")
     private val USD_DETECT_REGEX = Regex("""(?<![\p{L}])usd(?![\p{L}])""")
     private val GBP_DETECT_REGEX = Regex("""(?<![\p{L}])gbp(?![\p{L}])""")
-    private val PLN_DETECT_REGEX = Regex("""(?<![\p{L}])pln(?![\p{L}])""")
+    private val PLN_DETECT_REGEX = Regex("""(?<![\p{L}])(?:pln|zł)(?![\p{L}])|(?<=\d\s{0,2})zl(?![\p{L}])""")
     private val CHF_DETECT_REGEX = Regex("""(?<![\p{L}])chf(?![\p{L}])""")
-    private val HUF_DETECT_REGEX = Regex("""(?<![\p{L}])huf(?![\p{L}])""")
+    private val HUF_DETECT_REGEX = Regex("""(?<![\p{L}])huf(?![\p{L}])|(?<=\d\s{0,2})ft(?![\p{L}])""")
     private val CZK_DETECT_REGEX = Regex("""(?<![\p{L}])(?:czk|kč|kc)(?![\p{L}])""")
 
     data class CurrencyConversionDetails(

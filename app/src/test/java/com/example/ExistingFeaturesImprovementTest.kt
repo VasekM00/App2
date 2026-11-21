@@ -268,15 +268,16 @@ class ExistingFeaturesImprovementTest {
             Regex("""OTHER_EXPENSE_TYPES\s*=\s*setOf\([^)]*"GROCERIES"""").containsMatchIn(coordinatorText)
         )
 
-        val vmText = File(mainDir, "com/example/ui/MainViewModel.kt").readText()
+        val vmText = File(mainDir, "com/example/ui/MainViewModel.kt").readText() + "\n" +
+            File(mainDir, "com/example/ui/state/StatementImportController.kt").readText()
         assertTrue(
-            "MainViewModel must persist learned merchant rules to merchantRulesJson",
+            "StatementImportController / MainViewModel must persist learned merchant rules to merchantRulesJson",
             vmText.contains("merchantRulesJson = MerchantCategoryManager.serializeRulesToJson") ||
                 vmText.contains("merchantRulesJson = com.example.util.MerchantCategoryManager.serializeRulesToJson")
         )
         assertTrue(
-            "MainViewModel.deleteImportedStatement must preserve manual exclusions",
-            vmText.contains("it.nettingReason.startsWith(\"Manually \")")
+            "StatementImportController / MainViewModel.deleteImportedStatement must preserve manual exclusions",
+            vmText.contains("nettingReason.startsWith(\"Manually \")")
         )
 
         val milestonesCardText = File(mainDir, "com/example/ui/tabs/TrajectoryMilestonesTableCard.kt").readText()

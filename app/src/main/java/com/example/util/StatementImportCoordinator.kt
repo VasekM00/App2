@@ -164,7 +164,14 @@ class StatementImportCoordinator(
         val ym = try { YearMonth.parse(targetYm) } catch (_: Exception) { return emptyList() }
         val prev = repository.getTransactionsInDateRangeDirect(ym.atDay(1).minusDays(5).toString(), ym.atDay(1).minusDays(1).toString())
         val next = repository.getTransactionsInDateRangeDirect(ym.atEndOfMonth().plusDays(1).toString(), ym.atEndOfMonth().plusDays(5).toString())
-        return (prev + next).filter { !it.isNetted || !(it.nettingReason?.startsWith("Cross-") == true) }
+        return (prev + next).filter { !it.isNetted || !(it.nettingReason.startsWith("Cross-")) }
+    }
+
+    suspend fun fetchAllAdjacentTransactions(targetYm: String): List<ImportedBankTransactionEntity> {
+        val ym = try { YearMonth.parse(targetYm) } catch (_: Exception) { return emptyList() }
+        val prev = repository.getTransactionsInDateRangeDirect(ym.atDay(1).minusDays(5).toString(), ym.atDay(1).minusDays(1).toString())
+        val next = repository.getTransactionsInDateRangeDirect(ym.atEndOfMonth().plusDays(1).toString(), ym.atEndOfMonth().plusDays(5).toString())
+        return prev + next
     }
 
     suspend fun recalculateMonthLedger(targetYm: String) = withContext(Dispatchers.IO) {
@@ -250,6 +257,7 @@ class StatementImportCoordinator(
                     cur.spouseName.takeIf { !cur.isSingleHousehold && it.isNotBlank() }
                 )
                 val knownFamilyAccounts = parseAccountListJson(cur.knownFamilyAccountsJson).toSet()
+                val knownParentalGiftAccounts = parseAccountListJson(cur.knownParentalGiftAccountsJson).toSet()
 
                 // Stage per-bank closing balances in memory and persist only after DB commit.
                 val storedBalances = getStoredBankBalancesForMonth(targetYm).toMutableMap()
@@ -283,10 +291,11 @@ class StatementImportCoordinator(
                 val reconcileResult = CrossStatementReconciliationEngine.reconcileTransactionsWithBoundaries(
                     transactions = allMonthTxs,
                     yearMonth = targetYm,
+                    knownFamilyAccounts = knownFamilyAccounts,
                     boundaryTransactions = boundaryTxs,
                     bankBalances = storedBalances,
                     householdNames = householdNames,
-                    knownFamilyAccounts = knownFamilyAccounts
+                    knownParentalGiftAccounts = knownParentalGiftAccounts
                 )
                 val reconciledTxs = reconcileResult.currentMonthTxs
                 val auditReport = reconcileResult.auditReport
@@ -402,7 +411,8 @@ class StatementImportCoordinator(
         txIndex: Int,
         newCategory: BankTransactionType,
         rememberForMerchant: Boolean = false,
-        applyToAllMatching: Boolean = false
+        applyToAllMatching: Boolean = false,
+        persistMerchantOverride: Boolean = true
     ): StatementParseSummary {
         if (txIndex !in summary.transactions.indices) return summary
         val targetTx = summary.transactions[txIndex]
@@ -414,8 +424,8 @@ class StatementImportCoordinator(
         val merchantName = targetTx.counterpartyName.ifBlank { targetTx.message }
         val query = CzechMerchantCatalog.suggestMerchantSearchQuery(merchantName)
 
-        if (rememberForMerchant && query.isNotBlank()) {
-            MerchantCategoryManager.saveOverride(application, query, newCategory)
+        if (persistMerchantOverride && rememberForMerchant && query.isNotBlank()) {
+            MerchantCategoryManager.saveOverride(application, query, newCategory, preferencesRepository.storeName)
             val currentSettings = repository.settingsFlow.first()
             val currentRules = MerchantCategoryManager.parseRulesFromJson(currentSettings.merchantRulesJson).toMutableMap()
             val canonicalKey = MerchantCategoryManager.canonicalRuleKey(query)

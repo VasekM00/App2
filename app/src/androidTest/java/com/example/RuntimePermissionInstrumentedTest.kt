@@ -2,41 +2,55 @@ package com.example
 
 import android.app.Application
 import android.net.Uri
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.AppDatabase
+import com.example.data.AppPreferencesRepository
+import com.example.data.FinancialRepository
 import com.example.data.SettingsEntity
 import com.example.ui.MainViewModel
 import com.example.ui.UiMessage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class RuntimePermissionInstrumentedTest {
 
     private lateinit var application: Application
+    private lateinit var db: AppDatabase
+    private lateinit var prefsName: String
     private lateinit var viewModel: MainViewModel
     private var tempCsvFile: File? = null
 
     @Before
     fun setUp() {
         application = ApplicationProvider.getApplicationContext()
-        viewModel = MainViewModel(application)
+        db = Room.inMemoryDatabaseBuilder(application, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        prefsName = "test_runtime_perm_${UUID.randomUUID()}"
+        val repository = FinancialRepository(
+            db, db.settingsDao(), db.ledgerDao(), db.actionStateDao(), db.importedTransactionDao()
+        )
+        val preferencesRepository = AppPreferencesRepository(application, prefsName)
+        viewModel = MainViewModel(
+            application = application,
+            repository = repository,
+            preferencesRepository = preferencesRepository
+        )
     }
 
     @After
@@ -44,6 +58,8 @@ class RuntimePermissionInstrumentedTest {
         tempCsvFile?.let {
             if (it.exists()) it.delete()
         }
+        runCatching { db.close() }
+        runCatching { application.deleteSharedPreferences(prefsName) }
     }
 
     /**

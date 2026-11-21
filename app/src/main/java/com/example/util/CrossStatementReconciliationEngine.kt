@@ -1,6 +1,7 @@
 package com.example.util
 
 import com.example.data.ImportedBankTransactionEntity
+import com.example.util.statement.CzechValueParsers
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -66,28 +67,49 @@ object CrossStatementReconciliationEngine {
     private val KB_CODE_REGEX = Regex("""\bkb\b""")
     private val CS_CODE_REGEX = Regex("""\bcs\b""")
     private val FAMILY_GIFT_WORD_REGEX = Regex(
-        """\b(?:dar|dary|darek|darem|darovani|maminka|mamka|tatinek|tatka|babicka|dedecek|rodice|rodicu|tchyne|tchan)\b"""
+        """\b(?:dar|dary|darek|darem|darovani|maminka|mamka|tati|tatinek|tatka|babicka|dedecek|rodice|rodicu|tchyne|tchan)\b"""
+    )
+    private val FAMILY_PRISPEVEK_REGEX = Regex(
+        """\bprispevek\s+(?:na\s+(?:bydleni|najem|najemne|domacnost|dite|deti|studium|rodinu|zivobyti|vyzivne|kocarek|vybaveni)|od\b)"""
+    )
+    private val EMPLOYER_BENEFIT_REJECTION_REGEX = Regex(
+        """\b(?:stravovani|stravenk|obed|penzij|dip|dps|kultura|multisport|doprava|mobil|telefon|dovolen|benefity)\b"""
     )
 
-    private fun canonicalAccountKey(rawAccount: String): String {
-        val stripped = rawAccount.replace(" ", "").lowercase(Locale.ROOT).trim()
-        if (stripped.isEmpty()) return ""
-        val slashIdx = stripped.indexOf('/')
-        if (slashIdx == -1) return stripped.replace("-", "").trimStart('0')
-        val accPart = stripped.substring(0, slashIdx)
-        val bankPart = stripped.substring(slashIdx + 1)
-        val parts = accPart.split("-")
-            .map { it.trimStart('0').ifEmpty { "0" } }
-            .filter { it.isNotEmpty() }
-        val normalizedAcc = if (parts.size >= 2 && parts[0] == "0") {
-            parts.drop(1).joinToString("")
-        } else {
-            parts.joinToString("")
+    internal class NormalizedHouseholdContext(
+        val knownFamilyCanonical: Set<String>,
+        val knownParentalGiftCanonical: Set<String>,
+        val normalizedNames: List<List<String>>,
+        val allNameTokens: Set<String>
+    ) {
+        companion object {
+            fun from(
+                knownFamilyAccounts: Set<String>,
+                knownParentalGiftAccounts: Set<String>,
+                householdNames: Collection<String>
+            ): NormalizedHouseholdContext {
+                val familyCanon = knownFamilyAccounts.asSequence()
+                    .map { CzechValueParsers.canonicalAccountKey(it) }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
+                val giftCanon = knownParentalGiftAccounts.asSequence()
+                    .map { CzechValueParsers.canonicalAccountKey(it) }
+                    .filter { it.isNotEmpty() }
+                    .toSet()
+                val normNames = householdNames.asSequence()
+                    .map { CzechMerchantCatalog.normalizeSimple(it) }
+                    .filter { it.length >= 3 }
+                    .map { it.split(" ").filter { tok -> tok.isNotBlank() } }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .toList()
+                val allTokens = normNames.flatten().filter { it.length >= 3 }.toSet()
+                return NormalizedHouseholdContext(familyCanon, giftCanon, normNames, allTokens)
+            }
         }
-        return "$normalizedAcc/$bankPart"
     }
 
-    private fun isKnownFamilyAccount(canonicalTxAcc: String, knownCanonicalAccounts: Set<String>): Boolean {
+    private fun isKnownCanonicalMatch(canonicalTxAcc: String, knownCanonicalAccounts: Set<String>): Boolean {
         if (canonicalTxAcc.isEmpty() || knownCanonicalAccounts.isEmpty()) return false
         if (canonicalTxAcc in knownCanonicalAccounts) return true
         val accCore = canonicalTxAcc.substringBefore('/')
@@ -130,20 +152,37 @@ object CrossStatementReconciliationEngine {
         message: String,
         knownFamilyAccounts: Set<String> = emptySet(),
         isDebit: Boolean = false,
-        householdNames: List<String> = emptyList()
+        householdNames: Collection<String> = emptyList(),
+        knownParentalGiftAccounts: Set<String> = emptySet()
     ): Boolean {
-        val cleanAcc = canonicalAccountKey(counterpartyAccount)
-        if (cleanAcc.isNotEmpty() && knownFamilyAccounts.any { fam ->
-                val famKey = canonicalAccountKey(fam)
-                famKey.isNotEmpty() && (famKey == cleanAcc || (!famKey.contains('/') && famKey == cleanAcc.substringBefore('/')))
-            }
-        ) {
-            return true
+        val ctx = NormalizedHouseholdContext.from(knownFamilyAccounts, knownParentalGiftAccounts, householdNames)
+        return isSelfOrFamilyTransferInternal(
+            counterpartyName = counterpartyName,
+            counterpartyAccount = counterpartyAccount,
+            message = message,
+            isDebit = isDebit,
+            ctx = ctx
+        )
+    }
+
+    internal fun isSelfOrFamilyTransferInternal(
+        counterpartyName: String,
+        counterpartyAccount: String,
+        message: String,
+        isDebit: Boolean,
+        ctx: NormalizedHouseholdContext
+    ): Boolean {
+        val cleanAcc = CzechValueParsers.canonicalAccountKey(counterpartyAccount)
+
+        // Precedence 1: Incoming credits from parental gift accounts or matching family gift rules
+        // are 100% tax-exempt household inflows and must NEVER be netted as internal self-transfers.
+        if (!isDebit && isFamilyGiftContributionInternal(counterpartyName, message, cleanAcc, ctx.knownParentalGiftCanonical)) {
+            return false
         }
 
         val normAll = CzechMerchantCatalog.normalizeSimple("$counterpartyName $message")
 
-        // Rent and housing payments are never self-transfers
+        // Precedence 2: Rent and housing payments are never self-transfers.
         if (normAll.contains("najem") || normAll.contains("najmu") ||
             normAll.contains("cinze") || normAll.contains("fond oprav") ||
             SVJ_REGEX.containsMatchIn(normAll)
@@ -151,58 +190,48 @@ object CrossStatementReconciliationEngine {
             return false
         }
 
-        // Salaries, wages, and state parental benefits are employment/statutory income, never internal transfers
-        val isSalaryOrBenefit = normAll.contains("mzda") || normAll.contains("vyplata") ||
+        // Precedence 3: Salaries, wages, and state parental benefits are external/statutory income.
+        if (normAll.contains("mzda") || normAll.contains("vyplata") ||
             normAll.contains("rodicov") || normAll.contains("urad prace")
-        if (isSalaryOrBenefit) {
+        ) {
             return false
         }
 
-        // Incoming family gifts from parents/relatives are tax-exempt household inflows, never internal self-transfers
-        if (!isDebit && isFamilyGiftContribution(counterpartyName, message)) {
-            return false
+        // Precedence 4: Configured own household accounts.
+        if (isKnownCanonicalMatch(cleanAcc, ctx.knownFamilyCanonical)) {
+            return true
         }
 
+        // Precedence 5: Configured household member names (no hardcoded personal names).
         val normCp = CzechMerchantCatalog.normalizeSimple(counterpartyName)
         val normMsg = CzechMerchantCatalog.normalizeSimple(message)
-
         val cpTokens = normCp.split(" ").filter { it.isNotBlank() }
-        val normHouseholdNames = householdNames
-            .map { CzechMerchantCatalog.normalizeSimple(it) }
-            .filter { it.length >= 3 }
-        val allHouseholdTokens = normHouseholdNames
-            .flatMap { it.split(" ") }
-            .filter { it.length >= 3 }
-            .toSet()
-        val matchesConfiguredHouseholdName = cpTokens.isNotEmpty() && normHouseholdNames.any { name ->
-            val nameTokens = name.split(" ").filter { it.isNotBlank() }
+        val allTokens = normAll.split(" ").filter { it.isNotBlank() }
+
+        val matchesConfiguredInCounterparty = cpTokens.isNotEmpty() && ctx.normalizedNames.any { nameTokens ->
             if (nameTokens.size >= 2) {
                 nameTokens.all { tok -> tok in cpTokens }
             } else {
-                cpTokens == nameTokens || (cpTokens.size >= 2 && cpTokens.all { it in allHouseholdTokens })
+                cpTokens == nameTokens || (cpTokens.size >= 2 && cpTokens.all { it in ctx.allNameTokens })
             }
         }
-
-        val hasVaclavName = normCp.contains("vaclav martinu") || normCp.contains("martinu vaclav")
-        val hasEleonoraName = normCp.contains("eleonora martinu") || normCp.contains("martinu eleonora")
+        val matchesConfiguredFullNameAnywhere = ctx.normalizedNames.any { nameTokens ->
+            nameTokens.size >= 2 && nameTokens.all { tok -> tok in allTokens }
+        } || (ctx.allNameTokens.size >= 2 && allTokens.count { it in ctx.allNameTokens } >= 2)
 
         if (!isDebit) {
-            if (hasVaclavName || hasEleonoraName || matchesConfiguredHouseholdName) return true
+            if (matchesConfiguredInCounterparty) return true
             if (normMsg.contains("prevod z vlastniho uctu") || normMsg.contains("prevod ze sporeni")) return true
+            if (normAll.contains("revolut") && matchesConfiguredFullNameAnywhere) return true
         } else {
             val isPayerPrefix = normCp.contains("prikazce") || normCp.contains("platce") || normCp.contains("majitel")
-            val mentionsVaclav = (!isPayerPrefix && hasVaclavName) ||
-                normMsg.contains("pro vaclava") || normMsg.contains("prevod vaclavovi")
-            val mentionsEleonora = (!isPayerPrefix && hasEleonoraName) ||
-                normMsg.contains("pro eleonoru") || normMsg.contains("prevod eleonore")
-            val mentionsConfigured = !isPayerPrefix && matchesConfiguredHouseholdName
-            if (mentionsVaclav || mentionsEleonora || mentionsConfigured) return true
+            if (!isPayerPrefix && matchesConfiguredInCounterparty) return true
+            if (normAll.contains("revolut") && !isPayerPrefix && matchesConfiguredFullNameAnywhere) return true
         }
 
         // Explicit self-transfer keywords
         if (normAll.contains("vlastni prevod") || normAll.contains("prevod mezi ucty")) return true
         if (normAll.contains("sporici ucet") || normAll.contains("prevod na sporeni") || normAll.contains("prevod ze sporeni")) return true
-        if (normAll.contains("sent from revolut") || (normAll.contains("revolut") && normAll.contains("martinu"))) return true
 
         // mBank micro-savings and goals (mSporeni / Cile)
         if (isMbankGoalOrMsporeni(counterpartyName, message)) return true
@@ -222,15 +251,42 @@ object CrossStatementReconciliationEngine {
 
     fun isFamilyGiftContribution(
         counterpartyName: String,
-        message: String
+        message: String,
+        counterpartyAccount: String = "",
+        knownParentalGiftAccounts: Set<String> = emptySet()
     ): Boolean {
+        val cleanAcc = CzechValueParsers.canonicalAccountKey(counterpartyAccount)
+        val giftCanonical = knownParentalGiftAccounts.asSequence()
+            .map { CzechValueParsers.canonicalAccountKey(it) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        return isFamilyGiftContributionInternal(counterpartyName, message, cleanAcc, giftCanonical)
+    }
+
+    internal fun isFamilyGiftContributionInternal(
+        counterpartyName: String,
+        message: String,
+        canonicalCounterpartyAcc: String,
+        knownParentalGiftCanonical: Set<String>
+    ): Boolean {
+        if (isKnownCanonicalMatch(canonicalCounterpartyAcc, knownParentalGiftCanonical)) {
+            return true
+        }
         val norm = CzechMerchantCatalog.normalizeSimple("$counterpartyName $message")
         if (norm.isBlank()) return false
         if (norm.contains("rodicovsk") || norm.contains("urad prace")) return false
-        val hasKnownFamilyPhrase = norm.contains("andrea martinu") ||
-            norm.contains("petr martinu") ||
-            norm.contains("prispevek na") ||
-            norm.contains("prispevek od") ||
+
+        val isCharityOrEmployment = norm.contains("nadace") ||
+            norm.contains("charita") ||
+            norm.contains("darcov") ||
+            norm.contains("mzda") ||
+            norm.contains("vyplata") ||
+            norm.contains("zamestnavatel") ||
+            EMPLOYER_BENEFIT_REJECTION_REGEX.containsMatchIn(norm)
+        if (isCharityOrEmployment) return false
+
+        val hasKnownFamilyPhrase = norm.contains("prispevek od") ||
+            FAMILY_PRISPEVEK_REGEX.containsMatchIn(norm) ||
             norm.contains("dar od rodiny") ||
             norm.contains("rodinny dar") ||
             norm.contains("financni podpora") ||
@@ -251,13 +307,7 @@ object CrossStatementReconciliationEngine {
             norm.contains("svatebni dar") ||
             norm.contains("kapesne")
         if (hasKnownFamilyPhrase) return true
-        val isCharityOrEmployment = norm.contains("nadace") ||
-            norm.contains("charita") ||
-            norm.contains("darcov") ||
-            norm.contains("mzda") ||
-            norm.contains("vyplata") ||
-            norm.contains("zamestnavatel")
-        return !isCharityOrEmployment && FAMILY_GIFT_WORD_REGEX.containsMatchIn(norm)
+        return FAMILY_GIFT_WORD_REGEX.containsMatchIn(norm)
     }
 
     private fun parseDate(dateStr: String): LocalDate? {
@@ -292,10 +342,17 @@ object CrossStatementReconciliationEngine {
         knownFamilyAccounts: Set<String> = emptySet(),
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
         bankBalances: Map<String, Double> = emptyMap(),
-        householdNames: List<String> = emptyList()
+        householdNames: Collection<String> = emptyList(),
+        knownParentalGiftAccounts: Set<String> = emptySet()
     ): Pair<List<ImportedBankTransactionEntity>, CrossStatementAuditReport> {
         val result = reconcileTransactionsWithBoundaries(
-            transactions, yearMonth, knownFamilyAccounts, boundaryTransactions, bankBalances, householdNames
+            transactions = transactions,
+            yearMonth = yearMonth,
+            knownFamilyAccounts = knownFamilyAccounts,
+            boundaryTransactions = boundaryTransactions,
+            bankBalances = bankBalances,
+            householdNames = householdNames,
+            knownParentalGiftAccounts = knownParentalGiftAccounts
         )
         return Pair(result.currentMonthTxs, result.auditReport)
     }
@@ -306,6 +363,7 @@ object CrossStatementReconciliationEngine {
         val parsedDate: LocalDate?,
         val absAmount: Double,
         val isSelfTransfer: Boolean,
+        val isKnownParentalGift: Boolean,
         val normName: String,
         val normNameIsBankLabel: Boolean,
         val canonicalAccount: String,
@@ -318,30 +376,29 @@ object CrossStatementReconciliationEngine {
     private fun buildTxMeta(
         index: Int,
         tx: ImportedBankTransactionEntity,
-        knownFamilyAccounts: Set<String>,
-        knownFamilyCanonical: Set<String>,
-        householdNames: List<String> = emptyList()
+        ctx: NormalizedHouseholdContext
     ): TxMeta {
         val isDebit = tx.amount < 0
-        val cleanAcc = canonicalAccountKey(tx.counterpartyAccount)
+        val cleanAcc = CzechValueParsers.canonicalAccountKey(tx.counterpartyAccount)
         val normName = CzechMerchantCatalog.normalizeSimple(tx.counterpartyName)
+        val isGiftAcc = !isDebit && isKnownCanonicalMatch(cleanAcc, ctx.knownParentalGiftCanonical)
         return TxMeta(
             index = index,
             tx = tx,
             parsedDate = parseDate(tx.date),
             absAmount = abs(tx.amount),
-            isSelfTransfer = isSelfOrFamilyTransfer(
+            isSelfTransfer = isSelfOrFamilyTransferInternal(
                 counterpartyName = tx.counterpartyName,
                 counterpartyAccount = tx.counterpartyAccount,
                 message = tx.message,
-                knownFamilyAccounts = knownFamilyAccounts,
                 isDebit = isDebit,
-                householdNames = householdNames
+                ctx = ctx
             ),
+            isKnownParentalGift = isGiftAcc,
             normName = normName,
             normNameIsBankLabel = normName.isNotEmpty() && bankCodeForBankName(tx.counterpartyName) != null,
             canonicalAccount = cleanAcc,
-            isKnownFamilyAcc = isKnownFamilyAccount(cleanAcc, knownFamilyCanonical),
+            isKnownFamilyAcc = !isGiftAcc && isKnownCanonicalMatch(cleanAcc, ctx.knownFamilyCanonical),
             routingBankCode = tx.counterpartyAccount.split("/").getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() },
             ownBankCode = bankCodeForBankName(tx.bankName),
             normBankName = CzechMerchantCatalog.normalizeSimple(tx.bankName)
@@ -358,7 +415,8 @@ object CrossStatementReconciliationEngine {
         if (daysDiff !in -1..CLEARING_WINDOW_DAYS) return null
 
         if (debit.tx.category == BankTransactionType.FAMILY_GIFT.name ||
-            credit.tx.category == BankTransactionType.FAMILY_GIFT.name
+            credit.tx.category == BankTransactionType.FAMILY_GIFT.name ||
+            credit.isKnownParentalGift
         ) {
             return null
         }
@@ -377,7 +435,6 @@ object CrossStatementReconciliationEngine {
             val dHasName = debit.normName.isNotEmpty() && !debit.normNameIsBankLabel
             val cHasName = credit.normName.isNotEmpty() && !credit.normNameIsBankLabel
             if (dHasName && cHasName && debit.normName != credit.normName) return null
-            // A named non-self third-party counterparty on one leg cannot match a blank counterparty via routing-code coincidence.
             if (dHasName xor cHasName) return null
         }
 
@@ -388,7 +445,6 @@ object CrossStatementReconciliationEngine {
         val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
             debitExplicitInternal || creditExplicitInternal || sameAccountKnownFamily
 
-        // Within the same bank, require explicit self-transfer/account evidence; across different banks, matching non-external transfers pair cleanly
         if (!isCrossBank && !isSelfOrExplicitTransfer) {
             return null
         }
@@ -455,26 +511,39 @@ object CrossStatementReconciliationEngine {
         knownFamilyAccounts: Set<String> = emptySet(),
         boundaryTransactions: List<ImportedBankTransactionEntity> = emptyList(),
         bankBalances: Map<String, Double> = emptyMap(),
-        householdNames: List<String> = emptyList()
+        householdNames: Collection<String> = emptyList(),
+        knownParentalGiftAccounts: Set<String> = emptySet()
     ): ReconcileResult {
         val workingList = transactions.map { it.copy() }.toMutableList()
         val workingBoundary = boundaryTransactions.map { it.copy() }.toMutableList()
         val modifiedBoundaryIndices = mutableSetOf<Int>()
-        val knownFamilyCanonical = knownFamilyAccounts
-            .map { canonicalAccountKey(it) }
-            .filter { it.isNotEmpty() }
-            .toSet()
+        val ctx = NormalizedHouseholdContext.from(knownFamilyAccounts, knownParentalGiftAccounts, householdNames)
 
-        // 1. Initial pass: identify known self-transfers and family contributions
+        // 1. Initial pass: ensure parental gift account credits stay FAMILY_GIFT (never netted),
+        // and identify known self-transfers.
         for (i in workingList.indices) {
             val tx = workingList[i]
+            if (tx.nettingReason.startsWith("Manually ")) continue
+
+            val cleanAcc = CzechValueParsers.canonicalAccountKey(tx.counterpartyAccount)
+            if (tx.amount > 0 && isKnownCanonicalMatch(cleanAcc, ctx.knownParentalGiftCanonical)) {
+                if (tx.category != BankTransactionType.FAMILY_GIFT.name || tx.isNetted) {
+                    workingList[i] = tx.copy(
+                        isNetted = false,
+                        category = BankTransactionType.FAMILY_GIFT.name,
+                        nettingReason = "",
+                        matchedTxId = null
+                    )
+                }
+                continue
+            }
+
             if (tx.isNetted ||
                 tx.category == BankTransactionType.HOUSING_RENT.name ||
-                tx.category == BankTransactionType.FAMILY_GIFT.name ||
-                tx.nettingReason.startsWith("Manually ")
+                tx.category == BankTransactionType.FAMILY_GIFT.name
             ) continue
 
-            if (isSelfOrFamilyTransfer(tx.counterpartyName, tx.counterpartyAccount, tx.message, knownFamilyAccounts, isDebit = tx.amount < 0, householdNames = householdNames)) {
+            if (isSelfOrFamilyTransferInternal(tx.counterpartyName, tx.counterpartyAccount, tx.message, isDebit = tx.amount < 0, ctx = ctx)) {
                 val reason = when {
                     isMbankGoalOrMsporeni(tx.counterpartyName, tx.message) ->
                         "mBank internal transfer (mSpoření / Cíl)"
@@ -503,7 +572,7 @@ object CrossStatementReconciliationEngine {
                     (!tx.isNetted || !isConfirmedPair(tx)) &&
                     !tx.nettingReason.startsWith("Manually ")
             }
-            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, ctx) }
 
         val currentCredits = workingList.withIndex()
             .filter { (_, tx) ->
@@ -512,7 +581,7 @@ object CrossStatementReconciliationEngine {
                     (!tx.isNetted || !isConfirmedPair(tx)) &&
                     !tx.nettingReason.startsWith("Manually ")
             }
-            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, ctx) }
 
         val currentCreditBuckets = indexByAmountBucket(currentCredits)
         for (debitMeta in currentDebits) {
@@ -554,7 +623,7 @@ object CrossStatementReconciliationEngine {
                     (!tx.isNetted || !isConfirmedPair(tx)) &&
                     !tx.nettingReason.startsWith("Manually ")
             }
-            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, ctx) }
         val remainingDebits = currentDebits.filter { it.index !in pairedWorkingIndices }
 
         val boundaryCreditBuckets = indexByAmountBucket(boundaryCredits)
@@ -597,7 +666,7 @@ object CrossStatementReconciliationEngine {
                     tx.category != BankTransactionType.HOUSING_RENT.name &&
                     !tx.nettingReason.startsWith("Manually ")
             }
-            .map { (idx, tx) -> buildTxMeta(idx, tx, knownFamilyAccounts, knownFamilyCanonical, householdNames) }
+            .map { (idx, tx) -> buildTxMeta(idx, tx, ctx) }
         val remainingCredits = currentCredits.filter { it.index !in pairedWorkingIndices }
 
         val boundaryDebitBuckets = indexByAmountBucket(boundaryDebits)
@@ -666,7 +735,7 @@ object CrossStatementReconciliationEngine {
     }
 
     private fun isConfirmedPair(tx: ImportedBankTransactionEntity): Boolean {
-        val reason = tx.nettingReason ?: return false
+        val reason = tx.nettingReason
         return reason.startsWith("Cross-account") || reason.startsWith("Cross-month")
     }
 }

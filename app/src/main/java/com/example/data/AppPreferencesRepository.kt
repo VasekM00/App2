@@ -36,6 +36,7 @@ class AppPreferencesRepository(
     context: Context,
     private val prefsName: String = DEFAULT_PREFS_NAME
 ) {
+    val storeName: String get() = prefsName
     private val appContext: Context = context.applicationContext
     private val prefsLock = Any()
 

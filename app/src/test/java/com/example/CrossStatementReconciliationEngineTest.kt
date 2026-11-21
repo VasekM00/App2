@@ -10,13 +10,20 @@ import org.junit.Test
 
 class CrossStatementReconciliationEngineTest {
 
+    private val defaultHouseholdNames = listOf("Vaclav Martinu", "Eleonora Martinu")
+
     @Test
     fun testSelfOrFamilyTransferKeywordDetection() {
-        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("MARTINU VACLAV", "", "Platba"))
-        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Eleonora Martinu", "", "Prevod"))
-        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("", "", "Sent from Revolut Vaclav Martinu"))
+        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("MARTINU VACLAV", "", "Platba", householdNames = defaultHouseholdNames))
+        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Eleonora Martinu", "", "Prevod", householdNames = defaultHouseholdNames))
+        assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("", "", "Sent from Revolut Vaclav Martinu", householdNames = defaultHouseholdNames))
         assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Neznamy", "", "vlastni prevod na sporici ucet"))
         assertTrue(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Neznamy", "123456789/0800", "Platba", setOf("123456789/0800")))
+
+        // Unconfigured personal names or bare Revolut transfers must NOT be hardcoded as self-transfers
+        assertFalse(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("MARTINU VACLAV", "", "Platba"))
+        assertFalse(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Eleonora Martinu", "", "Prevod"))
+        assertFalse(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("", "", "Sent from Revolut Karel Novak"))
 
         // Legitimate third-party transactions should NOT be flagged as self-transfers
         assertFalse(CrossStatementReconciliationEngine.isSelfOrFamilyTransfer("Albert Ceska republika s.r.o.", "", "Nakup potravin"))
@@ -29,7 +36,18 @@ class CrossStatementReconciliationEngineTest {
         assertTrue(CrossStatementReconciliationEngine.isFamilyGiftContribution("Andrea Martinu", "Dar"))
         assertTrue(CrossStatementReconciliationEngine.isFamilyGiftContribution("Petr Martinu", "Prispevek na bydleni"))
         assertTrue(CrossStatementReconciliationEngine.isFamilyGiftContribution("Babicka", "dar od rodiny"))
+        assertTrue(
+            CrossStatementReconciliationEngine.isFamilyGiftContribution(
+                counterpartyName = "Parent Account",
+                message = "Prevod",
+                counterpartyAccount = "555666/0800",
+                knownParentalGiftAccounts = setOf("555666/0800")
+            )
+        )
 
+        // Unconfigured personal names without gift keywords and employer "prispevek na stravovani" must NOT match as family gift
+        assertFalse(CrossStatementReconciliationEngine.isFamilyGiftContribution("Andrea Martinu", "Prevod"))
+        assertFalse(CrossStatementReconciliationEngine.isFamilyGiftContribution("Zamestnavatel", "Prispevek na stravovani"))
         assertFalse(CrossStatementReconciliationEngine.isFamilyGiftContribution("Zamestnavatel", "Bonus"))
     }
 
@@ -149,7 +167,8 @@ class CrossStatementReconciliationEngineTest {
 
         val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
             transactions = listOf(revolutDeposit, salaryTx),
-            yearMonth = "2026-07"
+            yearMonth = "2026-07",
+            householdNames = defaultHouseholdNames
         )
 
         // Revolut deposit is netted as single-side self-transfer
@@ -235,7 +254,11 @@ class CrossStatementReconciliationEngineTest {
         )
 
         val transactions = listOf(monetaSalary, csobSalary, monetaRent, csobGroceries, transferDebit, transferCredit)
-        val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(transactions, "2026-08")
+        val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
+            transactions = transactions,
+            yearMonth = "2026-08",
+            householdNames = defaultHouseholdNames
+        )
 
         // 1. Matched transfer pair found
         assertEquals(1, auditReport.matchedPairs.size)
@@ -286,7 +309,8 @@ class CrossStatementReconciliationEngineTest {
 
         val (reconciled, auditReport) = CrossStatementReconciliationEngine.reconcileTransactions(
             transactions = listOf(rentDebit, revolutCredit),
-            yearMonth = "2026-07"
+            yearMonth = "2026-07",
+            householdNames = defaultHouseholdNames
         )
 
         // Rent payment must NOT be netted out as self transfer
