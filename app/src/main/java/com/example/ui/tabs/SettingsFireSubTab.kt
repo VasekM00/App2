@@ -57,6 +57,7 @@ fun LazyListScope.settingsFireSubTab(
     onShowInfo: (MetricInfo) -> Unit,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
+    val snap = state.snapshot
     val s = state.settings
     fun patchSettings(transform: (SettingsEntity) -> SettingsEntity) {
         dispatchSettingsPatch(s, onUpdateSettings, onReduceSettings, transform)
@@ -68,9 +69,9 @@ fun LazyListScope.settingsFireSubTab(
     item {
         SettingsGroupCard(
             title = "Balances & Cash Reserve",
-            subtitle = "Liquid ${fmtCompact(state.currentLiquidPortfolio)} · Pension ${fmtCompact(state.currentPensionPortfolio)}",
+            subtitle = "Liquid ${fmtCompact(snap.investedLiquidTotal)} · Pension ${fmtCompact(snap.pensionTotal)}",
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.netWorthTotal),
+            badgeText = fmtCZK(snap.netWorthTotal),
             badgeColor = BrandTeal,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,
@@ -269,7 +270,7 @@ fun LazyListScope.settingsFireSubTab(
             title = "Monthly Investing",
             subtitle = "ETF ${fmtCompact(s.portuDcaMonthly + if (s.isSingleHousehold) 0.0 else s.ePortuDcaMonthly)} · Pension ${fmtCompact(s.dipContributionMonthly + s.dpsOwnContributionMonthly + if (s.isSingleHousehold) 0.0 else (s.eDipContributionMonthly + s.eDpsOwnContributionMonthly))}",
             initiallyExpanded = false,
-            badgeText = fmtCompact(state.investMonthlyTotal) + "/month",
+            badgeText = fmtCompact(snap.monthlyTotalInvesting) + "/month",
             badgeColor = GoodGreen,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,
@@ -402,7 +403,7 @@ fun LazyListScope.settingsFireSubTab(
             NumberSettingField(label = "Lifestyle Cost at FIRE (Kč monthly)", value = s.lifestyleCostAtFireMonthly, onValueChange = { v -> patchSettings { it.copy(lifestyleCostAtFireMonthly = v) } })
             if (s.lifestyleCostAtFireMonthly <= 0.0) {
                 Text(
-                    text = "Linked to current living expenses: ${fmtCZK(state.totalLivingCostMonthly)} monthly",
+                    text = "Linked to current living expenses: ${fmtCZK(snap.monthlyLivingCosts)} monthly",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp

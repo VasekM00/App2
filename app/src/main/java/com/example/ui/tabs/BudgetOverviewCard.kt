@@ -170,7 +170,8 @@ internal fun BudgetOverviewCard(
         // 3. Subscription & Fixed Debit Auditor Card
         SubscriptionAuditorCard(
             transactions = allImportedTransactions,
-            swrPct = state.settings.safeWithdrawalRatePct,
+            swrPct = state.effectiveSettings.safeWithdrawalRatePct,
+            safetyBufferPct = state.effectiveSettings.safetyBufferPct,
             dismissedMerchantKeys = dismissedSubscriptionMerchants,
             onDismissMerchant = onDismissSubscription,
             onRestoreMerchant = onRestoreSubscription,
@@ -205,12 +206,14 @@ internal fun BudgetOverviewCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 6. Monthly Savings & Investments Allocation Card (includes emergency reserve build contribution)
-        val emergencyReserveContrib = FinancialEngine.monthlyEmergencyReserveContribution(state.settings)
-        val totalMonthlySavingsAndDca = FinancialEngine.monthlySavingsAndInvestmentTotal(state.settings)
-        val isManualReserve = state.settings.emergencyReserveMonthlyOverride.isFinite() &&
-            state.settings.emergencyReserveMonthlyOverride >= 0.0
-        val allocationsInfo = remember(state.settings) {
-            CashFlowMetricInfos.savingsAndInvestmentAllocations(state.settings)
+        val snap = state.snapshot
+        val sEff = state.effectiveSettings
+        val emergencyReserveContrib = snap.monthlyReserveContribution
+        val totalMonthlySavingsAndDca = snap.monthlySavingsAndInvestingTotal
+        val isManualReserve = sEff.emergencyReserveMonthlyOverride.isFinite() &&
+            sEff.emergencyReserveMonthlyOverride >= 0.0
+        val allocationsInfo = remember(sEff) {
+            CashFlowMetricInfos.savingsAndInvestmentAllocations(sEff)
         }
 
         Card(

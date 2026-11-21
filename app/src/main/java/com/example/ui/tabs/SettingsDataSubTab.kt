@@ -372,14 +372,17 @@ fun LazyListScope.settingsDataSubTab(
 
             OutlinedButton(
                 onClick = {
+                    val snap = state.snapshot
+                    val sEff = state.effectiveSettings
                     val summary = buildString {
-                        appendLine("Financial Summary (${s.baseYear})")
-                        appendLine("- Net Worth: ${fmtCZK(state.netWorthTotal)}")
-                        appendLine("- Monthly Expenses: ${fmtCZK(state.totalLivingCostMonthly)}")
-                        appendLine("- Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
-                        appendLine("- FIRE Target: ${fmtCZK(state.fireBaseTargetToday)} (${fmtPct(s.safeWithdrawalRatePct)} SWR)")
-                        appendLine("- Dual FIRE ETA: ${state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
-                        appendLine("- Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve)} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths)} months)")
+                        appendLine("Financial Summary (${sEff.baseYear})")
+                        appendLine("- Net Worth: ${fmtCZK(snap.netWorthTotal)}")
+                        appendLine("- Monthly Expenses: ${fmtCZK(snap.monthlyLivingCosts)}")
+                        appendLine("- Monthly Investments (DCA): ${fmtCZK(snap.monthlyTotalInvesting)}")
+                        appendLine("- FIRE Target: ${fmtCZK(snap.activeFireTargetToday)} (${fmtPct(sEff.safeWithdrawalRatePct)} SWR)")
+                        val fireLabel = if (sEff.isSingleHousehold) "Projected FIRE ETA" else "Projected Dual FIRE ETA"
+                        appendLine("- $fireLabel: ${snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years"}")
+                        appendLine("- Emergency Reserve: ${fmtCZK(snap.emergencyCashTotal)} (${String.format(java.util.Locale.ROOT, "%.1f", snap.emergencyRunwayMonths)} months)")
                     }
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("Financial Summary", summary)

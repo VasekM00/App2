@@ -157,12 +157,9 @@ internal fun AddLedgerEntryDialog(
     val totalExpenses = valExpR + valExpL
 
     val netFlow = totalInflows - totalExpenses
-    val baselineExp = state.totalLivingCostMonthly
-    val baselineInc = remember(state.currentIncome, isSingle) {
-        val baseE = if (isSingle) 0.0 else (state.currentIncome.eleonoraSalary.takeIf { it > 0 } ?: state.currentIncome.benefit)
-        state.currentIncome.vaclavNet + baseE
-    }
-    val baselineSurplus = baselineInc - baselineExp
+    val baselineExp = state.snapshot.monthlyLivingCosts
+    val baselineInc = state.snapshot.monthlyTakeHomeInflows
+    val baselineSurplus = state.snapshot.monthlyLeftoverBeforeInvesting
     val surplusDiff = netFlow - baselineSurplus
 
     AlertDialog(

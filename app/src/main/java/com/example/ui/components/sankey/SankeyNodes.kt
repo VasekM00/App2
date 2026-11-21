@@ -41,14 +41,15 @@ fun buildInflowNodes(
     cBlue: Color = BrandBlueDarkTheme,
     isDark: Boolean = true
 ): List<SankeyNode> {
-    val s = state.settings
+    val s = state.effectiveSettings
+    val snap = state.snapshot
     val currentInc = state.currentIncome
     val cSpouse = if (isDark) Color(0xFF14B8A6) else Color(0xFF0F766E)
     val cGift = cGreen
     val cLecture = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7)
     val cOther = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
 
-    val safeTotalMonthly = currentInc.totalMonthly.finiteOrZero().coerceAtLeast(0.0)
+    val safeTotalMonthly = snap.monthlyTakeHomeInflows.finiteOrZero().coerceAtLeast(0.0)
     val safeVaclavNet = currentInc.vaclavNet.finiteOrZero().coerceAtLeast(0.0)
     val safeSpouseNet = currentInc.eleonoraSalary.finiteOrZero().coerceAtLeast(0.0)
     val safeVouchers = currentInc.vouchers.finiteOrZero().coerceAtLeast(0.0)
@@ -60,23 +61,40 @@ fun buildInflowNodes(
             currentInc.eleonoraOther.finiteOrZero() +
             currentInc.lumpSumMonthly.finiteOrZero()
         ).coerceAtLeast(0.0)
-    val empMatchTotal = FinancialEngine.baseEmployerMatchMonthly(s)
+    val empMatchTotal = snap.monthlyEmployerMatch.finiteOrZero().coerceAtLeast(0.0)
     val cViolet = if (isDark) Color(0xFFA78BFA) else Color(0xFF6D28D9)
 
     return if (viewMode == 0) {
-        listOf(
-            SankeyNode(
-                id = "in_total",
-                title = "Household Net Inflow",
-                shortLabel = "Inflows",
-                subtitle = "All Salaries & Support",
-                amount = safeTotalMonthly,
-                color = cTeal,
-                category = "Combined Take-Home Cash",
-                description = "Total disposable take-home pay received into household accounts after Czech personal income taxes, social, and health deductions.",
-                statutoryNote = "Progressive income tax (15% / 23%) + 7.1% social + 4.5% health insurance"
+        buildList {
+            add(
+                SankeyNode(
+                    id = "in_total",
+                    title = "Household Net Inflow",
+                    shortLabel = "Inflows",
+                    subtitle = "All Salaries & Support",
+                    amount = safeTotalMonthly,
+                    color = cTeal,
+                    category = "Combined Take-Home Cash",
+                    description = "Total disposable take-home pay received into household accounts after Czech personal income taxes, social, and health deductions.",
+                    statutoryNote = "Progressive income tax (15% / 23%) + 7.1% social + 4.5% health insurance"
+                )
             )
-        )
+            if (empMatchTotal > 0.0) {
+                add(
+                    SankeyNode(
+                        id = "in_employer_match",
+                        title = "Employer Pension Match",
+                        shortLabel = "Employer Match",
+                        subtitle = "Direct employer benefit",
+                        amount = empMatchTotal,
+                        color = cViolet,
+                        category = "Tax-Exempt Employer Benefit",
+                        description = "Direct employer contribution paid into DPS/DIP retirement accounts outside take-home salary.",
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
+                    )
+                )
+            }
+        }
     } else {
         buildList {
             if (safeVaclavNet > 0.0) {
@@ -212,18 +230,18 @@ fun buildOutflowNodes(
     cRed: Color = BadRedDark,
     isDark: Boolean = true
 ): List<SankeyNode> {
-    val s = state.settings
+    val s = state.effectiveSettings
+    val snap = state.snapshot
     val cPurple = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
     val cOrange = if (isDark) Color(0xFFFB923C) else Color(0xFFC2410C)
     val cAmber = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309)
     val cRose = if (isDark) Color(0xFFFB7185) else Color(0xFFE11D48)
     val cViolet = if (isDark) Color(0xFFA78BFA) else Color(0xFF6D28D9)
 
-    val currentInc = state.currentIncome
-    val totalInflows = currentInc.totalMonthly.finiteOrZero().coerceAtLeast(0.0)
-    val totalExpenses = state.totalLivingCostMonthly.finiteOrZero().coerceAtLeast(0.0)
-    val ownInvestMonthly = FinancialEngine.baseOwnInvestMonthly(s).finiteOrZero().coerceAtLeast(0.0)
-    val empMatchTotal = FinancialEngine.baseEmployerMatchMonthly(s).finiteOrZero().coerceAtLeast(0.0)
+    val totalInflows = snap.monthlyTakeHomeInflows.finiteOrZero().coerceAtLeast(0.0)
+    val totalExpenses = snap.monthlyLivingCosts.finiteOrZero().coerceAtLeast(0.0)
+    val ownInvestMonthly = snap.monthlyOwnInvesting.finiteOrZero().coerceAtLeast(0.0)
+    val empMatchTotal = snap.monthlyEmployerMatch.finiteOrZero().coerceAtLeast(0.0)
     val unallocatedSurplus = (totalInflows - totalExpenses - ownInvestMonthly).finiteOrZero().coerceAtLeast(0.0)
 
     val deletedSet = parseDeletedCategories(s.deletedCategoriesJson)
@@ -258,12 +276,27 @@ fun buildOutflowNodes(
                         id = "out_invest",
                         title = "Auto-Investing",
                         shortLabel = "Investing",
-                        subtitle = if (empMatchTotal > 0.0) "Own brokerage, DIP & DPS (plus employer match)" else "Brokerage, DIP & DPS",
+                        subtitle = if (empMatchTotal > 0.0) "Own brokerage, DIP & DPS" else "Brokerage, DIP & DPS",
                         amount = ownInvestMonthly,
                         color = cTeal,
                         category = "Compounding Capital Formation",
                         description = "Automated monthly investments funded from household take-home pay toward your early retirement target.",
                         statutoryNote = "3-year capital gains exemption + DIP tax deduction + State-subsidized DPS"
+                    )
+                )
+            }
+            if (empMatchTotal > 0.0) {
+                add(
+                    SankeyNode(
+                        id = "out_employer_match",
+                        title = "Employer Pension Match",
+                        shortLabel = "Employer Match",
+                        subtitle = "Direct employer benefit",
+                        amount = empMatchTotal,
+                        color = cViolet,
+                        category = "Employer Retirement Contribution",
+                        description = "Tax-advantaged employer contributions to DPS/DIP retirement accounts within the annual exemption cap.",
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
                     )
                 )
             }
@@ -435,16 +468,17 @@ fun buildOutflowNodes(
 fun buildCentralHubNode(
     state: FullCalculationState,
     cTeal: Color = BrandTealDark,
-    viewMode: Int = 1
+    @Suppress("UNUSED_PARAMETER") viewMode: Int = 1
 ): SankeyNode {
-    val currentInc = state.currentIncome
-    val empMatch = if (viewMode == 0) 0.0 else FinancialEngine.baseEmployerMatchMonthly(state.settings).finiteOrZero().coerceAtLeast(0.0)
+    val snap = state.snapshot
+    val empMatch = snap.monthlyEmployerMatch.finiteOrZero().coerceAtLeast(0.0)
+    val totalFlow = snap.monthlyTotalInflowsWithMatch.finiteOrZero().coerceAtLeast(0.0)
     return SankeyNode(
         id = "hub_central",
         title = "Household Clearing Pool",
         shortLabel = "Pool",
         subtitle = if (empMatch > 0.0) "Combined disposable cash & match" else "Combined disposable cash",
-        amount = currentInc.totalMonthly.finiteOrZero().coerceAtLeast(0.0) + empMatch,
+        amount = totalFlow,
         color = cTeal,
         category = "Central Cash Flow Clearing Hub",
         description = if (empMatch > 0.0) {

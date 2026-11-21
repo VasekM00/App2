@@ -92,8 +92,8 @@ internal fun MonteCarloAndStressSubTab(
     val taxDragInfo = MetricInfo(
         title = "Czech Dividend Tax Drag",
         category = "Tax Drag Modeling",
-        formulaOrRule = "Drag = Dividend Yield (${state.settings.dividendYieldPct}%) x Dividend Tax Rate (${state.settings.dividendTaxRatePct}%) = ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.dividendTaxDragPct(state.settings))}/year",
-        explanation = "In the Czech Republic, capital gains on securities held for more than 3 years are fully exempt from personal income tax. However, dividends (and fund-internal withholding taxes in accumulating UCITS ETFs) incur continuous tax drag. This drag is modeled on taxable brokerage assets (Portu) reducing net nominal return to ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(state.settings))}%, while tax-sheltered DIP and DPS accounts compound gross.",
+        formulaOrRule = "Drag = Dividend Yield (${state.effectiveSettings.dividendYieldPct}%) x Dividend Tax Rate (${state.effectiveSettings.dividendTaxRatePct}%) = ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.dividendTaxDragPct(state.effectiveSettings))}/year",
+        explanation = "In the Czech Republic, capital gains on securities held for more than 3 years are fully exempt from personal income tax. However, dividends (and fund-internal withholding taxes in accumulating UCITS ETFs) incur continuous tax drag. This drag is modeled on taxable brokerage assets (Portu) reducing net nominal return to ${String.format(java.util.Locale.ROOT, "%.2f%%", FinancialEngine.netTaxableNominalReturnPct(state.effectiveSettings))}%, while tax-sheltered DIP and DPS accounts compound gross.",
         statutoryReference = "Act No. 586/1992 Coll. (ZDP § 4(1)(u) & § 8)",
         practicalImplication = "Even a modest 0.27% annual tax drag compounds significantly over 30+ years, making tax-advantaged accounts like DIP crucial.",
         accentColor = BrandBlue
@@ -263,7 +263,7 @@ internal fun MonteCarloAndStressSubTab(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
                     label = "Dividend Tax Drag",
-                    value = "${fmtPct(FinancialEngine.dividendTaxDragPct(state.settings), 2)}/year",
+                    value = "${fmtPct(FinancialEngine.dividendTaxDragPct(state.effectiveSettings), 2)}/year",
                     info = taxDragInfo,
                     onShowInfo = onShowInfo
                 )

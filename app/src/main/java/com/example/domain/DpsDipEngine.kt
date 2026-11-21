@@ -35,8 +35,10 @@ object DpsDipEngine {
         val own = vDpsOwn + eDpsOwn
         val empCap = settings.employerRetirementExemptionAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0
-        val vEmp = min(settings.employerRetirementMonthly.finiteNonNegative(), empCap)
-        val eEmpEffective = min(eEmp, empCap)
+        val vHasDps = vDpsOwn > 0.0 || settings.dipContributionMonthly.finiteNonNegative() <= 0.0
+        val eHasDps = eDpsOwn > 0.0 || settings.eDipContributionMonthly.finiteNonNegative() <= 0.0
+        val vEmp = if (vHasDps) min(settings.employerRetirementMonthly.finiteNonNegative(), empCap) else 0.0
+        val eEmpEffective = if (!settings.isSingleHousehold && eHasDps) min(eEmp, empCap) else 0.0
         val emp = vEmp + eEmpEffective
 
         var dpsBal = vDpsBal0 + eDpsBal
@@ -148,10 +150,12 @@ object DpsDipEngine {
         )
         val activeSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(settings, settings.baseYear)
 
+        val vAgeScenario = settings.primaryAge
+        val effectiveScenarioThreshold = if (vAgeScenario >= settings.vStatePensionAge) 0.0 else dpsThreshold
         val scenarios = dpsLevels.map { monthly: Double ->
-            val subMonthly = CzechTaxEngine.dpsSubsidy(monthly, settings.primaryAge, settings, settings.baseYear)
+            val subMonthly = CzechTaxEngine.dpsSubsidy(monthly, vAgeScenario, settings, settings.baseYear, settings.vStatePensionAge)
             val subAnnual = subMonthly * 12.0
-            val dpsAboveThreshold = max(0.0, monthly - dpsThreshold)
+            val dpsAboveThreshold = max(0.0, monthly - effectiveScenarioThreshold)
             val dpsDeductionBase = dpsAboveThreshold * 12.0
             val effectiveDpsDeduction = min(dpsDeductionBase, remainingTaxHeadroom)
             val taxSavedAnnual = CzechTaxEngine.singleEarnerRetirementTaxSaved(
@@ -210,7 +214,17 @@ object DpsDipEngine {
         val totalMonthlyDip = vDipMonthly + eDipMonthly
         val dpsThreshold = settings.dpsDeductionThresholdMonthly
             .finiteNonNegative(RegulatoryConstants.STATUTORY_DPS_DEDUCTION_THRESHOLD_MONTHLY_2026)
-        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - dpsThreshold) * 12.0
+        val effectiveDpsThreshold = if (settings.primaryAge >= settings.vStatePensionAge) 0.0 else dpsThreshold
+        val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - effectiveDpsThreshold) * 12.0
+        val empCap = settings.employerRetirementExemptionAnnual
+            .finiteNonNegative(RegulatoryConstants.STATUTORY_EMPLOYER_RETIREMENT_EXEMPTION_ANNUAL) / 12.0
+        val vEmpToDip = if (settings.dpsOwnContributionMonthly.finiteNonNegative() <= 0.0 && vDipMonthly > 0.0) {
+            min(settings.employerRetirementMonthly.finiteNonNegative(), empCap)
+        } else 0.0
+        val eEmpToDip = if (!settings.isSingleHousehold && settings.eDpsOwnContributionMonthly.finiteNonNegative() <= 0.0 && eDipMonthly > 0.0) {
+            min(settings.eEmployerRetirementMonthly.finiteNonNegative(), empCap)
+        } else 0.0
+        val totalDipContributionWithMatchMonthly = totalMonthlyDip + vEmpToDip + eEmpToDip
         val ceiling = settings.taxDeductionCeilingAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026)
 
@@ -263,7 +277,7 @@ object DpsDipEngine {
         var dipBal = vDipBal0 + eDipBal
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
-            dipBal = max(0.0, (dipBal + totalMonthlyDip) * max(0.0, 1.0 + monthlyRate))
+            dipBal = max(0.0, (dipBal + totalDipContributionWithMatchMonthly) * max(0.0, 1.0 + monthlyRate))
         }
 
         val totalCeiling = if (settings.isSingleHousehold) ceiling else ceiling * 2.0

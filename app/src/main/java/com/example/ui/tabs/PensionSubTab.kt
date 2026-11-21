@@ -153,107 +153,29 @@ private fun PensionOptimizationSection(
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val s = state.settings
+    val s = state.effectiveSettings
     val dps = state.dps
     val dip = state.dip
+    val opt = state.pensionOptimization
 
     val vDipMonthly = s.dipContributionMonthly
     val eDipMonthly = s.eDipContributionMonthly
-
-    val vAge = s.primaryAge
-    val vSubsidy = CzechTaxEngine.dpsSubsidy(s.dpsOwnContributionMonthly, vAge, s, s.baseYear, statePensionAge = s.vStatePensionAge)
-    val eAge = s.baseYear - FinancialEngine.partnerBirthYear(s)
-    val eSubsidy = if (!s.isSingleHousehold) CzechTaxEngine.dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear, statePensionAge = s.eStatePensionAge) else 0.0
-
-    val vSalaryMonthly = FinancialEngine.vaclavSalaryMonthly(s.baseYear, s)
-    val eSalaryMonthly = if (!s.isSingleHousehold) FinancialEngine.eleonoraSalaryMonthly(s.baseYear, s) else 0.0
-    val eLecturingMonthly = if (!s.isSingleHousehold) FinancialEngine.eleonoraLecturingMonthly(s.baseYear, s) else 0.0
-    val vGrossAnnual = CzechTaxEngine.netToGrossAnnual(
-        netMonthly = vSalaryMonthly,
-        taxpayerCreditAnnual = s.taxpayerCreditAnnual,
-        highBracketThresholdAnnual = s.taxSecondBracketThresholdAnnual,
-        baseTaxRatePct = s.taxRatePct,
-        highTaxRatePct = s.taxRateSecondPct
-    )
-    val eGrossAnnual = if (!s.isSingleHousehold) {
-        CzechTaxEngine.spouseEarnedGrossAnnual(s.baseYear, s)
-    } else 0.0
-    val activeSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(s, s.baseYear)
-    val vHasIncome = vSalaryMonthly > 0.0
-    val eHasIncome = !s.isSingleHousehold && (eSalaryMonthly + eLecturingMonthly) > 0.0
-
-    val vDpsEffectiveThreshold = if (vAge >= s.vStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly
-    val vDeductionAnnual = min(
-        s.taxDeductionCeilingAnnual,
-        s.dipContributionMonthly * 12.0 + max(0.0, s.dpsOwnContributionMonthly - vDpsEffectiveThreshold) * 12.0
-    )
-    val vActualAnnualTaxSaved = CzechTaxEngine.singleEarnerRetirementTaxSaved(
-        taxableGrossAnnual = vGrossAnnual,
-        deductionAnnual = vDeductionAnnual,
-        thresholdHighBracket = s.taxSecondBracketThresholdAnnual,
-        baseRate = s.taxRatePct / 100.0,
-        highRate = s.taxRateSecondPct / 100.0,
-        basicTaxpayerCredit = s.taxpayerCreditAnnual,
-        additionalCredits = activeSpouseCredit
-    )
-    val eDpsEffectiveThreshold = if (eAge >= s.eStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly
-    val eDeductionAnnual = if (!s.isSingleHousehold) {
-        min(
-            s.taxDeductionCeilingAnnual,
-            s.eDipContributionMonthly * 12.0 + max(0.0, s.eDpsOwnContributionMonthly - eDpsEffectiveThreshold) * 12.0
-        )
-    } else 0.0
-    val eActualAnnualTaxSaved = if (!s.isSingleHousehold) {
-        CzechTaxEngine.singleEarnerRetirementTaxSaved(
-            taxableGrossAnnual = eGrossAnnual,
-            deductionAnnual = eDeductionAnnual,
-            thresholdHighBracket = s.taxSecondBracketThresholdAnnual,
-            baseRate = s.taxRatePct / 100.0,
-            highRate = s.taxRateSecondPct / 100.0,
-            basicTaxpayerCredit = s.taxpayerCreditAnnual
-        )
-    } else 0.0
-
-    val vSubsidyMaxAnnual = if (vAge >= s.vStatePensionAge) 0.0
-        else if (vAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) s.dpsYouthSubsidyMaxMonthly * 12.0
-        else s.dpsStandardSubsidyMaxMonthly * 12.0
-    val eSubsidyMaxAnnual = if (!s.isSingleHousehold && eAge < s.eStatePensionAge) {
-        if (eAge < s.dpsYouthAgeLimit && s.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR) {
-            s.dpsYouthSubsidyMaxMonthly * 12.0
-        } else {
-            s.dpsStandardSubsidyMaxMonthly * 12.0
-        }
-    } else 0.0
-
-    val vOptimalDepositAnnual = (if (vAge < s.vStatePensionAge) s.dpsDeductionThresholdMonthly * 12.0 else 0.0) + (if (vHasIncome) s.taxDeductionCeilingAnnual else 0.0)
-    val eOptimalDepositAnnual = if (!s.isSingleHousehold) {
-        (if (eAge < s.eStatePensionAge) s.dpsDeductionThresholdMonthly * 12.0 else 0.0) + (if (eHasIncome) s.taxDeductionCeilingAnnual else 0.0)
-    } else 0.0
-    val totalOptimalDepositAnnual = vOptimalDepositAnnual + eOptimalDepositAnnual
-
-    val maxCombinedBenefit = (vSubsidyMaxAnnual + eSubsidyMaxAnnual) +
-        CzechTaxEngine.singleEarnerRetirementTaxSaved(
-            taxableGrossAnnual = vGrossAnnual,
-            deductionAnnual = s.taxDeductionCeilingAnnual,
-            thresholdHighBracket = s.taxSecondBracketThresholdAnnual,
-            baseRate = s.taxRatePct / 100.0,
-            highRate = s.taxRateSecondPct / 100.0,
-            basicTaxpayerCredit = s.taxpayerCreditAnnual,
-            additionalCredits = activeSpouseCredit
-        ) +
-        (if (!s.isSingleHousehold) CzechTaxEngine.singleEarnerRetirementTaxSaved(
-            taxableGrossAnnual = eGrossAnnual,
-            deductionAnnual = s.taxDeductionCeilingAnnual,
-            thresholdHighBracket = s.taxSecondBracketThresholdAnnual,
-            baseRate = s.taxRatePct / 100.0,
-            highRate = s.taxRateSecondPct / 100.0,
-            basicTaxpayerCredit = s.taxpayerCreditAnnual
-        ) else 0.0)
-
+    val vAge = opt.primaryAge
+    val eAge = opt.partnerAge
+    val vSubsidy = opt.primarySubsidyMonthly
+    val eSubsidy = opt.partnerSubsidyMonthly
+    val vHasIncome = opt.primaryHasIncome
+    val eHasIncome = opt.partnerHasIncome
+    val vActualAnnualTaxSaved = opt.primaryAnnualTaxSaved
+    val eActualAnnualTaxSaved = opt.partnerAnnualTaxSaved
+    val vSubsidyMaxAnnual = opt.primarySubsidyMaxAnnual
+    val eSubsidyMaxAnnual = opt.partnerSubsidyMaxAnnual
+    val totalOptimalDepositAnnual = opt.totalOptimalDepositAnnual
+    val maxCombinedBenefit = opt.maxCombinedBenefitAnnual
     val yearlyTaxSaved = state.taxReturnHelper.totalIncrementalValue
-    val totalMonthlyRetirement = vDipMonthly + (if (!s.isSingleHousehold) eDipMonthly else 0.0) + s.dpsOwnContributionMonthly + (if (!s.isSingleHousehold) s.eDpsOwnContributionMonthly else 0.0)
-    val totalSubsidyMonthly = vSubsidy + eSubsidy
-    val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct - min(s.dpsAnnualFeePct, s.dpsStatutoryFeeCapPct))
+    val totalMonthlyRetirement = opt.totalMonthlyOwnRetirement
+    val totalSubsidyMonthly = opt.totalSubsidyMonthly
+    val dpsNetReturnPct = opt.dpsNetReturnPct
 
     Column(
         modifier = Modifier

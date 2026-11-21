@@ -270,7 +270,8 @@ class InteractiveChartsMotionHapticsTest {
         val outflows3Pillar = buildOutflowNodes(state, viewMode = 0)
         val hub = buildCentralHubNode(state)
 
-        assertEquals("In 3-Pillar mode, single unified inflow node is used", 1, inflows3Pillar.size)
+        assertTrue("In 3-Pillar mode, unified take-home inflow plus optional employer match is used", inflows3Pillar.any { it.id == "in_total" } && inflows3Pillar.size <= 2)
+        assertEquals("In 3-Pillar mode, inflow sum must equal hub total", inflows3Pillar.sumOf { it.amount }, hub.amount, 0.01)
         assertTrue("Outflows should include living, investments, cash", outflows3Pillar.size >= 3)
         assertNotNull(hub)
 

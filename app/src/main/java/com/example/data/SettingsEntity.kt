@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.domain.DEFAULT_CUSTOM_LIFE_GOALS
@@ -12,6 +13,7 @@ private val cachedDefaultCustomGoalsJson: String by lazy(LazyThreadSafetyMode.PU
     serializeCustomLifeGoals(DEFAULT_CUSTOM_LIFE_GOALS)
 }
 
+@Immutable
 @Entity(tableName = "app_settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,

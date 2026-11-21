@@ -72,10 +72,10 @@ fun HeroHeader(
     val haptic = LocalHapticFeedback.current
     var showMultiplierDialog by remember { mutableStateOf(false) }
 
-    // Always read unified calculation buckets (includes spouse pensions & active ledger snapshot)
-    val pensionTotal = state.currentPensionPortfolio
-    val liquidTotal = state.currentLiquidPortfolio
-    val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
+    val snap = state.snapshot
+    val pensionTotal = snap.pensionTotal
+    val liquidTotal = snap.investedLiquidTotal
+    val monthlySurplus = snap.monthlyLeftoverBeforeInvesting
 
     Card(
         modifier = modifier
@@ -163,7 +163,7 @@ fun HeroHeader(
                     .testTag("hero_stat_net_worth")
             ) {
                 Text(
-                    text = fmtCZK(state.netWorthTotal),
+                    text = fmtCZK(snap.netWorthTotal),
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontFamily = DisplayFontFamily,
                         fontSize = 30.sp,
@@ -180,7 +180,7 @@ fun HeroHeader(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Invested ${fmtCompact(liquidTotal)}  ·  Pension ${fmtCompact(pensionTotal)}  ·  Cash ${fmtCompact(state.currentEmergencyReserve)}",
+                    text = "Invested ${fmtCompact(liquidTotal)}  ·  Pension ${fmtCompact(pensionTotal)}  ·  Cash ${fmtCompact(snap.emergencyCashTotal)}",
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 12.sp,
                         fontFeatureSettings = "tnum",
@@ -207,7 +207,7 @@ fun HeroHeader(
                 ) {
                     HeroStripMetric(
                         label = "Cash Reserve",
-                        value = fmtCompact(state.currentEmergencyReserve),
+                        value = fmtCompact(snap.emergencyCashTotal),
                         valueColor = BrandBlue,
                         onClick = onNavigateToEmergencyReserve,
                         modifier = Modifier
@@ -242,7 +242,7 @@ fun HeroHeader(
 
                     HeroStripMetric(
                         label = "Savings Rate",
-                        value = fmtPct(state.savingsRatePct, 1),
+                        value = fmtPct(snap.savingsRatePct, 1),
                         valueColor = GoodGreen,
                         onClick = onNavigateToSavingsRate,
                         modifier = Modifier
@@ -256,7 +256,7 @@ fun HeroHeader(
             Spacer(modifier = Modifier.height(10.dp))
 
             SavingsImpactRow(
-                reductionFor100 = state.fireReductionPer100CzkMonthly,
+                reductionFor100 = snap.fireReductionPer100CzkMonthly,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showMultiplierDialog = true
@@ -402,8 +402,8 @@ fun PerpetualFireMultiplierDialog(
     state: FullCalculationState,
     onDismiss: () -> Unit
 ) {
-    val s = state.settings
-    val mult = state.perpetualFireMultiplier
+    val s = state.effectiveSettings
+    val mult = state.snapshot.perpetualFireMultiplier
     val swr = s.safeWithdrawalRatePct
     val buffer = s.safetyBufferPct
 

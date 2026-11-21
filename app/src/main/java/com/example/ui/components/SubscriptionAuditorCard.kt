@@ -64,6 +64,7 @@ import java.util.Locale
 fun SubscriptionAuditorCard(
     transactions: List<ImportedBankTransactionEntity>,
     swrPct: Double,
+    safetyBufferPct: Double = 0.0,
     dismissedMerchantKeys: Set<String> = emptySet(),
     onDismissMerchant: ((String) -> Unit)? = null,
     onRestoreMerchant: ((String) -> Unit)? = null,
@@ -75,8 +76,8 @@ fun SubscriptionAuditorCard(
     var showDismissedSection by remember { mutableStateOf(false) }
     var selectedItemForDetail by remember { mutableStateOf<RecurringSubscriptionItem?>(null) }
 
-    val audit = remember(transactions, swrPct, dismissedMerchantKeys) {
-        SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys)
+    val audit = remember(transactions, swrPct, safetyBufferPct, dismissedMerchantKeys) {
+        SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys, safetyBufferPct)
     }
 
     Card(

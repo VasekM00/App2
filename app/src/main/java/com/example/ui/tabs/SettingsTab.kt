@@ -232,10 +232,12 @@ fun SettingsTab(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
+                val snap = state.snapshot
+                val sEff = state.effectiveSettings
                 val (hubSummaryTitle, hubSummaryDetail) = when (selectedTab) {
-                    0 -> "Personalize your household setup" to "Income ${fmtCompact(state.currentIncome.totalMonthly)} · Living ${fmtCompact(state.totalLivingCostMonthly)} · Save ${fmtPct(state.savingsRatePct, 1)}"
-                    1 -> "Portfolio & Freedom parameters" to "Net ${fmtCompact(state.netWorthTotal)} · Investing ${fmtCompact(state.investMonthlyTotal)} · ${fmtPct(s.portfolioNominalReturnPct)} return"
-                    else -> "Preferences, Sync & Backups" to "Base ${s.baseYear} · ${if (s.isSingleHousehold) "Single" else "Dual"} household · JSON & ČNB Sync"
+                    0 -> "Personalize your household setup" to "Income ${fmtCompact(snap.monthlyTakeHomeInflows)} · Living ${fmtCompact(snap.monthlyLivingCosts)} · Save ${fmtPct(snap.savingsRatePct, 1)}"
+                    1 -> "Portfolio & Freedom parameters" to "Net ${fmtCompact(snap.netWorthTotal)} · Investing ${fmtCompact(snap.monthlyTotalInvesting)} · ${fmtPct(sEff.portfolioNominalReturnPct)} return"
+                    else -> "Preferences, Sync & Backups" to "Base ${sEff.baseYear} · ${if (sEff.isSingleHousehold) "Single" else "Dual"} household · JSON & ČNB Sync"
                 }
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(

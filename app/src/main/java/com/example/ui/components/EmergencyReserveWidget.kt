@@ -67,22 +67,24 @@ fun EmergencyReserveWidget(
     onSelectReserveMode: ((String) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
-    val resolvedMode = state.settings.emergencyReserveMode.ifBlank { "6M" }
-    var selectedTargetMode by remember(state.settings.emergencyReserveMode, resolvedMode) {
+    val sEff = state.effectiveSettings
+    val snap = state.snapshot
+    val resolvedMode = sEff.emergencyReserveMode.ifBlank { "6M" }
+    var selectedTargetMode by remember(sEff.emergencyReserveMode, resolvedMode) {
         mutableStateOf(resolvedMode)
     }
 
-    val monthlyExpense = state.totalLivingCostMonthly.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
-    val currentLiquidCash = state.currentEmergencyReserve.takeIf { it.isFinite() } ?: 0.0
+    val monthlyExpense = snap.monthlyLivingCosts.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+    val currentLiquidCash = snap.emergencyCashTotal.takeIf { it.isFinite() } ?: 0.0
 
-    val targetAmount = if (selectedTargetMode == state.settings.emergencyReserveMode &&
-        state.effectiveEmergencyReserveTargetToday.isFinite() &&
-        state.effectiveEmergencyReserveTargetToday > 0.0
+    val targetAmount = if (selectedTargetMode == sEff.emergencyReserveMode &&
+        snap.emergencyReserveTargetToday.isFinite() &&
+        snap.emergencyReserveTargetToday > 0.0
     ) {
-        state.effectiveEmergencyReserveTargetToday
+        snap.emergencyReserveTargetToday
     } else {
         FinancialEngine.computeEmergencyReserveTargetForMode(
-            settings = state.settings,
+            settings = sEff,
             totalLivingMonthly = monthlyExpense,
             mode = selectedTargetMode
         )

@@ -188,36 +188,38 @@ class BuildAndHygieneTest {
     }
 
     /**
-     * 9.6: Check for unused imports or verify `cos` in FinancialEngine.kt.
+     * 9.6: Check for unused imports across decomposed domain engine files and verify `cos` in MonteCarloEngine.kt.
      */
     @Test
     fun test9_6_unusedImportsAndCosVerificationInFinancialEngine() {
-        val engineFile = File(getMainJavaDir(), "com/example/domain/FinancialEngine.kt")
-        assertTrue("FinancialEngine.kt must exist at ${engineFile.absolutePath}", engineFile.exists())
-
-        val engineContent = engineFile.readText()
-
-        // Verify cos is imported and used for Box-Muller normal transform
-        assertTrue(
-            "FinancialEngine.kt must import kotlin.math.cos",
-            engineContent.contains("import kotlin.math.cos")
+        val domainFiles = listOf(
+            "com/example/domain/FinancialEngine.kt",
+            "com/example/domain/FinancialModels.kt",
+            "com/example/domain/HouseholdCashFlowEngine.kt",
+            "com/example/domain/FireTargetAndTrajectoryEngine.kt",
+            "com/example/domain/MonteCarloEngine.kt"
         )
-        assertTrue(
-            "FinancialEngine.kt must use cos() for Box-Muller Gaussian simulation",
-            engineContent.contains("cos(theta)") || engineContent.contains("cos(")
-        )
-
-        // Verify all imported symbols in FinancialEngine.kt are used in the codebase
-        val lines = engineFile.readLines()
-        val importLines = lines.filter { it.trim().startsWith("import ") }
-        val codeBody = lines.filter { !it.trim().startsWith("import ") && !it.trim().startsWith("package ") }.joinToString("\n")
-
-        for (importLine in importLines) {
-            val importedSymbol = importLine.trim().substringAfterLast('.').trim()
-            assertTrue(
-                "Imported symbol '$importedSymbol' in FinancialEngine.kt must be referenced in the file content",
-                codeBody.contains(importedSymbol)
-            )
+        for (relPath in domainFiles) {
+            val file = File(getMainJavaDir(), relPath)
+            assertTrue("$relPath must exist at ${file.absolutePath}", file.exists())
+            val lines = file.readLines()
+            val importLines = lines.filter { it.trim().startsWith("import ") }
+            val codeBody = lines.filter { !it.trim().startsWith("import ") && !it.trim().startsWith("package ") }.joinToString("\n")
+            for (importLine in importLines) {
+                val importedSymbol = importLine.trim().substringAfterLast('.').trim()
+                assertTrue(
+                    "Imported symbol '$importedSymbol' in $relPath must be referenced in the file content",
+                    codeBody.contains(importedSymbol)
+                )
+            }
         }
+
+        val mcFile = File(getMainJavaDir(), "com/example/domain/MonteCarloEngine.kt")
+        val mcContent = mcFile.readText()
+        assertTrue("MonteCarloEngine.kt must import kotlin.math.cos", mcContent.contains("import kotlin.math.cos"))
+        assertTrue(
+            "MonteCarloEngine.kt must use cos() for Box-Muller Gaussian simulation",
+            mcContent.contains("cos(theta)") || mcContent.contains("cos(")
+        )
     }
 }

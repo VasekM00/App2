@@ -326,7 +326,7 @@ fun LazyListScope.settingsHouseholdSubTab(
             title = "Living Expenses",
             subtitle = "Rent ${fmtCompact(s.rentMonthly)} · Food ${fmtCompact(s.groceriesMonthly)}",
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.totalLivingCostMonthly) + " monthly",
+            badgeText = fmtCZK(state.snapshot.monthlyLivingCosts) + " monthly",
             badgeColor = BadRed,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,

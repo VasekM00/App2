@@ -98,11 +98,13 @@ fun TrajectoryMilestonesTableCard(
                 val discount = (1.0 + (cpiInflationPct / 100.0)).coerceAtLeast(0.0001).pow(idx.toDouble())
                 val discPort = pt.portfolio / discount
                 val discPension = pt.pensionPortfolio / discount
+                val discCash = pt.emergencyCash / discount
                 pt.copy(
                     portfolio = discPort,
                     target = pt.target / discount,
                     pensionPortfolio = discPension,
-                    totalPortfolio = discPort + discPension
+                    totalPortfolio = discPort + discPension,
+                    emergencyCash = discCash
                 )
             }
         }
@@ -124,10 +126,11 @@ fun TrajectoryMilestonesTableCard(
     }
 
     fun exportToClipboard() {
-        val header = "Year\tLiquid Portfolio (Kč)\tPension Portfolio (Kč)\tTotal Net Worth (Kč)\tFIRE Target (Kč)\tStatus\n"
+        val header = "Year\tLiquid Portfolio (Kč)\tPension Portfolio (Kč)\tInvested + Pension (Kč)\tTotal Net Worth (Kč)\tFIRE Target (Kč)\tStatus\n"
         val rows = displayPoints.joinToString("\n") { pt ->
             val status = if (pt.year == fireYear) "FIRE Milestone" else if (pt.totalPortfolio >= pt.target) "FIRE Ready" else "Accumulation"
-            "${pt.year}\t${pt.portfolio.toLong()}\t${pt.pensionPortfolio.toLong()}\t${pt.totalPortfolio.toLong()}\t${pt.target.toLong()}\t$status"
+            val netWorth = (pt.totalPortfolio + pt.emergencyCash).toLong()
+            "${pt.year}\t${pt.portfolio.toLong()}\t${pt.pensionPortfolio.toLong()}\t${pt.totalPortfolio.toLong()}\t$netWorth\t${pt.target.toLong()}\t$status"
         }
         val clip = ClipData.newPlainText("FIRE Trajectory Table", header + rows)
         clip.description.extras = PersistableBundle().apply {

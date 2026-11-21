@@ -166,9 +166,17 @@ internal fun TrajectorySubTab(
             }
         }
 
-        val isSingleHh = state.settings.isSingleHousehold
+        val sEff = state.effectiveSettings
+        val snap = state.snapshot
+        val isSingleHh = sEff.isSingleHousehold
         val activeTrajectory = if (isSingleHh) state.singleTrajectory else state.dualTrajectory
-        val activeFirePoint = if (isSingleHh) state.fireSinglePoint else state.fireDualPoint
+        val activeFirePoint = snap.activeFirePoint
+        val singleCanonicalFireYear = if (isSingleHh) {
+            snap.activeFireYear
+        } else {
+            val singleBridge = state.singleTrajectory.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded }
+            (singleBridge ?: state.fireSinglePoint)?.year
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -221,13 +229,13 @@ internal fun TrajectorySubTab(
                 if (!isSingleHh) {
                     ProjectionMetricRow(
                         label = "Projected FIRE Year (Dual Income)",
-                        value = state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35 years",
+                        value = snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandTeal,
                         info = MetricInfo(
                             title = "Dual-Income FIRE Date",
                             category = "Household Horizon",
-                            explanation = "Models both $pLabel and $sLabel contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget.",
+                            explanation = "Models both $pLabel and $sLabel contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget and pre-60 liquid bridge.",
                             accentColor = BrandTeal
                         ),
                         onShowInfo = onShowInfo
@@ -236,13 +244,13 @@ internal fun TrajectorySubTab(
 
                     ProjectionMetricRow(
                         label = "Projected FIRE Year (Single Income)",
-                        value = state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years",
+                        value = singleCanonicalFireYear?.let { "$it" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandGold,
                         info = MetricInfo(
                             title = "Single-Income Resilience Test",
                             category = "Household Horizon",
-                            explanation = "Calculates the independent FIRE horizon if funded purely by the primary earner's savings capacity, providing a baseline stress test.",
+                            explanation = "Calculates the independent FIRE horizon (including pre-60 liquid bridge) if funded purely by the primary earner's savings capacity.",
                             accentColor = BrandGold
                         ),
                         onShowInfo = onShowInfo
@@ -251,7 +259,7 @@ internal fun TrajectorySubTab(
                 } else {
                     ProjectionMetricRow(
                         label = "Projected FIRE Year",
-                        value = activeFirePoint?.let { "${it.year}" } ?: "Beyond 35 years",
+                        value = snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years",
                         isBold = true,
                         highlightColor = BrandTeal,
                         info = MetricInfo(

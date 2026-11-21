@@ -72,7 +72,7 @@ fun HouseholdTimelineCard(
     val totalMembers = 1 + (if (!profile.isSingleHousehold) 1 else 0) + profile.children.size
 
     val income = state?.currentIncome ?: FinancialEngine.householdIncome(settings.baseYear, settings)
-    val totalHouseholdNet = income.totalMonthly.finiteOrZero()
+    val totalHouseholdNet = (state?.snapshot?.monthlyTakeHomeInflows ?: income.totalMonthly).finiteOrZero()
 
     val primaryNetTotal = (income.vaclavNet + income.vouchers + income.vaclavGifts + income.vaclavOther).finiteOrZero()
 

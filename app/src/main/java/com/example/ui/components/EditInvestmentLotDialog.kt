@@ -380,7 +380,7 @@ fun EditInvestmentLotDialog(
                             Surface(
                                 onClick = {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    val threeYearsAgo = now.minusYears(3).format(DateTimeFormatter.ofPattern("yyyy-MM", Locale.ROOT))
+                                    val threeYearsAgo = now.minusYears(3).minusMonths(1).format(DateTimeFormatter.ofPattern("yyyy-MM", Locale.ROOT))
                                     purchaseDateText = threeYearsAgo
                                 },
                                 shape = RoundedCornerShape(6.dp),

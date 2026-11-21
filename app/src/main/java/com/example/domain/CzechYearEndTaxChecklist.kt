@@ -1,7 +1,10 @@
 package com.example.domain
 
+import androidx.compose.runtime.Immutable
 import com.example.data.SettingsEntity
 import com.example.util.Formatters.fmtExactCZK
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.max
 import kotlin.math.min
 
@@ -141,8 +144,10 @@ object CzechYearEndTaxChecklist {
 
         // Secondary Earner DIP/DPS in dual household
         if (!settings.isSingleHousehold) {
+            val eAge = taxYear - FinancialEngine.partnerBirthYear(settings)
+            val eEffectiveDpsThreshold = if (eAge >= settings.eStatePensionAge) 0.0 else dpsThreshold
             val eDipAnnual = settings.eDipContributionMonthly.finiteNonNegative() * 12.0
-            val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly.finiteNonNegative() - dpsThreshold) * 12.0
+            val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly.finiteNonNegative() - eEffectiveDpsThreshold) * 12.0
             val eQualifying = eDipAnnual + eDpsAboveThreshold
             val eHeadroom = max(0.0, retirementCeiling - eQualifying)
             val eGrossFromSettings = CzechTaxEngine.spouseEarnedGrossAnnual(taxYear, settings)
@@ -277,11 +282,22 @@ object CzechYearEndTaxChecklist {
                 else -> ChecklistStatus.ATTENTION_NEEDED
             }
 
+            val vGrossTaxBeforeCredits = run {
+                val highInc = max(0.0, vGrossAnnual - taxThreshold)
+                val baseInc = vGrossAnnual - highInc
+                highInc * highRate + baseInc * baseRate
+            }
+            val vRemainingTaxForSpouse = max(0.0, vGrossTaxBeforeCredits - basicCredit)
+            val spouseCreditSaved = if (qualifies) {
+                min(spouseCreditAmount, vRemainingTaxForSpouse)
+            } else 0.0
             val spouseAdvice = when {
                 !settings.includeSpouseCredit ->
                     "Spouse tax credit is disabled in your household settings."
                 !childUnder3 ->
                     "From 2024 onward, claiming the ${fmtExactCZK(spouseCreditAmount)} spouse tax credit requires caring for a dependent child under age 3. The child-age criterion is not met."
+                qualifies && spouseCreditSaved < spouseCreditAmount ->
+                    "You qualify for the ZDP § 35ba(1)(b) spouse tax credit, but because it is non-refundable, actual saving is capped by your remaining tax liability (${fmtExactCZK(spouseCreditSaved)} of ${fmtExactCZK(spouseCreditAmount)}). Family gifts from parents/relatives and state parental allowance are 100% tax-exempt and excluded from this income cap."
                 qualifies ->
                     "You qualify for the ${fmtExactCZK(spouseCreditAmount)} annual spouse tax credit: own income is within the ${fmtExactCZK(spouseIncomeLimit)} limit while caring for a child under 3. Note: Family gifts from parents/relatives and state parental allowance are 100% tax-exempt and excluded from this income cap, whereas maternity benefit (PPM) and wages count."
                 else ->
@@ -299,10 +315,11 @@ object CzechYearEndTaxChecklist {
                     currentValueCzk = spouseIncome,
                     ceilingOrThresholdCzk = spouseIncomeLimit,
                     remainingHeadroomCzk = max(0.0, spouseIncomeLimit - spouseIncome),
-                    potentialTaxSavingCzk = if (qualifies) spouseCreditAmount else 0.0,
+                    potentialTaxSavingCzk = spouseCreditSaved,
                     actionDescription = when {
                         !settings.includeSpouseCredit -> "Disabled in household settings"
                         !childUnder3 -> "Requires dependent child under age 3"
+                        qualifies && spouseCreditSaved <= 0.0 -> "No remaining income tax liability to offset"
                         qualifies -> "Claim spouse tax credit"
                         else -> "Spouse income (${fmtExactCZK(spouseIncome)}) exceeds ${fmtExactCZK(spouseIncomeLimit)} limit"
                     },
@@ -310,7 +327,7 @@ object CzechYearEndTaxChecklist {
                 )
             )
             if (qualifies) {
-                totalPotentialSavings += spouseCreditAmount
+                totalPotentialSavings += spouseCreditSaved
             }
         }
 
@@ -350,7 +367,7 @@ object CzechYearEndTaxChecklist {
 
         return YearEndTaxChecklistReport(
             taxYear = taxYear,
-            generatedDate = java.time.LocalDate.now().toString(),
+            generatedDate = LocalDate.now(ZoneId.of("Europe/Prague")).toString(),
             items = items,
             totalPotentialTaxSavingsCzk = totalPotentialSavings,
             actionsRequiredCount = requiredCount,
@@ -384,6 +401,7 @@ enum class ChecklistStatus {
 /**
  * Detailed checklist item for year-end tax optimization.
  */
+@Immutable
 data class ChecklistItem(
     val id: String,
     val title: String,
@@ -402,6 +420,7 @@ data class ChecklistItem(
 /**
  * Aggregate report summarizing all year-end tax checklist recommendations.
  */
+@Immutable
 data class YearEndTaxChecklistReport(
     val taxYear: Int,
     val generatedDate: String,

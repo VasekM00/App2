@@ -1,5 +1,6 @@
 package com.example.domain
 
+import androidx.compose.runtime.Immutable
 import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.exp
 import kotlin.math.ln
@@ -466,6 +467,7 @@ enum class DecumulationStrategyType {
 /**
  * Configuration parameters for decumulation comparison.
  */
+@Immutable
 data class DecumulationConfig(
     val initialPortfolio: Double,
     val initialAnnualWithdrawal: Double = initialPortfolio * 0.04,
@@ -504,6 +506,7 @@ data class SinglePathYearResult(
 /**
  * Aggregate metrics evaluating performance, survival, and income stability of a strategy.
  */
+@Immutable
 data class StrategyMetrics(
     val strategyType: DecumulationStrategyType,
     val strategyName: String,
@@ -521,6 +524,7 @@ data class StrategyMetrics(
 /**
  * Comparison result across all 3 decumulation strategies.
  */
+@Immutable
 data class DecumulationComparisonResult(
     val config: DecumulationConfig,
     val strategies: Map<DecumulationStrategyType, StrategyMetrics>,

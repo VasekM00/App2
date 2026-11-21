@@ -197,7 +197,8 @@ object SubscriptionAuditor {
     fun auditSubscriptions(
         transactions: List<ImportedBankTransactionEntity>,
         swrPct: Double = 4.0,
-        dismissedMerchantKeys: Set<String> = emptySet()
+        dismissedMerchantKeys: Set<String> = emptySet(),
+        safetyBufferPct: Double = 0.0
     ): SubscriptionAuditSummary {
         val debits = transactions.filter { it.amount.isFinite() && it.amount < 0 && !it.isNetted }
         if (debits.isEmpty()) {
@@ -444,7 +445,9 @@ object SubscriptionAuditor {
         val totalMonthlyBurn = items.sumOf { it.normalizedMonthlyAmount }
         val annualizedBurn = totalMonthlyBurn * 12.0
         val safeSwr = if (swrPct.isFinite()) max(0.001, swrPct / 100.0) else 0.04
-        val fireCapitalRequired = annualizedBurn / safeSwr
+        val safeBuffer = if (safetyBufferPct.isFinite() && safetyBufferPct > 0.0) safetyBufferPct else 0.0
+        val bufferMult = (1.0 + safeBuffer / 100.0).coerceAtLeast(0.0)
+        val fireCapitalRequired = (annualizedBurn / safeSwr) * bufferMult
         val priceCreepCount = items.count { it.priceCreepDelta > 0.0 }
 
         return SubscriptionAuditSummary(

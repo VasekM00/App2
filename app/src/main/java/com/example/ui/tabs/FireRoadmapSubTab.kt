@@ -188,20 +188,19 @@ fun FireRoadmapSubTab(
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
-    val currentYear = state.settings.baseYear
-    val activeFirePoint = state.fireLiquidBridgePoint
-        ?: (if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint)
-    val targetSubtitle = if (activeFirePoint != null) {
-        val yrs = activeFirePoint.year - currentYear
-        "Target: Year ${activeFirePoint.year} ($yrs ${if (yrs == 1) "year" else "years"} to goal)"
-    } else {
-        "Target: Beyond 35y horizon (${currentYear + 35}+)"
-    }
-    val targetWorth = roundTo10k(state.fireBaseTargetToday)
-    val monthlyPassiveIncome = roundTo1k((targetWorth * (state.settings.safeWithdrawalRatePct / 100.0)) / 12.0)
-    val investableNetWorth = state.currentLiquidPortfolio + state.currentPensionPortfolio
+    val snap = state.snapshot
+    val sEff = state.effectiveSettings
+    val currentYear = sEff.baseYear
+    val activeFirePoint = snap.activeFirePoint
+    val targetSubtitle = snap.activeFireYear?.let { fireYr ->
+        val yrs = (fireYr - currentYear).coerceAtLeast(0)
+        "Target: Year $fireYr ($yrs ${if (yrs == 1) "year" else "years"} to goal)"
+    } ?: "Target: Beyond 35y horizon (${currentYear + 35}+)"
+    val targetWorth = snap.activeFireTargetToday
+    val monthlyPassiveIncome = snap.monthlyPassiveIncomeAtFire
+    val investableNetWorth = snap.investedLiquidTotal + snap.pensionTotal
 
-    val primaryProgress = if (targetWorth > 0) ((investableNetWorth / targetWorth) * 100.0).coerceIn(0.0, 100.0) else 0.0
+    val primaryProgress = snap.fireProgressPct
 
     val completedActionsCount = remember(actionStates, currentYear) {
         ActionMeta.items.count { meta ->

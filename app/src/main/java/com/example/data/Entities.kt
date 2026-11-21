@@ -1,9 +1,11 @@
 package com.example.data
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+@Immutable
 @Entity(
     tableName = "ledger_entries",
     indices = [Index(value = ["yearMonth"], unique = true)]
@@ -26,6 +28,7 @@ data class LedgerEntryEntity(
         get() = portfolioBalanceAtMonthEnd + pensionBalanceAtMonthEnd + emergencyReserveAtMonthEnd
 }
 
+@Immutable
 @Entity(
     tableName = "action_states"
 )

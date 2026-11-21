@@ -118,22 +118,23 @@ fun DecumulationComparisonCard(
     val strategy = DecumulationStrategy.entries[selectedIndex]
     val activeAccent = strategy.accentColor()
 
-    // Use current liquid + pension or FIRE target, whichever is higher
-    val combinedPortfolio = (state.currentLiquidPortfolio.finiteOrZero() + state.currentPensionPortfolio.finiteOrZero()).coerceAtLeast(0.0)
+    // Use canonical investable portfolio or FIRE target, whichever is higher
+    val snap = state.snapshot
+    val s = state.effectiveSettings
+    val combinedPortfolio = (snap.investedLiquidTotal.finiteOrZero() + snap.pensionTotal.finiteOrZero()).coerceAtLeast(0.0)
     val portfolioBase = maxOf(
         combinedPortfolio,
-        state.fireBaseTargetToday.finiteOrZero(),
+        snap.activeFireTargetToday.finiteOrZero(),
         1_000_000.0
     )
 
-    val s = state.settings
     val baseSwr = s.safeWithdrawalRatePct.finiteOrZero().coerceIn(0.5, 20.0)
     val horizonYears = s.retirementHorizonYears.coerceIn(5, 60)
     val decumulationRes = state.decumulationComparison ?: remember(
         portfolioBase, baseSwr, horizonYears, s.cpiInflationPct, s.portfolioNominalReturnPct,
         s.dividendYieldPct, s.dividendTaxRatePct,
         s.monteCarloVolatilityPct, s.guardrailsUpperThresholdPct, s.guardrailsLowerThresholdPct,
-        s.guardrailsCutPct, s.guardrailsBoostPct, s.guardrailsFloorPct
+        s.guardrailsCutPct, s.guardrailsBoostPct, s.guardrailsFloorPct, s.monteCarloN, s.monteCarloSeed
     ) {
         val netReturnPct = com.example.domain.FinancialEngine.netTaxableNominalReturnPct(s).finiteOrZero()
         com.example.domain.DecumulationStrategies.compareStrategies(
@@ -144,7 +145,7 @@ fun DecumulationComparisonCard(
                 annualInflationPct = s.cpiInflationPct.finiteOrZero(),
                 expectedAnnualReturnPct = netReturnPct,
                 returnVolatilityPct = s.monteCarloVolatilityPct.finiteOrZero().coerceAtLeast(1.0),
-                simulationsCount = 200,
+                simulationsCount = s.monteCarloN.coerceIn(50, 2000),
                 randomSeed = s.monteCarloSeed,
                 gkUpperThresholdPct = s.guardrailsUpperThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
                 gkLowerThresholdPct = s.guardrailsLowerThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),

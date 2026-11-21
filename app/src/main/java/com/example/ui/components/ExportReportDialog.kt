@@ -65,28 +65,31 @@ fun ExportReportDialog(
 ) {
     val context = LocalContext.current
 
-    val fiProgress = state.fireMilestones.standardFire.progressPct.finiteOrZero()
+    val snap = state.snapshot
+    val sEff = state.effectiveSettings
+    val fiProgress = snap.fireProgressPct.finiteOrZero()
 
     val reportText = remember(state) {
         buildString {
             appendLine("==============================================")
             appendLine(" PERSONAL FINANCE TRACKER - FINANCIAL REPORT")
             appendLine(" Country: Czech Republic")
-            appendLine(" Base Year: ${state.settings.baseYear}")
+            appendLine(" Base Year: ${sEff.baseYear}")
             appendLine("==============================================")
             appendLine()
             appendLine("EXECUTIVE SUMMARY")
-        appendLine("• Net Worth (Total): ${fmtCZK(state.netWorthTotal.finiteOrZero())}")
-        appendLine("• Liquid Investments: ${fmtCZK(state.currentLiquidPortfolio.finiteOrZero())}")
-        appendLine("• Emergency Reserve: ${fmtCZK(state.currentEmergencyReserve.finiteOrZero())} (${String.format(java.util.Locale.ROOT, "%.1f", state.emergencyCoverageMonths.finiteOrZero())} months)")
-        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio.finiteOrZero())}")
-        appendLine("• Current FIRE Target: ${fmtCZK(state.fireBaseTargetToday.finiteOrZero())}")
+        appendLine("• Net Worth (Total): ${fmtCZK(snap.netWorthTotal.finiteOrZero())}")
+        appendLine("• Liquid Investments: ${fmtCZK(snap.investedLiquidTotal.finiteOrZero())}")
+        appendLine("• Emergency Reserve: ${fmtCZK(snap.emergencyCashTotal.finiteOrZero())} (${String.format(java.util.Locale.ROOT, "%.1f", snap.emergencyRunwayMonths.finiteOrZero())} months)")
+        appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(snap.pensionTotal.finiteOrZero())}")
+        appendLine("• Current FIRE Target: ${fmtCZK(snap.activeFireTargetToday.finiteOrZero())}")
         appendLine("• FIRE Progress: ${String.format(java.util.Locale.ROOT, "%.1f%%", fiProgress)}")
-        if (state.settings.isSingleHousehold) {
-            appendLine("• Projected FIRE Year: ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
+        if (sEff.isSingleHousehold) {
+            appendLine("• Projected FIRE Year: ${snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years"}")
         } else {
-            appendLine("• Projected FIRE Year (Dual Earner): ${state.fireDualPoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
-            appendLine("• Projected FIRE Year (Single Earner Bridge): ${state.fireSinglePoint?.let { "${it.year}" } ?: "Beyond 35 years"}")
+            val singleCanonicalYear = (state.singleTrajectory.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded } ?: state.fireSinglePoint)?.year
+            appendLine("• Projected FIRE Year (Dual Earner): ${snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years"}")
+            appendLine("• Projected FIRE Year (Single Earner Bridge): ${singleCanonicalYear?.let { "$it" } ?: "Beyond 35 years"}")
         }
         appendLine()
         val pName = state.settings.primaryName.ifBlank { "Primary Earner" }
@@ -120,8 +123,8 @@ fun ExportReportDialog(
         if (state.currentIncome.lumpSumMonthly > 0.0) {
             appendLine("• Lump Sums / Bonuses: ${fmtCZK(state.currentIncome.lumpSumMonthly)}")
         }
-        appendLine("• Total Net Household Income: ${fmtCZK(state.currentIncome.totalMonthly)} monthly")
-        appendLine("• Monthly Investments (DCA): ${fmtCZK(state.investMonthlyTotal)}")
+        appendLine("• Total Net Household Income: ${fmtCZK(snap.monthlyTakeHomeInflows)} monthly")
+        appendLine("• Monthly Investments (DCA + Match): ${fmtCZK(snap.monthlyTotalInvesting)} (Savings rate ${String.format(java.util.Locale.ROOT, "%.1f%%", snap.savingsRatePct)})")
         appendLine()
         appendLine("CZECH TAX & PENSION REFORM")
         appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")

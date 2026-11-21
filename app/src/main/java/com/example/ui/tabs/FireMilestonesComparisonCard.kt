@@ -93,7 +93,7 @@ internal fun FireMilestonesComparisonCard(
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val milestones = state.fireMilestones
-    val investableNetWorth = state.currentLiquidPortfolio + state.currentPensionPortfolio
+    val investableNetWorth = state.snapshot.investedLiquidTotal + state.snapshot.pensionTotal
 
     val baristaMilestone = milestones.baristaFire
     val items = buildList {
@@ -293,8 +293,8 @@ internal fun FireMilestonesComparisonCard(
             items.forEach { config ->
                 val isSelected = selectedMilestoneId == config.milestone.id
                 val m = config.milestone
-                val roundedTarget = roundTo10k(m.targetAmountToday)
-                val roundedSWR = roundTo1k(m.monthlyPassiveIncome)
+                val roundedTarget = if (m.id == "standard") m.targetAmountToday else roundTo10k(m.targetAmountToday)
+                val roundedSWR = if (m.id == "standard") m.monthlyPassiveIncome else roundTo1k(m.monthlyPassiveIncome)
 
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -414,7 +414,7 @@ internal fun FireMilestonesComparisonCard(
 
             // Selected Tier Detail Card
             val activeM = activeConfig.milestone
-            val activeTarget = roundTo10k(activeM.targetAmountToday)
+            val activeTarget = if (activeM.id == "standard") activeM.targetAmountToday else roundTo10k(activeM.targetAmountToday)
             val activeGap = (activeTarget - investableNetWorth).coerceAtLeast(0.0)
             val progressFloat = (activeM.progressPct / 100.0).toFloat().coerceIn(0f, 1f)
 

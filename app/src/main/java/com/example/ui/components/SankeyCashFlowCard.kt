@@ -76,7 +76,7 @@ fun SankeyCashFlowCard(
     val cBlue = BrandBlue
     val cGold = BrandGold
     val cRed = BadRed
-    val totalInflows = state.currentIncome.totalMonthly.finiteOrZero().coerceAtLeast(1.0)
+    val totalInflows = state.snapshot.monthlyTotalInflowsWithMatch.finiteOrZero().coerceAtLeast(1.0)
 
     val inflowNodes = remember(state, viewMode, cTeal, cGreen, cBlue, isDark) {
         buildInflowNodes(state, viewMode, cTeal, cGreen, cBlue, isDark)
@@ -209,7 +209,7 @@ fun SankeyCashFlowCard(
             // Detail Inspection Panel (When Selected)
             SankeyDetailPanel(
                 selectedNode = selectedNode,
-                totalInflows = totalInflows,
+                totalInflows = sumInflows,
                 onDismiss = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     selectedNodeId = null
@@ -219,7 +219,7 @@ fun SankeyCashFlowCard(
             // Guidance Banner (When Nothing Selected)
             if (selectedNode == null) {
                 SankeyGuidanceBanner(
-                    totalInflows = totalInflows,
+                    totalInflows = sumInflows,
                     deficitAmount = deficitAmount
                 )
             }

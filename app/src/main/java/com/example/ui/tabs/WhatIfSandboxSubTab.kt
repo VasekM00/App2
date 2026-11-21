@@ -85,11 +85,11 @@ internal fun WhatIfSandboxSubTab(
 ) {
     val scrollState = rememberScrollState()
 
-    var sandbox by remember(state.settings) { mutableStateOf(state.settings) }
-    var activePresetId by remember(state.settings) { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
+    var sandbox by remember(state.effectiveSettings) { mutableStateOf(state.effectiveSettings) }
+    var activePresetId by remember(state.effectiveSettings) { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
     var sandboxState by remember(state) { mutableStateOf(state) }
     LaunchedEffect(sandbox, state, ledgerEntries, actionStates) {
-        if (sandbox == state.settings) {
+        if (sandbox == state.effectiveSettings) {
             sandboxState = state
             return@LaunchedEffect
         }
@@ -98,7 +98,7 @@ internal fun WhatIfSandboxSubTab(
             FinancialEngine.calculate(sandbox, ledgerEntries = ledgerEntries, actionStates = actionStates, runMonteCarlo = false)
         }
     }
-    val isDirty = sandbox != state.settings
+    val isDirty = sandbox != state.effectiveSettings
 
     val sandboxInfo = MetricInfo(
         title = "What-If Sandbox",
@@ -341,10 +341,10 @@ private fun SandboxLiveDeltaBar(
     state: FullCalculationState,
     sandboxState: FullCalculationState
 ) {
-    val isSingle = state.settings.isSingleHousehold
-    val targetDelta = sandboxState.fireBaseTargetToday - state.fireBaseTargetToday
-    val baseYearPt = (if (isSingle) state.fireSinglePoint else state.fireDualPoint)?.year
-    val scenarioYearPt = (if (isSingle) sandboxState.fireSinglePoint else sandboxState.fireDualPoint)?.year
+    val isSingle = state.effectiveSettings.isSingleHousehold
+    val targetDelta = sandboxState.snapshot.activeFireTargetToday - state.snapshot.activeFireTargetToday
+    val baseYearPt = state.snapshot.activeFireYear
+    val scenarioYearPt = sandboxState.snapshot.activeFireYear
     val baseWealth = (if (isSingle) state.singleTrajectory else state.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
     val scenarioWealth = (if (isSingle) sandboxState.singleTrajectory else sandboxState.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
     val wealthDelta = scenarioWealth - baseWealth
@@ -506,20 +506,20 @@ private fun SandboxComparison(
     state: FullCalculationState,
     sandboxState: FullCalculationState
 ) {
-    val basePassive = state.fireBaseTargetToday * (state.settings.safeWithdrawalRatePct / 100.0) / 12.0
-    val scenarioPassive = sandboxState.fireBaseTargetToday * (sandboxState.settings.safeWithdrawalRatePct / 100.0) / 12.0
-    val isSingle = state.settings.isSingleHousehold
+    val basePassive = state.snapshot.monthlyPassiveIncomeAtFire
+    val scenarioPassive = sandboxState.snapshot.monthlyPassiveIncomeAtFire
+    val isSingle = state.effectiveSettings.isSingleHousehold
     val baseWealth = (if (isSingle) state.singleTrajectory else state.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
     val scenarioWealth = (if (isSingle) sandboxState.singleTrajectory else sandboxState.dualTrajectory).lastOrNull()?.totalPortfolio ?: 0.0
-    val baseYearPt = (if (isSingle) state.fireSinglePoint else state.fireDualPoint)?.year
-    val scenarioYearPt = (if (isSingle) sandboxState.fireSinglePoint else sandboxState.fireDualPoint)?.year
+    val baseYearPt = state.snapshot.activeFireYear
+    val scenarioYearPt = sandboxState.snapshot.activeFireYear
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SandboxComparisonRow(
             label = "FIRE target (today)",
-            baselineText = fmtCZK(state.fireBaseTargetToday),
-            scenarioText = fmtCZK(sandboxState.fireBaseTargetToday),
-            delta = sandboxState.fireBaseTargetToday - state.fireBaseTargetToday,
+            baselineText = fmtCZK(state.snapshot.activeFireTargetToday),
+            scenarioText = fmtCZK(sandboxState.snapshot.activeFireTargetToday),
+            delta = sandboxState.snapshot.activeFireTargetToday - state.snapshot.activeFireTargetToday,
             higherIsBetter = false,
             deltaFormatter = { fmtCZK(abs(it)) }
         )
@@ -644,7 +644,8 @@ private fun PortfolioAccountsView(
     state: FullCalculationState,
     onShowInfo: (MetricInfo) -> Unit
 ) {
-    val s = state.settings
+    val s = state.effectiveSettings
+    val snap = state.snapshot
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -667,12 +668,12 @@ private fun PortfolioAccountsView(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                val isSingle = s.isSingleHousehold
-                val liquidTotal = state.currentLiquidPortfolio
+                val isSingle = snap.isSingleHousehold
+                val liquidTotal = snap.investedLiquidTotal
                 val rawDipTotal = s.dipBalanceCurrent + if (!isSingle) s.eDipBalanceCurrent else 0.0
                 val rawDpsTotal = s.dpsBalanceCurrent + if (!isSingle) s.eDpsBalanceCurrent else 0.0
                 val rawPensionSum = rawDipTotal + rawDpsTotal
-                val actualPensionTotal = state.currentPensionPortfolio
+                val actualPensionTotal = snap.pensionTotal
                 val dipTotalBal = if (rawPensionSum > 0.0 && abs(actualPensionTotal - rawPensionSum) > 1.0) {
                     actualPensionTotal * (rawDipTotal / rawPensionSum)
                 } else if (rawPensionSum <= 0.0 && actualPensionTotal > 0.0) {
@@ -688,9 +689,9 @@ private fun PortfolioAccountsView(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(dpsTotalBal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(state.currentEmergencyReserve))
+                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(snap.emergencyCashTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total Portfolio Net Worth", fmtCZK(state.netWorthTotal), isBold = true, highlightColor = BrandTeal)
+                ProjectionMetricRow("Total Portfolio Net Worth", fmtCZK(snap.netWorthTotal), isBold = true, highlightColor = BrandTeal)
             }
         }
 
@@ -726,11 +727,11 @@ private fun PortfolioAccountsView(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 ProjectionMetricRow("DPS Own Contribution", fmtCZK(dpsTotal))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                if (empTotal > 0) {
-                    ProjectionMetricRow("Employer Pension Match", fmtCZK(empTotal))
+                if (snap.monthlyEmployerMatch > 0) {
+                    ProjectionMetricRow("Employer Pension Match", fmtCZK(snap.monthlyEmployerMatch))
                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
                 }
-                ProjectionMetricRow("Total Combined Investment", fmtCZK(state.investMonthlyTotal), isBold = true, highlightColor = BrandTeal)
+                ProjectionMetricRow("Total Combined Investment", fmtCZK(snap.monthlyTotalInvesting), isBold = true, highlightColor = BrandTeal)
             }
         }
 

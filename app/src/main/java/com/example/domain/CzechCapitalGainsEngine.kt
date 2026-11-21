@@ -1,7 +1,9 @@
 package com.example.domain
 
+import androidx.compose.runtime.Immutable
 import com.example.util.Formatters
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.max
@@ -11,7 +13,7 @@ import kotlin.math.min
  * CzechCapitalGainsEngine models Czech taxation of investment securities and ETFs under:
  * - Act No. 586/1992 Coll. on Income Taxes (ZDP):
  *   - § 4(1)(u) - 3-year holding time-test (strictly > 3 years) for securities & ETFs
- *   - § 4(1)(w) - 100,000 Kč annual total gross proceeds exemption limit (includes all securities sales per GFŘ D-59)
+ *   - § 4(1)(w) - 100,000 Kč annual total gross proceeds exemption limit for non-time-test-exempt securities sales (GFŘ D-59)
  *   - § 10 and § 16 - Capital gains tax base and progressive tax rates (15% / 23%)
  */
 object CzechCapitalGainsEngine {
@@ -44,7 +46,7 @@ object CzechCapitalGainsEngine {
      */
     fun analyzePortfolio(
         lots: List<InvestmentLot>,
-        asOfDate: LocalDate = LocalDate.now(),
+        asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague")),
         priorNonExemptGrossSalesAnnualCzk: Double = 0.0
     ): CapitalGainsPortfolioSummary {
         var totalVal = 0.0
@@ -125,7 +127,7 @@ object CzechCapitalGainsEngine {
     fun simulateSale(
         lots: List<InvestmentLot>,
         saleOrders: List<LotSaleOrder>,
-        asOfDate: LocalDate = LocalDate.now(),
+        asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague")),
         priorNonExemptGrossSalesAnnualCzk: Double = 0.0,
         taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT
     ): SaleTaxSimulationResult {
@@ -183,7 +185,9 @@ object CzechCapitalGainsEngine {
             max(0.0, nonExemptGross - nonExemptCost)
         }
 
-        val rateBase = taxRatePct.finiteIn(0.0, 50.0, STATUTORY_BASE_TAX_RATE_PCT) / 100.0
+        val safeRatePct = taxRatePct.finiteIn(0.0, 50.0, STATUTORY_BASE_TAX_RATE_PCT)
+        val rateBase = safeRatePct / 100.0
+        val estimatedAtConfiguredRate = netTaxableGain * rateBase
         val taxLiability15 = netTaxableGain * (STATUTORY_BASE_TAX_RATE_PCT / 100.0)
         val taxLiability23 = netTaxableGain * (STATUTORY_HIGH_TAX_RATE_PCT / 100.0)
         val taxSavedByTimeTest = max(0.0, exemptGain) * rateBase
@@ -199,7 +203,7 @@ object CzechCapitalGainsEngine {
             netTaxableGain <= 0.0 ->
                 "Sale generates no net taxable capital gain (losses offset gains). Tax liability is 0\u00A0Kč."
             taxSavedByWaiting > 0.0 ->
-                "Notice: Selling lots close to maturity incurs ${Formatters.fmtExactCZK(taxLiability15)} (15%) tax. Postponing sale past the 3-year mark saves ${Formatters.fmtExactCZK(taxSavedByWaiting)}."
+                "Notice: Selling lots close to maturity incurs ${Formatters.fmtExactCZK(estimatedAtConfiguredRate)} (${safeRatePct.toInt()}%) tax. Postponing sale past the 3-year mark saves ${Formatters.fmtExactCZK(taxSavedByWaiting)}."
             else ->
                 "Sale is subject to capital gains tax on ${Formatters.fmtExactCZK(netTaxableGain)} net gain: ${Formatters.fmtExactCZK(taxLiability15)} (15%) or ${Formatters.fmtExactCZK(taxLiability23)} (23%)."
         }
@@ -228,7 +232,7 @@ object CzechCapitalGainsEngine {
     fun recommendOptimalHarvest(
         lots: List<InvestmentLot>,
         targetCashCzk: Double,
-        asOfDate: LocalDate = LocalDate.now(),
+        asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague")),
         priorNonExemptGrossSalesAnnualCzk: Double = 0.0,
         taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT
     ): TaxOptimalHarvestRecommendation {
@@ -371,6 +375,7 @@ enum class TimeTestStatus {
 /**
  * An investment lot for tax tracking.
  */
+@Immutable
 data class InvestmentLot(
     val id: String,
     val ticker: String,
@@ -385,12 +390,12 @@ data class InvestmentLot(
 
     val exemptionDate: LocalDate get() = purchaseDate.plusYears(CzechCapitalGainsEngine.STATUTORY_TIME_TEST_YEARS).plusDays(1)
 
-    fun daysUntilExemption(asOfDate: LocalDate = LocalDate.now()): Long {
+    fun daysUntilExemption(asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague"))): Long {
         if (!asOfDate.isBefore(exemptionDate)) return 0L
         return ChronoUnit.DAYS.between(asOfDate, exemptionDate)
     }
 
-    fun timeTestStatus(asOfDate: LocalDate = LocalDate.now()): TimeTestStatus {
+    fun timeTestStatus(asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague"))): TimeTestStatus {
         return CzechCapitalGainsEngine.determineTimeTestStatus(purchaseDate, asOfDate)
     }
 
@@ -406,7 +411,7 @@ data class InvestmentLot(
         ): InvestmentLot {
             val date = runCatching {
                 LocalDate.parse(purchaseDateIso.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
-            }.getOrElse { LocalDate.now() }
+            }.getOrElse { LocalDate.now(ZoneId.of("Europe/Prague")) }
             return InvestmentLot(
                 id = id,
                 ticker = ticker,
@@ -423,6 +428,7 @@ data class InvestmentLot(
 /**
  * Order to sell a specified number of units of an investment lot.
  */
+@Immutable
 data class LotSaleOrder(
     val lotId: String,
     val unitsToSell: Double
@@ -431,6 +437,7 @@ data class LotSaleOrder(
 /**
  * Summary of a portfolio's capital gains and time-test distribution.
  */
+@Immutable
 data class CapitalGainsPortfolioSummary(
     val asOfDate: String,
     val totalPortfolioValueCzk: Double,
@@ -452,6 +459,7 @@ data class CapitalGainsPortfolioSummary(
 /**
  * Result of simulating a sale of lots with tax implications.
  */
+@Immutable
 data class SaleTaxSimulationResult(
     val totalGrossProceedsCzk: Double,
     val exemptGrossProceedsCzk: Double,
@@ -468,6 +476,7 @@ data class SaleTaxSimulationResult(
 /**
  * Recommendation for an optimal liquidation order.
  */
+@Immutable
 data class TaxOptimalHarvestRecommendation(
     val targetCashCzk: Double,
     val totalCashRaisedCzk: Double,

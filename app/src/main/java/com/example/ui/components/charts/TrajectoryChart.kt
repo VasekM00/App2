@@ -916,8 +916,8 @@ fun NetWorthChart(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val discount = inflationDiscountFactor(safeCpiPct, activeIdx.toDouble())
-                val nominalTotalNw = rawActivePt.totalPortfolio.finiteOrZero()
-                val realTotalNw = nominalTotalNw / discount
+                val nominalTotalNw = (rawActivePt.totalPortfolio + rawActivePt.emergencyCash).finiteOrZero()
+                val realTotalNw = (nominalTotalNw / discount).finiteOrZero()
                 val activeTotal = activePt.totalPortfolio.finiteOrZero()
                 val activeTarget = activePt.target.finiteOrZero()
 
@@ -997,14 +997,14 @@ fun NetWorthChart(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             ChartMetricPill(
-                                label = "Nominal Total",
+                                label = "Nominal Net Worth",
                                 value = fmtCompact(nominalTotalNw),
                                 color = cPurple,
                                 isBold = true,
                                 modifier = Modifier.weight(1f)
                             )
                             ChartMetricPill(
-                                label = "Real Total",
+                                label = "Real Net Worth",
                                 value = fmtCompact(realTotalNw),
                                 color = cTeal,
                                 isBold = true,

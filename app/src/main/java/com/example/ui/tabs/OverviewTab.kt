@@ -111,10 +111,12 @@ fun OverviewTab(
         accentColor = BrandTeal
     )
 
-    val pensionAgeDesc = if (state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
-        "age ${state.settings.vStatePensionAge}"
+    val snap = state.snapshot
+    val sEff = state.effectiveSettings
+    val pensionAgeDesc = if (sEff.vStatePensionAge == sEff.eStatePensionAge) {
+        "age ${sEff.vStatePensionAge}"
     } else {
-        "ages ${state.settings.vStatePensionAge}/${state.settings.eStatePensionAge}"
+        "ages ${sEff.vStatePensionAge}/${sEff.eStatePensionAge}"
     }
     val fireTargetInfo = MetricInfo(
         title = "Base FIRE Target Capital",
@@ -122,31 +124,31 @@ fun OverviewTab(
         formulaOrRule = "Target = (Annual Living Burn − State Pension) ÷ SWR + Bridge Deficit",
         explanation = "Calculated in today's constant purchasing power (real Kč). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at $pensionAgeDesc.",
         statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act)",
-        practicalImplication = "Every 1\u00A0000\u00A0Kč/month reduction in permanent baseline living expenses reduces required FIRE capital by ${fmtCompact(1000.0 * state.perpetualFireMultiplier)} at your current ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR.",
+        practicalImplication = "Every 1\u00A0000\u00A0Kč/month reduction in permanent baseline living expenses reduces required FIRE capital by ${fmtCompact(1000.0 * snap.perpetualFireMultiplier)} at your current ${fmtPct(sEff.safeWithdrawalRatePct)} SWR.",
         accentColor = BrandGold
     )
 
-    val firePoint = state.fireLiquidBridgePoint ?: (if (state.settings.isSingleHousehold) state.fireSinglePoint else state.fireDualPoint)
+    val firePoint = snap.activeFirePoint
     val fireAgeInfo = MetricInfo(
         title = "Projected FIRE Horizon",
         category = "Trajectory Milestone",
-        formulaOrRule = "Compound DCA + Organic Growth >= Dynamic FIRE Target",
-        explanation = "Determined dynamically by modeling when aggregate liquid brokerage investments, DIP, and accessible retirement assets surpass the required cost-of-living capital barrier under inflation and real return assumptions.",
+        formulaOrRule = "Compound DCA + Organic Growth >= Dynamic FIRE Target (with pre-60 liquid bridge)",
+        explanation = "Determined dynamically by modeling when aggregate liquid brokerage investments, DIP, and accessible retirement assets surpass the required cost-of-living capital barrier while funding pre-60 bridge liquidity.",
         practicalImplication = "Front-loading savings rate early compounds exponentially due to sequence-of-returns acceleration in initial accumulation years.",
         accentColor = BrandBlue
     )
 
-    val monthlySurplus = state.currentIncome.totalMonthly - state.totalLivingCostMonthly
-    val surplusRatePct = if (state.currentIncome.totalMonthly > 0.0) {
-        ((monthlySurplus / state.currentIncome.totalMonthly) * 100.0).coerceIn(0.0, 100.0)
+    val monthlySurplus = snap.monthlyLeftoverBeforeInvesting
+    val surplusRatePct = if (snap.monthlyTakeHomeInflows > 0.0) {
+        ((monthlySurplus / snap.monthlyTakeHomeInflows) * 100.0).coerceIn(0.0, 100.0)
     } else 0.0
 
     val savingsRateInfo = MetricInfo(
         title = "Monthly Investment & Savings Rate",
         category = "Cash Flow & DCA Firepower",
-        formulaOrRule = "Savings Rate = (${fmtCZK(state.investMonthlyTotal)} Invested / ${fmtCZK(state.currentIncome.totalMonthly)} Net Inflows) = ${fmtPct(state.savingsRatePct, 1)}",
-        explanation = "Measures the share of monthly household net cash actively invested through automated DCA (${fmtCZK(state.investMonthlyTotal)} monthly). Your total monthly surplus (inflows minus living expenses) is ${fmtCZK(monthlySurplus)} monthly (${fmtPct(surplusRatePct, 1)} of net inflows).",
-        statutoryReference = "DCA Wealth Building Strategy & DIP Pension Tax Shield",
+        formulaOrRule = "Savings Rate = (${fmtCZK(snap.monthlyTotalInvesting)} Invested / ${fmtCZK(snap.monthlyTotalInflowsWithMatch)} Inflows + Match) = ${fmtPct(snap.savingsRatePct, 1)}",
+        explanation = "Measures the share of total monthly inflows (including tax-exempt employer match of ${fmtCZK(snap.monthlyEmployerMatch)}) directed to automated investments (${fmtCZK(snap.monthlyTotalInvesting)}/month total; own cash rate ${fmtPct(snap.savingsRateOwnCashPct, 1)}). Monthly surplus before investing is ${fmtCZK(monthlySurplus)} (${fmtPct(surplusRatePct, 1)} of take-home cash).",
+        statutoryReference = "DCA Wealth Building Strategy & ZDP § 6(9)(m) / § 15a Tax Shield",
         practicalImplication = "Directing a higher share of your monthly surplus (${fmtCZK(monthlySurplus)}) into automated ETF and DIP contributions increases your savings rate and shortens your timeline to financial independence.",
         accentColor = GoodGreen
     )
@@ -212,8 +214,8 @@ fun OverviewTab(
             KpiCard(
                 title = "Target FIRE Year",
                 value = firePoint?.let { "${it.year}" } ?: "${state.settings.baseYear + 35}+",
-                hint = firePoint?.let {
-                    val yearsAway = (it.year - state.settings.baseYear).coerceAtLeast(0)
+                hint = snap.activeFireYear?.let { fireYr ->
+                    val yearsAway = (fireYr - sEff.baseYear).coerceAtLeast(0)
                     if (yearsAway == 0) "Goal reached" else "In $yearsAway years"
                 } ?: "Beyond 35 years",
                 accentColor = BrandBlue,
@@ -226,8 +228,8 @@ fun OverviewTab(
 
             KpiCard(
                 title = "Monthly Investing",
-                value = fmtCZK(state.investMonthlyTotal),
-                hint = "${fmtPct(state.savingsRatePct, 1)} of income",
+                value = fmtCZK(snap.monthlyTotalInvesting),
+                hint = "${fmtPct(snap.savingsRatePct, 1)} of total inflows",
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_savings_rate",

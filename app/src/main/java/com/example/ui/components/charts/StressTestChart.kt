@@ -151,7 +151,7 @@ fun StressComparisonChart(
             val ySteps = 4
             val maxVal = remember(scenarios) {
                 val rawMax = scenarios.flatMap { it.trajectory }
-                    .maxOfOrNull { it.portfolio.finiteOrZero().coerceAtLeast(0.0) } ?: 0.0
+                    .maxOfOrNull { it.totalPortfolio.finiteOrZero().coerceAtLeast(0.0) } ?: 0.0
                 computeNiceAxisMax((rawMax * 1.1).coerceAtLeast(100000.0), steps = ySteps)
             }
             val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -296,7 +296,7 @@ fun StressComparisonChart(
                             scenarioPath.reset()
                             scenario.trajectory.forEachIndexed { i, pt ->
                                 val x = xForIndex(i)
-                                val y = yPix(pt.portfolio)
+                                val y = yPix(pt.totalPortfolio)
                                 if (i == 0) scenarioPath.moveTo(x, y) else scenarioPath.lineTo(x, y)
                             }
                             drawPath(
@@ -312,7 +312,7 @@ fun StressComparisonChart(
                             drawCircle(
                                 color = color,
                                 radius = if (scenario.id == "baseline") 7f else 5f,
-                                center = Offset(xForIndex(0), yPix(scenario.trajectory[0].portfolio))
+                                center = Offset(xForIndex(0), yPix(scenario.trajectory[0].totalPortfolio))
                             )
                         }
                     }
@@ -387,7 +387,7 @@ fun StressComparisonChart(
                                     rowScenarios.forEach { sc ->
                                         val sIdx = scenarios.indexOf(sc).coerceAtLeast(0)
                                         val color = scenarioColors[sIdx % scenarioColors.size]
-                                        val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.portfolio ?: 0.0).finiteOrZero()
+                                        val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.totalPortfolio ?: 0.0).finiteOrZero()
                                         ChartMetricPill(
                                             label = sc.name,
                                             value = fmtCompact(ptVal),
