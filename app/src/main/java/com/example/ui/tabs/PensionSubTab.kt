@@ -2,10 +2,10 @@ package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,38 +21,32 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.domain.CzechTaxEngine
-import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
-import com.example.domain.RegulatoryConstants
-import com.example.ui.components.CardHeaderPill
+import com.example.ui.components.CapitalGainsTimeTestCard
 import com.example.ui.components.ColorPill
 import com.example.ui.components.DipOptimizationMatrixCard
 import com.example.ui.components.DpsOptimizationMatrixCard
@@ -60,7 +54,6 @@ import com.example.ui.components.FundsAllocatorCard
 import com.example.ui.components.KpiCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.YtdTaxShieldTrackerCard
-import com.example.ui.components.infoTapHold
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
@@ -68,89 +61,12 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PensionSubTab(
     state: FullCalculationState,
     onShowInfo: (MetricInfo) -> Unit = {}
-) {
-    var selectedSection by rememberSaveable { mutableIntStateOf(0) }
-    val sections = listOf("Optimization", "Waterfall", "Deposit Tiers")
-    val haptic = LocalHapticFeedback.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("pension_subtab")
-    ) {
-        // Section Navigation Segmented Bar
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                sections.forEachIndexed { index, name ->
-                    val isSelected = selectedSection == index
-                    Surface(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedSection = index
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.surface else androidx.compose.ui.graphics.Color.Transparent,
-                        contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
-                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-                        shadowElevation = if (isSelected) 1.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag("pension_section_$index")
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 6.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                ),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        when (selectedSection) {
-            0 -> PensionOptimizationSection(state, onShowInfo)
-            1 -> PensionWaterfallSection(state, onShowInfo)
-            2 -> PensionDepositTiersSection(state)
-        }
-    }
-}
-
-@Composable
-private fun PensionOptimizationSection(
-    state: FullCalculationState,
-    onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
     val s = state.effectiveSettings
@@ -177,12 +93,18 @@ private fun PensionOptimizationSection(
     val totalSubsidyMonthly = opt.totalSubsidyMonthly
     val dpsNetReturnPct = opt.dpsNetReturnPct
 
+    var optimizationExpanded by rememberSaveable { mutableStateOf(false) }
+    var waterfallExpanded by rememberSaveable { mutableStateOf(false) }
+    var tiersExpanded by rememberSaveable { mutableStateOf(false) }
+    var timeTestExpanded by rememberSaveable { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(16.dp)
+            .testTag("pension_subtab"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. KPI Highlights Hero Grid (2x2)
         Column(
@@ -257,369 +179,214 @@ private fun PensionOptimizationSection(
             checklist = state.yearEndTaxChecklist
         )
 
-        // 3. Main Hero Card: DIP & DPS Two-Stage Statutory Optimization (Subsidy + Tax Shield)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .infoTapHold(PlanMetricInfos.dipDeduction, onShowInfo)
-                .testTag("dip_summary_card"),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        // 3. Accordion: Statutory Optimization Strategy
+        PensionAccordionCard(
+            title = "Retirement Optimization",
+            subtitle = "DIP & DPS earner match, tax deduction & blueprint",
+            expanded = optimizationExpanded,
+            onToggle = { optimizationExpanded = !optimizationExpanded },
+            tag = "dip_summary_card"
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                CardHeaderPill(
-                    title = "Retirement Optimization",
-                    subtitle = "DIP & DPS state match and tax shield",
-                    icon = Icons.Default.AccountBalance,
-                    badgeText = null,
-                    accentColor = GoodGreen,
-                    trailingContent = {
-                        IconButton(
-                            onClick = { onShowInfo(PlanMetricInfos.dipDeduction) },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "DIP Details",
-                                tint = GoodGreen,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                )
+            EarnerOptimizationCard(
+                name = if (s.primaryName.isNotBlank()) s.primaryName else "Primary Earner",
+                roleSubtitle = "Primary Earner",
+                dpsMonthly = s.dpsOwnContributionMonthly,
+                dipMonthly = vDipMonthly,
+                subsidyMonthly = vSubsidy,
+                subsidyCapMonthly = if (vAge >= s.vStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly,
+                taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
+                taxRatePct = s.taxRatePct,
+                hasTaxableIncome = vHasIncome,
+                maxSubsidyAnnual = vSubsidyMaxAnnual,
+                annualTaxSavedOverride = vActualAnnualTaxSaved,
+                accentColor = BrandTeal
+            )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Primary Earner Optimization Card
+            if (!s.isSingleHousehold) {
+                Spacer(modifier = Modifier.height(12.dp))
                 EarnerOptimizationCard(
-                    name = if (s.primaryName.isNotBlank()) s.primaryName else "Primary Earner",
-                    roleSubtitle = "Primary Earner",
-                    dpsMonthly = s.dpsOwnContributionMonthly,
-                    dipMonthly = vDipMonthly,
-                    subsidyMonthly = vSubsidy,
-                    subsidyCapMonthly = if (vAge >= s.vStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly,
+                    name = if (s.spouseName.isNotBlank()) s.spouseName else "Partner",
+                    roleSubtitle = "Partner",
+                    dpsMonthly = s.eDpsOwnContributionMonthly,
+                    dipMonthly = eDipMonthly,
+                    subsidyMonthly = eSubsidy,
+                    subsidyCapMonthly = if (eAge >= s.eStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly,
                     taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
                     taxRatePct = s.taxRatePct,
-                    hasTaxableIncome = vHasIncome,
-                    maxSubsidyAnnual = vSubsidyMaxAnnual,
-                    annualTaxSavedOverride = vActualAnnualTaxSaved,
-                    accentColor = BrandTeal
+                    hasTaxableIncome = eHasIncome,
+                    maxSubsidyAnnual = eSubsidyMaxAnnual,
+                    annualTaxSavedOverride = eActualAnnualTaxSaved,
+                    accentColor = BrandGold
                 )
+            }
 
-                // Partner Optimization Card — visible in dual-income mode
-                if (!s.isSingleHousehold) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    EarnerOptimizationCard(
-                        name = if (s.spouseName.isNotBlank()) s.spouseName else "Partner",
-                        roleSubtitle = "Partner",
-                        dpsMonthly = s.eDpsOwnContributionMonthly,
-                        dipMonthly = eDipMonthly,
-                        subsidyMonthly = eSubsidy,
-                        subsidyCapMonthly = if (eAge >= s.eStatePensionAge) 0.0 else s.dpsDeductionThresholdMonthly,
-                        taxShieldCapAnnual = s.taxDeductionCeilingAnnual,
-                        taxRatePct = s.taxRatePct,
-                        hasTaxableIncome = eHasIncome,
-                        maxSubsidyAnnual = eSubsidyMaxAnnual,
-                        annualTaxSavedOverride = eActualAnnualTaxSaved,
-                        accentColor = BrandGold
-                    )
-                }
+            Spacer(modifier = Modifier.height(14.dp))
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Optimal Statutory Strategy Banner (Structured Blueprint)
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = GoodGreen.copy(alpha = 0.08f),
-                    border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = GoodGreen.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(GoodGreen.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(GoodGreen.copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = GoodGreen,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "Maximum Optimization Strategy",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = GoodGreen,
-                                        fontSize = 13.sp
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = GoodGreen,
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
-
-                            ColorPill(
-                                text = "MAX RETURN",
-                                color = GoodGreen,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                horizontalPadding = 6.dp,
-                                verticalPadding = 2.dp
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // 3 Key Metric Tiles: Optimal Deposit / Combined Return / Statutory ROI
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(
-                                        text = "OPTIMAL / MO",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = fmtCompact(totalOptimalDepositAnnual / 12.0),
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontFamily = BodyFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 11.5.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${fmtCompact(totalOptimalDepositAnnual)}/year",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = BodyFontFamily,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 9.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(
-                                        text = "ANNUAL GAIN",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = GoodGreen,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "+${fmtCompact(maxCombinedBenefit)}",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontFamily = BodyFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            color = GoodGreen,
-                                            fontSize = 11.5.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "Cash & tax relief",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 9.sp
-                                        ),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            val roiPct = if (totalOptimalDepositAnnual > 0.0) (maxCombinedBenefit / totalOptimalDepositAnnual) * 100.0 else 0.0
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(0.5.dp, GoodGreen.copy(alpha = 0.2f)),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(
-                                        text = "DIRECT RETURN",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = BrandTeal,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "+${String.format(java.util.Locale.ROOT, "%.1f", roiPct)}%",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontFamily = BodyFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            color = BrandTeal,
-                                            fontSize = 11.5.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "Guaranteed",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 9.sp
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // 2 Structured Step Tiles
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(BrandGold)
-                                )
-                                Text(
-                                    text = "Step 1 (DPS): Deposit ${fmtCZK(s.dpsDeductionThresholdMonthly)}/month ${if (s.isSingleHousehold) "" else "per partner "}to lock full ${fmtCZK(if (s.isSingleHousehold) vSubsidyMaxAnnual else (vSubsidyMaxAnnual + eSubsidyMaxAnnual))} annual state cash match.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 11.5.sp
-                                    )
-                                )
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(GoodGreen)
-                                )
-                                val workingText = if (s.isSingleHousehold) "" else if (!eHasIncome) "for ${if (s.primaryName.isNotBlank()) s.primaryName else "Primary Earner"} " else "per earner "
-                                Text(
-                                    text = "Step 2 (DIP): Deposit ${fmtCZK(s.taxDeductionCeilingAnnual / 12.0)}/month ${workingText}to maximize the ${fmtCZK(s.taxDeductionCeilingAnnual)} personal tax deduction.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 11.5.sp
-                                    )
-                                )
-                            }
-                        }
-
-                        if (!s.isSingleHousehold && !eHasIncome) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            HorizontalDivider(color = GoodGreen.copy(alpha = 0.2f))
-                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Partner"}'s tax shield is paused during parental leave because personal tax deductions require taxable income and cannot be transferred. DPS state subsidies remain 100% active and claimable.",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.5.sp,
-                                    lineHeight = 14.sp
-                                )
+                                text = "Maximum Optimization Strategy",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoodGreen,
+                                    fontSize = 13.sp
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        ColorPill(
+                            text = "MAX RETURN",
+                            color = GoodGreen,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val roiPct = if (totalOptimalDepositAnnual > 0.0) (maxCombinedBenefit / totalOptimalDepositAnnual) * 100.0 else 0.0
+                    Text(
+                        text = "Optimal deposit ${fmtCompact(totalOptimalDepositAnnual / 12.0)}/mo · Annual statutory benefit +${fmtCompact(maxCombinedBenefit)} (+${String.format(java.util.Locale.ROOT, "%.1f", roiPct)}% direct ROI).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (!s.isSingleHousehold && !eHasIncome) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Note: ${if (s.spouseName.isNotBlank()) s.spouseName else "Partner"}'s DIP/DPS tax deduction requires taxable income; DPS state subsidy remains active.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp))
+        // 4. Accordion: Funds Allocation Waterfall
+        PensionAccordionCard(
+            title = "Contribution Waterfall",
+            subtitle = "Priority allocation order for monthly inflows",
+            expanded = waterfallExpanded,
+            onToggle = { waterfallExpanded = !waterfallExpanded }
+        ) {
+            FundsAllocatorCard(state = state, onShowInfo = onShowInfo)
+        }
+
+        // 5. Accordion: DIP & DPS Deposit Tier Matrices
+        PensionAccordionCard(
+            title = "DIP & DPS Deposit Tiers",
+            subtitle = "Statutory deduction & state subsidy tables",
+            expanded = tiersExpanded,
+            onToggle = { tiersExpanded = !tiersExpanded }
+        ) {
+            DipOptimizationMatrixCard(state = state)
+            Spacer(modifier = Modifier.height(12.dp))
+            DpsOptimizationMatrixCard(state = state)
+        }
+
+        // 6. Accordion: ETF 3-Year Capital Gains Time Test (moved from Home)
+        PensionAccordionCard(
+            title = "ETF 3-Year Capital Gains Test",
+            subtitle = "Track ZDP § 4(1)(w) tax-exempt holding lots",
+            expanded = timeTestExpanded,
+            onToggle = { timeTestExpanded = !timeTestExpanded },
+            tag = "accordion_capital_gains_time_test"
+        ) {
+            CapitalGainsTimeTestCard(
+                state = state,
+                onShowInfo = onShowInfo
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-private fun PensionWaterfallSection(
-    state: FullCalculationState,
-    onShowInfo: (MetricInfo) -> Unit
+private fun PensionAccordionCard(
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    tag: String? = null,
+    content: @Composable () -> Unit
 ) {
-    val scrollState = rememberScrollState()
-
-    Column(
+    Card(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .fillMaxWidth()
+            .then(if (tag != null) Modifier.testTag(tag) else Modifier),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
-        FundsAllocatorCard(state = state, onShowInfo = onShowInfo)
-
-        Spacer(modifier = Modifier.height(80.dp))
-    }
-}
-
-@Composable
-private fun PensionDepositTiersSection(
-    state: FullCalculationState
-) {
-    val scrollState = rememberScrollState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        DipOptimizationMatrixCard(state = state)
-        DpsOptimizationMatrixCard(state = state)
-
-        Spacer(modifier = Modifier.height(80.dp))
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onToggle),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(12.dp))
+                content()
+            }
+        }
     }
 }

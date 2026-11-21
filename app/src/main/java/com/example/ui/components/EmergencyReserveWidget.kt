@@ -4,22 +4,23 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,10 +30,9 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,8 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +61,6 @@ import com.example.ui.theme.WarnAmber
 import com.example.data.SettingsEntity
 import com.example.util.Formatters.fmtCompact
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EmergencyReserveWidget(
     state: FullCalculationState,
@@ -139,6 +142,8 @@ fun EmergencyReserveWidget(
     ) {
         Column(modifier = Modifier.padding(16.dp).animateContentSize()) {
             // Header
+            val isCompactHeader = LocalConfiguration.current.screenWidthDp < 380 ||
+                LocalDensity.current.fontScale >= 1.3f
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -171,7 +176,8 @@ fun EmergencyReserveWidget(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(end = 6.dp)
+                            .padding(end = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = "Emergency Fund",
@@ -183,22 +189,37 @@ fun EmergencyReserveWidget(
                             softWrap = true,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (isCompactHeader) {
+                            ColorPill(
+                                text = statusText,
+                                color = statusColor,
+                                icon = statusIcon,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = BodyFontFamily,
+                                horizontalPadding = 8.dp,
+                                verticalPadding = 4.dp,
+                                info = reserveInfo,
+                                onShowInfo = onShowInfo
+                            )
+                        }
                     }
                 }
 
-                // Status Pill Badge (Actionable reserve status)
-                ColorPill(
-                    text = statusText,
-                    color = statusColor,
-                    icon = statusIcon,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = BodyFontFamily,
-                    horizontalPadding = 8.dp,
-                    verticalPadding = 4.dp,
-                    info = reserveInfo,
-                    onShowInfo = onShowInfo
-                )
+                if (!isCompactHeader) {
+                    ColorPill(
+                        text = statusText,
+                        color = statusColor,
+                        icon = statusIcon,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = BodyFontFamily,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 4.dp,
+                        info = reserveInfo,
+                        onShowInfo = onShowInfo
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -269,46 +290,59 @@ fun EmergencyReserveWidget(
                     softWrap = true
                 )
 
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("3M" to "3 months", "6M" to "6 months", "9M" to "9 months", "12M" to "12 months").forEach { (mode, labelText) ->
-                        FilterChip(
-                            selected = selectedTargetMode == mode,
-                            onClick = {
-                                selectedTargetMode = mode
-                                if (onSelectReserveMode != null) {
-                                    onSelectReserveMode(mode)
-                                } else if (onReduceSettings != null) {
-                                    onReduceSettings { it.copy(emergencyReserveMode = mode) }
-                                } else {
-                                    onUpdateSettings?.invoke(state.settings.copy(emergencyReserveMode = mode))
-                                }
-                            },
-                            label = {
-                                Box(
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = labelText,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = BodyFontFamily,
-                                        maxLines = 2,
-                                        softWrap = true
-                                    )
-                                }
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    listOf("3M" to "3m", "6M" to "6m", "9M" to "9m", "12M" to "12m").forEach { (mode, labelText) ->
+                        val isSelected = selectedTargetMode == mode
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                             ),
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 48.dp)
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.Tab,
+                                    onClick = {
+                                        selectedTargetMode = mode
+                                        if (onSelectReserveMode != null) {
+                                            onSelectReserveMode(mode)
+                                        } else if (onReduceSettings != null) {
+                                            onReduceSettings { it.copy(emergencyReserveMode = mode) }
+                                        } else {
+                                            onUpdateSettings?.invoke(state.settings.copy(emergencyReserveMode = mode))
+                                        }
+                                    }
+                                )
                                 .testTag("reserve_chip_${mode.lowercase()}")
-                        )
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = labelText,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                    fontFamily = BodyFontFamily,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }

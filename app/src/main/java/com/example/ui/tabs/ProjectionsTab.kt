@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -72,6 +73,7 @@ fun ProjectionsTab(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .selectableGroup()
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {

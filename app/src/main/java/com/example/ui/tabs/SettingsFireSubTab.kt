@@ -417,6 +417,49 @@ fun LazyListScope.settingsFireSubTab(
                 NumberSettingField(label = "$sName's State Pension Monthly", value = s.eStatePensionMonthly, onValueChange = { v -> patchSettings { it.copy(eStatePensionMonthly = v) } }, fieldKey = "e_pension")
                 NumberSettingField(label = "$sName's State Pension Age", value = s.eStatePensionAge.toDouble(), minValue = 40.0, maxValue = 90.0, onValueChange = { v -> patchSettings { it.copy(eStatePensionAge = v.toInt()) } }, fieldKey = "e_pension", quickStep = 1.0)
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Monte Carlo Stochastic Risk Engine",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { onShowInfo(SettingsMetricInfos.monteCarloFor(s.monteCarloN, s.monteCarloVolatilityPct, s.useHistoricalBootstrap)) },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Monte Carlo Methodology Details",
+                        tint = BrandTeal,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(monteCarloVolatilityPct = v) } })
+            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 10.0, maxValue = 10000.0, onValueChange = { v -> patchSettings { it.copy(monteCarloN = v.toInt()) } })
+            NumberSettingField(label = "Simulation RNG Seed", value = s.monteCarloSeed.toDouble(), minValue = 0.0, maxValue = 9999999.0, onValueChange = { v -> patchSettings { it.copy(monteCarloSeed = v.toLong()) } }, fieldKey = "mc_seed")
+            NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 1.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(retirementHorizonYears = v.toInt()) } })
+            BooleanSettingField(
+                label = "Use Historical 1970–2025 Bootstrap",
+                checked = s.useHistoricalBootstrap,
+                onCheckedChange = { v -> patchSettings { it.copy(useHistoricalBootstrap = v) } },
+                info = SettingsMetricInfos.historicalBootstrap,
+                onShowInfo = onShowInfo
+            )
+            BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { v -> patchSettings { it.copy(guardrailsEnabled = v) } })
+            if (s.guardrailsEnabled) {
+                NumberSettingField(label = "Capital Preservation Upper Trigger (+%)", value = s.guardrailsUpperThresholdPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsUpperThresholdPct = v) } })
+                NumberSettingField(label = "Preservation Spending Cut (%)", value = s.guardrailsCutPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsCutPct = v) } })
+                NumberSettingField(label = "Prosperity Lower Trigger (-%)", value = s.guardrailsLowerThresholdPct, minValue = 0.0, maxValue = 95.0, onValueChange = { v -> patchSettings { it.copy(guardrailsLowerThresholdPct = v) } })
+                NumberSettingField(label = "Prosperity Spending Boost (%)", value = s.guardrailsBoostPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsBoostPct = v) } })
+                NumberSettingField(label = "Essential Spending Floor (%)", value = s.guardrailsFloorPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsFloorPct = v) } })
+            }
         }
     }
 
@@ -543,49 +586,6 @@ fun LazyListScope.settingsFireSubTab(
             NumberSettingField(label = "Parental Allowance Pot (Pre-Cutoff Kč)", value = s.parentalAllowanceTotalBeforeCutoff, onValueChange = { v -> patchSettings { it.copy(parentalAllowanceTotalBeforeCutoff = v) } })
             NumberSettingField(label = "Parental Allowance Pot (Post-Cutoff Kč)", value = s.parentalAllowanceTotalFromCutoff, onValueChange = { v -> patchSettings { it.copy(parentalAllowanceTotalFromCutoff = v) } })
             NumberSettingField(label = "Parental Allowance Cutoff Year", value = s.parentalAllowanceCutoffYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(parentalAllowanceCutoffYear = v.toInt()) } })
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Monte Carlo Stochastic Risk Engine",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick = { onShowInfo(SettingsMetricInfos.monteCarloFor(s.monteCarloN, s.monteCarloVolatilityPct, s.useHistoricalBootstrap)) },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Monte Carlo Methodology Details",
-                        tint = BrandTeal,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            NumberSettingField(label = "Portfolio Annual Volatility (%)", value = s.monteCarloVolatilityPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(monteCarloVolatilityPct = v) } })
-            NumberSettingField(label = "Simulation Runs", value = s.monteCarloN.toDouble(), minValue = 10.0, maxValue = 10000.0, onValueChange = { v -> patchSettings { it.copy(monteCarloN = v.toInt()) } })
-            NumberSettingField(label = "Simulation RNG Seed", value = s.monteCarloSeed.toDouble(), minValue = 0.0, maxValue = 9999999.0, onValueChange = { v -> patchSettings { it.copy(monteCarloSeed = v.toLong()) } }, fieldKey = "mc_seed")
-            NumberSettingField(label = "Retirement Horizon (years post-FIRE)", value = s.retirementHorizonYears.toDouble(), minValue = 1.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(retirementHorizonYears = v.toInt()) } })
-            BooleanSettingField(
-                label = "Use Historical 1970–2025 Bootstrap",
-                checked = s.useHistoricalBootstrap,
-                onCheckedChange = { v -> patchSettings { it.copy(useHistoricalBootstrap = v) } },
-                info = SettingsMetricInfos.historicalBootstrap,
-                onShowInfo = onShowInfo
-            )
-            BooleanSettingField(label = "Dynamic Spending Guardrails (Guyton-Klinger)", checked = s.guardrailsEnabled, onCheckedChange = { v -> patchSettings { it.copy(guardrailsEnabled = v) } })
-            if (s.guardrailsEnabled) {
-                NumberSettingField(label = "Capital Preservation Upper Trigger (+%)", value = s.guardrailsUpperThresholdPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsUpperThresholdPct = v) } })
-                NumberSettingField(label = "Preservation Spending Cut (%)", value = s.guardrailsCutPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsCutPct = v) } })
-                NumberSettingField(label = "Prosperity Lower Trigger (-%)", value = s.guardrailsLowerThresholdPct, minValue = 0.0, maxValue = 95.0, onValueChange = { v -> patchSettings { it.copy(guardrailsLowerThresholdPct = v) } })
-                NumberSettingField(label = "Prosperity Spending Boost (%)", value = s.guardrailsBoostPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsBoostPct = v) } })
-                NumberSettingField(label = "Essential Spending Floor (%)", value = s.guardrailsFloorPct, minValue = 0.0, maxValue = 100.0, onValueChange = { v -> patchSettings { it.copy(guardrailsFloorPct = v) } })
-            }
         }
     }
 }

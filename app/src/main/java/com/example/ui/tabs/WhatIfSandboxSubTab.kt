@@ -2,6 +2,7 @@ package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -306,7 +309,8 @@ internal fun WhatIfSandboxSubTab(
             }
         }
 
-        // 4. Live impact vs the saved plan
+        // 4. Collapsible Live Impact Comparison (delta already visible in live bar above sliders)
+        var showFullImpactComparison by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
@@ -314,14 +318,37 @@ internal fun WhatIfSandboxSubTab(
             border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.35f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Live Impact",
-                    subtitle = "Saved plan vs sandbox",
-                    badgeText = "DELTA",
-                    accentColor = GoodGreen
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                SandboxComparison(state = state, sandboxState = sandboxState)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                            showFullImpactComparison = !showFullImpactComparison
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "Live Impact Details",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Saved plan vs sandbox side-by-side",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showFullImpactComparison) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (showFullImpactComparison) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (showFullImpactComparison) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SandboxComparison(state = state, sandboxState = sandboxState)
+                }
             }
         }
 
@@ -330,9 +357,6 @@ internal fun WhatIfSandboxSubTab(
             state = sandboxState,
             onShowInfo = onShowInfo
         )
-
-        // 6. Read-only accounts & DCA breakdown
-        PortfolioAccountsView(state = sandboxState, onShowInfo = onShowInfo)
     }
 }
 
@@ -639,102 +663,3 @@ private fun SandboxComparisonRow(
     }
 }
 
-@Composable
-private fun PortfolioAccountsView(
-    state: FullCalculationState,
-    onShowInfo: (MetricInfo) -> Unit
-) {
-    val s = state.effectiveSettings
-    val snap = state.snapshot
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // 1. Current Account Balances Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Portfolio Balances",
-                    subtitle = "Liquid investments, DIP & pension capital",
-                    badgeText = "ASSETS",
-                    accentColor = BrandTeal
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                val isSingle = snap.isSingleHousehold
-                val liquidTotal = snap.investedLiquidTotal
-                val rawDipTotal = s.dipBalanceCurrent + if (!isSingle) s.eDipBalanceCurrent else 0.0
-                val rawDpsTotal = s.dpsBalanceCurrent + if (!isSingle) s.eDpsBalanceCurrent else 0.0
-                val rawPensionSum = rawDipTotal + rawDpsTotal
-                val actualPensionTotal = snap.pensionTotal
-                val dipTotalBal = if (rawPensionSum > 0.0 && abs(actualPensionTotal - rawPensionSum) > 1.0) {
-                    actualPensionTotal * (rawDipTotal / rawPensionSum)
-                } else if (rawPensionSum <= 0.0 && actualPensionTotal > 0.0) {
-                    actualPensionTotal
-                } else {
-                    rawDipTotal
-                }
-                val dpsTotalBal = (actualPensionTotal - dipTotalBal).coerceAtLeast(0.0)
-
-                ProjectionMetricRow("Brokerage / ETF Portfolio", fmtCZK(liquidTotal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DIP Investment Balance", fmtCZK(dipTotalBal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total DPS Pension Balance", fmtCZK(dpsTotalBal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Emergency Reserve Cash", fmtCZK(snap.emergencyCashTotal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("Total Portfolio Net Worth", fmtCZK(snap.netWorthTotal), isBold = true, highlightColor = BrandTeal)
-            }
-        }
-
-        // 2. Monthly Investment DCA Flow Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Monthly DCA Contributions",
-                    subtitle = "Recurring automated investing cadence",
-                    badgeText = "SAVINGS",
-                    accentColor = GoodGreen
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                val isSingle = s.isSingleHousehold
-                val portuTotal = s.portuDcaMonthly + if (!isSingle) s.ePortuDcaMonthly else 0.0
-                val dipTotal = s.dipContributionMonthly + if (!isSingle) s.eDipContributionMonthly else 0.0
-                val dpsTotal = s.dpsOwnContributionMonthly + if (!isSingle) s.eDpsOwnContributionMonthly else 0.0
-                val empCap = s.employerRetirementExemptionAnnual / 12.0
-                val empV = min(s.employerRetirementMonthly, empCap)
-                val empE = if (!isSingle) min(s.eEmployerRetirementMonthly, empCap) else 0.0
-                val empTotal = empV + empE
-
-                ProjectionMetricRow("Brokerage / ETF DCA", fmtCZK(portuTotal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DIP Contribution", fmtCZK(dipTotal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                ProjectionMetricRow("DPS Own Contribution", fmtCZK(dpsTotal))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                if (snap.monthlyEmployerMatch > 0) {
-                    ProjectionMetricRow("Employer Pension Match", fmtCZK(snap.monthlyEmployerMatch))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-                }
-                ProjectionMetricRow("Total Combined Investment", fmtCZK(snap.monthlyTotalInvesting), isBold = true, highlightColor = BrandTeal)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(96.dp))
-    }
-}

@@ -20,11 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -228,23 +226,9 @@ fun SettingsTab(
     var expandTrigger by rememberSaveable(selectedTab) { mutableIntStateOf(0) }
     var expandTargetState by rememberSaveable(selectedTab) { mutableStateOf<Boolean?>(null) }
 
-    val hubDefinitions = listOf(
-        Triple(
-            "Household",
-            "${fmtCompact(state.currentIncome.totalMonthly)}/month",
-            Icons.Default.AccountBalanceWallet
-        ),
-        Triple(
-            "Portfolio & Tax",
-            fmtCompact(state.netWorthTotal),
-            Icons.AutoMirrored.Filled.TrendingUp
-        ),
-        Triple(
-            "App & Data",
-            if (liveRegulatoryData?.isFxLive == true) "FX Live" else "Backup",
-            Icons.Default.CloudDownload
-        )
-    )
+    val hubTitles = listOf("Household", "Portfolio & Tax", "App & Data")
+    @Suppress("UNUSED_VARIABLE")
+    val unusedIconCheck = liveRegulatoryData?.isFxLive
 
     var lastHandledFocusTrigger by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(selectedTab, focusedSectionTrigger, focusedSectionKey) {
@@ -299,10 +283,13 @@ fun SettingsTab(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .selectableGroup()
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                hubDefinitions.forEachIndexed { index, (title, _, _) ->
+                val isCompactHub = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 380 ||
+                    androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.3f
+                hubTitles.forEachIndexed { index, title ->
                     val isSelected = selectedTab == index
                     Box(
                         modifier = Modifier
@@ -322,14 +309,14 @@ fun SettingsTab(
                                     onSubTabSelected?.invoke(index)
                                 }
                             )
-                            .padding(horizontal = 6.dp, vertical = 8.dp)
+                            .padding(horizontal = if (isCompactHub) 4.dp else 6.dp, vertical = 8.dp)
                             .testTag("settings_hub_$index"),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = title,
                             style = MaterialTheme.typography.labelLarge.copy(
-                                fontSize = 12.sp,
+                                fontSize = if (isCompactHub) 10.5.sp else 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
@@ -389,7 +376,7 @@ fun SettingsTab(
                                 expandTargetState = nextExpand
                                 expandTrigger += 1
                             },
-                            modifier = Modifier.heightIn(min = 40.dp)
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
                             Icon(
                                 imageVector = if (nextExpand) Icons.Default.UnfoldMore else Icons.Default.UnfoldLess,

@@ -317,9 +317,19 @@ fun DcaTrajectoryBarChart(
                 }
             }
             val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
+            val nowMarkerResources = rememberNowMarkerResources(cTeal)
+            val resolvedNowYm = currentYearMonth ?: remember {
+                java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
+            }
+            val yTickLabels = remember(maxVal) {
+                (0..ySteps).map { i -> fmtCompact(maxVal * i / ySteps) }
+            }
+            val xYearLabels = remember(data) {
+                data.map { "${it.year}" }
+            }
 
-            val maxYLabelW = remember(maxVal, textPaint) {
-                (0..ySteps).maxOf { i -> textPaint.measureText(fmtCompact(maxVal * i / ySteps)) }
+            val maxYLabelW = remember(yTickLabels, textPaint) {
+                yTickLabels.maxOf { label -> textPaint.measureText(label) }
             }
             val paddingTop = with(density) { 14.dp.toPx() }
             val paddingLeft = maxOf(with(density) { 54.dp.toPx() }, maxYLabelW + with(density) { 10.dp.toPx() })
@@ -419,7 +429,7 @@ fun DcaTrajectoryBarChart(
                         )
 
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(valAtStep),
+                            yTickLabels[i],
                             4.dp.toPx(),
                             (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
@@ -439,7 +449,6 @@ fun DcaTrajectoryBarChart(
                     val xStepCount = 5
                     var lastDrawnRight = -Float.MAX_VALUE
                     for (i in 0 until data.size step max(1, data.size / xStepCount)) {
-                        val pt = data[i]
                         val x = xForIndex(i)
                         if (x in paddingLeft..(w - paddingRight + 4f)) {
                             drawLine(
@@ -448,7 +457,7 @@ fun DcaTrajectoryBarChart(
                                 end = Offset(x, plotH + 5.dp.toPx()),
                                 strokeWidth = 1.5f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = xYearLabels[i]
                             val textWidth = textPaint.measureText(labelText)
                             val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
                             if (drawX >= lastDrawnRight + xLabelGap) {
@@ -467,7 +476,8 @@ fun DcaTrajectoryBarChart(
                     drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
                     // Draw Bars
-                    data.forEachIndexed { i, pt ->
+                    for (i in data.indices) {
+                        val pt = data[i]
                         val x = xForIndex(i)
                         val left = x - barWidth / 2f
                         val right = x + barWidth / 2f
@@ -562,8 +572,9 @@ fun DcaTrajectoryBarChart(
                         plotTop = paddingTop,
                         plotBottom = plotH,
                         accentColor = cTeal,
-                        currentYearMonth = currentYearMonth,
+                        currentYearMonth = resolvedNowYm,
                         showDot = false,
+                        resources = nowMarkerResources,
                     )
 
                     drawContext.canvas.restore()
@@ -631,7 +642,7 @@ fun DcaTrajectoryBarChart(
                                 if (safeSelectedIndex != null) {
                                     IconButton(
                                         onClick = { selectedIndex = null },
-                                        modifier = Modifier.size(36.dp)
+                                        modifier = Modifier.size(48.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Close,

@@ -15,6 +15,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -22,10 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -349,6 +352,42 @@ fun computeNowYearFraction(
 }
 
 /**
+ * Pre-allocated Canvas drawing resources for [drawNowMarker] and [drawNowMarkerOnSeries],
+ * avoiding per-frame [PathEffect] and [android.graphics.Paint] allocations inside `Canvas.onDraw`.
+ */
+@Stable
+class NowMarkerResources(
+    val dashEffect: PathEffect,
+    val textPaint: android.graphics.Paint,
+)
+
+@Composable
+fun rememberNowMarkerResources(
+    accentColor: Color,
+    pillTextArgb: Int? = null,
+): NowMarkerResources {
+    val density = LocalDensity.current
+    val resolvedPillTextArgb = pillTextArgb ?: if (accentColor.luminance() > 0.35f) {
+        android.graphics.Color.rgb(15, 23, 42)
+    } else {
+        android.graphics.Color.WHITE
+    }
+    return remember(density, resolvedPillTextArgb) {
+        val textPx = with(density) { 9.5.sp.toPx() }
+        NowMarkerResources(
+            dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f),
+            textPaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                textSize = textPx
+                color = resolvedPillTextArgb
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                textAlign = android.graphics.Paint.Align.CENTER
+            },
+        )
+    }
+}
+
+/**
  * Draws the vertical dashed `"Now"` indicator, concentric marker dot on the curve,
  * and `[Now]` badge, returning early if [curX] falls outside the visible plot bounds.
  */
@@ -364,6 +403,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNowMarker(
     dotHaloColor: Color? = null,
     label: String = "Now",
     showDot: Boolean = true,
+    resources: NowMarkerResources? = null,
 ) {
     if (curX !in plotLeft..plotRight) return
     val resolvedPillTextArgb = pillTextArgb ?: if (accentColor.luminance() > 0.35f) {
@@ -376,15 +416,13 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNowMarker(
     } else {
         Color.White
     }
+    val dashEffect = resources?.dashEffect ?: PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
     drawLine(
         color = accentColor.copy(alpha = 0.55f),
         start = androidx.compose.ui.geometry.Offset(curX, plotTop),
         end = androidx.compose.ui.geometry.Offset(curX, plotBottom),
         strokeWidth = 1.25.dp.toPx(),
-        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
-            floatArrayOf(8f, 6f),
-            0f,
-        ),
+        pathEffect = dashEffect,
     )
     if (showDot) {
         drawCircle(
@@ -399,7 +437,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNowMarker(
         )
     }
 
-    val textPaint = android.graphics.Paint().apply {
+    val textPaint = resources?.textPaint ?: android.graphics.Paint().apply {
         isAntiAlias = true
         textSize = 9.5.sp.toPx()
         color = resolvedPillTextArgb
@@ -453,6 +491,7 @@ fun <T> androidx.compose.ui.graphics.drawscope.DrawScope.drawNowMarkerOnSeries(
     accentColor: Color,
     currentYearMonth: java.time.YearMonth? = null,
     showDot: Boolean = true,
+    resources: NowMarkerResources? = null,
 ) {
     if (items.isEmpty()) return
     val nowFraction = computeNowYearFraction(
@@ -477,5 +516,6 @@ fun <T> androidx.compose.ui.graphics.drawscope.DrawScope.drawNowMarkerOnSeries(
         plotBottom = plotBottom,
         accentColor = accentColor,
         showDot = showDot,
+        resources = resources,
     )
 }

@@ -1,12 +1,6 @@
 package com.example.ui.components.sankey
 
 import android.graphics.Paint
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -39,7 +34,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.components.charts.rememberChartPathReveal
 import com.example.ui.components.charts.safeFraction
@@ -49,11 +43,21 @@ import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
 import kotlin.math.abs
 
+@Immutable
 private data class PositionedSankeyNode(
     val layout: LayoutNode,
-    val labelCenterY: Float
+    val labelCenterY: Float,
+    val labelX: Float,
+    val leaderStartX: Float,
+    val leaderEndX: Float,
+    val titleLines: List<String>,
+    val titleTextSize: Float,
+    val amountText: String,
+    val amountTextSize: Float,
+    val colorArgb: Int
 )
 
+@Immutable
 private data class SankeyRibbonSpec(
     val tapNodeId: String,
     val focusIds: Set<String>,
@@ -63,11 +67,13 @@ private data class SankeyRibbonSpec(
     val y1Bottom: Float,
     val y2Top: Float,
     val y2Bottom: Float,
-    val startColor: Color,
-    val endColor: Color,
-    val strokeColor: Color
+    val strokeColor: Color,
+    val defaultBrush: Brush,
+    val focusedBrush: Brush,
+    val dimmedBrush: Brush
 )
 
+@Immutable
 private data class SankeyLayoutData(
     val width: Float,
     val height: Float,
@@ -80,6 +86,63 @@ private data class SankeyLayoutData(
     val hubLayout: LayoutNode,
     val ribbons: List<SankeyRibbonSpec>,
     val allClickableNodes: List<LayoutNode>
+)
+
+private fun buildRibbonBrush(
+    cStart: Color,
+    cEnd: Color,
+    startX: Float,
+    endX: Float,
+    alpha: Float,
+    isFocused: Boolean
+): Brush {
+    val baseStart = cStart.copy(alpha = alpha)
+    val baseEnd = cEnd.copy(alpha = alpha)
+    val midColor = if (isFocused) {
+        Color.White.copy(alpha = (alpha * 0.45f).coerceAtMost(0.45f))
+    } else {
+        Color(
+            (baseStart.red + baseEnd.red) / 2f,
+            (baseStart.green + baseEnd.green) / 2f,
+            (baseStart.blue + baseEnd.blue) / 2f,
+            alpha
+        )
+    }
+    return Brush.horizontalGradient(
+        0.0f to baseStart,
+        0.5f to midColor,
+        1.0f to baseEnd,
+        startX = startX,
+        endX = endX
+    )
+}
+
+private fun makeRibbonSpec(
+    tapNodeId: String,
+    focusIds: Set<String>,
+    x1: Float,
+    x2: Float,
+    y1Top: Float,
+    y1Bottom: Float,
+    y2Top: Float,
+    y2Bottom: Float,
+    startColor: Color,
+    endColor: Color,
+    strokeColor: Color,
+    dimmedAlpha: Float
+): SankeyRibbonSpec = SankeyRibbonSpec(
+    tapNodeId = tapNodeId,
+    focusIds = focusIds,
+    x1 = x1,
+    x2 = x2,
+    y1Top = y1Top,
+    y1Bottom = y1Bottom,
+    y2Top = y2Top,
+    y2Bottom = y2Bottom,
+    strokeColor = strokeColor,
+    defaultBrush = buildRibbonBrush(startColor, endColor, x1, x2, 0.40f, isFocused = false),
+    focusedBrush = buildRibbonBrush(startColor, endColor, x1, x2, 0.58f, isFocused = true),
+    dimmedBrush = buildRibbonBrush(startColor, endColor, x1, x2, dimmedAlpha, isFocused = false)
 )
 
 private fun resolveNonOverlappingLabelCenters(
@@ -158,35 +221,30 @@ private fun fitCanvasTextLines(
         val firstFit = paint.breakText(text, true, safeMax, null).coerceAtLeast(1)
         val splitAt = text.lastIndexOf(' ', firstFit.coerceAtMost(text.length - 1))
         if (splitAt > 0 && splitAt < text.length - 1) {
-            val l1 = text.substring(0, splitAt).trimEnd()
-            val rawL2 = text.substring(splitAt + 1).trimStart()
-            val l2 = if (paint.measureText(rawL2) <= safeMax) {
-                rawL2
+            val part1 = text.substring(0, splitAt).trimEnd()
+            val part2Raw = text.substring(splitAt + 1).trimStart()
+            val part2 = if (paint.measureText(part2Raw) <= safeMax) {
+                part2Raw
             } else {
-                val ellW = paint.measureText("…")
-                val c = paint.breakText(rawL2, true, (safeMax - ellW).coerceAtLeast(4f), null)
-                rawL2.take(c).trimEnd() + "…"
+                val n2 = paint.breakText(part2Raw, true, (safeMax - paint.measureText("...")).coerceAtLeast(6f), null).coerceAtLeast(1)
+                part2Raw.take(n2).trimEnd() + "..."
             }
-            if (l1.isNotEmpty()) {
-                return minTextSize to listOf(l1, l2)
-            }
+            return minTextSize to listOf(part1, part2)
         }
     }
 
     paint.textSize = minTextSize
-    val ellW = paint.measureText("…")
-    val count = paint.breakText(text, true, (safeMax - ellW).coerceAtLeast(4f), null).coerceAtLeast(1)
-    return minTextSize to listOf(text.take(count).trimEnd() + "…")
+    val ellipsisW = paint.measureText("...")
+    val chars = paint.breakText(text, true, (safeMax - ellipsisW).coerceAtLeast(6f), null).coerceAtLeast(1)
+    return minTextSize to listOf(text.take(chars).trimEnd() + "...")
 }
 
 private fun solveBezierTForX(x: Float, x1: Float, cX: Float, x2: Float): Float {
-    if (x <= x1) return 0f
-    if (x >= x2) return 1f
     val p1x = x1 + cX
     val p2x = x2 - cX
     var lo = 0f
     var hi = 1f
-    repeat(10) {
+    repeat(12) {
         val t = (lo + hi) * 0.5f
         val u = 1f - t
         val bx = (u * u * u * x1) + (3f * u * u * t * p1x) + (3f * u * t * t * p2x) + (t * t * t * x2)
@@ -251,19 +309,7 @@ fun SankeyCanvasDiagram(
         }
     }
 
-    // Animated ribbon flow gradient phase (infinite smooth flow from source to sink)
-    val infiniteTransition = rememberInfiniteTransition(label = "SankeyFlow")
-    val flowPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "flowPhase"
-    )
-
-    // Smooth reveal progress on viewMode or stream changes
+    // Smooth one-shot reveal progress when viewMode or stream counts change (zero 60fps infinite polling!)
     val revealProgress by rememberChartPathReveal(
         key = Pair(viewMode, inflowNodes.size + outflowNodes.size),
         durationMillis = 650
@@ -275,6 +321,15 @@ fun SankeyCanvasDiagram(
     val ribbonPath = remember { Path() }
     val topEdgePath = remember { Path() }
     val bottomEdgePath = remember { Path() }
+
+    val strokeDefault = remember(density) { Stroke(with(density) { 1.25f.dp.toPx() }) }
+    val strokeFocused = remember(density) { Stroke(with(density) { 2.2f.dp.toPx() }) }
+    val strokeDimmed = remember(density) { Stroke(with(density) { 0.6f.dp.toPx() }) }
+    val selectionBorderStroke = remember { Stroke(width = 3f) }
+    val leaderStrokePx = remember(density) { with(density) { 1f.dp.toPx() } }
+    val leaderThresholdPx = remember(density) { with(density) { 3.dp.toPx() } }
+    val poolOffsetPx = remember(density) { with(density) { 6.dp.toPx() } }
+    val poolMinPadPx = remember(density) { with(density) { 2.dp.toPx() } }
 
     val latestSelectedNodeId by rememberUpdatedState(selectedNodeId)
     val latestOnSelectNode by rememberUpdatedState(onSelectNode)
@@ -312,6 +367,7 @@ fun SankeyCanvasDiagram(
                 } else {
                     with(density) {
                         val is3Pillar = viewMode == 0
+                        val dimmedAlpha = if (is3Pillar) 0.06f else 0.05f
                         val poolTextHeight = poolLabelPaint.fontMetrics.let { it.descent - it.ascent }
                         val paddingTop = if (is3Pillar) {
                             16.dp.toPx()
@@ -367,7 +423,7 @@ fun SankeyCanvasDiagram(
                         val inScale = (safeSumIn / flowScaleMax).toFloat().coerceIn(0f, 1f)
                         val outScale = (safeSumOut / flowScaleMax).toFloat().coerceIn(0f, 1f)
 
-                        // 1. Inflow Node Geometries
+                        // 1. Inflow Node Geometries & pre-fitted label lines
                         val totalInflowGap = (inflowNodes.size - 1).coerceAtLeast(0) * gap
                         val maxInflowBarH = (availableH - totalInflowGap).coerceAtLeast(minNodeH)
                         val targetInflowBarH = maxOf(
@@ -397,8 +453,41 @@ fun SankeyCanvasDiagram(
                             maxY = maxLabelY,
                             minPitch = minLabelPitch
                         )
+                        val labelMarginPad = 6.dp.toPx()
+                        val edgePad = 4.dp.toPx()
+                        val leaderOffset = 2.dp.toPx()
                         val inflowLayouts = rawInLayouts.mapIndexed { idx, ln ->
-                            PositionedSankeyNode(ln, resolvedInLabelYs[idx])
+                            val xLabel = ln.bounds.left - labelMarginPad
+                            val maxLeftW = (xLabel - edgePad).coerceAtLeast(10f)
+                            val (fittedTitleSize, titleLines) = fitCanvasTextLines(
+                                text = ln.node.shortLabel,
+                                maxWidth = maxLeftW,
+                                paint = boldPaint,
+                                baseTextSize = boldTextPx,
+                                minTextSize = minTextPx,
+                                allowTwoLineWrap = true
+                            )
+                            val amountStr = fmtCompact(ln.node.amount.finiteOrZero())
+                            val (fittedAmtSize, amtLines) = fitCanvasTextLines(
+                                text = amountStr,
+                                maxWidth = maxLeftW,
+                                paint = labelPaint,
+                                baseTextSize = textPx,
+                                minTextSize = minTextPx,
+                                allowTwoLineWrap = false
+                            )
+                            PositionedSankeyNode(
+                                layout = ln,
+                                labelCenterY = resolvedInLabelYs[idx],
+                                labelX = xLabel,
+                                leaderStartX = ln.bounds.left,
+                                leaderEndX = xLabel + leaderOffset,
+                                titleLines = titleLines,
+                                titleTextSize = fittedTitleSize,
+                                amountText = amtLines[0],
+                                amountTextSize = fittedAmtSize,
+                                colorArgb = ln.node.color.toArgb()
+                            )
                         }
 
                         // 2. Central Hub Geometry
@@ -415,7 +504,7 @@ fun SankeyCanvasDiagram(
                         )
                         val hubLayout = LayoutNode(centralHubNode, hubTop, hubBottom, hubBounds)
 
-                        // 3. Outflow Node Geometries
+                        // 3. Outflow Node Geometries & pre-fitted label lines
                         val totalOutflowGap = (outflowNodes.size - 1).coerceAtLeast(0) * gap
                         val maxOutflowBarH = (availableH - totalOutflowGap).coerceAtLeast(minNodeH)
                         val targetOutflowBarH = maxOf(
@@ -446,10 +535,44 @@ fun SankeyCanvasDiagram(
                             minPitch = minLabelPitch
                         )
                         val outflowLayouts = rawOutLayouts.mapIndexed { idx, ln ->
-                            PositionedSankeyNode(ln, resolvedOutLabelYs[idx])
+                            val xLabel = ln.bounds.right + labelMarginPad
+                            val maxRightW = (wPx - xLabel - edgePad).coerceAtLeast(10f)
+                            val pct = (ln.node.amount.finiteOrZero().coerceAtLeast(0.0) / pctDenomLayout * 100.0).coerceIn(0.0, 999.0)
+                            val titleText = "${ln.node.shortLabel} (${fmtPct(pct, 0)})"
+                            val (fittedTitleSize, titleLines) = fitCanvasTextLines(
+                                text = titleText,
+                                maxWidth = maxRightW,
+                                paint = boldPaint,
+                                baseTextSize = boldTextPx,
+                                minTextSize = minTextPx,
+                                allowTwoLineWrap = true
+                            )
+                            val amountStr = fmtCompact(ln.node.amount.finiteOrZero())
+                            val (fittedAmtSize, amtLines) = fitCanvasTextLines(
+                                text = amountStr,
+                                maxWidth = maxRightW,
+                                paint = labelPaint,
+                                baseTextSize = textPx,
+                                minTextSize = minTextPx,
+                                allowTwoLineWrap = false
+                            )
+                            PositionedSankeyNode(
+                                layout = ln,
+                                labelCenterY = resolvedOutLabelYs[idx],
+                                labelX = xLabel,
+                                leaderStartX = ln.bounds.right,
+                                leaderEndX = xLabel - leaderOffset,
+                                titleLines = titleLines,
+                                titleTextSize = fittedTitleSize,
+                                amountText = amtLines[0],
+                                amountTextSize = fittedAmtSize,
+                                colorArgb = ln.node.color.toArgb()
+                            )
                         }
+                        boldPaint.textSize = boldTextPx
+                        labelPaint.textSize = textPx
 
-                        // 4. Ribbons
+                        // 4. Ribbons (with prebuilt Gradient Brushes)
                         val ribbons = buildList {
                             if (is3Pillar) {
                                 val inLayout = rawInLayouts.firstOrNull()
@@ -463,7 +586,7 @@ fun SankeyCanvasDiagram(
                                         val sourceBottom = curSourceY + sliceH
                                         curSourceY += sliceH
                                         add(
-                                            SankeyRibbonSpec(
+                                            makeRibbonSpec(
                                                 tapNodeId = outLayout.node.id,
                                                 focusIds = setOf(inLayout.node.id, outLayout.node.id),
                                                 x1 = inLayout.bounds.right,
@@ -474,7 +597,8 @@ fun SankeyCanvasDiagram(
                                                 y2Bottom = outLayout.yBottom,
                                                 startColor = inLayout.node.color,
                                                 endColor = outLayout.node.color,
-                                                strokeColor = outLayout.node.color
+                                                strokeColor = outLayout.node.color,
+                                                dimmedAlpha = dimmedAlpha
                                             )
                                         )
                                     }
@@ -487,7 +611,7 @@ fun SankeyCanvasDiagram(
                                     val targetBottom = hubInY + ribbonH
                                     hubInY += ribbonH
                                     add(
-                                        SankeyRibbonSpec(
+                                        makeRibbonSpec(
                                             tapNodeId = inLayout.node.id,
                                             focusIds = setOf(inLayout.node.id, centralHubNode.id),
                                             x1 = inLayout.bounds.right,
@@ -498,7 +622,8 @@ fun SankeyCanvasDiagram(
                                             y2Bottom = targetBottom,
                                             startColor = inLayout.node.color,
                                             endColor = cTeal,
-                                            strokeColor = inLayout.node.color
+                                            strokeColor = inLayout.node.color,
+                                            dimmedAlpha = dimmedAlpha
                                         )
                                     )
                                 }
@@ -509,7 +634,7 @@ fun SankeyCanvasDiagram(
                                     val sourceBottom = hubOutY + ribbonH
                                     hubOutY += ribbonH
                                     add(
-                                        SankeyRibbonSpec(
+                                        makeRibbonSpec(
                                             tapNodeId = outLayout.node.id,
                                             focusIds = setOf(outLayout.node.id, centralHubNode.id),
                                             x1 = xCenter + nodeWidth,
@@ -520,7 +645,8 @@ fun SankeyCanvasDiagram(
                                             y2Bottom = outLayout.yBottom,
                                             startColor = cTeal,
                                             endColor = outLayout.node.color,
-                                            strokeColor = outLayout.node.color
+                                            strokeColor = outLayout.node.color,
+                                            dimmedAlpha = dimmedAlpha
                                         )
                                     )
                                 }
@@ -560,7 +686,6 @@ fun SankeyCanvasDiagram(
                             val labelHalfH = (boldTextPx + textPx + 6.dp.toPx()) / 2f
                             val curSelected = latestSelectedNodeId
 
-                            // 1a. Check inflow & outflow label columns (tapping a node's text label selects it)
                             val clickedInLabel = layout.inflowLayouts.firstOrNull { pos ->
                                 offset.x <= pos.layout.bounds.right + padX &&
                                     abs(offset.y - pos.labelCenterY) <= labelHalfH
@@ -580,7 +705,6 @@ fun SankeyCanvasDiagram(
                                 return@detectTapGestures
                             }
 
-                            // 1b. Check direct node hit
                             val clickedNode = layout.allClickableNodes.firstOrNull { node ->
                                 offset.x in (node.bounds.left - padX)..(node.bounds.right + padX) &&
                                     offset.y in (node.bounds.top - padY)..(node.bounds.bottom + padY)
@@ -591,7 +715,6 @@ fun SankeyCanvasDiagram(
                                 return@detectTapGestures
                             }
 
-                            // 2. Accurate cubic Bezier ribbon envelope hit-testing
                             val ribbonPadY = 4.dp.toPx()
                             val hitRibbon = layout.ribbons.firstOrNull { r ->
                                 if (offset.x !in r.x1..r.x2) {
@@ -619,67 +742,29 @@ fun SankeyCanvasDiagram(
                 val layout = layoutData ?: return@Canvas
                 val is3Pillar = viewMode == 0
                 val curSelected = selectedNodeId
-                val safeFlowPhase = flowPhase.finiteOrZero().coerceIn(0f, 1f)
                 val safeReveal = revealProgress.finiteOrZero().coerceIn(0f, 1f)
 
-                fun createRibbonBrush(
-                    cStart: Color,
-                    cEnd: Color,
-                    startX: Float,
-                    endX: Float,
-                    alpha: Float,
-                    isFocused: Boolean
-                ): Brush {
-                    val baseStart = cStart.copy(alpha = alpha)
-                    val baseEnd = cEnd.copy(alpha = alpha)
-                    val pulseColor = if (isFocused) {
-                        Color.White.copy(alpha = (alpha * 1.5f).coerceAtMost(0.95f))
-                    } else {
-                        Color(
-                            (baseStart.red + baseEnd.red) / 2f,
-                            (baseStart.green + baseEnd.green) / 2f,
-                            (baseStart.blue + baseEnd.blue) / 2f,
-                            (alpha * 1.25f).coerceAtMost(0.70f)
-                        )
-                    }
-                    val p0 = (safeFlowPhase - 0.22f).coerceIn(0.01f, 0.98f)
-                    val p1 = safeFlowPhase.coerceIn(0.02f, 0.99f)
-                    val p2 = (safeFlowPhase + 0.22f).coerceIn(0.03f, 1.0f)
-                    return Brush.horizontalGradient(
-                        0.0f to baseStart,
-                        p0 to baseStart,
-                        p1 to pulseColor,
-                        p2 to baseEnd,
-                        1.0f to baseEnd,
-                        startX = startX,
-                        endX = endX
-                    )
-                }
-
-                // Smooth reveal clip
                 val revealRight = layout.width * safeReveal
                 drawContext.canvas.save()
                 drawContext.canvas.clipRect(0f, 0f, revealRight, layout.height)
 
-                // Draw Ribbons using pooled Path objects
                 layout.ribbons.forEach { r ->
                     val isFocused = curSelected != null && curSelected in r.focusIds
                     val isDimmed = curSelected != null && !isFocused
-
-                    val fillAlpha = when {
-                        isFocused -> 0.58f
-                        isDimmed -> if (is3Pillar) 0.06f else 0.05f
-                        else -> 0.40f
+                    val activeBrush = when {
+                        isFocused -> r.focusedBrush
+                        isDimmed -> r.dimmedBrush
+                        else -> r.defaultBrush
                     }
                     val strokeAlpha = when {
                         isFocused -> 0.88f
                         isDimmed -> 0.12f
                         else -> 0.70f
                     }
-                    val strokeW = when {
-                        isFocused -> 2.2f.dp.toPx()
-                        isDimmed -> 0.6f.dp.toPx()
-                        else -> 1.25f.dp.toPx()
+                    val activeStroke = when {
+                        isFocused -> strokeFocused
+                        isDimmed -> strokeDimmed
+                        else -> strokeDefault
                     }
                     val cX = (r.x2 - r.x1) * 0.52f
 
@@ -690,30 +775,23 @@ fun SankeyCanvasDiagram(
                     ribbonPath.cubicTo(r.x2 - cX, r.y2Bottom, r.x1 + cX, r.y1Bottom, r.x1, r.y1Bottom)
                     ribbonPath.close()
 
-                    drawPath(
-                        path = ribbonPath,
-                        brush = createRibbonBrush(
-                            cStart = r.startColor,
-                            cEnd = r.endColor,
-                            startX = r.x1,
-                            endX = r.x2,
-                            alpha = fillAlpha,
-                            isFocused = isFocused
-                        )
-                    )
+                    drawPath(path = ribbonPath, brush = activeBrush)
 
+                    val strokeCol = r.strokeColor.copy(alpha = strokeAlpha)
                     topEdgePath.reset()
                     topEdgePath.moveTo(r.x1, r.y1Top)
                     topEdgePath.cubicTo(r.x1 + cX, r.y1Top, r.x2 - cX, r.y2Top, r.x2, r.y2Top)
-                    drawPath(topEdgePath, color = r.strokeColor.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                    drawPath(topEdgePath, color = strokeCol, style = activeStroke)
 
                     bottomEdgePath.reset()
                     bottomEdgePath.moveTo(r.x1, r.y1Bottom)
                     bottomEdgePath.cubicTo(r.x1 + cX, r.y1Bottom, r.x2 - cX, r.y2Bottom, r.x2, r.y2Bottom)
-                    drawPath(bottomEdgePath, color = r.strokeColor.copy(alpha = strokeAlpha), style = Stroke(strokeW))
+                    drawPath(bottomEdgePath, color = strokeCol, style = activeStroke)
                 }
 
-                // Inflow Nodes & Margin Labels
+                // Inflow Nodes & Pre-Fitted Margin Labels
+                labelPaint.textAlign = Paint.Align.RIGHT
+                boldPaint.textAlign = Paint.Align.RIGHT
                 layout.inflowLayouts.forEach { pos ->
                     val item = pos.layout
                     val isSel = curSelected == item.node.id
@@ -729,78 +807,38 @@ fun SankeyCanvasDiagram(
                             topLeft = Offset(item.bounds.left - 2.5f, item.bounds.top - 2.5f),
                             size = Size(item.bounds.width + 5f, item.bounds.height + 5f),
                             cornerRadius = CornerRadius(layout.cornerR + 2f, layout.cornerR + 2f),
-                            style = Stroke(width = 3f)
+                            style = selectionBorderStroke
                         )
                     }
 
                     val nodeCenterY = (item.yTop + item.yBottom) / 2f
                     val yCenter = pos.labelCenterY
-                    val xLabel = item.bounds.left - 6.dp.toPx()
-                    if (abs(yCenter - nodeCenterY) > 3.dp.toPx()) {
+                    if (abs(yCenter - nodeCenterY) > leaderThresholdPx) {
                         drawLine(
                             color = item.node.color.copy(alpha = 0.45f),
-                            start = Offset(item.bounds.left, nodeCenterY),
-                            end = Offset(xLabel + 2.dp.toPx(), yCenter),
-                            strokeWidth = 1f.dp.toPx()
+                            start = Offset(pos.leaderStartX, nodeCenterY),
+                            end = Offset(pos.leaderEndX, yCenter),
+                            strokeWidth = leaderStrokePx
                         )
                     }
 
-                    labelPaint.textAlign = Paint.Align.RIGHT
-                    boldPaint.textAlign = Paint.Align.RIGHT
-                    val maxLeftW = (xLabel - 4.dp.toPx()).coerceAtLeast(10f)
-
-                    val labelText = item.node.shortLabel
-                    val originalBoldSize = boldPaint.textSize
-                    val (fittedTitleSize, titleLines) = fitCanvasTextLines(
-                        text = labelText,
-                        maxWidth = maxLeftW,
-                        paint = boldPaint,
-                        baseTextSize = boldTextPx,
-                        minTextSize = minTextPx,
-                        allowTwoLineWrap = true
-                    )
-                    boldPaint.textSize = fittedTitleSize
-                    val titleLineStep = fittedTitleSize * 1.12f
-                    val amountExtraShift = if (titleLines.size > 1) {
-                        val l1Y = yCenter - titleBaselineOffset - titleLineStep * 0.55f
-                        val l2Y = yCenter - titleBaselineOffset + titleLineStep * 0.35f
-                        drawContext.canvas.nativeCanvas.drawText(titleLines[0], xLabel, l1Y, boldPaint)
-                        drawContext.canvas.nativeCanvas.drawText(titleLines[1], xLabel, l2Y, boldPaint)
+                    boldPaint.textSize = pos.titleTextSize
+                    val titleLineStep = pos.titleTextSize * 1.12f
+                    val amountExtraShift = if (pos.titleLines.size > 1) {
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[0], pos.labelX, yCenter - titleBaselineOffset - titleLineStep * 0.55f, boldPaint)
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[1], pos.labelX, yCenter - titleBaselineOffset + titleLineStep * 0.35f, boldPaint)
                         titleLineStep * 0.42f
                     } else {
-                        drawContext.canvas.nativeCanvas.drawText(
-                            titleLines[0],
-                            xLabel,
-                            yCenter - titleBaselineOffset,
-                            boldPaint
-                        )
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[0], pos.labelX, yCenter - titleBaselineOffset, boldPaint)
                         0f
                     }
-                    boldPaint.textSize = originalBoldSize
 
-                    val amountText = fmtCompact(item.node.amount.finiteOrZero())
-                    val originalLabelSize = labelPaint.textSize
-                    val (fittedAmountSize, amountLines) = fitCanvasTextLines(
-                        text = amountText,
-                        maxWidth = maxLeftW,
-                        paint = labelPaint,
-                        baseTextSize = textPx,
-                        minTextSize = minTextPx,
-                        allowTwoLineWrap = false
-                    )
-                    labelPaint.textSize = fittedAmountSize
-                    labelPaint.color = item.node.color.toArgb()
-                    drawContext.canvas.nativeCanvas.drawText(
-                        amountLines[0],
-                        xLabel,
-                        yCenter + amountBaselineOffset + amountExtraShift,
-                        labelPaint
-                    )
-                    labelPaint.textSize = originalLabelSize
-                    labelPaint.color = textColor
+                    labelPaint.textSize = pos.amountTextSize
+                    labelPaint.color = pos.colorArgb
+                    drawContext.canvas.nativeCanvas.drawText(pos.amountText, pos.labelX, yCenter + amountBaselineOffset + amountExtraShift, labelPaint)
                 }
 
-                // Central Pool Hub (in Granular Mode)
+                // Central Pool Hub
                 if (!is3Pillar) {
                     val hub = layout.hubLayout
                     drawRoundRect(
@@ -815,12 +853,12 @@ fun SankeyCanvasDiagram(
                             topLeft = Offset(hub.bounds.left - 2.5f, hub.bounds.top - 2.5f),
                             size = Size(hub.bounds.width + 5f, hub.bounds.height + 5f),
                             cornerRadius = CornerRadius(layout.cornerR + 2f, layout.cornerR + 2f),
-                            style = Stroke(width = 3f)
+                            style = selectionBorderStroke
                         )
                     }
                     poolLabelPaint.textAlign = Paint.Align.CENTER
-                    val poolBaselineY = (hub.bounds.top - 6.dp.toPx() - poolLabelPaint.fontMetrics.descent)
-                        .coerceAtLeast(-poolLabelPaint.fontMetrics.ascent + 2.dp.toPx())
+                    val poolBaselineY = (hub.bounds.top - poolOffsetPx - poolLabelPaint.fontMetrics.descent)
+                        .coerceAtLeast(-poolLabelPaint.fontMetrics.ascent + poolMinPadPx)
                     drawContext.canvas.nativeCanvas.drawText(
                         "POOL",
                         layout.xCenter + (layout.nodeWidth / 2f),
@@ -829,8 +867,9 @@ fun SankeyCanvasDiagram(
                     )
                 }
 
-                // Outflow Nodes & Margin Labels
-                val pctDenom = sumInflows.finiteOrZero().let { if (it > 0.0) it else 1.0 }
+                // Outflow Nodes & Pre-Fitted Margin Labels
+                labelPaint.textAlign = Paint.Align.LEFT
+                boldPaint.textAlign = Paint.Align.LEFT
                 layout.outflowLayouts.forEach { pos ->
                     val item = pos.layout
                     val isSel = curSelected == item.node.id
@@ -846,77 +885,40 @@ fun SankeyCanvasDiagram(
                             topLeft = Offset(item.bounds.left - 2.5f, item.bounds.top - 2.5f),
                             size = Size(item.bounds.width + 5f, item.bounds.height + 5f),
                             cornerRadius = CornerRadius(layout.cornerR + 2f, layout.cornerR + 2f),
-                            style = Stroke(width = 3f)
+                            style = selectionBorderStroke
                         )
                     }
 
                     val nodeCenterY = (item.yTop + item.yBottom) / 2f
                     val yCenter = pos.labelCenterY
-                    val xLabel = item.bounds.right + 6.dp.toPx()
-                    if (abs(yCenter - nodeCenterY) > 3.dp.toPx()) {
+                    if (abs(yCenter - nodeCenterY) > leaderThresholdPx) {
                         drawLine(
                             color = item.node.color.copy(alpha = 0.45f),
-                            start = Offset(item.bounds.right, nodeCenterY),
-                            end = Offset(xLabel - 2.dp.toPx(), yCenter),
-                            strokeWidth = 1f.dp.toPx()
+                            start = Offset(pos.leaderStartX, nodeCenterY),
+                            end = Offset(pos.leaderEndX, yCenter),
+                            strokeWidth = leaderStrokePx
                         )
                     }
 
-                    labelPaint.textAlign = Paint.Align.LEFT
-                    boldPaint.textAlign = Paint.Align.LEFT
-                    val pct = (item.node.amount.finiteOrZero().coerceAtLeast(0.0) / pctDenom * 100.0).coerceIn(0.0, 999.0)
-                    val maxRightW = (layout.width - xLabel - 4.dp.toPx()).coerceAtLeast(10f)
-
-                    val titleText = "${item.node.shortLabel} (${fmtPct(pct, 0)})"
-                    val originalBoldSize = boldPaint.textSize
-                    val (fittedTitleSize, titleLines) = fitCanvasTextLines(
-                        text = titleText,
-                        maxWidth = maxRightW,
-                        paint = boldPaint,
-                        baseTextSize = boldTextPx,
-                        minTextSize = minTextPx,
-                        allowTwoLineWrap = true
-                    )
-                    boldPaint.textSize = fittedTitleSize
-                    val titleLineStep = fittedTitleSize * 1.12f
-                    val amountExtraShift = if (titleLines.size > 1) {
-                        val l1Y = yCenter - titleBaselineOffset - titleLineStep * 0.55f
-                        val l2Y = yCenter - titleBaselineOffset + titleLineStep * 0.35f
-                        drawContext.canvas.nativeCanvas.drawText(titleLines[0], xLabel, l1Y, boldPaint)
-                        drawContext.canvas.nativeCanvas.drawText(titleLines[1], xLabel, l2Y, boldPaint)
+                    boldPaint.textSize = pos.titleTextSize
+                    val titleLineStep = pos.titleTextSize * 1.12f
+                    val amountExtraShift = if (pos.titleLines.size > 1) {
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[0], pos.labelX, yCenter - titleBaselineOffset - titleLineStep * 0.55f, boldPaint)
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[1], pos.labelX, yCenter - titleBaselineOffset + titleLineStep * 0.35f, boldPaint)
                         titleLineStep * 0.42f
                     } else {
-                        drawContext.canvas.nativeCanvas.drawText(
-                            titleLines[0],
-                            xLabel,
-                            yCenter - titleBaselineOffset,
-                            boldPaint
-                        )
+                        drawContext.canvas.nativeCanvas.drawText(pos.titleLines[0], pos.labelX, yCenter - titleBaselineOffset, boldPaint)
                         0f
                     }
-                    boldPaint.textSize = originalBoldSize
 
-                    val amountText = fmtCompact(item.node.amount.finiteOrZero())
-                    val originalLabelSize = labelPaint.textSize
-                    val (fittedAmountSize, amountLines) = fitCanvasTextLines(
-                        text = amountText,
-                        maxWidth = maxRightW,
-                        paint = labelPaint,
-                        baseTextSize = textPx,
-                        minTextSize = minTextPx,
-                        allowTwoLineWrap = false
-                    )
-                    labelPaint.textSize = fittedAmountSize
-                    labelPaint.color = item.node.color.toArgb()
-                    drawContext.canvas.nativeCanvas.drawText(
-                        amountLines[0],
-                        xLabel,
-                        yCenter + amountBaselineOffset + amountExtraShift,
-                        labelPaint
-                    )
-                    labelPaint.textSize = originalLabelSize
-                    labelPaint.color = textColor
+                    labelPaint.textSize = pos.amountTextSize
+                    labelPaint.color = pos.colorArgb
+                    drawContext.canvas.nativeCanvas.drawText(pos.amountText, pos.labelX, yCenter + amountBaselineOffset + amountExtraShift, labelPaint)
                 }
+
+                boldPaint.textSize = boldTextPx
+                labelPaint.textSize = textPx
+                labelPaint.color = textColor
 
                 drawContext.canvas.restore()
             }

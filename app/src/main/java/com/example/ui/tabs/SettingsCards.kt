@@ -117,6 +117,8 @@ fun SettingsGroupCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            val stackBadgeBelow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 385 &&
+                androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.3f
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -146,12 +148,23 @@ fun SettingsGroupCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    if (stackBadgeBelow && badgeText != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        ColorPill(
+                            text = badgeText,
+                            color = badgeColor,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 8.dp,
+                            verticalPadding = 3.dp
+                        )
+                    }
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    if (badgeText != null) {
+                    if (!stackBadgeBelow && badgeText != null) {
                         ColorPill(
                             text = badgeText,
                             color = badgeColor,

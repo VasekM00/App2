@@ -473,15 +473,6 @@ internal fun FireMilestonesComparisonCard(
                                 horizontalPadding = 7.dp,
                                 verticalPadding = 3.dp
                             )
-                        } else {
-                            Text(
-                                text = "${fmtCompact(activeGap)} gap",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = BodyFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
                         }
                     }
 
@@ -590,66 +581,6 @@ internal fun FireMilestonesComparisonCard(
                                     softWrap = true
                                 )
                             }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    val milestoneDetailInfo = MetricInfo(
-                        title = "${activeM.name} Strategy & Rules",
-                        category = "FIRE Milestone",
-                        explanation = "${activeM.description}\n\n${
-                            if (activeM.id == "coast") "Compound interest alone turns current capital into full financial independence without future savings."
-                            else if (activeM.isAchieved) "Milestone unlocked! Your current portfolio exceeds this threshold."
-                            else "At ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR, reaching ${fmtCZK(activeTarget)} generates sustainable passive cash flow of ${fmtCZK(roundTo1k(activeM.monthlyPassiveIncome))} / month."
-                        }",
-                        formulaOrRule = "${fmtCZK(activeTarget)} @ ${fmtPct(state.settings.safeWithdrawalRatePct)} SWR",
-                        accentColor = activeConfig.accentColor
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = activeConfig.accentColor.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, activeConfig.accentColor.copy(alpha = 0.25f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onShowInfo?.invoke(milestoneDetailInfo) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f).padding(end = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Milestone Strategy Details",
-                                    tint = activeConfig.accentColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Tap to view milestone strategy & rules",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = activeConfig.accentColor
-                                    ),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                                contentDescription = null,
-                                tint = activeConfig.accentColor,
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
                     }
 

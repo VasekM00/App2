@@ -1,5 +1,6 @@
 package com.example.ui.components.sankey
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import com.example.domain.FinancialEngine
@@ -14,6 +15,7 @@ import com.example.ui.theme.GoodGreenDark
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 
+@Immutable
 data class SankeyNode(
     val id: String,
     val title: String,
@@ -26,6 +28,7 @@ data class SankeyNode(
     val statutoryNote: String = ""
 )
 
+@Immutable
 data class LayoutNode(
     val node: SankeyNode,
     val yTop: Float,

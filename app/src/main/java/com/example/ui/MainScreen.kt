@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -81,12 +82,14 @@ import com.example.ui.tabs.OverviewTab
 import com.example.ui.tabs.ProjectionsTab
 import com.example.ui.tabs.SettingsTab
 
+@Immutable
 data class NavTabItem(
     val title: String,
     val icon: ImageVector,
     val tag: String
 )
 
+@Immutable
 data class SearchResult(
     val title: String,
     val category: String,
@@ -95,6 +98,7 @@ data class SearchResult(
     val sectionKey: String? = null
 )
 
+@Immutable
 data class SearchIndexEntry(
     val title: String,
     val category: String,
@@ -225,9 +229,9 @@ fun MainScreen(
             SearchIndexEntry("Living Expenses, Rent & Groceries", "Budget > Expenses", 1, 2, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
             SearchIndexEntry("Monthly Records & Bank Ledger", "Budget > Ledger", 1, 3, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
             SearchIndexEntry("Freedom Goal, SWR & 35-Year Forecast", "Wealth > Forecast", 2, 0, listOf("fire", "target", "swr", "withdrawal", "bridge", "state pension", "lifestyle", "projections", "trajectory", "forecast")),
-            SearchIndexEntry("What-If Simulator & Investment Balances", "Wealth > What-If", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders")),
-            SearchIndexEntry("Monte Carlo Stress Test & Scenarios", "Wealth > Stress Test", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
-            SearchIndexEntry("Czech Tax Relief, DPS & DIP Pensions", "Wealth > Tax & Pension", 2, 3, listOf("pension", "dps", "dip", "tax", "statutory", "youth", "40%", "tax shield", "deduction", "employer match", "early withdrawal")),
+            SearchIndexEntry("What-If Simulator & Scenario Presets", "Wealth > What-If", 2, 1, listOf("investments", "portu", "etf", "dca", "portfolio", "liquid", "sandbox", "what-if", "sliders", "presets")),
+            SearchIndexEntry("Monte Carlo Stress Test & Scenarios", "Wealth > Stress", 2, 2, listOf("monte carlo", "fan chart", "p50", "p95", "p5", "simulation", "probability", "stress", "stagflation", "crash")),
+            SearchIndexEntry("Czech Tax Relief, DPS, DIP & 3-Year Time Test", "Wealth > Pension", 2, 3, listOf("pension", "dps", "dip", "tax", "statutory", "youth", "tax shield", "deduction", "employer match", "early withdrawal", "time test", "capital gains", "3 year")),
             SearchIndexEntry("Goals, Roadmap & Annual Action Checklist", "Wealth > Goals & Roadmap", 2, 4, listOf("roadmap", "action", "checklist", "tasks", "phase", "timeline", "life goals", "goal", "down payment", "real estate", "house")),
             SearchIndexEntry("Base Planning Year, Inflation & Assumptions", "More > Portfolio & Tax", 3, 1, listOf("base year", "cpi", "inflation", "settings", "planning year", "macro", "fire assumptions"), sectionKey = "assumptions"),
             SearchIndexEntry("Salary, Raise & Bonus Parameters", "More > Household", 3, 0, listOf("salary settings", "vsalary", "esalary", "growth", "bonus", "gift", "vouchers", "income settings"), sectionKey = "income"),
@@ -408,7 +412,7 @@ fun MainScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             selectedTab = index
                         },
-                        icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
+                        icon = { Icon(imageVector = tab.icon, contentDescription = null) },
                         label = {
                             Text(
                                 text = tab.title,

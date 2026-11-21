@@ -252,17 +252,17 @@ fun CapitalGainsTimeTestCard(
                             color = GoodGreen.copy(alpha = 0.12f),
                             border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.35f)),
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 40.dp)
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                 .testTag("btn_add_lot")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
-                                    contentDescription = "Add lot",
+                                    contentDescription = null,
                                     tint = GoodGreen,
                                     modifier = Modifier.size(14.dp)
                                 )

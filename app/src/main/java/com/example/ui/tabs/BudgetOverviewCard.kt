@@ -185,6 +185,7 @@ internal fun BudgetOverviewCard(
             transactions = allImportedTransactions,
             settings = state.settings,
             dismissedSubscriptionMerchants = dismissedSubscriptionMerchants,
+            initiallyExpanded = false,
             onShowInfo = onShowInfo,
             onUpdateSettings = onUpdateSettings,
             onDismissSubscription = onDismissSubscription,
@@ -197,6 +198,7 @@ internal fun BudgetOverviewCard(
         MerchantLeaderboardCard(
             transactions = allImportedTransactions,
             settings = state.settings,
+            initiallyExpanded = false,
             onShowInfo = onShowInfo,
             onUpdateSettings = onUpdateSettings,
             onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,

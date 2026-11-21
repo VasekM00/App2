@@ -110,6 +110,23 @@ internal fun LedgerChart(
     }
     val gridDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f) }
     val selectedDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f) }
+    val lineStroke = remember(density) {
+        Stroke(width = with(density) { 3.dp.toPx() }, cap = StrokeCap.Round)
+    }
+    val gridSteps = 2
+    val yTickLabels = remember(maxVal) {
+        (0..gridSteps).map { i -> fmtCompact(maxVal * (gridSteps - i) / gridSteps) }
+    }
+    val xLabels = remember(sorted) {
+        sorted.map { e ->
+            val parts = e.yearMonth.split("-")
+            if (parts.size >= 2 && parts[0].length >= 2) {
+                "${parts[1]}/${parts[0].takeLast(2)}"
+            } else {
+                e.yearMonth
+            }
+        }
+    }
     val incPath = remember { Path() }
     val expPath = remember { Path() }
     val incPoints = remember { mutableListOf<Offset>() }
@@ -188,8 +205,8 @@ internal fun LedgerChart(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Chart Canvas (density-aware padding with Y-axis scale)
-            val maxYLabelW = remember(maxVal, yLabelPaint) {
-                listOf(0.0, maxVal / 2.0, maxVal).maxOf { v -> yLabelPaint.measureText(fmtCompact(v)) }
+            val maxYLabelW = remember(yTickLabels, yLabelPaint) {
+                yTickLabels.maxOf { label -> yLabelPaint.measureText(label) }
             }
             val paddingLeft = maxOf(with(density) { 48.dp.toPx() }, maxYLabelW + with(density) { 10.dp.toPx() })
             val paddingRight = with(density) { 16.dp.toPx() }
@@ -232,10 +249,8 @@ internal fun LedgerChart(
                     val stepX = if (sorted.size > 1) plotW / (sorted.size - 1) else 0f
 
                     // 1. Grid Lines & Y-Axis Scale Labels
-                    val gridSteps = 2
                     for (i in 0..gridSteps) {
                         val yPos = paddingTop + (plotH / gridSteps) * i
-                        val tickVal = maxVal * (gridSteps - i) / gridSteps
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, yPos),
@@ -244,7 +259,7 @@ internal fun LedgerChart(
                             pathEffect = gridDashEffect
                         )
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(tickVal),
+                            yTickLabels[i],
                             2.dp.toPx(),
                             (yPos + textPx * 0.32f).coerceIn(textPx, (paddingTop + plotH).coerceAtLeast(textPx)),
                             yLabelPaint
@@ -274,7 +289,8 @@ internal fun LedgerChart(
                     incPoints.clear()
                     expPoints.clear()
 
-                    sorted.forEachIndexed { index, e ->
+                    for (index in sorted.indices) {
+                        val e = sorted[index]
                         val x = if (sorted.size > 1) {
                             paddingLeft + index * stepX
                         } else {
@@ -293,33 +309,36 @@ internal fun LedgerChart(
                     // 4. Draw Incomes Line (when multiple points exist)
                     if (incPoints.size > 1) {
                         incPath.reset()
-                        incPoints.forEachIndexed { i, pt ->
+                        for (i in incPoints.indices) {
+                            val pt = incPoints[i]
                             if (i == 0) incPath.moveTo(pt.x, pt.y) else incPath.lineTo(pt.x, pt.y)
                         }
                         drawPath(
                             path = incPath,
                             color = cGreen,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            style = lineStroke
                         )
                     }
 
                     // 5. Draw Expenses Line (when multiple points exist)
                     if (expPoints.size > 1) {
                         expPath.reset()
-                        expPoints.forEachIndexed { i, pt ->
+                        for (i in expPoints.indices) {
+                            val pt = expPoints[i]
                             if (i == 0) expPath.moveTo(pt.x, pt.y) else expPath.lineTo(pt.x, pt.y)
                         }
                         drawPath(
                             path = expPath,
                             color = cRed,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            style = lineStroke
                         )
                     }
 
                     // 6. Draw Points and X-Axis Labels (with collision guard)
                     val labelBaselineY = (h - 5.dp.toPx()).coerceAtLeast(paddingTop + plotH + textPx)
                     var lastLabelRight = -Float.MAX_VALUE
-                    sorted.forEachIndexed { index, e ->
+                    for (index in sorted.indices) {
+                        val e = sorted[index]
                         val incPt = incPoints[index]
                         val expPt = expPoints[index]
                         val isSelected = e.yearMonth == selectedEntry?.yearMonth
@@ -348,13 +367,7 @@ internal fun LedgerChart(
                             center = expPt
                         )
 
-                        // Label formatting (e.g. "09/26")
-                        val parts = e.yearMonth.split("-")
-                        val label = if (parts.size >= 2 && parts[0].length >= 2) {
-                            "${parts[1]}/${parts[0].takeLast(2)}"
-                        } else {
-                            e.yearMonth
-                        }
+                        val label = xLabels[index]
                         val labelW = textPaint.measureText(label)
                         val clampedCenter = incPt.x.coerceIn(
                             paddingLeft + labelW / 2f,

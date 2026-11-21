@@ -226,9 +226,22 @@ fun MonteCarloFanChart(
             val targetPath = remember { Path() }
             val targetDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f) }
             val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
+            val strokeThin = remember { Stroke(width = 3f) }
+            val strokeMedian = remember { Stroke(width = 5f, cap = StrokeCap.Round) }
+            val strokeTarget = remember(targetDashEffect) { Stroke(width = 3.5f, pathEffect = targetDashEffect) }
+            val nowMarkerResources = rememberNowMarkerResources(cTeal)
+            val resolvedNowYm = currentYearMonth ?: remember {
+                java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
+            }
+            val yTickLabels = remember(maxVal) {
+                (0..ySteps).map { i -> fmtCompact(maxVal * i / ySteps) }
+            }
+            val xYearLabels = remember(realPoints) {
+                realPoints.map { "${it.year}" }
+            }
 
-            val maxYLabelW = remember(maxVal, textPaint) {
-                (0..ySteps).maxOf { i -> textPaint.measureText(fmtCompact(maxVal * i / ySteps)) }
+            val maxYLabelW = remember(yTickLabels, textPaint) {
+                yTickLabels.maxOf { label -> textPaint.measureText(label) }
             }
             val paddingTop = with(density) { 14.dp.toPx() }
             val paddingLeft = maxOf(with(density) { 56.dp.toPx() }, maxYLabelW + with(density) { 12.dp.toPx() })
@@ -304,7 +317,7 @@ fun MonteCarloFanChart(
                             strokeWidth = 1.5f
                         )
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(valAtStep),
+                            yTickLabels[i],
                             4.dp.toPx(),
                             (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
@@ -315,7 +328,6 @@ fun MonteCarloFanChart(
                     val xStepCount = 5
                     var lastDrawnRight = -Float.MAX_VALUE
                     for (i in 0 until realPoints.size step max(1, realPoints.size / xStepCount)) {
-                        val pt = realPoints[i]
                         val x = xForIndex(i)
                         drawLine(
                             color = gridColor,
@@ -323,7 +335,7 @@ fun MonteCarloFanChart(
                             end = Offset(x, plotH + 5.dp.toPx()),
                             strokeWidth = 2f
                         )
-                        val labelText = "${pt.year}"
+                        val labelText = xYearLabels[i]
                         val textWidth = textPaint.measureText(labelText)
                         val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
                         if (drawX >= lastDrawnRight + xLabelGap) {
@@ -348,13 +360,14 @@ fun MonteCarloFanChart(
                     if (realPoints.size > 1) {
                         // P95 -> P5 Area Shade
                         fillPath.reset()
-                        realPoints.forEachIndexed { i, pt ->
+                        for (i in realPoints.indices) {
+                            val pt = realPoints[i]
                             val x = xForIndex(i)
                             val yP95 = yPix(pt.p95)
                             if (i == 0) fillPath.moveTo(x, yP95) else fillPath.lineTo(x, yP95)
                         }
-                        realPoints.reversed().forEachIndexed { i, pt ->
-                            val origIdx = realPoints.size - 1 - i
+                        for (origIdx in realPoints.lastIndex downTo 0) {
+                            val pt = realPoints[origIdx]
                             val x = xForIndex(origIdx)
                             val yP5 = yPix(pt.p5)
                             fillPath.lineTo(x, yP5)
@@ -368,34 +381,38 @@ fun MonteCarloFanChart(
 
                         // P95 Line (Blue — visually distinct from Teal P50)
                         p95Path.reset()
-                        realPoints.forEachIndexed { i, pt ->
+                        for (i in realPoints.indices) {
+                            val pt = realPoints[i]
                             val x = xForIndex(i)
                             val yP95 = yPix(pt.p95)
                             if (i == 0) p95Path.moveTo(x, yP95) else p95Path.lineTo(x, yP95)
                         }
-                        drawPath(p95Path, cP95, style = Stroke(width = 3f))
+                        drawPath(p95Path, cP95, style = strokeThin)
 
                         // P5 Line (Red)
                         p5Path.reset()
-                        realPoints.forEachIndexed { i, pt ->
+                        for (i in realPoints.indices) {
+                            val pt = realPoints[i]
                             val x = xForIndex(i)
                             val yP5 = yPix(pt.p5)
                             if (i == 0) p5Path.moveTo(x, yP5) else p5Path.lineTo(x, yP5)
                         }
-                        drawPath(p5Path, cRed, style = Stroke(width = 3f))
+                        drawPath(p5Path, cRed, style = strokeThin)
 
                         // P50 Median Line (Teal Thick)
                         p50Path.reset()
-                        realPoints.forEachIndexed { i, pt ->
+                        for (i in realPoints.indices) {
+                            val pt = realPoints[i]
                             val x = xForIndex(i)
                             val yP50 = yPix(pt.p50)
                             if (i == 0) p50Path.moveTo(x, yP50) else p50Path.lineTo(x, yP50)
                         }
-                        drawPath(p50Path, cTeal, style = Stroke(width = 5f, cap = StrokeCap.Round))
+                        drawPath(p50Path, cTeal, style = strokeMedian)
 
                         // FIRE Target Line (Gold Dashed)
                         targetPath.reset()
-                        realPoints.forEachIndexed { i, pt ->
+                        for (i in realPoints.indices) {
+                            val pt = realPoints[i]
                             val x = xForIndex(i)
                             val yTarget = yPix(pt.target)
                             if (i == 0) targetPath.moveTo(x, yTarget) else targetPath.lineTo(x, yTarget)
@@ -403,7 +420,7 @@ fun MonteCarloFanChart(
                         drawPath(
                             targetPath,
                             cGold,
-                            style = Stroke(width = 3.5f, pathEffect = targetDashEffect)
+                            style = strokeTarget
                         )
                     } else {
                         val sx = xForIndex(0)
@@ -431,7 +448,8 @@ fun MonteCarloFanChart(
                         plotTop = paddingTop,
                         plotBottom = plotH,
                         accentColor = cTeal,
-                        currentYearMonth = currentYearMonth,
+                        currentYearMonth = resolvedNowYm,
+                        resources = nowMarkerResources,
                     )
 
                     // Highlight selected scrubber point marker

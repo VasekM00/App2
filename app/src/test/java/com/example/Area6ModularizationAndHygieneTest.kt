@@ -36,9 +36,9 @@ class Area6ModularizationAndHygieneTest {
         assertTrue("SettingsTab.kt must exist", settingsTabFile.exists())
         assertTrue("SettingsTab.kt must be non-empty", settingsTabFile.readLines().isNotEmpty())
 
-        val budgetTabFile = File(getMainJavaDir(), "com/example/ui/tabs/BudgetAndIncomesSubTab.kt")
-        assertTrue("BudgetAndIncomesSubTab.kt must exist", budgetTabFile.exists())
-        assertTrue("BudgetAndIncomesSubTab.kt must be non-empty", budgetTabFile.readLines().isNotEmpty())
+        val cashFlowTabFile = File(getMainJavaDir(), "com/example/ui/tabs/CashFlowTab.kt")
+        assertTrue("CashFlowTab.kt must exist", cashFlowTabFile.exists())
+        assertTrue("CashFlowTab.kt must be non-empty", cashFlowTabFile.readLines().isNotEmpty())
     }
 
     @Test
@@ -57,10 +57,11 @@ class Area6ModularizationAndHygieneTest {
             "com/example/ui/tabs/SettingsFireSubTab.kt",
             "com/example/ui/tabs/SettingsDataSubTab.kt",
             "com/example/ui/tabs/SettingsDialogs.kt",
-            "com/example/ui/tabs/BudgetAndIncomesSubTab.kt",
             "com/example/ui/tabs/BudgetOverviewCard.kt",
             "com/example/ui/tabs/IncomeSourcesCard.kt",
-            "com/example/ui/tabs/ExpenseCategoriesCard.kt"
+            "com/example/ui/tabs/ExpenseCategoriesCard.kt",
+            "com/example/ui/components/BankAccountsCard.kt",
+            "com/example/ui/components/AppLockOverlay.kt"
         )
 
         for (relPath in requiredExtractedFiles) {
@@ -87,10 +88,11 @@ class Area6ModularizationAndHygieneTest {
             "com/example/ui/tabs/SettingsFireSubTab.kt",
             "com/example/ui/tabs/SettingsDataSubTab.kt",
             "com/example/ui/tabs/SettingsDialogs.kt",
-            "com/example/ui/tabs/BudgetAndIncomesSubTab.kt",
             "com/example/ui/tabs/BudgetOverviewCard.kt",
             "com/example/ui/tabs/IncomeSourcesCard.kt",
-            "com/example/ui/tabs/ExpenseCategoriesCard.kt"
+            "com/example/ui/tabs/ExpenseCategoriesCard.kt",
+            "com/example/ui/components/BankAccountsCard.kt",
+            "com/example/ui/components/AppLockOverlay.kt"
         )
 
         val todoRegex = Regex("""\b(TODO|FIXME)\b""")

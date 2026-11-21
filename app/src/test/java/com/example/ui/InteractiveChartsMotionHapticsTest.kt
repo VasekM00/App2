@@ -11,7 +11,6 @@ import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.MonteCarloPoint
 import com.example.domain.PortfolioYearPoint
-import com.example.ui.components.charts.AssetAllocationChart
 import com.example.ui.components.charts.ChartMetricPill
 import com.example.ui.components.charts.DcaAllocationBreakdownBar
 import com.example.ui.components.charts.FanChart
@@ -226,7 +225,7 @@ class InteractiveChartsMotionHapticsTest {
     }
 
     @Test
-    fun testAssetAllocationChartAndDcaAllocationBreakdownBar() {
+    fun testDcaAllocationBreakdownBarFilters() {
         val settings = SettingsEntity(
             liquidPortfolioCurrent = 600_000.0,
             dipBalanceCurrent = 120_000.0,
@@ -242,19 +241,12 @@ class InteractiveChartsMotionHapticsTest {
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 Column {
-                    AssetAllocationChart(settings = settings)
                     DcaAllocationBreakdownBar(settings = settings)
                 }
             }
         }
 
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("asset_allocation_chart_card").assertExists()
-        composeTestRule.onNodeWithTag("asset_layer_chip_liquid").assertExists().performClick()
-        composeTestRule.onNodeWithTag("asset_layer_chip_dip").assertExists().performClick()
-        composeTestRule.onNodeWithTag("asset_layer_chip_dps").assertExists().performClick()
-        composeTestRule.onNodeWithTag("asset_layer_chip_cash").assertExists().performClick()
-
         composeTestRule.onNodeWithTag("filter_chip_liquid").assertExists().performClick()
         composeTestRule.onNodeWithTag("filter_chip_dip").assertExists().performClick()
         composeTestRule.onNodeWithTag("filter_chip_dps").assertExists().performClick()

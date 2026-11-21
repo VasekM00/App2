@@ -189,7 +189,7 @@ internal fun LedgerSubTab(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FileUpload,
-                            contentDescription = "Import Statement",
+                            contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -216,7 +216,7 @@ internal fun LedgerSubTab(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "New Entry",
+                            contentDescription = null,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))

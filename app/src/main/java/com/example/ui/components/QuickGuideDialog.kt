@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,7 +76,6 @@ private enum class GuideCategory(val label: String) {
     PRIVACY("Privacy & Banking")
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuickGuideDialog(
     onDismiss: () -> Unit,
@@ -132,18 +133,19 @@ fun QuickGuideDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Category Filter Chips
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Single-row horizontally scrollable Category Filter Chips (scales cleanly at 1.5x font)
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("guide_filter_row"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    GuideCategory.entries.forEach { cat ->
+                    items(GuideCategory.entries, key = { it.name }) { cat ->
                         val isSelected = selectedCategory == cat
                         FilterChip(
                             selected = isSelected,
                             onClick = { selectedCategory = cat },
-                            label = { Text(cat.label, fontSize = 11.5.sp) },
+                            label = { Text(cat.label, fontSize = 11.5.sp, maxLines = 1) },
                             modifier = Modifier
                                 .heightIn(min = 48.dp)
                                 .testTag("guide_filter_${cat.name.lowercase()}"),

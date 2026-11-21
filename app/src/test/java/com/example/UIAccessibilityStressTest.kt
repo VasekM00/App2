@@ -241,16 +241,20 @@ class UIAccessibilityStressTest {
 
     @Test
     fun test6_10_heroHeaderButtonsAreClickable() {
-        var quickGuideOpened = false
+        var netWorthClicks = 0
+        var savingsClicks = 0
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
                     state = defaultCalcState,
-                    onOpenQuickGuide = { quickGuideOpened = true }
+                    onNavigateToNetWorth = { netWorthClicks++ },
+                    onNavigateToSavingsRate = { savingsClicks++ }
                 )
             }
         }
-        composeTestRule.onNodeWithTag("hero_quick_guide_button").performClick()
-        assertTrue(quickGuideOpened)
+        composeTestRule.onNodeWithTag("hero_stat_net_worth").performClick()
+        composeTestRule.onNodeWithTag("hero_stat_savings_rate").performClick()
+        assertTrue(netWorthClicks >= 1)
+        assertTrue(savingsClicks >= 1)
     }
 }

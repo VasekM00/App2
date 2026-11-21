@@ -29,7 +29,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,7 +87,7 @@ fun LazyListScope.settingsHouseholdSubTab(
                 "$pName ${fmtCZK(s.vSalary)} · $sName ${fmtCZK(eCurrentMonthly)}"
             },
             initiallyExpanded = false,
-            badgeText = fmtCZK(state.currentIncome.totalMonthly) + " monthly",
+            badgeText = fmtCZK(state.snapshot.monthlyTakeHomeInflows) + " monthly",
             badgeColor = GoodGreen,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,
@@ -260,8 +259,7 @@ fun LazyListScope.settingsHouseholdSubTab(
                                                 }
                                                 cur.copy(customLumpSumsJson = serializeCustomLumpSums(updated))
                                             }
-                                        },
-                                        modifier = Modifier.scale(0.8f)
+                                        }
                                     )
                                     IconButton(
                                         onClick = { onShowAddLumpSum(item) },

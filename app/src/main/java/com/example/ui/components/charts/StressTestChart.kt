@@ -52,9 +52,11 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.StressScenarioResult
 import com.example.ui.components.ColorPill
 import com.example.ui.theme.BadRed
+import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.LocalIsDarkTheme
 import com.example.util.Formatters.fmtCompact
 import kotlin.math.max
 import kotlin.math.round
@@ -69,18 +71,20 @@ fun StressComparisonChart(
     if (scenarios.isEmpty()) return
 
     val cTeal = BrandTeal
+    val cBlue = BrandBlue
     val cGreen = GoodGreen
     val cRed = BadRed
     val cGold = BrandGold
+    val cViolet = if (LocalIsDarkTheme.current) androidx.compose.ui.graphics.Color(0xFFA78BFA) else androidx.compose.ui.graphics.Color(0xFF7C3AED)
     val cCardSurface = MaterialTheme.colorScheme.surface
     val haptic = LocalHapticFeedback.current
 
     val scenarioColors = listOf(
-        cTeal,                             // Baseline
-        cGreen,                            // Bull
-        cRed,                              // Stagflation
-        cGold,                             // Crash
-        MaterialTheme.colorScheme.tertiary // Inflation Shock
+        cBlue,   // Baseline (clearly distinct from GoodGreen Bull!)
+        cGreen,  // Bull
+        cRed,    // Stagflation
+        cGold,   // Crash
+        cViolet  // Inflation Shock
     )
 
     val refTraj = remember(scenarios) {
@@ -171,9 +175,24 @@ fun StressComparisonChart(
             val scenarioPath = remember { Path() }
             val crashDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) }
             val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
+            val baselineStroke = remember { Stroke(width = 5f, cap = StrokeCap.Round) }
+            val regularStroke = remember { Stroke(width = 3f, cap = StrokeCap.Round) }
+            val crashStroke = remember(crashDashEffect) {
+                Stroke(width = 3f, cap = StrokeCap.Round, pathEffect = crashDashEffect)
+            }
+            val nowMarkerResources = rememberNowMarkerResources(cTeal)
+            val resolvedNowYm = currentYearMonth ?: remember {
+                java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague"))
+            }
+            val yTickLabels = remember(maxVal) {
+                (0..ySteps).map { i -> fmtCompact(maxVal * i / ySteps) }
+            }
+            val xYearLabels = remember(refTraj) {
+                refTraj.map { "${it.year}" }
+            }
 
-            val maxYLabelW = remember(maxVal, textPaint) {
-                (0..ySteps).maxOf { i -> textPaint.measureText(fmtCompact(maxVal * i / ySteps)) }
+            val maxYLabelW = remember(yTickLabels, textPaint) {
+                yTickLabels.maxOf { label -> textPaint.measureText(label) }
             }
             val paddingTop = with(density) { 14.dp.toPx() }
             val paddingLeft = maxOf(with(density) { 56.dp.toPx() }, maxYLabelW + with(density) { 12.dp.toPx() })
@@ -246,7 +265,7 @@ fun StressComparisonChart(
                         )
 
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(valAtStep),
+                            yTickLabels[i],
                             4.dp.toPx(),
                             (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
@@ -263,7 +282,6 @@ fun StressComparisonChart(
                     val xStepCount = 5
                     var lastDrawnRight = -Float.MAX_VALUE
                     for (i in 0 until refTraj.size step max(1, refTraj.size / xStepCount)) {
-                        val pt = refTraj[i]
                         val x = xForIndex(i)
                         if (x in paddingLeft..(w - paddingRight + 4f)) {
                             drawLine(
@@ -272,7 +290,7 @@ fun StressComparisonChart(
                                 end = Offset(x, plotH + 5.dp.toPx()),
                                 strokeWidth = 2f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = xYearLabels[i]
                             val textWidth = textPaint.measureText(labelText)
                             val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
                             if (drawX >= lastDrawnRight + xLabelGap) {
@@ -290,23 +308,26 @@ fun StressComparisonChart(
                     drawContext.canvas.save()
                     drawContext.canvas.clipRect(paddingLeft, paddingTop, w - paddingRight, plotH)
 
-                    scenarios.forEachIndexed { sIdx, scenario ->
+                    for (sIdx in scenarios.indices) {
+                        val scenario = scenarios[sIdx]
                         val color = scenarioColors[sIdx % scenarioColors.size]
                         if (scenario.trajectory.size > 1) {
                             scenarioPath.reset()
-                            scenario.trajectory.forEachIndexed { i, pt ->
+                            for (i in scenario.trajectory.indices) {
+                                val pt = scenario.trajectory[i]
                                 val x = xForIndex(i)
                                 val y = yPix(pt.totalPortfolio)
                                 if (i == 0) scenarioPath.moveTo(x, y) else scenarioPath.lineTo(x, y)
                             }
+                            val lineStroke = when (scenario.id) {
+                                "baseline" -> baselineStroke
+                                "crash" -> crashStroke
+                                else -> regularStroke
+                            }
                             drawPath(
                                 path = scenarioPath,
                                 color = color,
-                                style = Stroke(
-                                    width = if (scenario.id == "baseline") 5f else 3f,
-                                    cap = StrokeCap.Round,
-                                    pathEffect = if (scenario.id == "crash") crashDashEffect else null
-                                )
+                                style = lineStroke
                             )
                         } else if (scenario.trajectory.size == 1) {
                             drawCircle(
@@ -329,7 +350,8 @@ fun StressComparisonChart(
                         plotTop = paddingTop,
                         plotBottom = plotH,
                         accentColor = cTeal,
-                        currentYearMonth = currentYearMonth,
+                        currentYearMonth = resolvedNowYm,
+                        resources = nowMarkerResources,
                     )
 
                     // Selected scrubber highlight
@@ -373,33 +395,22 @@ fun StressComparisonChart(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Year ${inspectYearPt.year} - Age ${inspectYearPt.age} Regime Comparison",
+                                text = "Year ${inspectYearPt.year} · Age ${inspectYearPt.age} Regime Comparison",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                             )
-                            scenarios.chunked(2).forEach { rowScenarios ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    rowScenarios.forEach { sc ->
-                                        val sIdx = scenarios.indexOf(sc).coerceAtLeast(0)
-                                        val color = scenarioColors[sIdx % scenarioColors.size]
-                                        val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.totalPortfolio ?: 0.0).finiteOrZero()
-                                        ChartMetricPill(
-                                            label = sc.name,
-                                            value = fmtCompact(ptVal),
-                                            color = color,
-                                            isBold = sc.id == "baseline",
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    if (rowScenarios.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
+                            scenarios.forEachIndexed { sIdx, sc ->
+                                val color = scenarioColors[sIdx % scenarioColors.size]
+                                val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.totalPortfolio ?: 0.0).finiteOrZero()
+                                ChartMetricPill(
+                                    label = sc.name,
+                                    value = fmtCompact(ptVal),
+                                    color = color,
+                                    isBold = sc.id == "baseline",
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }

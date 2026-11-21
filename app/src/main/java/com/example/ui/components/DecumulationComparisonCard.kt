@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -267,6 +269,7 @@ fun DecumulationComparisonCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .selectableGroup()
                         .testTag("decumulation_strategy_toggle"),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -274,16 +277,21 @@ fun DecumulationComparisonCard(
                         val isSelected = selectedIndex == index
                         val sColor = opt.accentColor()
                         Surface(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                selectedIndex = index
-                            },
                             shape = RoundedCornerShape(10.dp),
                             color = if (isSelected) sColor.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             border = BorderStroke(1.dp, if (isSelected) sColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                             modifier = Modifier
                                 .weight(1f)
                                 .defaultMinSize(minHeight = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .selectable(
+                                    selected = isSelected,
+                                    role = androidx.compose.ui.semantics.Role.Tab,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        selectedIndex = index
+                                    }
+                                )
                         ) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),

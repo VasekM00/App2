@@ -212,17 +212,22 @@ class MobileErgonomicsAndImeTest {
 
     @Test
     fun test12_touchTarget_heroHeaderButtons_clickable() {
-        var quickGuideOpened = false
+        var netWorthOpened = 0
+        var savingsOpened = 0
         composeTestRule.setContent {
             MartinuFinancialsTheme {
                 HeroHeader(
                     state = defaultCalcState,
-                    onOpenQuickGuide = { quickGuideOpened = true }
+                    onNavigateToNetWorth = { netWorthOpened++ },
+                    onNavigateToSavingsRate = { savingsOpened++ }
                 )
             }
         }
-        composeTestRule.onNodeWithTag("hero_quick_guide_button").performClick()
-        assertTrue(quickGuideOpened)
+        composeTestRule.onNodeWithTag("hero_stat_fire_year").performClick()
+        composeTestRule.onNodeWithTag("hero_stat_freedom_goal").assertExists()
+        composeTestRule.onNodeWithTag("hero_stat_savings_rate").performClick()
+        assertTrue(netWorthOpened >= 1)
+        assertTrue(savingsOpened >= 1)
     }
 
     @Test

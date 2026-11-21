@@ -1,6 +1,7 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,7 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -37,19 +39,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
-import com.example.ui.components.CardHeaderPill
-import com.example.ui.components.charts.DcaTrajectoryBarChart
 import com.example.ui.components.MetricInfo
+import com.example.ui.components.charts.DcaTrajectoryBarChart
 import com.example.ui.components.charts.NetWorthChart
 import com.example.ui.components.infoTapHold
 import com.example.ui.theme.BodyFontFamily
@@ -66,263 +66,152 @@ internal fun TrajectorySubTab(
     onShowInfo: (MetricInfo) -> Unit
 ) {
     val scrollState = rememberScrollState()
-
-    val swrInfo = MetricInfo(
-        title = "Safe Withdrawal Rate (SWR)",
-        category = "Retirement Actuarial Math",
-        formulaOrRule = "Initial Annual Draw = Portfolio Capital × SWR (Adjusted for CPI Yearly)",
-        explanation = "While the classic Trinity Study established a 4.0% rule for a 30-year retirement, an early FIRE horizon of 40–50 years introduces substantial longevity and sequence-of-returns risks. Calibrating at 3.25%–3.50% delivers a 98%+ historical survival rate without principal exhaustion.",
-        statutoryReference = "Trinity Study & Bengen Longevity Analysis",
-        practicalImplication = "A 3.5% SWR requires 28.6× annual living expenses in invested assets, providing a resilient buffer against extended market drawdowns.",
-        accentColor = BrandTeal
-    )
-
-    val returnInflationInfo = MetricInfo(
-        title = "Nominal vs Real Compound Returns",
-        category = "Macroeconomic Assumptions",
-        formulaOrRule = "Real CAGR = (1 + Net Nominal Return) / (1 + CPI Inflation) - 1",
-        explanation = "With an expected ${fmtPct(state.settings.portfolioNominalReturnPct)} gross nominal return (${fmtPct(com.example.domain.FinancialEngine.netTaxableNominalReturnPct(state.settings), 2)} net after dividend tax drag) and ${fmtPct(state.settings.cpiInflationPct)} inflation, your equity assets grow at ~${fmtPct(state.realReturnPct, 2)} real purchasing power annually.",
-        statutoryReference = "Fisher Equation of Real Interest",
-        practicalImplication = "Maintaining realistic inflation assumptions guarantees your FIRE target in today's Kč remains accurate in future purchasing power.",
-        accentColor = BrandGold
-    )
-
-    val pLabel = state.settings.primaryName.ifBlank { "Primary Earner" }
-    val sLabel = state.settings.spouseName.ifBlank { "Partner" }
-    val combinedPension = state.settings.vStatePensionMonthly + if (state.settings.isSingleHousehold) 0.0 else state.settings.eStatePensionMonthly
-    val pensionAgeDisplay = if (state.settings.isSingleHousehold || state.settings.vStatePensionAge == state.settings.eStatePensionAge) {
-        "${state.settings.vStatePensionAge}"
-    } else {
-        "$pLabel: ${state.settings.vStatePensionAge} / $sLabel: ${state.settings.eStatePensionAge}"
-    }
-    val pensionBridgeInfo = MetricInfo(
-        title = "State Pension Bridge Years",
-        category = "Actuarial Horizon",
-        formulaOrRule = "Bridge Horizon = State Pension Age ($pensionAgeDisplay) - Target FIRE Age",
-        explanation = "The actuarial phase between early retirement and statutory state pension entitlement. During this bridge, your investment portfolio must support 100% of household cash outlays. Once state pension arrives (${fmtCZK(combinedPension)} monthly), the required portfolio draw drops dramatically.",
-        statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act § 32)",
-        practicalImplication = "Dynamic bridge modeling avoids over-saving millions of Kč by accounting for future guaranteed state annuity cash flows.",
-        accentColor = BrandTeal
-    )
-
-    var selectedTrajectoryChart by rememberSaveable { mutableIntStateOf(0) }
     var isRealPurchasingPower by rememberSaveable { mutableStateOf(false) }
+    var dcaExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val sEff = state.effectiveSettings
+    val snap = state.snapshot
+    val isSingleHh = sEff.isSingleHousehold
+    val activeTrajectory = if (isSingleHh) state.singleTrajectory else state.dualTrajectory
+    val activeFirePoint = snap.activeFirePoint
+    val combinedPension = sEff.vStatePensionMonthly + if (isSingleHh) 0.0 else sEff.eStatePensionMonthly
+    val pensionAgeDisplay = if (isSingleHh || sEff.vStatePensionAge == sEff.eStatePensionAge) {
+        "${sEff.vStatePensionAge}"
+    } else {
+        "${sEff.vStatePensionAge}/${sEff.eStatePensionAge}"
+    }
+
+    val assumptionsInfo = MetricInfo(
+        title = "Forecast Assumptions",
+        category = "Actuarial Baseline",
+        formulaOrRule = "SWR ${fmtPct(sEff.safeWithdrawalRatePct)} · Nominal Return ${fmtPct(sEff.portfolioNominalReturnPct)} (Net ${fmtPct(FinancialEngine.netTaxableNominalReturnPct(sEff), 2)}) · CPI ${fmtPct(sEff.cpiInflationPct)}",
+        explanation = "Real CAGR is ${fmtPct(state.realReturnPct, 2)} after dividend tax drag and CPI inflation. State pension kicks in at age $pensionAgeDisplay (${fmtCZK(combinedPension)}/mo). Adjust any parameter in More > Portfolio & Tax or test locally in What-If.",
+        statutoryReference = "Act No. 586/1992 Coll. & Act No. 155/1995 Coll.",
+        practicalImplication = "Using constant-purchasing-power (Real) view keeps future FIRE targets intuitive in today's Kč.",
+        accentColor = BrandTeal
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        val haptic = LocalHapticFeedback.current
+        // Primary 35-Year Net Worth Chart (direct without L3 tab bar)
+        NetWorthChart(
+            data = activeTrajectory,
+            cpiInflationPct = sEff.cpiInflationPct,
+            ledgerEntries = ledgerEntries,
+            isRealPurchasingPower = isRealPurchasingPower,
+            onRealPurchasingPowerChange = { isRealPurchasingPower = it },
+            onOpenSandbox = onOpenSandbox
+        )
+
+        // Compact 1-line Forecast Assumptions Summary Chip
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.fillMaxWidth()
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .infoTapHold(assumptionsInfo, onShowInfo)
+                .testTag("forecast_assumptions_summary_chip")
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                val chartModes = listOf(
-                    Triple(0, "Net Worth Curve", "chip_net_worth_curve"),
-                    Triple(1, "Contributions & Growth", "chip_dca_bars")
-                )
-                chartModes.forEach { (idx, label, tag) ->
-                    val isSelected = selectedTrajectoryChart == idx
-                    Surface(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedTrajectoryChart = idx
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                        contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
-                        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-                        shadowElevation = if (isSelected) 1.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .testTag(tag)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                ),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "SWR ${fmtPct(sEff.safeWithdrawalRatePct)} · Return ${fmtPct(sEff.portfolioNominalReturnPct)} · CPI ${fmtPct(sEff.cpiInflationPct)} · Pension $pensionAgeDisplay",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = BodyFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "FIRE year: ${snap.activeFireYear ?: "Beyond 35 years"} · Tap for formula",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BrandTeal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "View forecast assumptions details",
+                    tint = BrandTeal,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
-        val sEff = state.effectiveSettings
-        val snap = state.snapshot
-        val isSingleHh = sEff.isSingleHousehold
-        val activeTrajectory = if (isSingleHh) state.singleTrajectory else state.dualTrajectory
-        val activeFirePoint = snap.activeFirePoint
-        val singleCanonicalFireYear = if (isSingleHh) {
-            snap.activeFireYear
-        } else {
-            val singleBridge = state.singleTrajectory.firstOrNull { it.totalPortfolio >= it.target && it.isLiquidBridgeFunded }
-            (singleBridge ?: state.fireSinglePoint)?.year
+        // Collapsible Accordion: Contributions & Growth (replaces L3 tab bar)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable(role = Role.Button) { dcaExpanded = !dcaExpanded }
+                        .testTag("accordion_contributions_growth"),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "Contributions & Growth",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Annual DCA, match & compounding",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Icon(
+                        imageVector = if (dcaExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (dcaExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (dcaExpanded) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DcaTrajectoryBarChart(
+                        data = activeTrajectory,
+                        settings = sEff
+                    )
+                }
+            }
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        if (selectedTrajectoryChart == 0) {
-            // Primary 35-Year Trajectory Chart
-            NetWorthChart(
-                data = activeTrajectory,
-                cpiInflationPct = state.settings.cpiInflationPct,
-                ledgerEntries = ledgerEntries,
-                isRealPurchasingPower = isRealPurchasingPower,
-                onRealPurchasingPowerChange = { isRealPurchasingPower = it },
-                onOpenSandbox = onOpenSandbox
-            )
-        } else {
-            // 35-Year DCA Bar Chart & Growth
-            DcaTrajectoryBarChart(
-                data = activeTrajectory,
-                settings = state.settings
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         // 35-Year Trajectory Milestones Table with Interactive Inspector & CSV Export
         TrajectoryMilestonesTableCard(
             trajectory = activeTrajectory,
             isRealPurchasingPower = isRealPurchasingPower,
-            cpiInflationPct = state.settings.cpiInflationPct,
-            swrPct = state.settings.safeWithdrawalRatePct,
+            cpiInflationPct = sEff.cpiInflationPct,
+            swrPct = sEff.safeWithdrawalRatePct,
             firePoint = activeFirePoint
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // FIRE Trajectory Analysis Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                CardHeaderPill(
-                    title = "Forecast Assumptions",
-                    subtitle = "Tap any row to see how it affects your goal",
-                    accentColor = BrandTeal
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (!isSingleHh) {
-                    ProjectionMetricRow(
-                        label = "Projected FIRE Year (Dual Income)",
-                        value = snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years",
-                        isBold = true,
-                        highlightColor = BrandTeal,
-                        info = MetricInfo(
-                            title = "Dual-Income FIRE Date",
-                            category = "Household Horizon",
-                            explanation = "Models both $pLabel and $sLabel contributing via combined DCA, DIP, and employer matching until aggregate wealth covers the shared household lifestyle budget and pre-60 liquid bridge.",
-                            accentColor = BrandTeal
-                        ),
-                        onShowInfo = onShowInfo
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    ProjectionMetricRow(
-                        label = "Projected FIRE Year (Single Income)",
-                        value = singleCanonicalFireYear?.let { "$it" } ?: "Beyond 35 years",
-                        isBold = true,
-                        highlightColor = BrandGold,
-                        info = MetricInfo(
-                            title = "Single-Income Resilience Test",
-                            category = "Household Horizon",
-                            explanation = "Calculates the independent FIRE horizon (including pre-60 liquid bridge) if funded purely by the primary earner's savings capacity.",
-                            accentColor = BrandGold
-                        ),
-                        onShowInfo = onShowInfo
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                } else {
-                    ProjectionMetricRow(
-                        label = "Projected FIRE Year",
-                        value = snap.activeFireYear?.let { "$it" } ?: "Beyond 35 years",
-                        isBold = true,
-                        highlightColor = BrandTeal,
-                        info = MetricInfo(
-                            title = "Single-Earner FIRE Date",
-                            category = "Household Horizon",
-                            explanation = "Models primary earner contributing via DCA, DIP, and employer matching until aggregate wealth covers the household lifestyle budget.",
-                            accentColor = BrandTeal
-                        ),
-                        onShowInfo = onShowInfo
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-
-                ProjectionMetricRow(
-                    label = if (isRealPurchasingPower) "Today's FIRE Target (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)" else "Target at FIRE (${fmtPct(state.settings.safeWithdrawalRatePct)} SWR)",
-                    value = if (isRealPurchasingPower) fmtCZK(state.fireBaseTargetToday) else (activeFirePoint?.let { "${fmtCZK(it.target)} (${it.year})" } ?: fmtCZK(state.fireBaseTargetToday)),
-                    info = swrInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                ProjectionMetricRow(
-                    label = if (isRealPurchasingPower) "Real Portfolio Compound Return" else "Expected Portfolio Nominal Return",
-                    value = if (isRealPurchasingPower) "${fmtPct(state.realReturnPct, 1)} (Real CAGR)" else "${fmtPct(state.settings.portfolioNominalReturnPct)} (Nominal)",
-                    info = returnInflationInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                ProjectionMetricRow(
-                    label = "CPI Inflation Assumption",
-                    value = fmtPct(state.settings.cpiInflationPct),
-                    info = returnInflationInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                ProjectionMetricRow(
-                    label = "Safe Withdrawal Rate (SWR)",
-                    value = fmtPct(state.settings.safeWithdrawalRatePct),
-                    info = swrInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                ProjectionMetricRow(
-                    label = if (isSingleHh || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "State Pension Age" else "State Pension Ages",
-                    value = if (isSingleHh || state.settings.vStatePensionAge == state.settings.eStatePensionAge) "${state.settings.vStatePensionAge} years" else "$pLabel: ${state.settings.vStatePensionAge} / $sLabel: ${state.settings.eStatePensionAge} years",
-                    info = pensionBridgeInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                ProjectionMetricRow(
-                    label = if (isSingleHh) "State Pension (Monthly)" else "Combined State Pension",
-                    value = fmtCZK(combinedPension),
-                    info = pensionBridgeInfo,
-                    onShowInfo = onShowInfo
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 

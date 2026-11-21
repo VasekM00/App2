@@ -27,6 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
@@ -44,7 +46,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,12 +104,14 @@ fun MerchantLeaderboardCard(
     transactions: List<ImportedBankTransactionEntity> = emptyList(),
     settings: SettingsEntity? = null,
     modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = true,
     onShowInfo: ((MetricInfo) -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     onUpdateImportedTransactionCategory: ((Long, BankTransactionType, Boolean, Boolean) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     var selectedTimeframeIndex by remember { mutableIntStateOf(0) } // 0 = 30 Days, 1 = 90 Days, 2 = Year to Date
     val timeframes = listOf("30 Days", "90 Days", "YTD")
     var editingTarget by remember { mutableStateOf<MerchantEditTarget?>(null) }
@@ -253,62 +261,105 @@ fun MerchantLeaderboardCard(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header
-                CardHeaderPill(
-                    title = "Merchant Spend Drift",
-                    subtitle = if (hasStatementData) "Top 5 merchants · tap row to recategorize" else "Top 5 budget categories · tap row to edit",
-                    icon = Icons.Default.Leaderboard,
-                    accentColor = BrandTeal,
-                    badgeText = if (hasStatementData) "STATEMENTS" else "BUDGET ESTIMATE",
-                    badgeColor = BrandTeal,
-                    trailingContent = {
+                // Header (collapsible)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clickable(role = Role.Button) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            expanded = !expanded
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = "Merchant Spend Drift",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = if (expanded) {
+                                if (hasStatementData) "Top 5 merchants · tap row to recategorize" else "Top 5 budget categories · tap row to edit"
+                            } else {
+                                "Top 5: ${fmtCompact(top5Total)} (${String.format(java.util.Locale.ROOT, "%.0f", top5Share)}% of expenses)"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ColorPill(
+                            text = if (hasStatementData) "STATEMENTS" else "BUDGET ESTIMATE",
+                            color = BrandTeal,
+                            fontSize = 9.5.sp,
+                            fontFamily = BodyFontFamily
+                        )
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .clickable {
+                                .clickable(role = Role.Button) {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onShowInfo?.invoke(leaderboardInfo)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Leaderboard Details",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Leaderboard Details",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                )
+                }
 
-                // Timeframe Chips (min 48dp target)
+                if (expanded) {
+                // Timeframe Chips (min 48dp target, selectableGroup + Role.Tab)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectableGroup(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     timeframes.forEachIndexed { index, name ->
                         val isSelected = selectedTimeframeIndex == index
                         Surface(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                selectedTimeframeIndex = index
-                            },
                             shape = RoundedCornerShape(10.dp),
                             color = if (isSelected) BrandTeal else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             border = BorderStroke(1.dp, if (isSelected) BrandTeal else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                             modifier = Modifier
                                 .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.Tab,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedTimeframeIndex = index
+                                    }
+                                )
                         ) {
                             Box(
                                 modifier = Modifier
@@ -324,6 +375,7 @@ fun MerchantLeaderboardCard(
                                         color = if (isSelected) OnBrandTeal else MaterialTheme.colorScheme.onSurface,
                                         fontSize = 11.5.sp
                                     ),
+                                    textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis
@@ -391,6 +443,7 @@ fun MerchantLeaderboardCard(
                             onClick = if (canEdit) { { editingTarget = merchant.editTarget } } else null
                         )
                     }
+                }
                 }
             }
         }

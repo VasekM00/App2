@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -60,6 +63,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -83,16 +87,24 @@ import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private fun PortfolioYearPoint.resolvedDipDps(): Pair<Double, Double> {
+private fun PortfolioYearPoint.resolvedDip(): Double {
     val dip = dipPortfolio.finiteOrZero().coerceAtLeast(0.0)
     val dps = dpsPortfolio.finiteOrZero().coerceAtLeast(0.0)
     val pen = pensionPortfolio.finiteOrZero().coerceAtLeast(0.0)
-    return if (dip <= 0.0 && dps <= 0.0 && pen > 0.0) {
-        (pen * 0.5) to (pen * 0.5)
-    } else {
-        dip to dps
-    }
+    return if (dip <= 0.0 && dps <= 0.0 && pen > 0.0) pen * 0.5 else dip
 }
+
+private fun PortfolioYearPoint.resolvedDps(): Double {
+    val dip = dipPortfolio.finiteOrZero().coerceAtLeast(0.0)
+    val dps = dpsPortfolio.finiteOrZero().coerceAtLeast(0.0)
+    val pen = pensionPortfolio.finiteOrZero().coerceAtLeast(0.0)
+    return if (dip <= 0.0 && dps <= 0.0 && pen > 0.0) pen * 0.5 else dps
+}
+
+private data class ActualPlotPoint(
+    val yearFraction: Double,
+    val discountedNw: Double,
+)
 
 private fun inflationDiscountFactor(cpiInflationPct: Double, yearFraction: Double): Double {
     val safeCpi = cpiInflationPct.finiteOrZero()
@@ -281,29 +293,42 @@ fun NetWorthChart(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Row(
-                        modifier = Modifier.padding(3.dp),
+                        modifier = Modifier
+                            .padding(3.dp)
+                            .selectableGroup(),
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         val modes = listOf(false to "Nominal", true to "Real")
                         modes.forEach { (realMode, label) ->
                             val isSelected = effectiveIsReal == realMode
                             Surface(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    updateReal(realMode)
-                                },
                                 shape = RoundedCornerShape(7.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
                                 border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-                                shadowElevation = if (isSelected) 1.dp else 0.dp
+                                shadowElevation = if (isSelected) 1.dp else 0.dp,
+                                modifier = Modifier
+                                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .selectable(
+                                        selected = isSelected,
+                                        role = Role.Tab,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            updateReal(realMode)
+                                        }
+                                    )
                             ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) cTeal else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                                )
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) cTeal else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -322,17 +347,23 @@ fun NetWorthChart(
                             shape = RoundedCornerShape(8.dp),
                             color = cGold.copy(alpha = 0.14f),
                             border = BorderStroke(1.dp, cGold.copy(alpha = 0.45f)),
-                            modifier = Modifier.testTag("chart_open_sandbox")
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                                .testTag("chart_open_sandbox")
                         ) {
-                            Text(
-                                text = "What-If",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = cGold
-                                ),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "What-If",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cGold
+                                    )
+                                )
+                            }
                         }
                     }
                     Text(
@@ -425,21 +456,28 @@ fun NetWorthChart(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val maxActual = actualPoints.maxOfOrNull { entry ->
-                val ymParts = entry.yearMonth.split("-")
-                val yr = ymParts.getOrNull(0)?.toIntOrNull() ?: baseYear
-                val mo = ymParts.getOrNull(1)?.toIntOrNull() ?: 1
-                val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
-                val discount = if (effectiveIsReal) inflationDiscountFactor(safeCpiPct, yearFraction) else 1.0
-                val investable = entry.portfolioBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                    entry.pensionBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                    entry.emergencyReserveAtMonthEnd.finiteOrZero().coerceAtLeast(0.0)
-                (investable / discount).finiteOrZero()
-            } ?: 0.0
+            val actualPlotData = remember(actualPoints, baseYear, effectiveIsReal, safeCpiPct) {
+                actualPoints.map { entry ->
+                    val ymParts = entry.yearMonth.split("-")
+                    val yr = ymParts.getOrNull(0)?.toIntOrNull() ?: baseYear
+                    val mo = ymParts.getOrNull(1)?.toIntOrNull() ?: 1
+                    val yearFraction = (yr - baseYear) + (mo - 1) / 12.0
+                    val discount = if (effectiveIsReal) inflationDiscountFactor(safeCpiPct, yearFraction) else 1.0
+                    val investable = entry.portfolioBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
+                        entry.pensionBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
+                        entry.emergencyReserveAtMonthEnd.finiteOrZero().coerceAtLeast(0.0)
+                    ActualPlotPoint(
+                        yearFraction = yearFraction,
+                        discountedNw = (investable / discount).finiteOrZero()
+                    )
+                }
+            }
+            val maxActual = actualPlotData.maxOfOrNull { it.discountedNw } ?: 0.0
 
             val maxVal = (maxOf(
                 displayData.maxOfOrNull {
-                    val (dip, dps) = it.resolvedDipDps()
+                    val dip = it.resolvedDip()
+                    val dps = it.resolvedDps()
                     val cash = it.emergencyCash.finiteOrZero().coerceAtLeast(0.0)
                     val liq = it.portfolio.finiteOrZero().coerceAtLeast(0.0)
                     (liq * animLiquid + dip * animDip + dps * animDps + cash * animCash).finiteOrZero()
@@ -483,10 +521,19 @@ fun NetWorthChart(
             val targetDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(12f, 8f)) }
             val curDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(4f, 4f)) }
             val selDashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(6f, 6f)) }
+            val strokeTarget = remember(targetDashEffect) { Stroke(width = 3.5f, pathEffect = targetDashEffect) }
+            val strokeDipDps = remember { Stroke(width = 3.5f, cap = StrokeCap.Round) }
+            val strokeCash = remember { Stroke(width = 3f, cap = StrokeCap.Round) }
+            val strokeLiquid = remember { Stroke(width = 4.5f, cap = StrokeCap.Round) }
+            val strokeActiveNw = remember { Stroke(width = 5.5f, cap = StrokeCap.Round) }
+            val strokeActual = remember { Stroke(width = 6f, cap = StrokeCap.Round) }
+            val strokeBadge = remember(density) { Stroke(width = with(density) { 1.dp.toPx() }) }
 
             val tickValues = remember(maxVal) { (0..4).map { maxVal * it / 4.0 } }
-            val maxYLabelW = remember(tickValues, textPaint) {
-                tickValues.maxOf { v -> textPaint.measureText(fmtCompact(v)) }
+            val yTickLabels = remember(tickValues) { tickValues.map { fmtCompact(it) } }
+            val xYearLabels = remember(displayData) { displayData.map { "${it.year}" } }
+            val maxYLabelW = remember(yTickLabels, textPaint) {
+                yTickLabels.maxOf { label -> textPaint.measureText(label) }
             }
             val paddingTop = with(density) { 14.dp.toPx() }
             val paddingLeft = maxOf(with(density) { 58.dp.toPx() }, maxYLabelW + with(density) { 12.dp.toPx() })
@@ -580,8 +627,8 @@ fun NetWorthChart(
                     }
 
                     // Draw Y-Axis lines and numeric labels
-                    for (valAtStep in tickValues) {
-                        val y = yPix(valAtStep)
+                    for (i in tickValues.indices) {
+                        val y = yPix(tickValues[i])
                         drawLine(
                             color = gridColor,
                             start = Offset(paddingLeft, y),
@@ -589,7 +636,7 @@ fun NetWorthChart(
                             strokeWidth = 1.5f
                         )
                         drawContext.canvas.nativeCanvas.drawText(
-                            fmtCompact(valAtStep),
+                            yTickLabels[i],
                             4.dp.toPx(),
                             (y + textPx * 0.35f).coerceIn(textPx, plotH.coerceAtLeast(textPx)),
                             textPaint
@@ -615,7 +662,6 @@ fun NetWorthChart(
                     val xStepCount = 5
                     var lastDrawnRight = -Float.MAX_VALUE
                     for (i in 0 until displayData.size step max(1, displayData.size / xStepCount)) {
-                        val pt = displayData[i]
                         val x = xForIndex(i)
                         if (x in paddingLeft..(w - paddingRight + 4f)) {
                             drawLine(
@@ -624,7 +670,7 @@ fun NetWorthChart(
                                 end = Offset(x, plotH + 5.dp.toPx()),
                                 strokeWidth = 2f
                             )
-                            val labelText = "${pt.year}"
+                            val labelText = xYearLabels[i]
                             val textWidth = textPaint.measureText(labelText)
                             val drawX = (x - textWidth / 2f).coerceIn(paddingLeft, (w - paddingRight - textWidth).coerceAtLeast(paddingLeft))
                             if (drawX >= lastDrawnRight + xLabelGap) {
@@ -647,23 +693,19 @@ fun NetWorthChart(
                     val revealClipRight = paddingLeft + (w - paddingRight - paddingLeft) * clampedReveal
                     drawContext.canvas.clipRect(paddingLeft, paddingTop, revealClipRight, plotH)
 
-                    // Helper to get active layer values for any point
-                    fun getLayerValues(pt: PortfolioYearPoint): ActiveLayerSnapshot {
+                    fun activeTotalFor(pt: PortfolioYearPoint): Double {
                         val liq = pt.portfolio.finiteOrZero().coerceAtLeast(0.0)
-                        val (dip, dps) = pt.resolvedDipDps()
+                        val dip = pt.resolvedDip()
+                        val dps = pt.resolvedDps()
                         val cash = pt.emergencyCash.finiteOrZero().coerceAtLeast(0.0)
-                        val effLiq = liq * animLiquid
-                        val effDip = dip * animDip
-                        val effDps = dps * animDps
-                        val effCash = cash * animCash
-                        val activeTotal = (effLiq + effDip + effDps + effCash).finiteOrZero()
-                        return ActiveLayerSnapshot(liq, dip, dps, cash, effDip, effDps, effCash, activeTotal)
+                        return (liq * animLiquid + dip * animDip + dps * animDps + cash * animCash).finiteOrZero()
                     }
 
                     if (displayData.size > 1) {
                         // 1. Build & Draw FIRE Target Path (Dashed Gold)
                         targetPath.reset()
-                        displayData.forEachIndexed { i, pt ->
+                        for (i in displayData.indices) {
+                            val pt = displayData[i]
                             val x = xForIndex(i)
                             val y = yPix(pt.target)
                             if (i == 0) targetPath.moveTo(x, y) else targetPath.lineTo(x, y)
@@ -671,124 +713,103 @@ fun NetWorthChart(
                         drawPath(
                             path = targetPath,
                             color = cGold,
-                            style = Stroke(width = 3.5f, pathEffect = targetDashEffect)
+                            style = strokeTarget
                         )
 
                         // 2. Individual Wealth Layer Lines (DIP, DPS, Cash, Liquid) with animated alphas
                         if (animDip > 0.02f) {
                             dipPath.reset()
-                            displayData.forEachIndexed { i, pt ->
+                            for (i in displayData.indices) {
                                 val x = xForIndex(i)
-                                val snap = getLayerValues(pt)
-                                val y = yPix(snap.dip * animDip)
+                                val y = yPix(displayData[i].resolvedDip() * animDip)
                                 if (i == 0) dipPath.moveTo(x, y) else dipPath.lineTo(x, y)
                             }
-                            drawPath(dipPath, color = cDip.copy(alpha = animDip * 0.85f), style = Stroke(width = 3.5f, cap = StrokeCap.Round))
+                            drawPath(dipPath, color = cDip.copy(alpha = animDip * 0.85f), style = strokeDipDps)
                         }
 
                         if (animDps > 0.02f) {
                             dpsPath.reset()
-                            displayData.forEachIndexed { i, pt ->
+                            for (i in displayData.indices) {
                                 val x = xForIndex(i)
-                                val snap = getLayerValues(pt)
-                                val y = yPix(snap.dps * animDps)
+                                val y = yPix(displayData[i].resolvedDps() * animDps)
                                 if (i == 0) dpsPath.moveTo(x, y) else dpsPath.lineTo(x, y)
                             }
-                            drawPath(dpsPath, color = cDps.copy(alpha = animDps * 0.85f), style = Stroke(width = 3.5f, cap = StrokeCap.Round))
+                            drawPath(dpsPath, color = cDps.copy(alpha = animDps * 0.85f), style = strokeDipDps)
                         }
 
                         if (animCash > 0.02f) {
                             cashPath.reset()
-                            displayData.forEachIndexed { i, pt ->
+                            for (i in displayData.indices) {
                                 val x = xForIndex(i)
-                                val snap = getLayerValues(pt)
-                                val y = yPix(snap.cash * animCash)
+                                val cash = displayData[i].emergencyCash.finiteOrZero().coerceAtLeast(0.0)
+                                val y = yPix(cash * animCash)
                                 if (i == 0) cashPath.moveTo(x, y) else cashPath.lineTo(x, y)
                             }
-                            drawPath(cashPath, color = cCash.copy(alpha = animCash * 0.80f), style = Stroke(width = 3f, cap = StrokeCap.Round))
+                            drawPath(cashPath, color = cCash.copy(alpha = animCash * 0.80f), style = strokeCash)
                         }
 
                         if (animLiquid > 0.02f) {
                             liquidPath.reset()
-                            displayData.forEachIndexed { i, pt ->
+                            for (i in displayData.indices) {
                                 val x = xForIndex(i)
-                                val snap = getLayerValues(pt)
-                                val y = yPix(snap.liquid * animLiquid)
+                                val liq = displayData[i].portfolio.finiteOrZero().coerceAtLeast(0.0)
+                                val y = yPix(liq * animLiquid)
                                 if (i == 0) liquidPath.moveTo(x, y) else liquidPath.lineTo(x, y)
                             }
-                            drawPath(liquidPath, color = cTeal.copy(alpha = animLiquid * 0.90f), style = Stroke(width = 4.5f, cap = StrokeCap.Round))
+                            drawPath(liquidPath, color = cTeal.copy(alpha = animLiquid * 0.90f), style = strokeLiquid)
                         }
 
                         // 3. Combined Active Net Worth Trajectory Path
                         activeNwPath.reset()
-                        displayData.forEachIndexed { i, pt ->
+                        for (i in displayData.indices) {
                             val x = xForIndex(i)
-                            val snap = getLayerValues(pt)
-                            val y = yPix(snap.activeTotal)
+                            val y = yPix(activeTotalFor(displayData[i]))
                             if (i == 0) activeNwPath.moveTo(x, y) else activeNwPath.lineTo(x, y)
                         }
                         drawPath(
                             path = activeNwPath,
                             color = cPurple,
-                            style = Stroke(width = 5.5f, cap = StrokeCap.Round)
+                            style = strokeActiveNw
                         )
                     } else {
                         val sx = xForIndex(0)
                         val pt = displayData[0]
-                        val snap = getLayerValues(pt)
                         drawCircle(color = cGold, radius = 6f, center = Offset(sx, yPix(pt.target)))
-                        if (animDip > 0.02f) drawCircle(color = cDip.copy(alpha = animDip), radius = 5f, center = Offset(sx, yPix(snap.dip * animDip)))
-                        if (animDps > 0.02f) drawCircle(color = cDps.copy(alpha = animDps), radius = 5f, center = Offset(sx, yPix(snap.dps * animDps)))
-                        if (animCash > 0.02f) drawCircle(color = cCash.copy(alpha = animCash), radius = 5f, center = Offset(sx, yPix(snap.cash * animCash)))
-                        if (animLiquid > 0.02f) drawCircle(color = cTeal.copy(alpha = animLiquid), radius = 6f, center = Offset(sx, yPix(snap.liquid * animLiquid)))
-                        drawCircle(color = cPurple, radius = 8f, center = Offset(sx, yPix(snap.activeTotal)))
+                        if (animDip > 0.02f) drawCircle(color = cDip.copy(alpha = animDip), radius = 5f, center = Offset(sx, yPix(pt.resolvedDip() * animDip)))
+                        if (animDps > 0.02f) drawCircle(color = cDps.copy(alpha = animDps), radius = 5f, center = Offset(sx, yPix(pt.resolvedDps() * animDps)))
+                        if (animCash > 0.02f) drawCircle(color = cCash.copy(alpha = animCash), radius = 5f, center = Offset(sx, yPix(pt.emergencyCash.finiteOrZero().coerceAtLeast(0.0) * animCash)))
+                        if (animLiquid > 0.02f) drawCircle(color = cTeal.copy(alpha = animLiquid), radius = 6f, center = Offset(sx, yPix(pt.portfolio.finiteOrZero().coerceAtLeast(0.0) * animLiquid)))
+                        drawCircle(color = cPurple, radius = 8f, center = Offset(sx, yPix(activeTotalFor(pt))))
                     }
 
                     // 4. Actual Historical Wealth Path (GoodGreen)
-                    if (actualPoints.isNotEmpty()) {
-                        val baseYearActual = displayData.firstOrNull()?.year ?: 2026
+                    if (actualPlotData.isNotEmpty()) {
                         actualPath.reset()
-                        actualPoints.forEachIndexed { i, entry ->
-                            val ymParts = entry.yearMonth.split("-")
-                            val yr = ymParts.getOrNull(0)?.toIntOrNull() ?: baseYearActual
-                            val mo = ymParts.getOrNull(1)?.toIntOrNull() ?: 1
-                            val yearFraction = (yr - baseYearActual) + (mo - 1) / 12.0
-                            val discount = if (effectiveIsReal) inflationDiscountFactor(safeCpiPct, yearFraction) else 1.0
-                            val investable = entry.portfolioBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                                entry.pensionBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                                entry.emergencyReserveAtMonthEnd.finiteOrZero().coerceAtLeast(0.0)
-                            val discountedNw = (investable / discount).finiteOrZero()
+                        for (i in actualPlotData.indices) {
+                            val ap = actualPlotData[i]
                             val ax = if (displayData.size > 1) {
-                                paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
+                                paddingLeft + panOffsetX + (ap.yearFraction.toFloat() * stepX)
                             } else {
                                 paddingLeft + panOffsetX + (chartWidth / 2f)
                             }
-                            val ay = yPix(discountedNw)
+                            val ay = yPix(ap.discountedNw)
                             if (i == 0) actualPath.moveTo(ax, ay) else actualPath.lineTo(ax, ay)
                         }
-                        if (actualPoints.size >= 2) {
+                        if (actualPlotData.size >= 2) {
                             drawPath(
                                 path = actualPath,
                                 color = cGreen,
-                                style = Stroke(width = 6f, cap = StrokeCap.Round)
+                                style = strokeActual
                             )
                         }
-                        actualPoints.forEach { entry ->
-                            val ymParts = entry.yearMonth.split("-")
-                            val yr = ymParts.getOrNull(0)?.toIntOrNull() ?: baseYearActual
-                            val mo = ymParts.getOrNull(1)?.toIntOrNull() ?: 1
-                            val yearFraction = (yr - baseYearActual) + (mo - 1) / 12.0
-                            val discount = if (effectiveIsReal) inflationDiscountFactor(safeCpiPct, yearFraction) else 1.0
-                            val investable = entry.portfolioBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                                entry.pensionBalanceAtMonthEnd.finiteOrZero().coerceAtLeast(0.0) +
-                                entry.emergencyReserveAtMonthEnd.finiteOrZero().coerceAtLeast(0.0)
-                            val discountedNw = (investable / discount).finiteOrZero()
+                        for (i in actualPlotData.indices) {
+                            val ap = actualPlotData[i]
                             val ax = if (displayData.size > 1) {
-                                paddingLeft + panOffsetX + (yearFraction.toFloat() * stepX)
+                                paddingLeft + panOffsetX + (ap.yearFraction.toFloat() * stepX)
                             } else {
                                 paddingLeft + panOffsetX + (chartWidth / 2f)
                             }
-                            val ay = yPix(discountedNw)
+                            val ay = yPix(ap.discountedNw)
                             drawCircle(color = cGreen.copy(alpha = 0.3f), radius = 12f, center = Offset(ax, ay))
                             drawCircle(color = cGreen, radius = 6.5f, center = Offset(ax, ay))
                             drawCircle(color = cSurface, radius = 3f, center = Offset(ax, ay))
@@ -808,8 +829,8 @@ fun NetWorthChart(
                         val loIdx = floor(nowFraction).toInt().coerceIn(0, displayData.lastIndex)
                         val hiIdx = (loIdx + 1).coerceIn(0, displayData.lastIndex)
                         val localT = (nowFraction - loIdx).coerceIn(0.0, 1.0)
-                        val snapLo = getLayerValues(displayData[loIdx]).activeTotal
-                        val snapHi = getLayerValues(displayData[hiIdx]).activeTotal
+                        val snapLo = activeTotalFor(displayData[loIdx])
+                        val snapHi = activeTotalFor(displayData[hiIdx])
                         val nowTotal = snapLo + (snapHi - snapLo) * localT
                         val curY = yPix(nowTotal)
 
@@ -851,7 +872,7 @@ fun NetWorthChart(
                                 topLeft = Offset(badgeLeft, badgeTop),
                                 size = Size(badgeW, badgeH),
                                 cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
-                                style = Stroke(width = 1.dp.toPx())
+                                style = strokeBadge
                             )
                             drawContext.canvas.nativeCanvas.drawText(
                                 nowText,
@@ -881,9 +902,8 @@ fun NetWorthChart(
                                     pathEffect = selDashEffect
                                 )
                                 val pt = displayData[idx]
-                                val snap = getLayerValues(pt)
                                 val syTarget = yPix(pt.target)
-                                val syActiveTotal = yPix(snap.activeTotal)
+                                val syActiveTotal = yPix(activeTotalFor(pt))
 
                                 // Target indicator dot
                                 drawCircle(color = cGold.copy(alpha = 0.35f), radius = 10f, center = Offset(sx, syTarget))
@@ -896,7 +916,7 @@ fun NetWorthChart(
                                 drawCircle(color = cCardSurface, radius = 4f, center = Offset(sx, syActiveTotal))
 
                                 if (showLiquid && animLiquid > 0.05f) {
-                                    val syLiq = yPix(snap.liquid * animLiquid)
+                                    val syLiq = yPix(pt.portfolio.finiteOrZero().coerceAtLeast(0.0) * animLiquid)
                                     drawCircle(color = cTeal, radius = 5f, center = Offset(sx, syLiq))
                                 }
                             }
@@ -1035,7 +1055,8 @@ fun NetWorthChart(
                         }
 
                         // Active Wealth Layer Breakdown Rows (2 columns max per row)
-                        val (dipAmt, dpsAmt) = activePt.resolvedDipDps()
+                        val dipAmt = activePt.resolvedDip()
+                        val dpsAmt = activePt.resolvedDps()
                         val cashAmt = activePt.emergencyCash.finiteOrZero().coerceAtLeast(0.0)
 
                         val activeLayerPills = buildList {
@@ -1071,17 +1092,6 @@ fun NetWorthChart(
     }
 }
 
-private data class ActiveLayerSnapshot(
-    val liquid: Double,
-    val dip: Double,
-    val dps: Double,
-    val cash: Double,
-    val effDip: Double,
-    val effDps: Double,
-    val effCash: Double,
-    val activeTotal: Double
-)
-
 @Composable
 fun WealthLayerFilterChip(
     label: String,
@@ -1091,17 +1101,23 @@ fun WealthLayerFilterChip(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        onClick = onToggle,
         shape = RoundedCornerShape(8.dp),
         color = if (isChecked) color.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         border = BorderStroke(
             1.dp,
             if (isChecked) color.copy(alpha = 0.50f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
         ),
-        modifier = modifier.defaultMinSize(minHeight = 36.dp)
+        modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .toggleable(
+                value = isChecked,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() }
+            )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {

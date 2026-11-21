@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tv
@@ -41,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,12 +98,14 @@ fun UpcomingBillsCalendarCard(
     settings: SettingsEntity? = null,
     dismissedSubscriptionMerchants: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = true,
     onShowInfo: ((MetricInfo) -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     onDismissSubscription: ((String) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     var selectedDayFilter by remember { mutableStateOf<Int?>(null) }
     var editingBill by remember { mutableStateOf<UpcomingBill?>(null) }
     var showAddBillDialog by remember { mutableStateOf(false) }
@@ -344,11 +349,17 @@ fun UpcomingBillsCalendarCard(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header with accurate source attribution
+                // Header with accurate source attribution & collapsible toggle
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clickable(role = Role.Button) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            expanded = !expanded
+                        },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -374,11 +385,11 @@ fun UpcomingBillsCalendarCard(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(end = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                                .padding(end = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = "Upcoming Bills & Calendar",
+                                text = "Upcoming Bills",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
@@ -386,37 +397,19 @@ fun UpcomingBillsCalendarCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = BrandTeal.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (transactions.isNotEmpty()) "STATEMENTS + BUDGET" else "BUDGET",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = BrandTeal,
-                                            fontSize = 9.sp
-                                        ),
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                    )
-                                }
-                                Text(
-                                    text = if (onUpdateSettings != null || onReduceSettings != null) "30-day bills · tap to edit" else "30-day fixed bills & DCA",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    maxLines = 2,
-                                    softWrap = true,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Text(
+                                text = if (expanded) {
+                                    if (onUpdateSettings != null || onReduceSettings != null) "30-day bills · tap to edit" else "30-day fixed bills & DCA"
+                                } else {
+                                    "${bills.size} bills · ${fmtCompact(livingBills)}"
+                                },
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
@@ -445,7 +438,7 @@ fun UpcomingBillsCalendarCard(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Add,
-                                            contentDescription = "Add recurring bill",
+                                            contentDescription = null,
                                             tint = BrandTeal,
                                             modifier = Modifier.size(12.dp)
                                         )
@@ -468,7 +461,7 @@ fun UpcomingBillsCalendarCard(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .clickable {
+                                .clickable(role = Role.Button) {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onShowInfo?.invoke(billsCalendarInfo)
                                 },
@@ -489,9 +482,21 @@ fun UpcomingBillsCalendarCard(
                                 )
                             }
                         }
+
+                        Box(
+                            modifier = Modifier.size(36.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (expanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
 
+                if (expanded) {
                 // 3 Summary Metric Boxes
                 Row(
                     modifier = Modifier
@@ -641,25 +646,59 @@ fun UpcomingBillsCalendarCard(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
 
-                    // List of Bills
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        filteredBills.forEach { bill ->
-                            val canEditRow = when (bill.editSource) {
-                                is BillEditSource.StatementSubscription -> onDismissSubscription != null
-                                is BillEditSource.BudgetField, is BillEditSource.CustomBill ->
-                                    (onUpdateSettings != null || onReduceSettings != null) && settings != null
-                                null -> false
+                    // List of Bills separated into Living Obligations vs Scheduled DCA
+                    val fixedObligations = filteredBills.filter { !it.isDcaInvestment }
+                    val scheduledDcaItems = filteredBills.filter { it.isDcaInvestment }
+
+                    if (fixedObligations.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            fixedObligations.forEach { bill ->
+                                val canEditRow = when (bill.editSource) {
+                                    is BillEditSource.StatementSubscription -> onDismissSubscription != null
+                                    is BillEditSource.BudgetField, is BillEditSource.CustomBill ->
+                                        (onUpdateSettings != null || onReduceSettings != null) && settings != null
+                                    null -> false
+                                }
+                                UpcomingBillRow(
+                                    bill = bill,
+                                    canEdit = canEditRow,
+                                    onEditClick = if (canEditRow) { { editingBill = bill } } else null
+                                )
                             }
-                            UpcomingBillRow(
-                                bill = bill,
-                                canEdit = canEditRow,
-                                onEditClick = if (canEditRow) { { editingBill = bill } } else null
-                            )
                         }
                     }
+
+                    if (scheduledDcaItems.isNotEmpty()) {
+                        if (fixedObligations.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        Text(
+                            text = "SCHEDULED AUTO-INVESTING (DCA)",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.4.sp,
+                                color = GoodGreen
+                            )
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            scheduledDcaItems.forEach { bill ->
+                                val canEditRow = (onUpdateSettings != null || onReduceSettings != null) && settings != null
+                                UpcomingBillRow(
+                                    bill = bill,
+                                    canEdit = canEditRow,
+                                    onEditClick = if (canEditRow) { { editingBill = bill } } else null
+                                )
+                            }
+                        }
+                    }
+                }
                 }
             }
         }

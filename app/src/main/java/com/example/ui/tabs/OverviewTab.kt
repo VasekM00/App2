@@ -48,15 +48,12 @@ import androidx.compose.ui.unit.sp
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
-import com.example.ui.components.CapitalGainsTimeTestCard
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.components.KpiCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.MetricInfoDialog
-import com.example.ui.components.charts.NetWorthChart
-import com.example.ui.components.QuickGuideDialog
 import com.example.ui.components.infoTapHold
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BrandBlue
@@ -93,7 +90,8 @@ fun OverviewTab(
     modifier: Modifier = Modifier
 ) {
     val infoState = rememberMetricInfoState()
-    var showLocalQuickGuide by remember { mutableStateOf(false) }
+    @Suppress("UNUSED_VARIABLE")
+    val unusedParams = Triple(ledgerEntries.size, onOpenSettings, onNavigateToSandbox)
     val emergencyReserveRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(scrollToEmergencyReserveTrigger) {
         if (scrollToEmergencyReserveTrigger > 0) {
@@ -113,43 +111,31 @@ fun OverviewTab(
 
     val snap = state.snapshot
     val sEff = state.effectiveSettings
-    val pensionAgeDesc = if (sEff.vStatePensionAge == sEff.eStatePensionAge) {
-        "age ${sEff.vStatePensionAge}"
-    } else {
-        "ages ${sEff.vStatePensionAge}/${sEff.eStatePensionAge}"
-    }
-    val fireTargetInfo = MetricInfo(
-        title = "Base FIRE Target Capital",
-        category = "Retirement Actuarial Target",
-        formulaOrRule = "Target = (Annual Living Burn − State Pension) ÷ SWR + Bridge Deficit",
-        explanation = "Calculated in today's constant purchasing power (real Kč). It accounts for the multi-decade bridge period where private investment assets must sustain 100% of household expenditures before the Czech state pension kicks in at $pensionAgeDesc.",
-        statutoryReference = "Act No. 155/1995 Coll. (Pension Insurance Act)",
-        practicalImplication = "Every 1\u00A0000\u00A0Kč/month reduction in permanent baseline living expenses reduces required FIRE capital by ${fmtCompact(1000.0 * snap.perpetualFireMultiplier)} at your current ${fmtPct(sEff.safeWithdrawalRatePct)} SWR.",
+    val livingCostInfo = MetricInfo(
+        title = "Monthly Living Burn & Leftover",
+        category = "Cash Flow & Living Costs",
+        formulaOrRule = "Monthly Leftover = Take-Home Inflows (${fmtCZK(snap.monthlyTakeHomeInflows)}) − Living Costs (${fmtCZK(snap.monthlyLivingCosts)})",
+        explanation = "Total recurring housing, groceries, family, and discretionary living outlays compared against household take-home cash.",
+        practicalImplication = "After covering monthly living costs, ${fmtCZK(snap.monthlyLeftoverBeforeInvesting)} remains available for investing and cash buffers.",
         accentColor = BrandGold
     )
 
-    val firePoint = snap.activeFirePoint
-    val fireAgeInfo = MetricInfo(
-        title = "Projected FIRE Horizon",
-        category = "Trajectory Milestone",
-        formulaOrRule = "Compound DCA + Organic Growth >= Dynamic FIRE Target (with pre-60 liquid bridge)",
-        explanation = "Determined dynamically by modeling when aggregate liquid brokerage investments, DIP, and accessible retirement assets surpass the required cost-of-living capital barrier while funding pre-60 bridge liquidity.",
-        practicalImplication = "Front-loading savings rate early compounds exponentially due to sequence-of-returns acceleration in initial accumulation years.",
+    val unallocatedCashInfo = MetricInfo(
+        title = "Monthly Unallocated Cash",
+        category = "Residual Cash Flow",
+        formulaOrRule = "Unallocated = Take-Home (${fmtCZK(snap.monthlyTakeHomeInflows)}) − Living (${fmtCZK(snap.monthlyLivingCosts)}) − Own Investing (${fmtCZK(snap.monthlyOwnInvesting)})",
+        explanation = "Liquid surplus remaining each month after all living costs and automated ETF/DIP/DPS investments have been funded.",
+        practicalImplication = "This buffer absorbs irregular expenses, builds your emergency fund, or can be swept into extra taxable ETF purchases.",
         accentColor = BrandBlue
     )
 
-    val monthlySurplus = snap.monthlyLeftoverBeforeInvesting
-    val surplusRatePct = if (snap.monthlyTakeHomeInflows > 0.0) {
-        ((monthlySurplus / snap.monthlyTakeHomeInflows) * 100.0).coerceIn(0.0, 100.0)
-    } else 0.0
-
     val savingsRateInfo = MetricInfo(
-        title = "Monthly Investment & Savings Rate",
+        title = "Monthly Investing & Employer Match",
         category = "Cash Flow & DCA Firepower",
-        formulaOrRule = "Savings Rate = (${fmtCZK(snap.monthlyTotalInvesting)} Invested / ${fmtCZK(snap.monthlyTotalInflowsWithMatch)} Inflows + Match) = ${fmtPct(snap.savingsRatePct, 1)}",
-        explanation = "Measures the share of total monthly inflows (including tax-exempt employer match of ${fmtCZK(snap.monthlyEmployerMatch)}) directed to automated investments (${fmtCZK(snap.monthlyTotalInvesting)}/month total; own cash rate ${fmtPct(snap.savingsRateOwnCashPct, 1)}). Monthly surplus before investing is ${fmtCZK(monthlySurplus)} (${fmtPct(surplusRatePct, 1)} of take-home cash).",
+        formulaOrRule = "Total DCA = Own Contributions (${fmtCZK(snap.monthlyOwnInvesting)}) + Employer Match (${fmtCZK(snap.monthlyEmployerMatch)}) = ${fmtCZK(snap.monthlyTotalInvesting)}/mo",
+        explanation = "Measures household own monthly automated investing plus tax-exempt employer retirement contributions (ZDP § 6(9)(m)). Combined total inflows including match yield a ${fmtPct(snap.savingsRatePct, 1)} savings rate (${fmtPct(snap.savingsRateOwnCashPct, 1)} from own cash).",
         statutoryReference = "DCA Wealth Building Strategy & ZDP § 6(9)(m) / § 15a Tax Shield",
-        practicalImplication = "Directing a higher share of your monthly surplus (${fmtCZK(monthlySurplus)}) into automated ETF and DIP contributions increases your savings rate and shortens your timeline to financial independence.",
+        practicalImplication = "Directing surplus cash into tax-advantaged DIP/DPS and low-fee ETFs compounds wealth directly toward FIRE.",
         accentColor = GoodGreen
     )
 
@@ -160,18 +146,17 @@ fun OverviewTab(
             .padding(16.dp)
             .testTag("overview_tab")
     ) {
-        // Pinned Hero Header moved inside scrollable column (UX-01)
         HeroHeader(
             state = state,
             onNavigateToNetWorth = { onNavigateToNetWorth?.invoke() ?: onNavigateToProjections?.invoke() },
             onNavigateToEmergencyReserve = { onNavigateToEmergencyReserve?.invoke() },
             onNavigateToSavingsRate = { onNavigateToSavingsRate?.invoke() ?: onNavigateToIncome?.invoke() },
-            onOpenQuickGuide = { onOpenQuickGuide?.invoke() ?: run { showLocalQuickGuide = true } }
+            onOpenQuickGuide = onOpenQuickGuide
         )
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 4 Interactive KPI Cards (Symmetric 2x2 Grid, Tap / Hold for deep insight)
+        // 4 Interactive KPI Cards (Symmetric 2x2 Grid, zero Hero duplication)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -180,8 +165,8 @@ fun OverviewTab(
         ) {
             KpiCard(
                 title = "Monthly Income",
-                value = fmtCZK(state.currentIncome.totalMonthly),
-                hint = if (state.settings.isSingleHousehold) "Net monthly income" else "Combined take-home",
+                value = fmtCZK(snap.monthlyTakeHomeInflows),
+                hint = if (sEff.isSingleHousehold) "Net monthly income" else "Combined take-home",
                 accentColor = BrandTeal,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_family_net",
@@ -191,15 +176,15 @@ fun OverviewTab(
             )
 
             KpiCard(
-                title = "Freedom Goal",
-                value = fmtCompact(state.fireBaseTargetToday),
-                hint = "Target in today's Kč",
+                title = "Monthly Living",
+                value = fmtCZK(snap.monthlyLivingCosts),
+                hint = "Leftover ${fmtCompact(snap.monthlyLeftoverBeforeInvesting)}",
                 accentColor = BrandGold,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                testTagStr = "kpi_fire_target",
-                info = fireTargetInfo,
+                testTagStr = "kpi_monthly_living",
+                info = livingCostInfo,
                 onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToProjections
+                onClick = onNavigateToIncome
             )
         }
 
@@ -212,28 +197,29 @@ fun OverviewTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             KpiCard(
-                title = "Target FIRE Year",
-                value = firePoint?.let { "${it.year}" } ?: "${state.settings.baseYear + 35}+",
-                hint = snap.activeFireYear?.let { fireYr ->
-                    val yearsAway = (fireYr - sEff.baseYear).coerceAtLeast(0)
-                    if (yearsAway == 0) "Goal reached" else "In $yearsAway years"
-                } ?: "Beyond 35 years",
-                accentColor = BrandBlue,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                testTagStr = "kpi_fire_age",
-                info = fireAgeInfo,
-                onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToProjections
-            )
-
-            KpiCard(
-                title = "Monthly Investing",
-                value = fmtCZK(snap.monthlyTotalInvesting),
-                hint = "${fmtPct(snap.savingsRatePct, 1)} of total inflows",
+                title = "Own Investing",
+                value = fmtCZK(snap.monthlyOwnInvesting),
+                hint = if (snap.monthlyEmployerMatch > 0.0) {
+                    "+ ${fmtCompact(snap.monthlyEmployerMatch)} employer match"
+                } else {
+                    "Automated monthly DCA"
+                },
                 accentColor = GoodGreen,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 testTagStr = "kpi_savings_rate",
                 info = savingsRateInfo,
+                onShowInfo = { infoState.show(it) },
+                onClick = onNavigateToIncome
+            )
+
+            KpiCard(
+                title = "Unallocated Cash",
+                value = fmtCZK(snap.monthlyUnallocatedCash),
+                hint = "Free cash after DCA",
+                accentColor = BrandBlue,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                testTagStr = "kpi_unallocated_cash",
+                info = unallocatedCashInfo,
                 onShowInfo = { infoState.show(it) },
                 onClick = onNavigateToIncome
             )
@@ -248,16 +234,6 @@ fun OverviewTab(
             onShowInfo = { infoState.show(it) },
             onUpdateSettings = onUpdateSettings,
             onReduceSettings = onReduceSettings
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Net Worth Chart
-        NetWorthChart(
-            data = if (state.settings.isSingleHousehold) state.singleTrajectory else state.dualTrajectory,
-            cpiInflationPct = state.settings.cpiInflationPct,
-            ledgerEntries = ledgerEntries,
-            onOpenSandbox = onNavigateToSandbox
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -335,22 +311,21 @@ fun OverviewTab(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Symmetric 2x2 Strategic Metric Grid
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Row 1: Early-Access Bridge + Coast FIRE
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Max),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val bridgeValue = if (state.isLiquidBridgeFundedToday) "Ready (100%)" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
-                        val bridgeSub = if (state.isLiquidBridgeFundedToday) "Covers pre-60 years" else "Needed before age 60"
-                        val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+                val useSingleColumnHealth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 385 &&
+                    androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.35f
+                val bridgeValue = if (state.isLiquidBridgeFundedToday) "Ready (100%)" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
+                val bridgeSub = if (state.isLiquidBridgeFundedToday) "Covers pre-60 years" else "Needed before age 60"
+                val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+                val coastValue = if (coastMilestone.isAchieved) "Achieved" else "${fmtPct(coastMilestone.progressPct, 0)} funded"
+                val coastSub = if (coastMilestone.isAchieved) "Grows by $coastTargetYear" else "Goal: ${fmtCompact(coastMilestone.targetAmountToday)}"
+                val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
+                val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
 
+                if (useSingleColumnHealth) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         StrategicMetricTile(
                             label = "Early-Access Bridge",
                             value = bridgeValue,
@@ -359,13 +334,8 @@ fun OverviewTab(
                             icon = Icons.Default.Shield,
                             info = liquidBridgeInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_bridge")
+                            modifier = Modifier.fillMaxWidth().testTag("strategic_tile_bridge")
                         )
-
-                        val coastValue = if (coastMilestone.isAchieved) "Achieved" else "${fmtPct(coastMilestone.progressPct, 0)} funded"
-                        val coastSub = if (coastMilestone.isAchieved) "Grows by $coastTargetYear" else "Goal: ${fmtCompact(coastMilestone.targetAmountToday)}"
-                        val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
-
                         StrategicMetricTile(
                             label = "Coast FIRE",
                             value = coastValue,
@@ -374,17 +344,8 @@ fun OverviewTab(
                             icon = Icons.Default.Star,
                             info = coastFireInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_milestone")
+                            modifier = Modifier.fillMaxWidth().testTag("strategic_tile_milestone")
                         )
-                    }
-
-                    // Row 2: Annual Tax Relief + Stress Score
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Max),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
                         StrategicMetricTile(
                             label = "Annual Tax Refund",
                             value = "+${fmtCZK(taxRefundTotal)}",
@@ -393,10 +354,8 @@ fun OverviewTab(
                             icon = Icons.Default.AccountBalance,
                             info = taxRefundInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_tax_refund")
+                            modifier = Modifier.fillMaxWidth().testTag("strategic_tile_tax_refund")
                         )
-
-                        val survivalColor = if (survivalRate >= 95.0) GoodGreen else if (survivalRate >= 85.0) BrandTeal else BrandGold
                         StrategicMetricTile(
                             label = "Market Stress Score",
                             value = "${survivalRate.roundToInt()}% Pass",
@@ -405,29 +364,80 @@ fun OverviewTab(
                             icon = Icons.Default.CheckCircle,
                             info = survivalInfo,
                             onShowInfo = { infoState.show(it) },
-                            modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_survival")
+                            modifier = Modifier.fillMaxWidth().testTag("strategic_tile_survival")
                         )
+                    }
+                } else {
+                    // Symmetric 2x2 Strategic Metric Grid
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Row 1: Early-Access Bridge + Coast FIRE
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            StrategicMetricTile(
+                                label = "Early-Access Bridge",
+                                value = bridgeValue,
+                                subLabel = bridgeSub,
+                                accentColor = bridgeColor,
+                                icon = Icons.Default.Shield,
+                                info = liquidBridgeInfo,
+                                onShowInfo = { infoState.show(it) },
+                                modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_bridge")
+                            )
+
+                            StrategicMetricTile(
+                                label = "Coast FIRE",
+                                value = coastValue,
+                                subLabel = coastSub,
+                                accentColor = coastColor,
+                                icon = Icons.Default.Star,
+                                info = coastFireInfo,
+                                onShowInfo = { infoState.show(it) },
+                                modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_milestone")
+                            )
+                        }
+
+                        // Row 2: Annual Tax Relief + Stress Score
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            StrategicMetricTile(
+                                label = "Annual Tax Refund",
+                                value = "+${fmtCZK(taxRefundTotal)}",
+                                subLabel = "Spring tax rebate",
+                                accentColor = GoodGreen,
+                                icon = Icons.Default.AccountBalance,
+                                info = taxRefundInfo,
+                                onShowInfo = { infoState.show(it) },
+                                modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_tax_refund")
+                            )
+
+                            StrategicMetricTile(
+                                label = "Market Stress Score",
+                                value = "${survivalRate.roundToInt()}% Pass",
+                                subLabel = "Historical crash test",
+                                accentColor = survivalColor,
+                                icon = Icons.Default.CheckCircle,
+                                info = survivalInfo,
+                                onShowInfo = { infoState.show(it) },
+                                modifier = Modifier.weight(1f).fillMaxHeight().testTag("strategic_tile_survival")
+                            )
+                        }
                     }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Capital Gains 3-Year Time Test Tracker
-        CapitalGainsTimeTestCard(
-            state = state,
-            onShowInfo = { infoState.show(it) }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-
-    if (showLocalQuickGuide && onOpenQuickGuide == null) {
-        QuickGuideDialog(
-            onDismiss = { showLocalQuickGuide = false },
-            onGoToSetup = onOpenSettings
-        )
     }
 
     // Modal Metric Info Dialog

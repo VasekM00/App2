@@ -13,21 +13,25 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.SettingsEntity
+import com.example.domain.CzechRegulatoryData
 import com.example.domain.FinancialEngine
 import com.example.ui.MainScreen
 import com.example.ui.MainViewModel
+import com.example.ui.components.LiveSyncDialog
 import com.example.ui.components.QuickGuideDialog
 import com.example.ui.components.SankeyCashFlowCard
 import com.example.ui.components.charts.StressComparisonChart
@@ -532,9 +536,113 @@ class ScreenshotAuditTest {
         composeTestRule.onNodeWithText("disregards all family gifts", substring = true).assertIsDisplayed()
 
         // Filter to Privacy & Banking -> supported banks & cross-account netting audit visible
+        composeTestRule.onNodeWithTag("guide_filter_row")
+            .performScrollToNode(hasTestTag("guide_filter_privacy"))
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("guide_filter_privacy").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Automated Bank Statement Parser").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Automated Bank Statement Parser").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Cross-Account Netting Audit").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h1400dp-xxhdpi")
+    fun captureOverviewNarrowLargeFont() {
+        composeTestRule.setContent {
+            val curDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density = curDensity.density, fontScale = 1.5f)
+            ) {
+                MartinuFinancialsTheme {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        OverviewTab(state = state)
+                    }
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/overview_narrow_large_font.png")
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h1800dp-xxhdpi")
+    fun captureSettingsDataNarrowLargeFont() {
+        composeTestRule.setContent {
+            val curDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(density = curDensity.density, fontScale = 1.5f)
+            ) {
+                MartinuFinancialsTheme {
+                    Surface(color = MaterialTheme.colorScheme.background) {
+                        SettingsTab(
+                            state = state,
+                            onUpdateSettings = {},
+                            onResetDefaults = {},
+                            onClearAllData = {},
+                            liveRegulatoryData = null,
+                            isSyncing = false,
+                            onSyncLiveCzechData = {},
+                            initialSubTab = 2
+                        )
+                    }
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/settings_data_narrow_large_font.png")
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h1800dp-xxhdpi")
+    fun captureSettingsPrivacyAndBanks() {
+        val bankState = FinancialEngine.calculate(
+            settings.copy(
+                knownFamilyAccountsJson = """["123456-7890123456/0100"]""",
+                knownParentalGiftAccountsJson = """["9876543210/0800"]"""
+            ),
+            runMonteCarlo = false
+        )
+        composeTestRule.setContent {
+            MartinuFinancialsTheme {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    SettingsTab(
+                        state = bankState,
+                        onUpdateSettings = {},
+                        onResetDefaults = {},
+                        onClearAllData = {},
+                        liveRegulatoryData = CzechRegulatoryData(isFxLive = true, rateDate = "2026-11-20"),
+                        isSyncing = false,
+                        onSyncLiveCzechData = {},
+                        initialSubTab = 2,
+                        biometricLockEnabled = true,
+                        flagSecureEnabled = true
+                    )
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Privacy & Security").performClick()
+        composeTestRule.onNodeWithText("Bank Accounts & Reconciliation").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/settings_privacy_and_banks.png")
+    }
+
+    @Test
+    fun captureHonestCnbSyncDialog() {
+        composeTestRule.setContent {
+            MartinuFinancialsTheme {
+                LiveSyncDialog(
+                    currentSettings = settings,
+                    liveData = CzechRegulatoryData(isFxLive = true, rateDate = "2026-11-20"),
+                    isLoading = false,
+                    onDismiss = {},
+                    onApplySettings = {},
+                    onRetry = {},
+                    lastSyncTimestamp = 1_795_000_000_000L
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("live_sync_dialog").captureRoboImage("src/test/screenshots/sync_live_cnb_dialog.png")
     }
 }

@@ -1,8 +1,9 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,20 +33,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
@@ -68,6 +70,7 @@ import com.example.util.Formatters
 /**
  * Rich structural data model for on-demand metric info.
  */
+@Immutable
 data class MetricInfo(
     val title: String,
     val category: String = "Metric Insight",
@@ -86,6 +89,7 @@ fun rememberMetricInfoState(): MetricInfoState {
     return remember { MetricInfoState() }
 }
 
+@Stable
 class MetricInfoState {
     var currentInfo by mutableStateOf<MetricInfo?>(null)
         private set
@@ -321,23 +325,25 @@ fun MetricInfoDialog(
 }
 
 /**
- * Modifier helper to attach tap & hold info triggers with haptic feedback.
+ * Modifier helper to attach accessible tap & hold info triggers with haptic feedback.
  */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 fun Modifier.infoTapHold(
     info: MetricInfo,
     onShowInfo: (MetricInfo) -> Unit
-): Modifier = composed {
+): Modifier {
     val haptic = LocalHapticFeedback.current
-    this.pointerInput(info) {
-        detectTapGestures(
-            onLongPress = {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onShowInfo(info)
-            },
-            onTap = {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onShowInfo(info)
-            }
-        )
-    }
+    return this.combinedClickable(
+        role = Role.Button,
+        onClickLabel = "View ${info.title} details",
+        onLongClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onShowInfo(info)
+        },
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onShowInfo(info)
+        }
+    )
 }

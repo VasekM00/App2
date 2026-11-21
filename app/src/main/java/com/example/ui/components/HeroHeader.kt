@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material3.AlertDialog
@@ -52,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.ui.theme.BrandBlue
+import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.DisplayFontFamily
 import com.example.ui.theme.GoodGreen
@@ -73,9 +73,12 @@ fun HeroHeader(
     var showMultiplierDialog by remember { mutableStateOf(false) }
 
     val snap = state.snapshot
+    val sEff = state.effectiveSettings
     val pensionTotal = snap.pensionTotal
     val liquidTotal = snap.investedLiquidTotal
-    val monthlySurplus = snap.monthlyLeftoverBeforeInvesting
+    val fireYearLabel = snap.activeFirePoint?.year?.toString() ?: "${sEff.baseYear + 35}+"
+    @Suppress("UNUSED_VARIABLE")
+    val unusedQuickGuide = onOpenQuickGuide
 
     Card(
         modifier = modifier
@@ -94,60 +97,18 @@ fun HeroHeader(
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 18.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "TOTAL NET WORTH",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                if (onOpenQuickGuide != null) {
-                    Surface(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onOpenQuickGuide()
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("hero_quick_guide_button")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                                contentDescription = "Open Quick Guide",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = "Quick Guide",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-                    }
-                }
-            }
+            Text(
+                text = "TOTAL NET WORTH",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp)
+            )
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -206,14 +167,14 @@ fun HeroHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     HeroStripMetric(
-                        label = "Cash Reserve",
-                        value = fmtCompact(snap.emergencyCashTotal),
+                        label = "Target FIRE Year",
+                        value = fireYearLabel,
                         valueColor = BrandBlue,
-                        onClick = onNavigateToEmergencyReserve,
+                        onClick = onNavigateToNetWorth,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .testTag("hero_stat_emergency_reserve")
+                            .testTag("hero_stat_fire_year")
                     )
 
                     VerticalDivider(
@@ -224,13 +185,14 @@ fun HeroHeader(
                     )
 
                     HeroStripMetric(
-                        label = "Monthly Leftover",
-                        value = fmtCompact(monthlySurplus),
-                        valueColor = MaterialTheme.colorScheme.onSurface,
-                        onClick = onNavigateToSavingsRate,
+                        label = "Freedom Goal",
+                        value = fmtCompact(snap.activeFireTargetToday),
+                        valueColor = BrandGold,
+                        onClick = onNavigateToNetWorth,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .testTag("hero_stat_freedom_goal")
                     )
 
                     VerticalDivider(

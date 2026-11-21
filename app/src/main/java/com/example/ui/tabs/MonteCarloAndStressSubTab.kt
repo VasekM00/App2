@@ -1,6 +1,7 @@
 package com.example.ui.tabs
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,11 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -143,7 +151,7 @@ internal fun MonteCarloAndStressSubTab(
                 CardHeaderPill(
                     title = if (isHistoricalMode) "Historical Simulation" else "Monte Carlo (${state.settings.monteCarloN} Runs)",
                     subtitle = if (isHistoricalMode) "1970–2025 block-bootstrap · Tap for info" else "Parametric log-normal · Tap for info",
-                    badgeText = "${mc.successRatePct.roundToInt()}% PASS",
+                    badgeText = null,
                     accentColor = BrandTeal,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -159,7 +167,10 @@ internal fun MonteCarloAndStressSubTab(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectableGroup()
+                            .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val modes = listOf(
@@ -169,10 +180,6 @@ internal fun MonteCarloAndStressSubTab(
                         modes.forEach { (modeVal, label) ->
                             val isSelected = isHistoricalMode == modeVal
                             Surface(
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isHistoricalMode = modeVal
-                                },
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
                                 contentColor = if (isSelected) BrandTeal else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -181,6 +188,15 @@ internal fun MonteCarloAndStressSubTab(
                                 modifier = Modifier
                                     .weight(1f)
                                     .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .selectable(
+                                        selected = isSelected,
+                                        role = Role.Tab,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            isHistoricalMode = modeVal
+                                        }
+                                    )
                             ) {
                                 Box(
                                     contentAlignment = Alignment.Center,
@@ -205,16 +221,7 @@ internal fun MonteCarloAndStressSubTab(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 ProjectionMetricRow(
-                    label = "Simulation Engine",
-                    value = if (isHistoricalMode) "Historical Bootstrap" else "Parametric (Normal)",
-                    isBold = true,
-                    highlightColor = BrandTeal,
-                    info = simulationEngineInfo,
-                    onShowInfo = onShowInfo
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                ProjectionMetricRow(
-                    label = "Overall Success Rate",
+                    label = "Accumulation Success",
                     value = fmtPct(mc.successRatePct),
                     isBold = true,
                     highlightColor = BrandTeal,
@@ -244,7 +251,7 @@ internal fun MonteCarloAndStressSubTab(
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 ProjectionMetricRow(
-                    label = "Sustainability (${survival.horizonYears} years)",
+                    label = "Withdrawal Survival (${survival.horizonYears} years)",
                     value = fmtPct(survival.successRatePct),
                     isBold = true,
                     highlightColor = BrandGold,
@@ -317,6 +324,7 @@ internal fun MonteCarloAndStressSubTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         state.stressScenarios.forEach { scenario ->
+            var scenarioExpanded by rememberSaveable(scenario.id) { mutableStateOf(false) }
             val scenarioInfo = MetricInfo(
                 title = scenario.name,
                 category = "Stress Regime Parameters",
@@ -344,82 +352,109 @@ internal fun MonteCarloAndStressSubTab(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable(role = Role.Button) { scenarioExpanded = !scenarioExpanded },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = scenario.name,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.weight(1f).padding(end = 8.dp),
-                            maxLines = 2,
-                            softWrap = true,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        ColorPill(
-                            text = scenario.fireAge?.let { "FIRE: ${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "FIRE: > 35 years",
-                            color = if (scenario.fireAge != null) GoodGreen else BadRed,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = BodyFontFamily,
-                            horizontalPadding = 6.dp,
-                            verticalPadding = 2.dp,
-                            info = scenarioInfo,
-                            onShowInfo = onShowInfo
-                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = scenario.name,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.nominalReturnPct)} return · ${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.cpiInflationPct)} CPI",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            ColorPill(
+                                text = scenario.fireAge?.let { "FIRE: ${state.settings.baseYear + (it - state.settings.primaryAge)}" } ?: "FIRE: > 35 years",
+                                color = if (scenario.fireAge != null) GoodGreen else BadRed,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = BodyFontFamily,
+                                horizontalPadding = 6.dp,
+                                verticalPadding = 2.dp,
+                                info = scenarioInfo,
+                                onShowInfo = onShowInfo
+                            )
+                            Icon(
+                                imageVector = if (scenarioExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (scenarioExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = scenario.description,
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            ProjectionMetricRow(
-                                label = "Market Return / Inflation:",
-                                value = "${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.nominalReturnPct)} / ${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.cpiInflationPct)} CPI",
-                                info = scenarioInfo,
-                                onShowInfo = onShowInfo
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
-                            ProjectionMetricRow(
-                                label = "Today's FIRE Target:",
-                                value = fmtCompact(scenario.fireTargetToday),
-                                info = scenarioInfo,
-                                onShowInfo = onShowInfo
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
-                            ProjectionMetricRow(
-                                label = "Monte Carlo Success Rate:",
-                                value = fmtPct(scenario.successRatePct),
-                                info = scenarioInfo,
-                                onShowInfo = onShowInfo
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
-                            ProjectionMetricRow(
-                                label = "Emergency Reserve Survival:",
-                                value = "${String.format(java.util.Locale.ROOT, "%.1f", scenario.emergencySurvivalMonths)} months",
-                                info = scenarioInfo,
-                                onShowInfo = onShowInfo
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
-                            val targetAge60Year = state.settings.baseYear + (60 - state.settings.primaryAge).coerceAtLeast(0)
-                            ProjectionMetricRow(
-                                label = if (state.settings.primaryAge < 60) "Net Worth in $targetAge60Year:" else "Projected Net Worth ($targetAge60Year):",
-                                value = fmtCompact(scenario.netWorthAt60),
-                                isBold = true,
-                                highlightColor = BrandTeal,
-                                info = scenarioInfo,
-                                onShowInfo = onShowInfo
-                            )
+                    if (scenarioExpanded) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = scenario.description,
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                ProjectionMetricRow(
+                                    label = "Market Return / Inflation:",
+                                    value = "${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.nominalReturnPct)} / ${String.format(java.util.Locale.ROOT, "%.1f%%", scenario.cpiInflationPct)} CPI",
+                                    info = scenarioInfo,
+                                    onShowInfo = onShowInfo
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                                ProjectionMetricRow(
+                                    label = "Today's FIRE Target:",
+                                    value = fmtCompact(scenario.fireTargetToday),
+                                    info = scenarioInfo,
+                                    onShowInfo = onShowInfo
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                                ProjectionMetricRow(
+                                    label = "Accumulation Success:",
+                                    value = fmtPct(scenario.successRatePct),
+                                    info = scenarioInfo,
+                                    onShowInfo = onShowInfo
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                                ProjectionMetricRow(
+                                    label = "Emergency Reserve Survival:",
+                                    value = "${String.format(java.util.Locale.ROOT, "%.1f", scenario.emergencySurvivalMonths)} months",
+                                    info = scenarioInfo,
+                                    onShowInfo = onShowInfo
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.20f))
+                                val targetAge60Year = state.settings.baseYear + (60 - state.settings.primaryAge).coerceAtLeast(0)
+                                ProjectionMetricRow(
+                                    label = if (state.settings.primaryAge < 60) "Net Worth in $targetAge60Year:" else "Projected Net Worth ($targetAge60Year):",
+                                    value = fmtCompact(scenario.netWorthAt60),
+                                    isBold = true,
+                                    highlightColor = BrandTeal,
+                                    info = scenarioInfo,
+                                    onShowInfo = onShowInfo
+                                )
+                            }
                         }
                     }
                 }

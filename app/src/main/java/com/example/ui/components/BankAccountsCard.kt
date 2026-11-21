@@ -132,6 +132,8 @@ fun BankAccountsReconciliationCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            val stackBadgeBelow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 385 &&
+                androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.3f
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -158,17 +160,27 @@ fun BankAccountsReconciliationCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (stackBadgeBelow) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        ColorPill(
+                            text = if (totalCount > 0) "$totalCount SAVED" else "RECONCILE",
+                            color = BrandTeal,
+                            fontFamily = BodyFontFamily
+                        )
+                    }
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    ColorPill(
-                        text = if (totalCount > 0) "$totalCount SAVED" else "RECONCILE",
-                        color = BrandTeal,
-                        fontFamily = BodyFontFamily
-                    )
+                    if (!stackBadgeBelow) {
+                        ColorPill(
+                            text = if (totalCount > 0) "$totalCount SAVED" else "RECONCILE",
+                            color = BrandTeal,
+                            fontFamily = BodyFontFamily
+                        )
+                    }
                     IconButton(
                         onClick = { expanded = !expanded },
                         modifier = Modifier.size(48.dp)

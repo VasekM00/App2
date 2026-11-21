@@ -24,9 +24,8 @@ class MainScreenNavigationInstrumentedTest {
     fun mainScreen_bottomTabsSearchAndQuickGuide_navigateCleanly() {
         composeTestRule.waitForIdle()
 
-        // Home tab surfaces both Hero Quick Guide pill and top-bar '?' action
+        // Home tab surfaces Hero Header and top-bar '?' action
         composeTestRule.onNodeWithTag("hero_header_card").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("hero_quick_guide_button").assertIsDisplayed()
         composeTestRule.onNodeWithTag("action_quick_guide").assertIsDisplayed()
         composeTestRule.onNodeWithTag("action_quick_guide").performClick()
         composeTestRule.waitForIdle()

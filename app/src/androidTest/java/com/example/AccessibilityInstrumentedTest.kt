@@ -1,21 +1,28 @@
 package com.example
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
+import com.example.ui.components.AppLockOverlay
+import com.example.ui.components.EmergencyReserveWidget
 import com.example.ui.components.HeroHeader
 import com.example.ui.theme.MartinuFinancialsTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -29,66 +36,62 @@ class AccessibilityInstrumentedTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(WakeDeviceRule()).around(composeTestRule)
 
-    /**
-     * Validates that semantic content descriptions are properly assigned to Compose UI elements
-     * including navigation items, action buttons, header controls, and accessibility icons.
-     */
     @Test
-    fun testSemanticContentDescriptionsOnComposeUIElements() {
+    fun testRealComponentsSemanticsTouchTargetsAndRoles() {
         val defaultState = FinancialEngine.calculate(SettingsEntity(), runMonteCarlo = false)
+        var selectedReserveMode = ""
+        var navToNetWorth = 0
 
         composeTestRule.setContent {
             MartinuFinancialsTheme {
-                androidx.compose.foundation.layout.Column {
-                    // 1. Hero Header accessibility elements
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     HeroHeader(
                         state = defaultState,
-                        onOpenQuickGuide = {}
+                        onNavigateToNetWorth = { navToNetWorth++ }
                     )
-
-                    // 2. Navigation Bar accessibility elements (4 goal-driven tabs)
-                    NavigationBar {
-                        val items = listOf(
-                            "Home" to Icons.Default.Dashboard,
-                            "Budget" to Icons.Default.Payments,
-                            "Wealth" to Icons.Default.Assessment,
-                            "More" to Icons.Default.Settings
-                        )
-                        items.forEach { (title, icon) ->
-                            NavigationBarItem(
-                                selected = false,
-                                onClick = {},
-                                icon = { Icon(imageVector = icon, contentDescription = title) },
-                                label = { Text(title) }
-                            )
-                        }
-                    }
+                    EmergencyReserveWidget(
+                        state = defaultState,
+                        onSelectReserveMode = { selectedReserveMode = it }
+                    )
                 }
             }
         }
 
-        // Verify HeroHeader quick guide control has proper content description for screen readers
-        composeTestRule
-            .onNodeWithContentDescription("Open Quick Guide")
-            .assertExists()
+        composeTestRule.onNodeWithTag("hero_header_card").assertExists()
+        composeTestRule.onNodeWithTag("hero_stat_net_worth").performClick()
+        assertTrue(navToNetWorth >= 1)
+        composeTestRule.onNodeWithTag("hero_stat_fire_year").assertExists()
+        composeTestRule.onNodeWithTag("hero_stat_freedom_goal").assertExists()
+        composeTestRule.onNodeWithTag("hero_stat_savings_rate").assertExists()
 
-        // Verify Navigation items have appropriate content descriptions.
-        // NavigationBarItem merges descendant semantics, so the icon's content description
-        // is only observable in the unmerged tree.
-        composeTestRule
-            .onNodeWithContentDescription("Home", useUnmergedTree = true)
-            .assertExists()
+        val hasTabRole = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+        for (tag in listOf("reserve_chip_3m", "reserve_chip_6m", "reserve_chip_9m", "reserve_chip_12m")) {
+            composeTestRule.onNodeWithTag(tag)
+                .assertExists()
+                .assert(hasTabRole)
+                .assertHeightIsAtLeast(48.dp)
+        }
+        composeTestRule.onNodeWithTag("reserve_chip_6m").assertIsSelected()
+        composeTestRule.onNodeWithTag("reserve_chip_9m").performClick()
+        assertEquals("9M", selectedReserveMode)
+    }
 
-        composeTestRule
-            .onNodeWithContentDescription("Budget", useUnmergedTree = true)
-            .assertExists()
+    @Test
+    fun testAppLockOverlayUnlockSemanticsAndTouchTarget() {
+        var unlockClicks = 0
+        composeTestRule.setContent {
+            MartinuFinancialsTheme {
+                AppLockOverlay(
+                    onUnlockClick = { unlockClicks++ }
+                )
+            }
+        }
 
-        composeTestRule
-            .onNodeWithContentDescription("Wealth", useUnmergedTree = true)
+        composeTestRule.onNodeWithTag("app_lock_overlay").assertExists()
+        composeTestRule.onNodeWithTag("unlock_app_button")
             .assertExists()
-
-        composeTestRule
-            .onNodeWithContentDescription("More", useUnmergedTree = true)
-            .assertExists()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        assertEquals(1, unlockClicks)
     }
 }

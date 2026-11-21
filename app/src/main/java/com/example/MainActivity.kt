@@ -171,12 +171,18 @@ class MainActivity : FragmentActivity() {
                     statusBarStyle = if (isDarkTheme) {
                         SystemBarStyle.dark(AndroidColor.TRANSPARENT)
                     } else {
-                        SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                        SystemBarStyle.light(
+                            AndroidColor.TRANSPARENT,
+                            AndroidColor.argb(0x80, 0x1B, 0x1B, 0x1B)
+                        )
                     },
                     navigationBarStyle = if (isDarkTheme) {
                         SystemBarStyle.dark(AndroidColor.TRANSPARENT)
                     } else {
-                        SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                        SystemBarStyle.light(
+                            AndroidColor.TRANSPARENT,
+                            AndroidColor.argb(0x80, 0x1B, 0x1B, 0x1B)
+                        )
                     }
                 )
                 onDispose {}

@@ -60,8 +60,8 @@ class CashFlowCardsInteractionTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Upcoming Bills & Calendar").assertIsDisplayed()
-        composeTestRule.onNodeWithText("BUDGET", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Upcoming Bills").assertIsDisplayed()
+        composeTestRule.onNodeWithText("30-day bills", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag("btn_add_upcoming_bill")
             .assertIsDisplayed()
             .assertHeightIsAtLeast(48.dp)

@@ -12,14 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -131,6 +126,7 @@ fun CashFlowTab(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .selectableGroup()
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -178,8 +174,8 @@ fun CashFlowTab(
                 }
             }
 
-            if (selectedSubTab in 0..2) {
-                BudgetAndIncomesSubTab(
+            when (selectedSubTab) {
+                0 -> BudgetOverviewCard(
                     state = state,
                     ledgerEntries = ledgerEntries,
                     allImportedTransactions = allImportedTransactions,
@@ -190,11 +186,25 @@ fun CashFlowTab(
                     onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,
                     onShowInfo = { infoState.show(it) },
                     onUpdateSettings = onUpdateSettings,
-                    externalSelectedSection = selectedSubTab,
                     onReduceSettings = onReduceSettings
                 )
-            } else {
-                LedgerSubTab(
+                1 -> IncomeSourcesCard(
+                    state = state,
+                    ledgerEntries = ledgerEntries,
+                    onShowInfo = { infoState.show(it) },
+                    onUpdateSettings = onUpdateSettings,
+                    onReduceSettings = onReduceSettings,
+                    allImportedTransactions = allImportedTransactions
+                )
+                2 -> ExpenseCategoriesCard(
+                    state = state,
+                    ledgerEntries = ledgerEntries,
+                    onShowInfo = { infoState.show(it) },
+                    onUpdateSettings = onUpdateSettings,
+                    onReduceSettings = onReduceSettings,
+                    allImportedTransactions = allImportedTransactions
+                )
+                else -> LedgerSubTab(
                     state = state,
                     entries = ledgerEntries,
                     onAddClick = {
@@ -216,30 +226,6 @@ fun CashFlowTab(
                     allImportedTransactions = allImportedTransactions,
                     onUpdateImportedTransactionCategory = onUpdateImportedTransactionCategory,
                     onToggleImportedTransactionExcluded = onToggleImportedTransactionExcluded
-                )
-            }
-        }
-
-        if (selectedSubTab == 3 && ledgerEntries.isNotEmpty()) {
-            FloatingActionButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    duplicateFromId = null
-                    showAddDialog = true
-                },
-                containerColor = BrandTeal,
-                contentColor = OnBrandTeal,
-                shape = CircleShape,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 18.dp, bottom = 22.dp)
-                    .size(52.dp)
-                    .testTag("fab_add_ledger_entry")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New Entry",
-                    modifier = Modifier.size(24.dp)
                 )
             }
         }
