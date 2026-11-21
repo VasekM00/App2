@@ -52,13 +52,35 @@ internal class BackupAndSyncController(
         if (fxJson.isBlank() || fxJson.trim() == "{}") return
         runCatching {
             val obj = JSONObject(fxJson)
+            val parsedRates = linkedMapOf<String, Double>()
             val keys = obj.keys()
             while (keys.hasNext()) {
                 val code = keys.next()
+                if (code == "rateDate") continue
                 val rate = obj.optDouble(code, Double.NaN)
                 if (rate.isFinite() && rate > 0.0) {
                     FxRateService.setRate(code, rate)
+                    parsedRates[code.uppercase(java.util.Locale.ROOT)] = rate
                 }
+            }
+            if (parsedRates.isNotEmpty() && liveRegulatoryData.value == null) {
+                val savedDate = obj.optString("rateDate", "").trim()
+                val defaults = CzechRegulatoryData()
+                liveRegulatoryData.value = defaults.copy(
+                    sourceName = if (savedDate.isNotBlank()) {
+                        "Saved ČNB FX ($savedDate) & Bundled 2026 Statutory Constants"
+                    } else {
+                        "Saved ČNB FX & Bundled 2026 Statutory Constants"
+                    },
+                    isFxLive = false,
+                    eurCzkRate = parsedRates["EUR"] ?: defaults.eurCzkRate,
+                    usdCzkRate = parsedRates["USD"] ?: defaults.usdCzkRate,
+                    gbpCzkRate = parsedRates["GBP"] ?: defaults.gbpCzkRate,
+                    plnCzkRate = parsedRates["PLN"] ?: defaults.plnCzkRate,
+                    chfCzkRate = parsedRates["CHF"] ?: defaults.chfCzkRate,
+                    hufCzkRate = parsedRates["HUF"] ?: defaults.hufCzkRate,
+                    rateDate = savedDate
+                )
             }
         }
     }
@@ -70,29 +92,33 @@ internal class BackupAndSyncController(
             try {
                 val data = CzechEconomicSyncService.fetchLiveRegulatoryData()
                 liveRegulatoryData.value = data
-                val fetchedLive = data.rateDate.isNotBlank() || data.sourceName.contains("Official")
-                if (fetchedLive) {
+                if (data.isFxLive) {
+                    val liveMap = linkedMapOf(
+                        "EUR" to data.eurCzkRate,
+                        "USD" to data.usdCzkRate,
+                        "GBP" to data.gbpCzkRate,
+                        "PLN" to data.plnCzkRate,
+                        "CHF" to data.chfCzkRate,
+                        "HUF" to data.hufCzkRate
+                    ).filterValues { it.isFinite() && it > 0.0 }
+                    FxRateService.updateRates(liveMap)
                     val fxJson = JSONObject()
-                    if (data.eurCzkRate.isFinite() && data.eurCzkRate > 0.0) {
-                        FxRateService.setRate("EUR", data.eurCzkRate)
-                        fxJson.put("EUR", data.eurCzkRate)
-                    }
-                    if (data.usdCzkRate.isFinite() && data.usdCzkRate > 0.0) {
-                        FxRateService.setRate("USD", data.usdCzkRate)
-                        fxJson.put("USD", data.usdCzkRate)
+                    liveMap.forEach { (code, rate) -> fxJson.put(code, rate) }
+                    if (data.rateDate.isNotBlank()) {
+                        fxJson.put("rateDate", data.rateDate)
                     }
                     if (fxJson.length() > 0) {
                         preferencesRepository.setCnbFxRatesJson(fxJson.toString())
                     }
                     preferencesRepository.setLastCzechSyncTimestamp(System.currentTimeMillis())
-                    emitSnackbar("ČNB FX rates synced & 2026 Czech statutory benchmarks verified")
+                    emitSnackbar("Live ČNB FX rates synced · 2026 statutory constants verified")
                 } else {
-                    emitSnackbar("Offline: using built-in 2026 Czech statutory parameters")
+                    emitSnackbar("Offline: ČNB FX unavailable; using bundled 2026 statutory constants")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                emitSnackbar("Sync failed. Using saved statutory parameters")
+                emitSnackbar("Sync failed. Using bundled 2026 statutory constants")
             } finally {
                 isSyncing.value = false
                 syncInFlight.set(false)

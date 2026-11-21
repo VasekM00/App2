@@ -8,7 +8,9 @@ import android.os.Build
 import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,16 +33,14 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -51,14 +51,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.ActionStateEntity
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.CzechRegulatoryData
 import com.example.domain.FullCalculationState
+import com.example.ui.components.BankAccountsReconciliationCard
 import com.example.ui.components.ColorPill
 import com.example.ui.components.LearnedMerchantRulesCard
+import com.example.ui.components.canAuthenticateWithDevice
 import com.example.ui.state.dispatchSettingsPatch
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandGold
@@ -66,15 +67,10 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
 import com.example.ui.theme.brandSolidContentColor
-import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtPct
 import com.example.util.Formatters.fmtRelativeTime
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
 
 fun LazyListScope.settingsDataSubTab(
     state: FullCalculationState,
@@ -96,11 +92,21 @@ fun LazyListScope.settingsDataSubTab(
     ledgerEntries: List<LedgerEntryEntity>,
     importedTransactions: List<ImportedBankTransactionEntity>,
     exportScope: CoroutineScope? = null,
-    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
+    biometricLockEnabled: Boolean = false,
+    flagSecureEnabled: Boolean = false,
+    onToggleBiometricLock: (Boolean) -> Unit = {},
+    onToggleFlagSecure: (Boolean) -> Unit = {},
+    onShowExportBackupDialog: () -> Unit = {},
+    onLaunchImportBackupFile: () -> Unit = {}
 ) {
     val s = state.settings
+    @Suppress("UNUSED_VARIABLE")
+    val unusedRefs = Triple(actionStates.size, ledgerEntries.size, importedTransactions.size)
+    @Suppress("UNUSED_VARIABLE")
+    val unusedScope = exportScope
 
-    // 0. Appearance & Theme Settings
+    // 0. Appearance & Theme Settings (item index 1)
     item {
         val haptic = LocalHapticFeedback.current
         SettingsGroupCard(
@@ -150,7 +156,9 @@ fun LazyListScope.settingsDataSubTab(
                             .testTag("theme_mode_$mode")
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
@@ -176,15 +184,122 @@ fun LazyListScope.settingsDataSubTab(
         }
     }
 
-    // 1. Live Czech Benchmarks Sync
+    // 1. Privacy & Security (item index 2)
     item {
+        val context = LocalContext.current
         val haptic = LocalHapticFeedback.current
         SettingsGroupCard(
-            title = "Live Czech Rates & Sync",
+            title = "Privacy & Security",
+            subtitle = when {
+                biometricLockEnabled && flagSecureEnabled -> "App lock & screenshot protection active"
+                biometricLockEnabled -> "Biometric / PIN app lock enabled"
+                flagSecureEnabled -> "Screen privacy (FLAG_SECURE) enabled"
+                else -> "On-device lock & screen privacy controls"
+            },
+            initiallyExpanded = false,
+            badgeText = if (biometricLockEnabled || flagSecureEnabled) "ACTIVE" else "ON-DEVICE",
+            badgeColor = if (biometricLockEnabled || flagSecureEnabled) GoodGreen else BrandTeal,
+            externalExpandTrigger = expandTrigger,
+            externalExpandState = expandTargetState,
+            sectionKey = "privacy",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
+        ) {
+            fun handleBiometricToggle(enable: Boolean) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (enable && !canAuthenticateWithDevice(context)) {
+                    Toast.makeText(
+                        context,
+                        "Configure a device PIN, pattern, password, or biometric in Android Settings first.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return
+                }
+                onToggleBiometricLock(enable)
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable { handleBiometricToggle(!biometricLockEnabled) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp)
+                ) {
+                    Text(
+                        text = "Biometric / Device PIN Lock",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "Require unlock when opening the app or returning from background",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = biometricLockEnabled,
+                    onCheckedChange = { handleBiometricToggle(it) },
+                    modifier = Modifier.testTag("switch_biometric_lock")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onToggleFlagSecure(!flagSecureEnabled)
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp)
+                ) {
+                    Text(
+                        text = "Hide Screen Content in Recents",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "Blocks screenshots, screen recording, and task-switcher previews",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = flagSecureEnabled,
+                    onCheckedChange = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onToggleFlagSecure(it)
+                    },
+                    modifier = Modifier.testTag("switch_screen_privacy")
+                )
+            }
+        }
+    }
+
+    // 2. ČNB FX Rates & Statutory Constants (item index 3)
+    item {
+        val haptic = LocalHapticFeedback.current
+        val isFxLive = liveRegulatoryData?.isFxLive == true
+        SettingsGroupCard(
+            title = "ČNB FX Rates & Statutory Constants",
             subtitle = liveDataSubtitle(liveRegulatoryData),
             initiallyExpanded = false,
-            badgeText = if (liveRegulatoryData != null) "SYNCED" else "OFFLINE",
-            badgeColor = if (liveRegulatoryData != null) GoodGreen else BrandGold,
+            badgeText = if (isFxLive) "FX LIVE" else "OFFLINE",
+            badgeColor = if (isFxLive) GoodGreen else BrandGold,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,
             sectionKey = "sync",
@@ -192,7 +307,7 @@ fun LazyListScope.settingsDataSubTab(
             focusedSectionTrigger = focusedSectionTrigger
         ) {
             Text(
-                text = "Fetch live daily exchange rates directly from the official Czech National Bank (ČNB) API and benchmark settings against verified Czech statutory tax and pension regulations.",
+                text = "Fetches live daily FX rates (EUR, USD, GBP, PLN, CHF, HUF) from api.cnb.cz. Czech 2026 tax, DIP/DPS, and parental constants are verified bundled local defaults.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -215,7 +330,7 @@ fun LazyListScope.settingsDataSubTab(
                 Spacer(modifier = Modifier.width(8.dp))
                 ColorPill(
                     text = fmtRelativeTime(lastSyncTimestamp),
-                    color = if (lastSyncTimestamp != null) GoodGreen else BrandGold,
+                    color = if (isFxLive) GoodGreen else BrandGold,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     horizontalPadding = 6.dp,
@@ -243,22 +358,19 @@ fun LazyListScope.settingsDataSubTab(
             ) {
                 Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Check & Sync Live Benchmarks", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Sync ČNB FX & Check 2026 Constants", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 
-    // 2. Export & Import Settings
+    // 3. Export & Import Backups via SAF (item index 4)
     item {
         val context = LocalContext.current
-        val fallbackScope = rememberCoroutineScope()
-        val scope = exportScope ?: fallbackScope
-        var isExporting by remember { mutableStateOf(false) }
         SettingsGroupCard(
-            title = "Backup & Share Settings",
-            subtitle = "JSON export/import and clipboard snapshot",
+            title = "Backup & Portable Restore",
+            subtitle = "AES-256-GCM encrypted files & summary snapshot",
             initiallyExpanded = false,
-            badgeText = "JSON",
+            badgeText = "SAF / GCM",
             badgeColor = BrandTeal,
             externalExpandTrigger = expandTrigger,
             externalExpandState = expandTargetState,
@@ -267,7 +379,7 @@ fun LazyListScope.settingsDataSubTab(
             focusedSectionTrigger = focusedSectionTrigger
         ) {
             Text(
-                text = "Safely export your parameters as a portable JSON file, restore previous backups, or copy a plain-text summary.",
+                text = "Save full or settings-only backups directly to a file with optional AES-256-GCM passphrase encryption, or restore from a saved backup.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -278,59 +390,7 @@ fun LazyListScope.settingsDataSubTab(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = {
-                        if (isExporting) return@Button
-                        isExporting = true
-                        scope.launch {
-                            try {
-                                val json = withContext(Dispatchers.IO) {
-                                    val actionEntities = actionStates.map { (k, done) ->
-                                        ActionStateEntity(
-                                            actionKey = k,
-                                            year = k.substringBefore('_').toIntOrNull() ?: s.baseYear,
-                                            actionId = k.substringAfter('_', k),
-                                            isDone = done
-                                        )
-                                    }
-                                    val prefsRepo = com.example.data.AppPreferencesRepository(context)
-                                    prefsRepo.hydrate()
-                                    val exportedPrefs = prefsRepo.exportPreferencesForBackup()
-                                    val lots = com.example.util.InvestmentLotManager.getLots(context)
-                                    BackupManager.serializeFullBackupToJson(
-                                        BackupManager.FullBackupPayload(
-                                            settings = s,
-                                            ledgerEntries = ledgerEntries,
-                                            actionStates = actionEntities,
-                                            importedTransactions = importedTransactions,
-                                            preferences = exportedPrefs,
-                                            investmentLots = lots
-                                        )
-                                    )
-                                }
-                                try {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("FIRE Full Backup JSON", json)
-                                    clip.description.extras = PersistableBundle().apply {
-                                        putBoolean(
-                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                ClipDescription.EXTRA_IS_SENSITIVE
-                                            } else {
-                                                "android.content.extra.IS_SENSITIVE"
-                                            },
-                                            true
-                                        )
-                                    }
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Full backup JSON copied to clipboard", Toast.LENGTH_SHORT).show()
-                                } catch (_: Exception) {
-                                    Toast.makeText(context, "Backup too large for Android clipboard. Use Export Report to share.", Toast.LENGTH_LONG).show()
-                                }
-                            } finally {
-                                isExporting = false
-                            }
-                        }
-                    },
-                    enabled = !isExporting,
+                    onClick = onShowExportBackupDialog,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = BrandTeal,
                         contentColor = OnBrandTeal
@@ -339,22 +399,24 @@ fun LazyListScope.settingsDataSubTab(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
+                        .testTag("export_backup_button")
                 ) {
                     Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Export JSON", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Export Backup File", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 OutlinedButton(
-                    onClick = onShowImportJsonDialog,
+                    onClick = onLaunchImportBackupFile,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 48.dp)
+                        .testTag("import_backup_button")
                 ) {
                     Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Import JSON", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Import Backup File", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -398,10 +460,42 @@ fun LazyListScope.settingsDataSubTab(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Copy Financial Snapshot Summary", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            TextButton(
+                onClick = onShowImportJsonDialog,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("paste_json_backup_button")
+            ) {
+                Text("Paste JSON Backup (Power Users)", fontSize = 12.sp)
+            }
         }
     }
 
-    // 3. Learned Merchant Rules
+    // 4. Bank Accounts & Reconciliation (item index 5)
+    item {
+        BankAccountsReconciliationCard(
+            knownFamilyAccountsJson = s.knownFamilyAccountsJson,
+            knownParentalGiftAccountsJson = s.knownParentalGiftAccountsJson,
+            onUpdateAccounts = { newFamilyJson, newGiftJson ->
+                dispatchSettingsPatch(s, onUpdateSettings, onReduceSettings) {
+                    it.copy(
+                        knownFamilyAccountsJson = newFamilyJson,
+                        knownParentalGiftAccountsJson = newGiftJson
+                    )
+                }
+            },
+            externalExpandTrigger = expandTrigger,
+            externalExpandState = expandTargetState,
+            sectionKey = "bank_accounts",
+            focusedSectionKey = focusedSectionKey,
+            focusedSectionTrigger = focusedSectionTrigger
+        )
+    }
+
+    // 5. Learned Merchant Rules (item index 6)
     item {
         LearnedMerchantRulesCard(
             rulesJson = s.merchantRulesJson,
@@ -416,7 +510,7 @@ fun LazyListScope.settingsDataSubTab(
         )
     }
 
-    // 4. Danger Zone / Reset Defaults
+    // 6. Danger Zone / Reset Defaults (item index 7)
     item {
         SettingsGroupCard(
             title = "Reset & Danger Zone",
@@ -468,10 +562,15 @@ fun LazyListScope.settingsDataSubTab(
     }
 }
 
-fun liveDataSubtitle(data: com.example.domain.CzechRegulatoryData?): String {
-    return if (data != null) {
-        "ČSÚ CPI: ${data.csuCpiInflationPct}% · EUR: ${String.format(java.util.Locale.ROOT, "%.2f", data.eurCzkRate)} · USD: ${String.format(java.util.Locale.ROOT, "%.2f", data.usdCzkRate)}"
-    } else {
-        "Check live ČSÚ inflation, ČNB rates & tax credits"
+fun liveDataSubtitle(data: CzechRegulatoryData?): String {
+    if (data == null) {
+        return "Offline — bundled 2026 statutory constants & fallback FX"
     }
+    val prefix = when {
+        data.isFxLive && data.rateDate.isNotBlank() -> "Live ČNB (${data.rateDate})"
+        data.isFxLive -> "Live ČNB FX"
+        data.rateDate.isNotBlank() -> "Cached (${data.rateDate})"
+        else -> "Offline FX"
+    }
+    return "$prefix · EUR: ${String.format(java.util.Locale.ROOT, "%.2f", data.eurCzkRate)} · USD: ${String.format(java.util.Locale.ROOT, "%.2f", data.usdCzkRate)}"
 }

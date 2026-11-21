@@ -116,6 +116,11 @@ class MainViewModel internal constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val isPreferencesHydrated: StateFlow<Boolean> = preferencesRepository.snapshot
+        .map { it.isHydrated }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, preferencesRepository.snapshot.value.isHydrated)
+
     private val importedTransactionsShared = repository.getAllImportedTransactions()
         .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
 

@@ -46,6 +46,7 @@ import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
+import com.example.ui.components.LocalExternalPickerGuard
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BrandTeal
@@ -106,6 +107,11 @@ fun CashFlowTab(
     val infoState = rememberMetricInfoState()
 
     val haptic = LocalHapticFeedback.current
+    val onExternalPickerLaunching = LocalExternalPickerGuard.current
+    val launchStatementPicker = {
+        onExternalPickerLaunching()
+        csvLauncher.launch(supportedMimeTypes)
+    }
 
     Box(
         modifier = modifier
@@ -201,7 +207,7 @@ fun CashFlowTab(
                     },
                     onEditEntry = { entry -> editingEntryId = entry.id },
                     onDelete = onDeleteLedgerEntry,
-                    onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
+                    onTriggerImportCsv = launchStatementPicker,
                     onShowInfo = { infoState.show(it) },
                     onShowAuditReport = onShowAuditReport,
                     importedBankSourcesByMonth = importedBankSourcesByMonth,
@@ -248,7 +254,7 @@ fun CashFlowTab(
                 showAddDialog = false
                 duplicateFromId = null
             },
-            onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
+            onTriggerImportCsv = launchStatementPicker,
             onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
                 if (onAddLedgerEntryWithOptionalBalances != null) {
                     onAddLedgerEntryWithOptionalBalances(ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve)
@@ -267,7 +273,7 @@ fun CashFlowTab(
             entries = ledgerEntries,
             initialEntry = entry,
             onDismiss = { editingEntryId = null },
-            onTriggerImportCsv = { csvLauncher.launch(supportedMimeTypes) },
+            onTriggerImportCsv = launchStatementPicker,
             onSave = { ym, incV, incE, incU, expR, expL, notes, balPortu, balPension, balReserve ->
                 val prevTotalLiving = entry.expGroceries + entry.expOther
                 val (newGroceries, newOther) = if (entry.expOther > 0.0 && prevTotalLiving > 0.0) {

@@ -6,7 +6,8 @@ package com.example.domain
  */
 data class CzechRegulatoryData(
     val timestamp: Long = System.currentTimeMillis(),
-    val sourceName: String = "ČSÚ, ČNB & Statutory Registry",
+    val sourceName: String = "Bundled 2026 Czech Statutory Constants",
+    val isFxLive: Boolean = false,
     val effectiveYear: Int = 2026,
     
     // Macroeconomics (ČSÚ & ČNB)
@@ -14,6 +15,10 @@ data class CzechRegulatoryData(
     val csuNationalAverageWageMonthly: Double = 48967.0,
     val eurCzkRate: Double = 25.20,
     val usdCzkRate: Double = 23.50,
+    val gbpCzkRate: Double = 29.80,
+    val plnCzkRate: Double = 5.90,
+    val chfCzkRate: Double = 26.90,
+    val hufCzkRate: Double = 0.063,
     val rateDate: String = "",
     
     // Czech Income Tax (Zákon č. 586/1992 Sb. - ZDP)

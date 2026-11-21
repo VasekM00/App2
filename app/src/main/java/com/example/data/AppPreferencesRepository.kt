@@ -50,7 +50,7 @@ class AppPreferencesRepository(
     suspend fun hydrate(): AppPreferencesSnapshot = withContext(Dispatchers.IO) {
         val loaded = synchronized(prefsLock) {
             if (!prefs.getBoolean(KEY_LEGACY_MIGRATED_V1, false) && prefsName == DEFAULT_PREFS_NAME) {
-                migrateLegacyStoresLocked()
+                runCatching { migrateLegacyStoresLocked() }
             }
             readSnapshotLocked().copy(isHydrated = true)
         }

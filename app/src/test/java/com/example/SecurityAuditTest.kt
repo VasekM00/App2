@@ -41,7 +41,7 @@ class SecurityAuditTest {
 
     /**
      * 4.1: AndroidManifest.xml permission audit
-     * Asserts only INTERNET and ACCESS_NETWORK_STATE permissions are declared.
+     * Asserts only INTERNET and USE_BIOMETRIC permissions are declared.
      */
     @Test
     fun test4_1_manifestPermissionsAudit() {
@@ -51,7 +51,8 @@ class SecurityAuditTest {
         val permissionLines = lines.filter { it.contains("<uses-permission") }
 
         val allowedPermissions = setOf(
-            "android.permission.INTERNET"
+            "android.permission.INTERNET",
+            "android.permission.USE_BIOMETRIC"
         )
 
         val foundPermissions = mutableListOf<String>()
@@ -66,8 +67,9 @@ class SecurityAuditTest {
         for (perm in foundPermissions) {
             assertTrue("Unexpected permission found: $perm", allowedPermissions.contains(perm))
         }
-        assertEquals("Manifest should contain only INTERNET permission", 1, foundPermissions.size)
+        assertEquals("Manifest should contain only INTERNET and USE_BIOMETRIC permissions", 2, foundPermissions.size)
         assertTrue("Manifest must contain INTERNET permission", foundPermissions.contains("android.permission.INTERNET"))
+        assertTrue("Manifest must contain USE_BIOMETRIC permission", foundPermissions.contains("android.permission.USE_BIOMETRIC"))
     }
 
     /**
@@ -116,7 +118,8 @@ class SecurityAuditTest {
             "investment_lots_prefs.xml",
             "merchant_category_overrides.xml",
             "app_preferences.xml",
-            "app_theme_prefs.xml"
+            "app_theme_prefs.xml",
+            "app_user_prefs.xml"
         )
         for (item in requiredExclusions) {
             assertTrue(

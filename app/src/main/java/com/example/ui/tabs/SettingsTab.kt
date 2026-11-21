@@ -1,6 +1,8 @@
 package com.example.ui.tabs
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -51,16 +53,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.ActionStateEntity
+import com.example.data.AppPreferencesRepository
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
 import com.example.domain.parseCustomLumpSums
 import com.example.ui.components.LiveSyncDialog
+import com.example.ui.components.LocalExternalPickerGuard
 import com.example.ui.components.MetricInfoDialog
 import com.example.ui.components.rememberMetricInfoState
 import com.example.ui.theme.BrandTeal
+import com.example.util.BackupCrypto
 import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
+import com.example.util.InvestmentLotManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+
+private data class PendingExportRequest(
+    val fullBackupScope: Boolean,
+    val encryptEnabled: Boolean,
+    val passphrase: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +102,10 @@ fun SettingsTab(
     themeMode: String = "SYSTEM",
     onChangeThemeMode: ((String) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
+    biometricLockEnabled: Boolean = false,
+    flagSecureEnabled: Boolean = false,
+    onToggleBiometricLock: (Boolean) -> Unit = {},
+    onToggleFlagSecure: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -92,11 +113,107 @@ fun SettingsTab(
     val s = state.settings
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val onExternalPickerLaunching = LocalExternalPickerGuard.current
 
     var showSyncDialog by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var showClearDataDialog by rememberSaveable { mutableStateOf(false) }
     var showImportJsonDialog by rememberSaveable { mutableStateOf(false) }
+    var showExportBackupDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingExportRequest by androidx.compose.runtime.remember { mutableStateOf<PendingExportRequest?>(null) }
+    var pendingEncryptedImportEnvelope by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
+    var pendingImportPreview by androidx.compose.runtime.remember { mutableStateOf<ParsedBackupPreview?>(null) }
+
+    val exportDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val req = pendingExportRequest
+        pendingExportRequest = null
+        if (uri == null || req == null) return@rememberLauncherForActivityResult
+        val passChars = req.passphrase.toCharArray()
+        exportScope.launch {
+            try {
+                val outputJson = withContext(Dispatchers.Default) {
+                    val plainJson = if (req.fullBackupScope) {
+                        val actionEntities = actionStates.map { (k, done) ->
+                            ActionStateEntity(
+                                actionKey = k,
+                                year = k.substringBefore('_').toIntOrNull() ?: s.baseYear,
+                                actionId = k.substringAfter('_', k),
+                                isDone = done
+                            )
+                        }
+                        val prefsRepo = AppPreferencesRepository(context)
+                        prefsRepo.hydrate()
+                        val exportedPrefs = prefsRepo.exportPreferencesForBackup()
+                        val lots = InvestmentLotManager.getLots(context, prefsRepo.storeName)
+                        BackupManager.serializeFullBackupToJson(
+                            BackupManager.FullBackupPayload(
+                                settings = s,
+                                ledgerEntries = ledgerEntries,
+                                actionStates = actionEntities,
+                                importedTransactions = importedTransactions,
+                                preferences = exportedPrefs,
+                                investmentLots = lots
+                            )
+                        )
+                    } else {
+                        BackupManager.serializeSettingsToJson(s)
+                    }
+                    if (req.encryptEnabled) {
+                        BackupCrypto.encryptJson(plainJson, passChars)
+                    } else {
+                        plainJson
+                    }
+                }
+                val ok = writeUriTextUtf8(context, uri, outputJson)
+                Toast.makeText(
+                    context,
+                    if (ok) "Backup file saved" else "Failed to write backup file",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Failed to export backup file", Toast.LENGTH_SHORT).show()
+            } finally {
+                passChars.fill('\u0000')
+            }
+        }
+    }
+
+    val importDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        exportScope.launch {
+            when (val readResult = readUriTextBounded(context, uri)) {
+                is ReadBackupFileResult.Success -> {
+                    val raw = readResult.text
+                    if (withContext(Dispatchers.Default) { BackupCrypto.isEncryptedBackup(raw) }) {
+                        pendingEncryptedImportEnvelope = raw
+                    } else {
+                        val preview = withContext(Dispatchers.Default) {
+                            parseBackupJsonForPreview(raw, s)
+                        }
+                        if (preview != null) {
+                            pendingImportPreview = preview
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Selected file is not a valid Martinu Financials backup.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+                ReadBackupFileResult.TooLarge -> {
+                    Toast.makeText(context, "Backup file exceeds 10 MB limit.", Toast.LENGTH_LONG).show()
+                }
+                ReadBackupFileResult.ReadFailed -> {
+                    Toast.makeText(context, "Unable to read selected backup file.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
     var showAddCategoryDialog by rememberSaveable { mutableStateOf(false) }
     var showAddLumpSumDialog by rememberSaveable { mutableStateOf(false) }
     var editingLumpSumId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -124,7 +241,7 @@ fun SettingsTab(
         ),
         Triple(
             "App & Data",
-            if (liveRegulatoryData != null) "Synced" else "Backup",
+            if (liveRegulatoryData?.isFxLive == true) "FX Live" else "Backup",
             Icons.Default.CloudDownload
         )
     )
@@ -147,10 +264,12 @@ fun SettingsTab(
             }
             else -> when (focusedSectionKey) {
                 "appearance" -> 1
-                "sync" -> 2
-                "backup" -> 3
-                "merchant_rules" -> 4
-                "danger" -> 5
+                "privacy" -> 2
+                "sync" -> 3
+                "backup" -> 4
+                "bank_accounts" -> 5
+                "merchant_rules" -> 6
+                "danger" -> 7
                 else -> null
             }
         }
@@ -336,7 +455,16 @@ fun SettingsTab(
                     ledgerEntries = ledgerEntries,
                     importedTransactions = importedTransactions,
                     exportScope = exportScope,
-                    onReduceSettings = onReduceSettings
+                    onReduceSettings = onReduceSettings,
+                    biometricLockEnabled = biometricLockEnabled,
+                    flagSecureEnabled = flagSecureEnabled,
+                    onToggleBiometricLock = onToggleBiometricLock,
+                    onToggleFlagSecure = onToggleFlagSecure,
+                    onShowExportBackupDialog = { showExportBackupDialog = true },
+                    onLaunchImportBackupFile = {
+                        onExternalPickerLaunching()
+                        importDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    }
                 )
             }
 
@@ -355,10 +483,66 @@ fun SettingsTab(
             onApplySettings = { updated ->
                 onUpdateSettings(updated)
                 showSyncDialog = false
-                Toast.makeText(context, "Official Czech benchmarks applied", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "2026 Czech statutory defaults applied", Toast.LENGTH_SHORT).show()
             },
             onRetry = onSyncLiveCzechData,
             lastSyncTimestamp = lastSyncTimestamp
+        )
+    }
+
+    if (showExportBackupDialog) {
+        SettingsExportBackupDialog(
+            onDismiss = { showExportBackupDialog = false },
+            onConfirmExport = { fullScope, encryptEnabled, passphrase ->
+                showExportBackupDialog = false
+                pendingExportRequest = PendingExportRequest(fullScope, encryptEnabled, passphrase)
+                val dateSuffix = LocalDate.now().toString()
+                val fileName = when {
+                    fullScope && encryptEnabled -> "app2_full_encrypted_$dateSuffix.json"
+                    fullScope -> "app2_full_backup_$dateSuffix.json"
+                    encryptEnabled -> "app2_settings_encrypted_$dateSuffix.json"
+                    else -> "app2_settings_backup_$dateSuffix.json"
+                }
+                onExternalPickerLaunching()
+                exportDocumentLauncher.launch(fileName)
+            }
+        )
+    }
+
+    val encryptedEnvelope = pendingEncryptedImportEnvelope
+    if (encryptedEnvelope != null) {
+        SettingsPassphrasePromptDialog(
+            envelopeJson = encryptedEnvelope,
+            fallbackSettings = s,
+            onDismiss = { pendingEncryptedImportEnvelope = null },
+            onDecryptedPreview = { preview ->
+                pendingEncryptedImportEnvelope = null
+                pendingImportPreview = preview
+            }
+        )
+    }
+
+    val importPreview = pendingImportPreview
+    if (importPreview != null) {
+        SettingsBackupPreviewDialog(
+            preview = importPreview,
+            onDismiss = { pendingImportPreview = null },
+            onApplyPreview = { preview ->
+                pendingImportPreview = null
+                when (preview) {
+                    is ParsedBackupPreview.Full -> {
+                        if (onRestoreFullBackup != null) {
+                            onRestoreFullBackup(preview.payload)
+                        } else {
+                            onUpdateSettings(preview.payload.settings)
+                        }
+                    }
+                    is ParsedBackupPreview.SettingsOnly -> {
+                        onUpdateSettings(preview.restoredSettings)
+                        Toast.makeText(context, "Settings successfully restored", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         )
     }
 

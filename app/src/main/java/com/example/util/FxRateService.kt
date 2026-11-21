@@ -180,6 +180,27 @@ object FxRateService {
     }
 
     /**
+     * Atomically updates multiple ČNB currency rates to CZK.
+     */
+    fun updateRates(newRates: Map<String, Double>) {
+        if (newRates.isEmpty()) return
+        synchronized(lock) {
+            val updated = rates.toMutableMap()
+            var changed = false
+            for ((rawCode, rate) in newRates) {
+                val norm = normalizeCurrencyCode(rawCode)
+                if (norm.isNotBlank() && rate.isFinite() && rate > 0.0) {
+                    updated[norm] = rate
+                    changed = true
+                }
+            }
+            if (changed) {
+                rates = updated.toMap()
+            }
+        }
+    }
+
+    /**
      * Parses ČNB official exchange rate table (either JSON or pipe-delimited daily TXT format).
      */
     fun parseCnbDailyRates(content: String): Boolean {

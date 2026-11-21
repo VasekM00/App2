@@ -83,13 +83,16 @@ fun LiveSyncDialog(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "Live Czech Economic Sync",
+                        text = "ČNB FX & 2026 Statutory Constants",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
-                    val subtitleText = if (lastSyncTimestamp != null) {
-                        "${liveData?.sourceName ?: "Official registers"} · Checked ${fmtRelativeTime(lastSyncTimestamp)}"
-                    } else {
-                        liveData?.sourceName ?: "Official Czech financial registers"
+                    val subtitleText = when {
+                        liveData?.isFxLive == true && lastSyncTimestamp != null ->
+                            "Live ČNB FX + bundled 2026 constants · Synced ${fmtRelativeTime(lastSyncTimestamp)}"
+                        liveData?.isFxLive == true ->
+                            "Live ČNB FX + bundled 2026 constants"
+                        else ->
+                            "Offline · Bundled 2026 ZDP/DPS statutory defaults"
                     }
                     Text(
                         text = subtitleText,
@@ -113,7 +116,7 @@ fun LiveSyncDialog(
                     CircularProgressIndicator(color = BrandTeal, modifier = Modifier.size(36.dp))
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Connecting to official ČNB exchange rate feed",
+                        text = "Fetching live daily FX rates from ČNB (api.cnb.cz)...",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -125,49 +128,119 @@ fun LiveSyncDialog(
                 val diffCount = remember(differences) { differences.count { it.isDifferent } }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // FX & Macro Rates Banner
+                    // Section 1: Live ČNB Daily FX Banner
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            val datePrefix = if (liveData.rateDate.isNotBlank()) " (${liveData.rateDate})" else ""
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val datePrefix = if (liveData.rateDate.isNotBlank()) " (${liveData.rateDate})" else ""
+                                Text(
+                                    text = "Live ČNB Daily FX$datePrefix",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ColorPill(
+                                    text = if (liveData.isFxLive) "FX LIVE" else "OFFLINE",
+                                    color = if (liveData.isFxLive) GoodGreen else BrandGold,
+                                    fontSize = 9.sp,
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    horizontalPadding = 6.dp,
+                                    verticalPadding = 2.dp
+                                )
+                            }
+
+                            val locale = java.util.Locale.getDefault()
                             val eurRate = liveData.eurCzkRate.finiteOrZero()
                             val usdRate = liveData.usdCzkRate.finiteOrZero()
+                            val gbpRate = liveData.gbpCzkRate.finiteOrZero()
+                            val plnRate = liveData.plnCzkRate.finiteOrZero()
+                            val chfRate = liveData.chfCzkRate.finiteOrZero()
+                            val hufRate = liveData.hufCzkRate.finiteOrZero()
                             Text(
-                                text = "ČNB FX$datePrefix: 1 EUR = ${String.format(java.util.Locale.getDefault(), "%.2f", eurRate)} Kč · 1 USD = ${String.format(java.util.Locale.getDefault(), "%.2f", usdRate)} Kč",
+                                text = "EUR ${String.format(locale, "%.2f", eurRate)} · USD ${String.format(locale, "%.2f", usdRate)} · GBP ${String.format(locale, "%.2f", gbpRate)}\n" +
+                                    "PLN ${String.format(locale, "%.2f", plnRate)} · CHF ${String.format(locale, "%.2f", chfRate)} · 100 HUF ${String.format(locale, "%.2f", hufRate * 100.0)} Kč",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = BodyFontFamily,
                                     fontSize = 11.sp
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
+                                )
                             )
-                            ColorPill(
-                                text = if (diffCount > 0) "$diffCount DIFFERENCES" else "FULLY SYNCED",
-                                color = if (diffCount > 0) BrandGold else GoodGreen,
-                                fontSize = 9.sp,
-                                fontFamily = BodyFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                horizontalPadding = 6.dp,
-                                verticalPadding = 2.dp
-                            )
+
+                            if (!liveData.isFxLive) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Offline: showing bundled ČNB fallback FX",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (onRetry != null) {
+                                        TextButton(
+                                            onClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                onRetry()
+                                            },
+                                            modifier = Modifier.heightIn(min = 48.dp)
+                                        ) {
+                                            Text("Retry ČNB FX", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.42f).dp
+                    // Section 2 Header: Bundled 2026 Czech Statutory Constants
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                text = "Bundled 2026 Czech Statutory Constants",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Local ZDP & pension reference values (not fetched from a live tax API)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        ColorPill(
+                            text = if (diffCount > 0) "$diffCount DIFFERENCES" else "MATCHES 2026",
+                            color = if (diffCount > 0) BrandGold else GoodGreen,
+                            fontSize = 9.sp,
+                            fontFamily = BodyFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 6.dp,
+                            verticalPadding = 2.dp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.36f).dp
 
                     // Comparison List
                     LazyColumn(
@@ -198,7 +271,7 @@ fun LiveSyncDialog(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Check your internet connection and retry, or continue using your current local Czech benchmarks.",
+                        text = "Check your internet connection and retry, or continue using your bundled 2026 Czech statutory defaults.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -230,7 +303,7 @@ fun LiveSyncDialog(
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Apply Official Benchmarks", maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
+                    Text("Apply 2026 Statutory Defaults", maxLines = 2, softWrap = true, overflow = TextOverflow.Ellipsis)
                 }
             } else if (!isLoading && onRetry != null) {
                 Button(

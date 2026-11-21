@@ -126,6 +126,8 @@ fun MainScreen(
     val lastCzechSyncTimestamp by viewModel.lastCzechSyncTimestamp.collectAsStateWithLifecycle()
     val allImportedTransactions by viewModel.allImportedTransactions.collectAsStateWithLifecycle()
     val dismissedSubscriptionMerchants by viewModel.dismissedSubscriptionMerchants.collectAsStateWithLifecycle()
+    val biometricLockEnabled by viewModel.biometricLockEnabled.collectAsStateWithLifecycle()
+    val flagSecureEnabled by viewModel.flagSecureEnabled.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -216,7 +218,9 @@ fun MainScreen(
             SearchIndexEntry("Learned Merchant Rules & Auto-Categorization", "More > App & Data", 3, 2, listOf("merchant", "rules", "learned", "category", "override", "keyword", "auto"), sectionKey = "merchant_rules"),
             SearchIndexEntry("Monthly Budget Summary", "Budget > Overview", 1, 0, listOf("budget", "surplus", "summary", "net flow", "savings rate", "family net", "cash flow")),
             SearchIndexEntry("Where Your Money Goes (Flow Chart)", "Budget > Overview", 1, 0, listOf("sankey", "waterfall", "cash flow", "cascade", "inflow", "allocation", "stream", "journey", "leakage")),
-            SearchIndexEntry("Live Czech Economic & Regulatory Sync", "More > App & Data", 3, 2, listOf("sync", "csu", "cnb", "inflation", "tax law", "benchmarks", "rates", "fx", "eur", "usd", "zdp"), sectionKey = "sync"),
+            SearchIndexEntry("ČNB FX Rates & 2026 Statutory Constants", "More > App & Data", 3, 2, listOf("sync", "cnb", "inflation", "tax law", "constants", "rates", "fx", "eur", "usd", "gbp", "pln", "chf", "huf", "zdp"), sectionKey = "sync"),
+            SearchIndexEntry("Privacy, Biometric Lock & Screen Security", "More > App & Data", 3, 2, listOf("privacy", "biometric", "fingerprint", "pin", "lock", "flag_secure", "screenshot", "security"), sectionKey = "privacy"),
+            SearchIndexEntry("Bank Accounts & Reconciliation", "More > App & Data", 3, 2, listOf("bank", "accounts", "iban", "reconciliation", "transfer", "parental", "gift", "family", "own account"), sectionKey = "bank_accounts"),
             SearchIndexEntry("Household Salaries, Raises & Bonuses", "Budget > Income", 1, 1, listOf("income", "salary", "bonus", "raise", "partner", "parental", "allowance", "benefit", "lecturing", "gift", "meal vouchers")),
             SearchIndexEntry("Living Expenses, Rent & Groceries", "Budget > Expenses", 1, 2, listOf("spending", "expenses", "rent", "groceries", "cafes", "therapy", "charity", "insurance", "fitness", "children", "lifestyle", "cost")),
             SearchIndexEntry("Monthly Records & Bank Ledger", "Budget > Ledger", 1, 3, listOf("ledger", "csv", "import", "export", "history", "records", "actuals", "tracking", "log", "entries")),
@@ -629,7 +633,11 @@ fun MainScreen(
                                 focusedSectionKey = targetSettingsSectionKey,
                                 focusedSectionTrigger = targetSettingsSectionTrigger,
                                 onConsumeFocusedSection = { targetSettingsSectionKey = null },
-                                onReduceSettings = { transform -> viewModel.updateSettings(transform = transform) }
+                                onReduceSettings = { transform -> viewModel.updateSettings(transform = transform) },
+                                biometricLockEnabled = biometricLockEnabled,
+                                flagSecureEnabled = flagSecureEnabled,
+                                onToggleBiometricLock = { viewModel.setBiometricLockEnabled(it) },
+                                onToggleFlagSecure = { viewModel.setFlagSecureEnabled(it) }
                             )
                         }
                     }

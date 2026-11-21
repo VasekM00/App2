@@ -40,12 +40,19 @@ object CzechEconomicSyncService {
         val fetchedAtMs: Long
     )
 
+    internal data class ParsedCnbRates(
+        val rates: Map<String, Double>,
+        val rateDate: String
+    )
+
+    private val SUPPORTED_CNB_CURRENCIES = setOf("EUR", "USD", "GBP", "PLN", "CHF", "HUF")
+
     @Volatile
     private var cachedCnbSuccess: CachedCnbResult? = null
 
     /**
      * Fetches live official Czech National Bank (ČNB) daily exchange rates and
-     * couples them with the verified statutory legal baseline (Act No. 586/1992 Coll. ZDP).
+     * couples them with the locally bundled 2026 Czech statutory baseline (Act No. 586/1992 Coll. ZDP).
      * Guaranteed to return a valid CzechRegulatoryData object with zero third-party dependencies.
      */
     suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
@@ -66,32 +73,43 @@ object CzechEconomicSyncService {
                 }
             }
 
-            var eurRate = FxRateService.DEFAULT_EUR_CZK_RATE
-            var usdRate = FxRateService.DEFAULT_USD_CZK_RATE
-            var rateDate = ""
-            var sourceDescription = "Verified Czech Statutory Registry"
             val parsed = localDefaults()
+            val cnbParsed = fetchCnbAllRates()
+            val eurLive = cnbParsed.rates["EUR"]
+            val usdLive = cnbParsed.rates["USD"]
+            val eurValid = eurLive != null && isValidCurrencyRate("EUR", eurLive)
+            val usdValid = usdLive != null && isValidCurrencyRate("USD", usdLive)
+            val isFxLive = eurValid || usdValid
 
-            // 1. Fetch live ČNB exchange rates directly from official CNB API
-            val fxRates = fetchCnbRates()
-            val eurValid = fxRates.first.isFinite() && fxRates.first in 5.0..200.0
-            val usdValid = fxRates.second.isFinite() && fxRates.second in 5.0..200.0
-            if (eurValid) eurRate = fxRates.first
-            if (usdValid) usdRate = fxRates.second
-            if (eurValid || usdValid) {
-                if (fxRates.third.isNotBlank()) rateDate = fxRates.third
-                sourceDescription = "Official ČNB Daily API & Statutory Registry"
-                FxRateService.updateFromCnb(
-                    eurRate = if (eurValid) eurRate else 0.0,
-                    usdRate = if (usdValid) usdRate else 0.0
-                )
+            val eurRate = if (eurValid) eurLive!! else FxRateService.DEFAULT_EUR_CZK_RATE
+            val usdRate = if (usdValid) usdLive!! else FxRateService.DEFAULT_USD_CZK_RATE
+            val gbpRate = cnbParsed.rates["GBP"]?.takeIf { isValidCurrencyRate("GBP", it) }
+                ?: FxRateService.DEFAULT_GBP_CZK_RATE
+            val plnRate = cnbParsed.rates["PLN"]?.takeIf { isValidCurrencyRate("PLN", it) }
+                ?: FxRateService.DEFAULT_PLN_CZK_RATE
+            val chfRate = cnbParsed.rates["CHF"]?.takeIf { isValidCurrencyRate("CHF", it) }
+                ?: FxRateService.DEFAULT_CHF_CZK_RATE
+            val hufRate = cnbParsed.rates["HUF"]?.takeIf { isValidCurrencyRate("HUF", it) }
+                ?: FxRateService.DEFAULT_HUF_CZK_RATE
+            val rateDate = if (isFxLive) cnbParsed.rateDate else ""
+
+            val sourceDescription = if (isFxLive) {
+                FxRateService.updateRates(cnbParsed.rates)
+                "Official ČNB Daily FX API & Bundled 2026 Statutory Constants"
+            } else {
+                "Bundled 2026 Czech Statutory Constants (Offline)"
             }
 
             val result = parsed.copy(
                 timestamp = lockedNowMs,
                 sourceName = sourceDescription,
+                isFxLive = isFxLive,
                 eurCzkRate = eurRate,
                 usdCzkRate = usdRate,
+                gbpCzkRate = gbpRate,
+                plnCzkRate = plnRate,
+                chfCzkRate = chfRate,
+                hufCzkRate = hufRate,
                 rateDate = rateDate
             )
             if (eurValid && usdValid) {
@@ -305,11 +323,20 @@ object CzechEconomicSyncService {
     }
 
     internal fun parseCnbRatesJson(jsonString: String): Triple<Double, Double, String> {
+        val parsed = parseCnbAllRatesJson(jsonString)
+        return Triple(parsed.rates["EUR"] ?: 0.0, parsed.rates["USD"] ?: 0.0, parsed.rateDate)
+    }
+
+    internal fun parseCnbRatesTxt(txtString: String): Triple<Double, Double, String> {
+        val parsed = parseCnbAllRatesTxt(txtString)
+        return Triple(parsed.rates["EUR"] ?: 0.0, parsed.rates["USD"] ?: 0.0, parsed.rateDate)
+    }
+
+    internal fun parseCnbAllRatesJson(jsonString: String): ParsedCnbRates {
         if (jsonString.isBlank() || jsonString.length > MAX_CNB_PAYLOAD_CHARS) {
-            return Triple(0.0, 0.0, "")
+            return ParsedCnbRates(emptyMap(), "")
         }
-        var eur = 0.0
-        var usd = 0.0
+        val parsedRates = linkedMapOf<String, Double>()
         var rateDate = ""
         try {
             val json = JSONObject(jsonString)
@@ -318,6 +345,7 @@ object CzechEconomicSyncService {
                 for (i in 0 until ratesArray.length()) {
                     val item = ratesArray.optJSONObject(i) ?: continue
                     val code = item.optString("currencyCode", "").trim().uppercase(Locale.ROOT)
+                    if (code !in SUPPORTED_CNB_CURRENCIES) continue
                     val rawRate = item.optDouble("rate", Double.NaN)
                     val amount = if (item.has("amount") && !item.isNull("amount")) {
                         item.optDouble("amount", Double.NaN)
@@ -332,31 +360,36 @@ object CzechEconomicSyncService {
                     if (date.isNotBlank() && rateDate.isBlank()) rateDate = date
                     if (rawRate.isFinite() && rawRate > 0.0 && amount.isFinite() && amount > 0.0) {
                         val unitRate = rawRate / amount
-                        if (unitRate.isFinite() && unitRate > 0.0) {
-                            if (code == "EUR") eur = unitRate
-                            if (code == "USD") usd = unitRate
+                        if (isValidCurrencyRate(code, unitRate)) {
+                            parsedRates[code] = unitRate
                         }
                     }
                 }
             }
         } catch (_: Exception) {
-            return extractCnbRatesViaRegex(jsonString)
-        }
-        if (eur == 0.0 || usd == 0.0 || rateDate.isBlank()) {
             val fallback = extractCnbRatesViaRegex(jsonString)
-            if (eur == 0.0) eur = fallback.first
-            if (usd == 0.0) usd = fallback.second
+            if (isValidCurrencyRate("EUR", fallback.first)) parsedRates["EUR"] = fallback.first
+            if (isValidCurrencyRate("USD", fallback.second)) parsedRates["USD"] = fallback.second
+            return ParsedCnbRates(parsedRates, fallback.third)
+        }
+        if ("EUR" !in parsedRates || "USD" !in parsedRates || rateDate.isBlank()) {
+            val fallback = extractCnbRatesViaRegex(jsonString)
+            if ("EUR" !in parsedRates && isValidCurrencyRate("EUR", fallback.first)) {
+                parsedRates["EUR"] = fallback.first
+            }
+            if ("USD" !in parsedRates && isValidCurrencyRate("USD", fallback.second)) {
+                parsedRates["USD"] = fallback.second
+            }
             if (rateDate.isBlank()) rateDate = fallback.third
         }
-        return Triple(eur, usd, rateDate)
+        return ParsedCnbRates(parsedRates, rateDate)
     }
 
-    internal fun parseCnbRatesTxt(txtString: String): Triple<Double, Double, String> {
+    internal fun parseCnbAllRatesTxt(txtString: String): ParsedCnbRates {
         if (txtString.isBlank() || txtString.length > MAX_CNB_PAYLOAD_CHARS) {
-            return Triple(0.0, 0.0, "")
+            return ParsedCnbRates(emptyMap(), "")
         }
-        var eur = 0.0
-        var usd = 0.0
+        val parsedRates = linkedMapOf<String, Double>()
         var rateDate = ""
         try {
             val lines = txtString.lines()
@@ -370,13 +403,13 @@ object CzechEconomicSyncService {
                     val amount = parts[2].trim().replace(",", ".").toDoubleOrNull()
                     val code = parts[3].trim().uppercase(Locale.ROOT)
                     val rawRate = parts[4].trim().replace(",", ".").toDoubleOrNull()
-                    if (rawRate != null && rawRate.isFinite() && rawRate > 0.0 &&
+                    if (code in SUPPORTED_CNB_CURRENCIES &&
+                        rawRate != null && rawRate.isFinite() && rawRate > 0.0 &&
                         amount != null && amount.isFinite() && amount > 0.0
                     ) {
                         val unitRate = rawRate / amount
-                        if (unitRate.isFinite() && unitRate > 0.0) {
-                            if (code == "EUR") eur = unitRate
-                            if (code == "USD") usd = unitRate
+                        if (isValidCurrencyRate(code, unitRate)) {
+                            parsedRates[code] = unitRate
                         }
                     }
                 }
@@ -384,28 +417,36 @@ object CzechEconomicSyncService {
         } catch (_: Exception) {
             // Return whatever valid rates were parsed prior to error
         }
-        return Triple(eur, usd, rateDate)
+        return ParsedCnbRates(parsedRates, rateDate)
     }
 
-    private fun isValidRate(rate: Double): Boolean = rate.isFinite() && rate in 5.0..200.0
+    private fun isValidCurrencyRate(code: String, rate: Double): Boolean {
+        if (!rate.isFinite() || rate <= 0.0) return false
+        return when (code.uppercase(Locale.ROOT)) {
+            "HUF" -> rate in 0.01..5.0
+            else -> rate in 1.0..200.0
+        }
+    }
 
-    private fun fetchCnbRates(): Triple<Double, Double, String> {
-        var jsonRates = Triple(0.0, 0.0, "")
+    private fun fetchCnbAllRates(): ParsedCnbRates {
+        var jsonRates = ParsedCnbRates(emptyMap(), "")
         val content = fetchUrlContent(CNB_DAILY_RATES_URL, timeoutMs = 2500)
         if (!content.isNullOrBlank()) {
-            jsonRates = parseCnbRatesJson(content)
-            if (isValidRate(jsonRates.first) && isValidRate(jsonRates.second)) {
+            jsonRates = parseCnbAllRatesJson(content)
+            val eurOk = jsonRates.rates["EUR"]?.let { isValidCurrencyRate("EUR", it) } == true
+            val usdOk = jsonRates.rates["USD"]?.let { isValidCurrencyRate("USD", it) } == true
+            if (eurOk && usdOk) {
                 return jsonRates
             }
         }
 
         val txt = fetchUrlContent(CNB_TXT_FALLBACK_URL, timeoutMs = 2000)
         if (!txt.isNullOrBlank()) {
-            val txtRates = parseCnbRatesTxt(txt)
-            val mergedEur = if (isValidRate(jsonRates.first)) jsonRates.first else txtRates.first
-            val mergedUsd = if (isValidRate(jsonRates.second)) jsonRates.second else txtRates.second
-            val mergedDate = jsonRates.third.ifBlank { txtRates.third }
-            return Triple(mergedEur, mergedUsd, mergedDate)
+            val txtRates = parseCnbAllRatesTxt(txt)
+            val merged = LinkedHashMap(txtRates.rates)
+            merged.putAll(jsonRates.rates)
+            val mergedDate = jsonRates.rateDate.ifBlank { txtRates.rateDate }
+            return ParsedCnbRates(merged, mergedDate)
         }
         return jsonRates
     }

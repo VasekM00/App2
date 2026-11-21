@@ -69,6 +69,7 @@ fun ExportReportDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val onExternalPickerLaunching = LocalExternalPickerGuard.current
 
     val snap = state.snapshot
     val sEff = state.effectiveSettings
@@ -260,6 +261,7 @@ fun ExportReportDialog(
                                         )
                                     }
                                 }
+                                onExternalPickerLaunching()
                                 context.startActivity(Intent.createChooser(shareIntent, "Share Financial Report"))
                                 onDismiss()
                             } catch (_: Exception) {
