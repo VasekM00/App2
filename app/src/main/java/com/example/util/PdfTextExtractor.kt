@@ -23,12 +23,15 @@ object PdfTextExtractor {
     }
 
     /** Upper bound for a single inflated PDF stream, to defend against decompression bombs. */
-    private const val MAX_INFLATED_BYTES = 40 * 1024 * 1024
+    private const val MAX_INFLATED_BYTES = 12 * 1024 * 1024
 
     /** Cumulative upper bound across all streams in one PDF, to defend against multi-stream bombs. */
-    private const val MAX_TOTAL_INFLATED_BYTES = 100 * 1024 * 1024
+    private const val MAX_TOTAL_INFLATED_BYTES = 32 * 1024 * 1024
 
-    private const val MAX_BF_RANGE_SPAN = 65_536
+    private const val MAX_BF_RANGE_SPAN = 4096
+    private const val MAX_GLOBAL_CMAP_ENTRIES = 65_536
+    private val ENCRYPT_DICT_REGEX = Regex("""/Encrypt(?:\s+\d+\s+\d+\s+R|\s*<<)""")
+    private val STREAM_LENGTH_REGEX = Regex("""/Length\s+(\d+)\b""")
 
     private val CMAP_PAIR_REGEX = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>""")
     private val CMAP_RANGE_ARRAY_START_REGEX = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[""")
@@ -36,7 +39,6 @@ object PdfTextExtractor {
     private val CMAP_RANGE_TRIPLE_REGEX = Regex("""<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>""")
     private val FALLBACK_DATE_REGEX = Regex("""\b\d{1,2}\.\s*\d{1,2}\.\s*\d{4}\b""")
     private val OBJ_HEADER_REGEX = Regex("""(\d+)\s+\d+\s+obj\b""")
-    private val OBJ_START_CAPTURE_REGEX = Regex("""(\d+)\s+\d+\s+obj\b([\s\S]*?)\bendobj\b""")
     private val TO_UNICODE_REF_REGEX = Regex("""/ToUnicode\s+(\d+)\s+\d+\s+R\b""")
     private val TYPE_FONT_REGEX = Regex("""/Type\s*/Font\b""")
     private val FONT_DICT_REGEX = Regex("""/Font\s*<<([^>]*)>>""")
@@ -98,6 +100,32 @@ object PdfTextExtractor {
         val prefix = bytes.take(1024).toByteArray()
         val ascii = String(prefix, Charsets.US_ASCII)
         return ascii.contains("%PDF-")
+    }
+
+    fun isEncryptedPdf(pdfBytes: ByteArray): Boolean {
+        if (!isPdf(pdfBytes)) return false
+        val streams = extractRawStreams(pdfBytes)
+        val nonStreamBytes = collectNonStreamBytes(pdfBytes, streams)
+        val text = String(nonStreamBytes, Charsets.US_ASCII)
+        return ENCRYPT_DICT_REGEX.containsMatchIn(text)
+    }
+
+    private fun collectNonStreamBytes(pdfBytes: ByteArray, streams: List<PdfStream>): ByteArray {
+        val out = ByteArrayOutputStream()
+        var cursor = 0
+        for (s in streams) {
+            if (s.rawDataStart > cursor) {
+                out.write(pdfBytes, cursor, s.rawDataStart - cursor)
+                out.write('\n'.code)
+            }
+            if (s.rawDataEnd > cursor) {
+                cursor = s.rawDataEnd
+            }
+        }
+        if (cursor < pdfBytes.size) {
+            out.write(pdfBytes, cursor, pdfBytes.size - cursor)
+        }
+        return out.toByteArray()
     }
 
     fun extractText(pdfBytes: ByteArray): String {
@@ -176,7 +204,10 @@ object PdfTextExtractor {
     }
 
     private fun isNonContentStreamDict(dict: String): Boolean {
-        return isBinaryResourceDict(dict) || dict.contains("/ToUnicode")
+        return isBinaryResourceDict(dict) ||
+            dict.contains("/ToUnicode") ||
+            dict.contains("/Type /ObjStm") ||
+            dict.contains("/Type/ObjStm")
     }
 
     private fun buildFontCMapIndex(
@@ -196,27 +227,16 @@ object PdfTextExtractor {
             )
         }
 
-        // Collect only non-stream object dictionary bytes so large compressed streams are skipped.
-        val out = ByteArrayOutputStream()
-        var cursor = 0
-        for (s in streams) {
-            if (s.rawDataStart > cursor) {
-                out.write(pdfBytes, cursor, s.rawDataStart - cursor)
-                out.write('\n'.code)
-            }
-            if (s.rawDataEnd > cursor) {
-                cursor = s.rawDataEnd
-            }
-        }
-        if (cursor < pdfBytes.size) {
-            out.write(pdfBytes, cursor, pdfBytes.size - cursor)
-        }
-        val catalogText = String(out.toByteArray(), Charsets.US_ASCII)
+        val catalogText = String(collectNonStreamBytes(pdfBytes, streams), Charsets.US_ASCII)
 
         val objects = mutableMapOf<Int, String>()
-        for (m in OBJ_START_CAPTURE_REGEX.findAll(catalogText)) {
+        for (m in OBJ_HEADER_REGEX.findAll(catalogText)) {
             val id = m.groupValues[1].toIntOrNull() ?: continue
-            objects[id] = m.groupValues[2]
+            val bodyStart = m.range.last + 1
+            val endObjIdx = catalogText.indexOf("endobj", bodyStart)
+            if (endObjIdx > bodyStart) {
+                objects[id] = catalogText.substring(bodyStart, endObjIdx)
+            }
         }
 
         val fontObjToCmapObj = mutableMapOf<Int, Int>()
@@ -345,35 +365,54 @@ object PdfTextExtractor {
 
         while (i < len - 7) {
             if (matchBytes(bytes, i, streamKeyword)) {
-                // Verify boundary before "stream" (must be whitespace or newline)
-                val before = if (i > 0) bytes[i - 1].toInt().toChar() else ' '
-                if (before.isWhitespace()) {
-                    var dataStart = i + streamKeyword.size
-                    // Skip \r\n or \n
+                // Verify boundary before "stream" (must be whitespace or newline) and EOL after "stream"
+                val before = if (i > 0) (bytes[i - 1].toInt() and 0xFF).toChar() else ' '
+                val afterIdx = i + streamKeyword.size
+                val hasValidEolAfter = afterIdx < len && (bytes[afterIdx] == '\r'.code.toByte() || bytes[afterIdx] == '\n'.code.toByte())
+                if (before.isWhitespace() && hasValidEolAfter) {
+                    var dataStart = afterIdx
+                    // Skip \r\n or \n (per PDF spec, only single EOL sequence belongs to stream keyword)
                     if (dataStart < len && bytes[dataStart] == '\r'.code.toByte()) dataStart++
                     if (dataStart < len && bytes[dataStart] == '\n'.code.toByte()) dataStart++
 
-                    // Find "endstream"
+                    val (dictString, objectNumber) = extractPrecedingDictionary(bytes, i)
+                    val declaredLen = STREAM_LENGTH_REGEX.find(dictString)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
                     var endIdx = -1
-                    var j = dataStart
-                    while (j <= len - endstreamKeyword.size) {
-                        if (matchBytes(bytes, j, endstreamKeyword)) {
-                            endIdx = j
-                            break
+                    var trimTrailingEol = true
+                    if (declaredLen != null && declaredLen >= 0 && dataStart + declaredLen <= len - endstreamKeyword.size) {
+                        var checkIdx = dataStart + declaredLen
+                        if (checkIdx < len && bytes[checkIdx] == '\r'.code.toByte()) checkIdx++
+                        if (checkIdx < len && bytes[checkIdx] == '\n'.code.toByte()) checkIdx++
+                        if (checkIdx <= len - endstreamKeyword.size && matchBytes(bytes, checkIdx, endstreamKeyword)) {
+                            endIdx = dataStart + declaredLen
+                            trimTrailingEol = false
                         }
-                        j++
+                    }
+                    if (endIdx == -1) {
+                        var j = dataStart
+                        while (j <= len - endstreamKeyword.size) {
+                            if (matchBytes(bytes, j, endstreamKeyword)) {
+                                endIdx = j
+                                break
+                            }
+                            j++
+                        }
                     }
 
-                    if (endIdx != -1 && endIdx >= dataStart) {
-                        // Trim trailing \r or \n before endstream
+                    if (endIdx == -1) {
+                        // No remaining "endstream" in file: abort immediately to guarantee O(N) scan
+                        break
+                    }
+
+                    if (endIdx >= dataStart) {
                         var dataEnd = endIdx
-                        if (dataEnd > dataStart && bytes[dataEnd - 1] == '\n'.code.toByte()) dataEnd--
-                        if (dataEnd > dataStart && bytes[dataEnd - 1] == '\r'.code.toByte()) dataEnd--
+                        if (trimTrailingEol) {
+                            if (dataEnd > dataStart && bytes[dataEnd - 1] == '\n'.code.toByte()) dataEnd--
+                            if (dataEnd > dataStart && bytes[dataEnd - 1] == '\r'.code.toByte()) dataEnd--
+                        }
 
                         val streamData = bytes.copyOfRange(dataStart, dataEnd)
-
-                        // Scan backwards from 'i' to find dictionary << ... >> and enclosing object id
-                        val (dictString, objectNumber) = extractPrecedingDictionary(bytes, i)
                         result.add(
                             PdfStream(
                                 dictionary = dictString,
@@ -538,10 +577,11 @@ object PdfTextExtractor {
                         val srcHex = match.groupValues[1]
                         if (srcHex.length >= 4) parsed.hasTwoByteSrc = true
                         val src = srcHex.toIntOrNull(16) ?: continue
+                        if (cMap.size >= MAX_GLOBAL_CMAP_ENTRIES && !cMap.containsKey(src)) continue
                         val dstStr = hexToUnicodeString(match.groupValues[2])
                         cMap[src] = dstStr
                     }
-                } else if (inBfRange) {
+                } else if (inBfRange && cMap.size < MAX_GLOBAL_CMAP_ENTRIES) {
                     val arrStartMatch = CMAP_RANGE_ARRAY_START_REGEX.find(line)
                     if (arrStartMatch != null) {
                         val startHex = arrStartMatch.groupValues[1]
@@ -558,7 +598,7 @@ object PdfTextExtractor {
                             afterBracket
                         }
                         for (h in CMAP_HEX_TOKEN_REGEX.findAll(beforeClose)) {
-                            if (rangeArrayCode > rangeArrayEnd) break
+                            if (rangeArrayCode > rangeArrayEnd || cMap.size >= MAX_GLOBAL_CMAP_ENTRIES) break
                             cMap[rangeArrayCode++] = hexToUnicodeString(h.groupValues[1])
                         }
                     } else if (inRangeArray) {
@@ -569,12 +609,13 @@ object PdfTextExtractor {
                             line
                         }
                         for (h in CMAP_HEX_TOKEN_REGEX.findAll(beforeBracket)) {
-                            if (rangeArrayCode > rangeArrayEnd) break
+                            if (rangeArrayCode > rangeArrayEnd || cMap.size >= MAX_GLOBAL_CMAP_ENTRIES) break
                             cMap[rangeArrayCode++] = hexToUnicodeString(h.groupValues[1])
                         }
                     } else {
                         // Format: <startHex> <endHex> <dstStartHex>
                         for (rangeMatch in CMAP_RANGE_TRIPLE_REGEX.findAll(line)) {
+                            if (cMap.size >= MAX_GLOBAL_CMAP_ENTRIES) break
                             val startHex = rangeMatch.groupValues[1]
                             if (startHex.length >= 4) parsed.hasTwoByteSrc = true
                             val start = startHex.toIntOrNull(16) ?: continue
@@ -582,7 +623,7 @@ object PdfTextExtractor {
                             if (end < start || (end - start) > MAX_BF_RANGE_SPAN) continue
                             var dst = rangeMatch.groupValues[3].toIntOrNull(16) ?: continue
                             for (code in start..end) {
-                                if (!Character.isValidCodePoint(dst)) break
+                                if (cMap.size >= MAX_GLOBAL_CMAP_ENTRIES || !Character.isValidCodePoint(dst)) break
                                 cMap[code] = String(Character.toChars(dst))
                                 if (dst == Character.MAX_CODE_POINT) break
                                 dst++
@@ -649,9 +690,101 @@ object PdfTextExtractor {
 
         fun activeCMap(): ParsedCMap = fontIndex.resolve(streamObjId, currentFontName)
 
+        fun flushPendingToken() {
+            if (pendingToken.isEmpty()) return
+            val tok = pendingToken.toString()
+            pendingToken.setLength(0)
+            val num = tok.toDoubleOrNull()
+            if (num != null && num.isFinite()) {
+                numBuffer.add(num)
+                if (numBuffer.size > 8) numBuffer.removeAt(0)
+            } else if (tok.startsWith("/")) {
+                lastNameToken = tok.substring(1)
+                numBuffer.clear()
+            } else {
+                when (tok) {
+                    "Td" -> {
+                        if (numBuffer.size >= 2) {
+                            val tx = numBuffer[numBuffer.size - 2] * tmScaleX
+                            val ty = numBuffer[numBuffer.size - 1] * tmScaleY
+                            lineStartX += tx
+                            lineStartY += ty
+                            curX = lineStartX
+                            curY = lineStartY
+                        }
+                        numBuffer.clear()
+                    }
+                    "TD" -> {
+                        if (numBuffer.size >= 2) {
+                            val rawTy = numBuffer[numBuffer.size - 1]
+                            textLeading = -rawTy
+                            hasExplicitLeading = true
+                            val tx = numBuffer[numBuffer.size - 2] * tmScaleX
+                            val ty = rawTy * tmScaleY
+                            lineStartX += tx
+                            lineStartY += ty
+                            curX = lineStartX
+                            curY = lineStartY
+                        }
+                        numBuffer.clear()
+                    }
+                    "TL" -> {
+                        val leading = numBuffer.lastOrNull()
+                        if (leading != null) {
+                            textLeading = leading
+                            hasExplicitLeading = true
+                        }
+                        numBuffer.clear()
+                    }
+                    "Tm" -> {
+                        if (numBuffer.size >= 6) {
+                            val a = numBuffer[numBuffer.size - 6]
+                            val d = numBuffer[numBuffer.size - 3]
+                            tmScaleX = if (kotlin.math.abs(a) > 0.001) kotlin.math.abs(a) else 1.0
+                            tmScaleY = if (kotlin.math.abs(d) > 0.001) kotlin.math.abs(d) else 1.0
+                            val tx = numBuffer[numBuffer.size - 2]
+                            val ty = numBuffer[numBuffer.size - 1]
+                            lineStartX = tx
+                            lineStartY = ty
+                            curX = tx
+                            curY = ty
+                        }
+                        numBuffer.clear()
+                    }
+                    "T*" -> {
+                        val stepY = (if (hasExplicitLeading) textLeading else currentFontSize) * tmScaleY
+                        lineStartY -= stepY
+                        curX = lineStartX
+                        curY = lineStartY
+                        numBuffer.clear()
+                    }
+                    "Tf" -> {
+                        val fontSize = numBuffer.lastOrNull()
+                        if (fontSize != null && fontSize > 0.0) {
+                            currentFontSize = fontSize
+                        }
+                        if (lastNameToken != null) {
+                            currentFontName = lastNameToken
+                        }
+                        numBuffer.clear()
+                    }
+                    else -> {
+                        numBuffer.clear()
+                    }
+                }
+            }
+        }
+
+        fun recordFragment(text: String) {
+            if (text.isNotBlank()) {
+                fragments.add(TextFragment(curX, curY, text))
+            }
+            curX += text.length * currentFontSize * 0.5 * tmScaleX
+        }
+
         var i = 0
         while (i < len) {
-            val b = bytes[i].toInt().toChar()
+            val b = (bytes[i].toInt() and 0xFF).toChar()
 
             // Check for BT / ET operators
             if (b == 'B' && i + 1 < len && bytes[i + 1].toInt().toChar() == 'T' && isTokenBoundary(bytes, i - 1, i + 2)) {
@@ -684,11 +817,7 @@ object PdfTextExtractor {
             when {
                 // String literal: (...)
                 b == '(' -> {
-                    if (pendingToken.isNotEmpty()) {
-                        val num = pendingToken.toString().toDoubleOrNull()
-                        if (num != null && num.isFinite()) numBuffer.add(num)
-                        pendingToken.setLength(0)
-                    }
+                    flushPendingToken()
 
                     val strEnd = findStringLiteralEnd(bytes, i)
                     val contentEnd = minOf(strEnd, len)
@@ -696,19 +825,19 @@ object PdfTextExtractor {
                     val decoded = decodePdfLiteralBytes(rawStrBytes, activeCMap())
 
                     var opIdx = if (strEnd < len) strEnd + 1 else len
-                    while (opIdx < len && bytes[opIdx].toInt().toChar().isWhitespace()) opIdx++
-                    if (opIdx < len && bytes[opIdx].toInt().toChar() == '\'') {
+                    while (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar().isWhitespace()) opIdx++
+                    if (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar() == '\'') {
                         val stepY = (if (hasExplicitLeading) textLeading else currentFontSize) * tmScaleY
                         lineStartY -= stepY
                         curX = lineStartX
                         curY = lineStartY
-                        if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
+                        recordFragment(decoded)
                         i = opIdx + 1
                     } else if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'j') {
-                        if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
+                        recordFragment(decoded)
                         i = opIdx + 2
                     } else {
-                        if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
+                        recordFragment(decoded)
                         i = if (strEnd < len) strEnd + 1 else len
                     }
                     numBuffer.clear()
@@ -716,11 +845,7 @@ object PdfTextExtractor {
 
                 // Hex string: <...>
                 b == '<' && i + 1 < len && bytes[i + 1].toInt().toChar() != '<' -> {
-                    if (pendingToken.isNotEmpty()) {
-                        val num = pendingToken.toString().toDoubleOrNull()
-                        if (num != null && num.isFinite()) numBuffer.add(num)
-                        pendingToken.setLength(0)
-                    }
+                    flushPendingToken()
 
                     val hexEnd = findHexEnd(bytes, i)
                     val contentEnd = minOf(hexEnd, len)
@@ -728,12 +853,12 @@ object PdfTextExtractor {
                     val decoded = decodeHexText(hexText, activeCMap())
 
                     var opIdx = if (hexEnd < len) hexEnd + 1 else len
-                    while (opIdx < len && bytes[opIdx].toInt().toChar().isWhitespace()) opIdx++
+                    while (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar().isWhitespace()) opIdx++
                     if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'j') {
-                        if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
+                        recordFragment(decoded)
                         i = opIdx + 2
                     } else {
-                        if (decoded.isNotBlank()) fragments.add(TextFragment(curX, curY, decoded))
+                        recordFragment(decoded)
                         i = if (hexEnd < len) hexEnd + 1 else len
                     }
                     numBuffer.clear()
@@ -741,11 +866,7 @@ object PdfTextExtractor {
 
                 // Array: [...] TJ
                 b == '[' -> {
-                    if (pendingToken.isNotEmpty()) {
-                        val num = pendingToken.toString().toDoubleOrNull()
-                        if (num != null && num.isFinite()) numBuffer.add(num)
-                        pendingToken.setLength(0)
-                    }
+                    flushPendingToken()
 
                     val arrEnd = findArrayEnd(bytes, i)
                     val contentEnd = minOf(arrEnd, len)
@@ -753,101 +874,19 @@ object PdfTextExtractor {
                     val parsedArrayText = parseTjArray(arrBytes, activeCMap())
 
                     var opIdx = if (arrEnd < len) arrEnd + 1 else len
-                    while (opIdx < len && bytes[opIdx].toInt().toChar().isWhitespace()) opIdx++
+                    while (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar().isWhitespace()) opIdx++
                     if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'J') {
-                        if (parsedArrayText.isNotBlank()) fragments.add(TextFragment(curX, curY, parsedArrayText))
+                        recordFragment(parsedArrayText)
                         i = opIdx + 2
                     } else {
-                        if (parsedArrayText.isNotBlank()) fragments.add(TextFragment(curX, curY, parsedArrayText))
+                        recordFragment(parsedArrayText)
                         i = if (arrEnd < len) arrEnd + 1 else len
                     }
                     numBuffer.clear()
                 }
 
                 b.isWhitespace() -> {
-                    if (pendingToken.isNotEmpty()) {
-                        val tok = pendingToken.toString()
-                        pendingToken.setLength(0)
-                        val num = tok.toDoubleOrNull()
-                        if (num != null && num.isFinite()) {
-                            numBuffer.add(num)
-                            if (numBuffer.size > 8) numBuffer.removeAt(0)
-                        } else if (tok.startsWith("/")) {
-                            lastNameToken = tok.substring(1)
-                            numBuffer.clear()
-                        } else {
-                            when (tok) {
-                                "Td" -> {
-                                    if (numBuffer.size >= 2) {
-                                        val tx = numBuffer[numBuffer.size - 2] * tmScaleX
-                                        val ty = numBuffer[numBuffer.size - 1] * tmScaleY
-                                        lineStartX += tx
-                                        lineStartY += ty
-                                        curX = lineStartX
-                                        curY = lineStartY
-                                    }
-                                    numBuffer.clear()
-                                }
-                                "TD" -> {
-                                    if (numBuffer.size >= 2) {
-                                        val rawTy = numBuffer[numBuffer.size - 1]
-                                        textLeading = -rawTy
-                                        hasExplicitLeading = true
-                                        val tx = numBuffer[numBuffer.size - 2] * tmScaleX
-                                        val ty = rawTy * tmScaleY
-                                        lineStartX += tx
-                                        lineStartY += ty
-                                        curX = lineStartX
-                                        curY = lineStartY
-                                    }
-                                    numBuffer.clear()
-                                }
-                                "TL" -> {
-                                    val leading = numBuffer.lastOrNull()
-                                    if (leading != null) {
-                                        textLeading = leading
-                                        hasExplicitLeading = true
-                                    }
-                                    numBuffer.clear()
-                                }
-                                "Tm" -> {
-                                    if (numBuffer.size >= 6) {
-                                        val a = numBuffer[numBuffer.size - 6]
-                                        val d = numBuffer[numBuffer.size - 3]
-                                        tmScaleX = if (kotlin.math.abs(a) > 0.001) kotlin.math.abs(a) else 1.0
-                                        tmScaleY = if (kotlin.math.abs(d) > 0.001) kotlin.math.abs(d) else 1.0
-                                        val tx = numBuffer[numBuffer.size - 2]
-                                        val ty = numBuffer[numBuffer.size - 1]
-                                        lineStartX = tx
-                                        lineStartY = ty
-                                        curX = tx
-                                        curY = ty
-                                    }
-                                    numBuffer.clear()
-                                }
-                                "T*" -> {
-                                    val stepY = (if (hasExplicitLeading) textLeading else currentFontSize) * tmScaleY
-                                    lineStartY -= stepY
-                                    curX = lineStartX
-                                    curY = lineStartY
-                                    numBuffer.clear()
-                                }
-                                "Tf" -> {
-                                    val fontSize = numBuffer.lastOrNull()
-                                    if (fontSize != null && fontSize > 0.0) {
-                                        currentFontSize = fontSize
-                                    }
-                                    if (lastNameToken != null) {
-                                        currentFontName = lastNameToken
-                                    }
-                                    numBuffer.clear()
-                                }
-                                else -> {
-                                    numBuffer.clear()
-                                }
-                            }
-                        }
-                    }
+                    flushPendingToken()
                     i++
                 }
 

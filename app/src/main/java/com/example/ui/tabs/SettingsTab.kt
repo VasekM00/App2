@@ -1,5 +1,6 @@
 package com.example.ui.tabs
 
+import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +57,7 @@ import com.example.data.AppPreferencesRepository
 import com.example.data.SettingsEntity
 import com.example.domain.FullCalculationState
 import com.example.domain.parseCustomLumpSums
+import com.example.ui.MainViewModel
 import com.example.ui.components.LiveSyncDialog
 import com.example.ui.components.LocalExternalPickerGuard
 import com.example.ui.components.MetricInfoDialog
@@ -70,12 +72,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
-
-private data class PendingExportRequest(
-    val fullBackupScope: Boolean,
-    val encryptEnabled: Boolean,
-    val passphrase: String
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,6 +100,8 @@ fun SettingsTab(
     flagSecureEnabled: Boolean = false,
     onToggleBiometricLock: (Boolean) -> Unit = {},
     onToggleFlagSecure: (Boolean) -> Unit = {},
+    onPrepareExportRequest: ((Boolean, Boolean, String) -> Unit)? = null,
+    onConsumeExportRequest: (() -> MainViewModel.PendingExportState?)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -118,16 +116,32 @@ fun SettingsTab(
     var showClearDataDialog by rememberSaveable { mutableStateOf(false) }
     var showImportJsonDialog by rememberSaveable { mutableStateOf(false) }
     var showExportBackupDialog by rememberSaveable { mutableStateOf(false) }
-    var pendingExportRequest by androidx.compose.runtime.remember { mutableStateOf<PendingExportRequest?>(null) }
-    var pendingEncryptedImportEnvelope by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
-    var pendingImportPreview by androidx.compose.runtime.remember { mutableStateOf<ParsedBackupPreview?>(null) }
+    var fallbackExportPending by rememberSaveable { mutableStateOf(false) }
+    var fallbackExportFull by rememberSaveable { mutableStateOf(false) }
+    var fallbackExportEncrypt by rememberSaveable { mutableStateOf(false) }
+    var fallbackExportPhrase by rememberSaveable { mutableStateOf("") }
+    var pendingEncryptedImportEnvelope by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingImportRawJson by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingImportPreview = androidx.compose.runtime.remember(pendingImportRawJson, s) {
+        pendingImportRawJson?.let { parseBackupJsonForPreview(it, s) }
+    }
 
     val exportDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        val req = pendingExportRequest
-        pendingExportRequest = null
-        if (uri == null || req == null) return@rememberLauncherForActivityResult
+        val req = onConsumeExportRequest?.invoke() ?: if (fallbackExportPending) {
+            MainViewModel.PendingExportState(fallbackExportFull, fallbackExportEncrypt, fallbackExportPhrase)
+        } else {
+            null
+        }
+        fallbackExportPending = false
+        fallbackExportPhrase = ""
+        if (uri == null) return@rememberLauncherForActivityResult
+        if (req == null) {
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+            Toast.makeText(context, "Export state was interrupted. Please try exporting again.", Toast.LENGTH_LONG).show()
+            return@rememberLauncherForActivityResult
+        }
         val passChars = req.passphrase.toCharArray()
         exportScope.launch {
             try {
@@ -193,7 +207,7 @@ fun SettingsTab(
                             parseBackupJsonForPreview(raw, s)
                         }
                         if (preview != null) {
-                            pendingImportPreview = preview
+                            pendingImportRawJson = raw
                         } else {
                             Toast.makeText(
                                 context,
@@ -482,13 +496,20 @@ fun SettingsTab(
             onDismiss = { showExportBackupDialog = false },
             onConfirmExport = { fullScope, encryptEnabled, passphrase ->
                 showExportBackupDialog = false
-                pendingExportRequest = PendingExportRequest(fullScope, encryptEnabled, passphrase)
+                if (onPrepareExportRequest != null) {
+                    onPrepareExportRequest(fullScope, encryptEnabled, passphrase)
+                } else {
+                    fallbackExportFull = fullScope
+                    fallbackExportEncrypt = encryptEnabled
+                    fallbackExportPhrase = passphrase
+                    fallbackExportPending = true
+                }
                 val dateSuffix = LocalDate.now().toString()
                 val fileName = when {
-                    fullScope && encryptEnabled -> "app2_full_encrypted_$dateSuffix.json"
-                    fullScope -> "app2_full_backup_$dateSuffix.json"
-                    encryptEnabled -> "app2_settings_encrypted_$dateSuffix.json"
-                    else -> "app2_settings_backup_$dateSuffix.json"
+                    fullScope && encryptEnabled -> "martinu_financials_full_encrypted_$dateSuffix.json"
+                    fullScope -> "martinu_financials_full_backup_$dateSuffix.json"
+                    encryptEnabled -> "martinu_financials_settings_encrypted_$dateSuffix.json"
+                    else -> "martinu_financials_settings_backup_$dateSuffix.json"
                 }
                 onExternalPickerLaunching()
                 exportDocumentLauncher.launch(fileName)
@@ -504,7 +525,10 @@ fun SettingsTab(
             onDismiss = { pendingEncryptedImportEnvelope = null },
             onDecryptedPreview = { preview ->
                 pendingEncryptedImportEnvelope = null
-                pendingImportPreview = preview
+                pendingImportRawJson = when (preview) {
+                    is ParsedBackupPreview.Full -> BackupManager.serializeFullBackupToJson(preview.payload)
+                    is ParsedBackupPreview.SettingsOnly -> BackupManager.serializeSettingsToJson(preview.restoredSettings)
+                }
             }
         )
     }
@@ -513,9 +537,9 @@ fun SettingsTab(
     if (importPreview != null) {
         SettingsBackupPreviewDialog(
             preview = importPreview,
-            onDismiss = { pendingImportPreview = null },
+            onDismiss = { pendingImportRawJson = null },
             onApplyPreview = { preview ->
-                pendingImportPreview = null
+                pendingImportRawJson = null
                 when (preview) {
                     is ParsedBackupPreview.Full -> {
                         if (onRestoreFullBackup != null) {

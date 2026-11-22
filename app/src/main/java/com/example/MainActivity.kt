@@ -5,6 +5,7 @@ import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -19,9 +20,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -35,15 +39,64 @@ import com.example.ui.MainScreen
 import com.example.ui.MainViewModel
 import com.example.ui.components.AppLockOverlay
 import com.example.ui.components.LocalExternalPickerGuard
+import com.example.ui.components.canAuthenticateWithDevice
 import com.example.ui.theme.MartinuFinancialsTheme
 import java.io.File
 
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private lateinit var biometricPrompt: BiometricPrompt
+    private var onAuthSucceededCallback: (() -> Unit)? = null
+    private var onAuthErrorCallback: ((Int, CharSequence) -> Unit)? = null
+
+    companion object {
+        private const val PICKER_GUARD_WINDOW_MS = 60_000L
+
+        internal fun shouldLockOnStop(
+            biometricEnabled: Boolean,
+            isChangingConfigurations: Boolean,
+            isPickerGuardActive: Boolean,
+            isPromptActive: Boolean,
+            canAuthenticateWithDevice: Boolean
+        ): Boolean =
+            biometricEnabled &&
+                !isChangingConfigurations &&
+                !isPickerGuardActive &&
+                !isPromptActive &&
+                canAuthenticateWithDevice
+
+        internal fun shouldProcessPendingIncomingImports(
+            isPreferencesHydrated: Boolean,
+            hasEvaluatedColdLock: Boolean,
+            biometricEnabled: Boolean,
+            isLocked: Boolean
+        ): Boolean =
+            isPreferencesHydrated &&
+                hasEvaluatedColdLock &&
+                (!biometricEnabled || !isLocked)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val executor = ContextCompat.getMainExecutor(this)
+        biometricPrompt = BiometricPrompt(
+            this,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    super.onAuthenticationSucceeded(result)
+                    onAuthSucceededCallback?.invoke()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    onAuthErrorCallback?.invoke(errorCode, errString)
+                }
+            }
+        )
+
         if (savedInstanceState == null) {
             handleIncomingIntent(intent)
         }
@@ -54,6 +107,7 @@ class MainActivity : FragmentActivity() {
             val flagSecureEnabled by viewModel.flagSecureEnabled.collectAsStateWithLifecycle()
             val biometricLockEnabled by viewModel.biometricLockEnabled.collectAsStateWithLifecycle()
             val isPreferencesHydrated by viewModel.isPreferencesHydrated.collectAsStateWithLifecycle()
+            val pendingIncomingUris by viewModel.pendingIncomingUris.collectAsStateWithLifecycle()
             val isDarkTheme = when (themeMode) {
                 "LIGHT" -> false
                 "DARK" -> true
@@ -62,39 +116,36 @@ class MainActivity : FragmentActivity() {
 
             var hasEvaluatedColdLock by rememberSaveable { mutableStateOf(false) }
             var isLocked by rememberSaveable { mutableStateOf(false) }
-            var authErrorMessage by remember { mutableStateOf<String?>(null) }
-            var suppressNextBackgroundLock by remember { mutableStateOf(false) }
-            var isPromptActive by remember { mutableStateOf(false) }
+            var authErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+            var pickerGuardDeadlineMs by rememberSaveable { mutableLongStateOf(0L) }
+            var isPromptActive by rememberSaveable { mutableStateOf(false) }
+
+            onAuthSucceededCallback = {
+                isPromptActive = false
+                isLocked = false
+                authErrorMessage = null
+            }
+            onAuthErrorCallback = { errorCode, errString ->
+                isPromptActive = false
+                val msg = errString.toString().trim()
+                if (msg.isNotBlank() && errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                    errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                ) {
+                    authErrorMessage = msg
+                }
+            }
 
             val triggerBiometricPrompt = remember(this) {
                 {
-                    if (!isPromptActive) {
+                    if (!canAuthenticateWithDevice(this)) {
+                        isPromptActive = false
+                        isLocked = false
+                        authErrorMessage = null
+                        viewModel.setBiometricLockEnabled(false)
+                        viewModel.showMessage("Device screen lock was removed; app lock was disabled so you are not locked out.")
+                    } else if (!isPromptActive) {
                         isPromptActive = true
                         authErrorMessage = null
-                        val executor = ContextCompat.getMainExecutor(this)
-                        val prompt = BiometricPrompt(
-                            this,
-                            executor,
-                            object : BiometricPrompt.AuthenticationCallback() {
-                                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                    super.onAuthenticationSucceeded(result)
-                                    isPromptActive = false
-                                    isLocked = false
-                                    authErrorMessage = null
-                                }
-
-                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                    super.onAuthenticationError(errorCode, errString)
-                                    isPromptActive = false
-                                    val msg = errString.toString().trim()
-                                    if (msg.isNotBlank() && errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
-                                    ) {
-                                        authErrorMessage = msg
-                                    }
-                                }
-                            }
-                        )
                         val builder = BiometricPrompt.PromptInfo.Builder()
                             .setTitle("Unlock Martinu Financials")
                             .setSubtitle("Authenticate to access your household data")
@@ -109,7 +160,7 @@ class MainActivity : FragmentActivity() {
                             builder.setDeviceCredentialAllowed(true)
                         }
                         try {
-                            prompt.authenticate(builder.build())
+                            biometricPrompt.authenticate(builder.build())
                         } catch (e: Exception) {
                             isPromptActive = false
                             authErrorMessage = e.localizedMessage ?: "Biometric authentication unavailable."
@@ -127,27 +178,71 @@ class MainActivity : FragmentActivity() {
                     }
                 } else if (isPreferencesHydrated && !hasEvaluatedColdLock) {
                     hasEvaluatedColdLock = true
-                    isLocked = true
-                    triggerBiometricPrompt()
+                    if (!canAuthenticateWithDevice(this@MainActivity)) {
+                        isLocked = false
+                        viewModel.setBiometricLockEnabled(false)
+                        viewModel.showMessage("Device screen lock is not set; app lock disabled.")
+                    } else {
+                        isLocked = true
+                        triggerBiometricPrompt()
+                    }
+                } else if (isPreferencesHydrated && isLocked && !canAuthenticateWithDevice(this@MainActivity)) {
+                    isLocked = false
+                    isPromptActive = false
+                    viewModel.setBiometricLockEnabled(false)
+                    viewModel.showMessage("Device screen lock was removed; app lock disabled.")
                 }
             }
 
+            LaunchedEffect(isPreferencesHydrated, hasEvaluatedColdLock, biometricLockEnabled, isLocked, pendingIncomingUris) {
+                if (pendingIncomingUris.isNotEmpty() &&
+                    shouldProcessPendingIncomingImports(
+                        isPreferencesHydrated = isPreferencesHydrated,
+                        hasEvaluatedColdLock = hasEvaluatedColdLock,
+                        biometricEnabled = biometricLockEnabled,
+                        isLocked = isLocked
+                    )
+                ) {
+                    val uris = viewModel.consumeIncomingImportUris()
+                    if (uris.isNotEmpty()) {
+                        viewModel.importStatements(uris)
+                    }
+                }
+            }
+
+            val latestBiometricEnabled by rememberUpdatedState(biometricLockEnabled)
             val lifecycleOwner = LocalLifecycleOwner.current
-            DisposableEffect(lifecycleOwner, biometricLockEnabled) {
+            DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
                     when (event) {
                         Lifecycle.Event.ON_STOP -> {
-                            if (biometricLockEnabled && !suppressNextBackgroundLock && !isPromptActive) {
+                            val now = SystemClock.elapsedRealtime()
+                            val guardActive = pickerGuardDeadlineMs > now
+                            if (shouldLockOnStop(
+                                    biometricEnabled = latestBiometricEnabled,
+                                    isChangingConfigurations = isChangingConfigurations,
+                                    isPickerGuardActive = guardActive,
+                                    isPromptActive = isPromptActive,
+                                    canAuthenticateWithDevice = canAuthenticateWithDevice(this@MainActivity)
+                                )
+                            ) {
                                 isLocked = true
                             }
                         }
                         Lifecycle.Event.ON_START -> {
-                            if (isLocked && biometricLockEnabled && !isPromptActive) {
-                                triggerBiometricPrompt()
+                            if (isLocked && latestBiometricEnabled) {
+                                if (!canAuthenticateWithDevice(this@MainActivity)) {
+                                    isLocked = false
+                                    isPromptActive = false
+                                    viewModel.setBiometricLockEnabled(false)
+                                    viewModel.showMessage("Device screen lock was removed; app lock disabled.")
+                                } else if (!isPromptActive) {
+                                    triggerBiometricPrompt()
+                                }
                             }
                         }
                         Lifecycle.Event.ON_RESUME -> {
-                            suppressNextBackgroundLock = false
+                            pickerGuardDeadlineMs = 0L
                         }
                         else -> {}
                     }
@@ -158,8 +253,9 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            LaunchedEffect(flagSecureEnabled) {
-                if (flagSecureEnabled) {
+            val shouldSecureWindow = flagSecureEnabled || (biometricLockEnabled && isLocked)
+            SideEffect {
+                if (shouldSecureWindow) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -204,7 +300,9 @@ class MainActivity : FragmentActivity() {
                     }
                     else -> {
                         CompositionLocalProvider(
-                            LocalExternalPickerGuard provides { suppressNextBackgroundLock = true }
+                            LocalExternalPickerGuard provides {
+                                pickerGuardDeadlineMs = SystemClock.elapsedRealtime() + PICKER_GUARD_WINDOW_MS
+                            }
                         ) {
                             MainScreen(
                                 viewModel = viewModel,
@@ -214,11 +312,7 @@ class MainActivity : FragmentActivity() {
                                     viewModel.setThemeMode(newMode)
                                 },
                                 onToggleDarkTheme = {
-                                    val nextMode = when (themeMode) {
-                                        "LIGHT" -> "DARK"
-                                        "DARK" -> "SYSTEM"
-                                        else -> if (systemDark) "LIGHT" else "DARK"
-                                    }
+                                    val nextMode = if (isDarkTheme) "LIGHT" else "DARK"
                                     viewModel.setThemeMode(nextMode)
                                 }
                             )
@@ -285,7 +379,7 @@ class MainActivity : FragmentActivity() {
             }
         }
         if (safeUris.isNotEmpty()) {
-            viewModel.importStatements(safeUris)
+            viewModel.queueIncomingImportUris(safeUris)
         }
     }
 }

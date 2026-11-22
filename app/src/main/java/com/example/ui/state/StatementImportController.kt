@@ -265,9 +265,11 @@ internal class StatementImportController(
                 val knownParentalGiftAccounts = parseAccountListJson(curSettings.knownParentalGiftAccountsJson).toSet()
                 val parsedSummaries = mutableListOf<StatementParseSummary>()
                 var failedCount = 0
+                var encryptedPdfCount = 0
 
                 for (bytes in byteList) {
                     try {
+                        val isEncrypted = com.example.util.PdfTextExtractor.isEncryptedPdf(bytes)
                         val bankSummary = BankStatementImporter.parseStatement(
                             inputStream = bytes.inputStream(),
                             knownFamilyAccounts = knownFamilyAccounts,
@@ -278,6 +280,7 @@ internal class StatementImportController(
                         if (bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
                             parsedSummaries.add(bankSummary)
                         } else {
+                            if (isEncrypted) encryptedPdfCount++
                             failedCount++
                         }
                     } catch (e: CancellationException) {
@@ -304,7 +307,11 @@ internal class StatementImportController(
                     return
                 }
 
-                emitSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV.")
+                if (encryptedPdfCount > 0) {
+                    emitSnackbar("This PDF is password-protected or encrypted. Export as CSV, ABO/GPC, or an unencrypted PDF from your bank.")
+                } else {
+                    emitSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV.")
+                }
             }
         } catch (e: CancellationException) {
             throw e

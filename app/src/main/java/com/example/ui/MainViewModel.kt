@@ -164,6 +164,44 @@ class MainViewModel internal constructor(
 
     val activeAuditReport = MutableStateFlow<CrossStatementAuditReport?>(null)
 
+    data class PendingExportState(
+        val fullBackupScope: Boolean,
+        val encryptEnabled: Boolean,
+        val passphrase: String
+    )
+
+    private val _pendingExportState = MutableStateFlow<PendingExportState?>(null)
+    val pendingExportState: StateFlow<PendingExportState?> = _pendingExportState.asStateFlow()
+
+    private val _pendingIncomingUris = MutableStateFlow<List<Uri>>(emptyList())
+    val pendingIncomingUris: StateFlow<List<Uri>> = _pendingIncomingUris.asStateFlow()
+
+    fun setPendingExportRequest(fullBackupScope: Boolean, encryptEnabled: Boolean, passphrase: String) {
+        _pendingExportState.value = PendingExportState(fullBackupScope, encryptEnabled, passphrase)
+    }
+
+    fun consumePendingExportRequest(): PendingExportState? {
+        val current = _pendingExportState.value
+        _pendingExportState.value = null
+        return current
+    }
+
+    fun queueIncomingImportUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val existing = _pendingIncomingUris.value
+        _pendingIncomingUris.value = (existing + uris).distinct()
+    }
+
+    fun consumeIncomingImportUris(): List<Uri> {
+        val current = _pendingIncomingUris.value
+        _pendingIncomingUris.value = emptyList()
+        return current
+    }
+
+    fun showMessage(message: String) {
+        viewModelScope.launch { emitSnackbar(message) }
+    }
+
     private val pendingEpoch = AtomicLong(0L)
     private val importMutex = Mutex()
     private val importCoordinator by lazy { StatementImportCoordinator(getApplication(), repository, preferencesRepository) }

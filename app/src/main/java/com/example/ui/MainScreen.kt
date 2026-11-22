@@ -641,7 +641,11 @@ fun MainScreen(
                                 biometricLockEnabled = biometricLockEnabled,
                                 flagSecureEnabled = flagSecureEnabled,
                                 onToggleBiometricLock = { viewModel.setBiometricLockEnabled(it) },
-                                onToggleFlagSecure = { viewModel.setFlagSecureEnabled(it) }
+                                onToggleFlagSecure = { viewModel.setFlagSecureEnabled(it) },
+                                onPrepareExportRequest = { full, enc, phrase ->
+                                    viewModel.setPendingExportRequest(full, enc, phrase)
+                                },
+                                onConsumeExportRequest = { viewModel.consumePendingExportRequest() }
                             )
                         }
                     }

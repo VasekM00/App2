@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -74,7 +75,9 @@ object CzechEconomicSyncService {
             }
 
             val parsed = localDefaults()
-            val cnbParsed = fetchCnbAllRates()
+            val cnbParsed = withTimeoutOrNull(15_000L) {
+                fetchCnbAllRates()
+            } ?: ParsedCnbRates(emptyMap(), "")
             val eurLive = cnbParsed.rates["EUR"]
             val usdLive = cnbParsed.rates["USD"]
             val eurValid = eurLive != null && isValidCurrencyRate("EUR", eurLive)
@@ -453,8 +456,10 @@ object CzechEconomicSyncService {
 
     private fun isAllowedCnbHttpsUrl(url: URL): Boolean {
         if (!url.protocol.equals("https", ignoreCase = true)) return false
+        if (!url.userInfo.isNullOrEmpty()) return false
+        if (url.port != -1 && url.port != 443) return false
         val host = url.host.lowercase(Locale.ROOT)
-        return host in ALLOWED_CNB_HOSTS || host.endsWith(".cnb.cz")
+        return host == "api.cnb.cz" || host == "www.cnb.cz" || host == "cnb.cz"
     }
 
     private fun isAcceptableContentType(contentType: String?): Boolean {

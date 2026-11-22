@@ -22,19 +22,24 @@ object ReportShareHelper {
     private const val MAX_EXPORT_CACHE_FILES: Int = 3
     private val SAFE_SIGNED_NUMBER_REGEX = Regex("""^[-+]?\d+([.,]\d+)?$""")
     private val UNSAFE_FILENAME_CHARS_REGEX = Regex("""[^A-Za-z0-9._-]""")
-    private val FORMULA_PREFIX_CHARS = charArrayOf('=', '+', '-', '@', '\t', '\r', '\n')
+    private val FORMULA_PREFIX_CHARS = charArrayOf('=', '+', '-', '@', '|', '\t', '\r', '\n')
+    private val FORMULA_TRIGGER_CHARS = charArrayOf('=', '+', '-', '@', '|')
+
+    private fun isCsvLeadingWhitespace(c: Char): Boolean =
+        c.isWhitespace() || c == '\u00A0' || c == '\u202F' || c == '\uFEFF' || c == '\u000B' || c == '\u000C'
 
     /**
      * Escapes a CSV cell for RFC 4180 delimiters/quotes while neutralizing spreadsheet
-     * formula-injection prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`, `\n`), preserving signed numbers.
+     * formula-injection prefixes (`=`, `+`, `-`, `@`, `|`, `\t`, `\r`, `\n`), preserving signed numbers.
      */
     fun escapeCsvCell(value: String, delimiter: String = ","): String {
-        val trimmedLeading = value.trimStart(' ', '\t', '\r', '\n')
+        val trimmedLeading = value.trimStart(::isCsvLeadingWhitespace)
+        val trimmedAll = value.trim(::isCsvLeadingWhitespace)
         val isSafeNumeric = SAFE_SIGNED_NUMBER_REGEX.matches(value)
         val startsWithDangerousChar = value.isNotEmpty() && value[0] in FORMULA_PREFIX_CHARS
         val trimmedStartsWithFormula = trimmedLeading.isNotEmpty() &&
-            trimmedLeading[0] in charArrayOf('=', '+', '-', '@') &&
-            !SAFE_SIGNED_NUMBER_REGEX.matches(value.trim())
+            trimmedLeading[0] in FORMULA_TRIGGER_CHARS &&
+            !SAFE_SIGNED_NUMBER_REGEX.matches(trimmedAll)
         val neutralized = if (!isSafeNumeric && (startsWithDangerousChar || trimmedStartsWithFormula)) {
             "'$value"
         } else {
@@ -119,7 +124,13 @@ object ReportShareHelper {
         val leaf = rawFilename.substringAfterLast('/').substringAfterLast('\\').trimStart('.')
         val cleaned = UNSAFE_FILENAME_CHARS_REGEX.replace(leaf, "_")
         val base = cleaned.ifBlank { "fire_financial_export.csv" }
-        return if (base.endsWith(".csv", ignoreCase = true)) base else "$base.csv"
+        val withExt = if (base.endsWith(".csv", ignoreCase = true)) base else "$base.csv"
+        return if (withExt.length > 96) {
+            val stem = withExt.substringBeforeLast('.').take(92)
+            "$stem.csv"
+        } else {
+            withExt
+        }
     }
 
     private fun pruneExportCache(exportDir: File, keepFile: File) {

@@ -17,19 +17,31 @@ import javax.crypto.spec.SecretKeySpec
 object BackupCrypto {
 
     const val ENCRYPTED_FORMAT: String = "martinu-encrypted-backup"
-    const val ENCRYPTED_SCHEMA: Int = 1
+    const val ENCRYPTED_SCHEMA: Int = 2
+    const val ENCRYPTED_SCHEMA_LEGACY: Int = 1
     const val KDF_ALGORITHM: String = "PBKDF2WithHmacSHA256"
     const val CIPHER_ALGORITHM: String = "AES/GCM/NoPadding"
-    const val PBKDF2_ITERATIONS: Int = 210_000
-    const val MIN_ITERATIONS: Int = 10_000
+    const val PBKDF2_ITERATIONS: Int = 600_000
+    const val MIN_ITERATIONS: Int = 100_000
+    const val MIN_LEGACY_ITERATIONS: Int = 10_000
     const val MAX_ITERATIONS: Int = 1_000_000
+    const val MAX_ENCRYPTED_ENVELOPE_CHARS: Int = 16_000_000
     const val SALT_BYTES: Int = 16
     const val IV_BYTES: Int = 12
     const val KEY_BITS: Int = 256
     const val GCM_TAG_BITS: Int = 128
 
-    private val ENVELOPE_AAD: ByteArray = "martinu-encrypted-backup:v1".toByteArray(Charsets.UTF_8)
+    private val ENVELOPE_AAD_V1: ByteArray = "martinu-encrypted-backup:v1".toByteArray(Charsets.UTF_8)
     private val secureRandom = SecureRandom()
+
+    private fun buildV2Aad(
+        kdf: String,
+        iterations: Int,
+        cipherAlg: String,
+        saltB64: String,
+        ivB64: String
+    ): ByteArray = "martinu-encrypted-backup:v2|$kdf|$iterations|$cipherAlg|$saltB64|$ivB64"
+        .toByteArray(Charsets.UTF_8)
 
     sealed interface DecryptResult {
         data class Success(val plaintext: String) : DecryptResult
@@ -38,8 +50,9 @@ object BackupCrypto {
     }
 
     fun isEncryptedBackup(rawText: String): Boolean {
+        if (rawText.length > MAX_ENCRYPTED_ENVELOPE_CHARS) return false
         val trimmed = rawText.trim()
-        if (!trimmed.startsWith("{") || !trimmed.contains(ENCRYPTED_FORMAT)) return false
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}") || !trimmed.contains(ENCRYPTED_FORMAT)) return false
         return try {
             val root = JSONObject(trimmed)
             root.optString("_format", "").trim() == ENCRYPTED_FORMAT
@@ -60,33 +73,41 @@ object BackupCrypto {
 
         val salt = ByteArray(SALT_BYTES).also { secureRandom.nextBytes(it) }
         val iv = ByteArray(IV_BYTES).also { secureRandom.nextBytes(it) }
+        val encoder = Base64.getEncoder()
+        val saltB64 = encoder.encodeToString(salt)
+        val ivB64 = encoder.encodeToString(iv)
         var derivedKey: ByteArray? = null
+        var plaintextBytes: ByteArray? = null
 
         return try {
             derivedKey = deriveAesKeyBytes(passphrase, salt, iterations)
             val cipherKey = SecretKeySpec(derivedKey, "AES")
             val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
             cipher.init(Cipher.ENCRYPT_MODE, cipherKey, GCMParameterSpec(GCM_TAG_BITS, iv))
-            cipher.updateAAD(ENVELOPE_AAD)
-            val cipherBytes = cipher.doFinal(plaintextJson.toByteArray(Charsets.UTF_8))
+            cipher.updateAAD(buildV2Aad(KDF_ALGORITHM, iterations, CIPHER_ALGORITHM, saltB64, ivB64))
+            plaintextBytes = plaintextJson.toByteArray(Charsets.UTF_8)
+            val cipherBytes = cipher.doFinal(plaintextBytes)
 
-            val encoder = Base64.getEncoder()
             JSONObject().apply {
                 put("_format", ENCRYPTED_FORMAT)
                 put("_schema", ENCRYPTED_SCHEMA)
                 put("kdf", KDF_ALGORITHM)
                 put("iterations", iterations)
                 put("cipher", CIPHER_ALGORITHM)
-                put("salt", encoder.encodeToString(salt))
-                put("iv", encoder.encodeToString(iv))
+                put("salt", saltB64)
+                put("iv", ivB64)
                 put("ciphertext", encoder.encodeToString(cipherBytes))
             }.toString()
         } finally {
             derivedKey?.fill(0)
+            plaintextBytes?.fill(0)
         }
     }
 
     fun decryptJson(envelopeJson: String, passphrase: CharArray): DecryptResult {
+        if (envelopeJson.length > MAX_ENCRYPTED_ENVELOPE_CHARS) {
+            return DecryptResult.MalformedEnvelope
+        }
         if (envelopeJson.isBlank() || passphrase.isEmpty()) {
             return if (envelopeJson.isBlank()) DecryptResult.MalformedEnvelope else DecryptResult.WrongPassphraseOrTampered
         }
@@ -94,6 +115,8 @@ object BackupCrypto {
         val root = try {
             JSONObject(envelopeJson.trim())
         } catch (_: Exception) {
+            return DecryptResult.MalformedEnvelope
+        } catch (_: StackOverflowError) {
             return DecryptResult.MalformedEnvelope
         }
 
@@ -103,11 +126,16 @@ object BackupCrypto {
         val cipherAlg = root.optString("cipher", "").trim()
         val iterations = root.optInt("iterations", -1)
 
+        val minIterAllowed = when (schema) {
+            ENCRYPTED_SCHEMA -> MIN_ITERATIONS
+            ENCRYPTED_SCHEMA_LEGACY -> MIN_LEGACY_ITERATIONS
+            else -> Int.MAX_VALUE
+        }
         if (format != ENCRYPTED_FORMAT ||
-            schema != ENCRYPTED_SCHEMA ||
+            (schema != ENCRYPTED_SCHEMA && schema != ENCRYPTED_SCHEMA_LEGACY) ||
             kdf != KDF_ALGORITHM ||
             cipherAlg != CIPHER_ALGORITHM ||
-            iterations !in MIN_ITERATIONS..MAX_ITERATIONS
+            iterations !in minIterAllowed..MAX_ITERATIONS
         ) {
             return DecryptResult.MalformedEnvelope
         }
@@ -141,13 +169,19 @@ object BackupCrypto {
         }
 
         var derivedKey: ByteArray? = null
+        var plaintextBytes: ByteArray? = null
         return try {
             derivedKey = deriveAesKeyBytes(passphrase, salt, iterations)
             val cipherKey = SecretKeySpec(derivedKey, "AES")
             val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
             cipher.init(Cipher.DECRYPT_MODE, cipherKey, GCMParameterSpec(GCM_TAG_BITS, iv))
-            cipher.updateAAD(ENVELOPE_AAD)
-            val plaintextBytes = cipher.doFinal(cipherBytes)
+            val aad = if (schema == ENCRYPTED_SCHEMA) {
+                buildV2Aad(kdf, iterations, cipherAlg, saltB64, ivB64)
+            } else {
+                ENVELOPE_AAD_V1
+            }
+            cipher.updateAAD(aad)
+            plaintextBytes = cipher.doFinal(cipherBytes)
             DecryptResult.Success(String(plaintextBytes, Charsets.UTF_8))
         } catch (_: AEADBadTagException) {
             DecryptResult.WrongPassphraseOrTampered
@@ -155,6 +189,7 @@ object BackupCrypto {
             DecryptResult.MalformedEnvelope
         } finally {
             derivedKey?.fill(0)
+            plaintextBytes?.fill(0)
         }
     }
 

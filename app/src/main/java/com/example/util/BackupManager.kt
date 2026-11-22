@@ -7,10 +7,61 @@ object BackupManager {
 
     private const val MAX_BACKUP_JSON_CHARS = 10 * 1024 * 1024
     private const val MAX_NESTED_JSON_CHARS = 1 * 1024 * 1024
+    private const val MAX_JSON_NESTING_DEPTH = 64
+    private const val MAX_LEDGER_ENTRIES = 2_000
+    private const val MAX_IMPORTED_TXS = 100_000
+    private const val MAX_ACTION_STATES = 5_000
+    private const val MAX_NAME_CHARS = 200
+    private val YEAR_MONTH_PATTERN = Regex("""^\d{4}-(0[1-9]|1[0-2])$""")
+    private val ISO_DATE_PATTERN = Regex("""^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$""")
+
+    private val KNOWN_SETTINGS_KEYS = setOf(
+        "baseYear", "primaryAge", "primaryName", "spouseName", "isSingleHousehold",
+        "vSalary", "eStartingSalary", "rentMonthly", "groceriesMonthly", "liquidPortfolioCurrent",
+        "dpsBalanceCurrent", "dipBalanceCurrent", "emergencyReserveCurrent", "safeWithdrawalRatePct",
+        "portfolioNominalReturnPct", "cpiInflationPct", "guardrailsUpperThresholdPct",
+        "baristaTransitionEnabled", "monteCarloSeed", "merchantRulesJson"
+    )
 
     private fun safeFinite(v: Double): Double = if (v.isFinite()) v else 0.0
 
-    fun serializeSettingsToJson(s: SettingsEntity): String {
+    private fun exceedsJsonDepthLimit(json: String, maxDepth: Int = MAX_JSON_NESTING_DEPTH): Boolean {
+        var depth = 0
+        var inQuotes = false
+        var escaped = false
+        for (i in 0 until json.length) {
+            val c = json[i]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (inQuotes) {
+                if (c == '\\') {
+                    escaped = true
+                } else if (c == '"') {
+                    inQuotes = false
+                }
+                continue
+            }
+            when (c) {
+                '"' -> inQuotes = true
+                '{', '[' -> {
+                    depth++
+                    if (depth > maxDepth) return true
+                }
+                '}', ']' -> if (depth > 0) depth--
+            }
+        }
+        return false
+    }
+
+    private fun hasAnyKnownSettingsKey(obj: JSONObject): Boolean =
+        KNOWN_SETTINGS_KEYS.any { obj.has(it) }
+
+    fun serializeSettingsToJson(s: SettingsEntity): String =
+        serializeSettingsToJsonObject(s).toString()
+
+    private fun serializeSettingsToJsonObject(s: SettingsEntity): JSONObject {
         val json = JSONObject()
         json.put("_format", "martinu-settings")
         json.put("_schema", 1)
@@ -165,13 +216,15 @@ object BackupManager {
         json.put("knownFamilyAccountsJson", s.knownFamilyAccountsJson)
         json.put("knownParentalGiftAccountsJson", s.knownParentalGiftAccountsJson)
 
-        return json.toString()
+        return json
     }
 
     fun deserializeSettingsFromJson(jsonStr: String, fallback: SettingsEntity): SettingsEntity? {
         if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
+        val trimmed = jsonStr.trim()
+        if (!trimmed.startsWith("{") || exceedsJsonDepthLimit(trimmed)) return null
         return try {
-            val rawJson = JSONObject(jsonStr.trim())
+            val rawJson = JSONObject(trimmed)
             val rootFormat = rawJson.optString("_format", "").trim()
             if (rawJson.has("_format")) {
                 val isSettingsFormat = rootFormat.equals("martinu-settings", ignoreCase = true)
@@ -196,17 +249,22 @@ object BackupManager {
             if (json !== rawJson && json.has("_schema") && json.optInt("_schema", -1) != 1) {
                 return null
             }
+            if (!rawJson.has("_format") && !hasAnyKnownSettingsKey(json)) {
+                return null
+            }
             val restoredVGifts = json.optFiniteDouble(
                 "vGiftsMonthly",
                 json.optFiniteDouble("familyGiftMonthly", fallback.vGiftsMonthly)
             )
             val restoredEGifts = json.optFiniteDouble("eGiftsMonthly", fallback.eGiftsMonthly)
+            val restoredSingle = json.optSafeBoolean("isSingleHousehold", fallback.isSingleHousehold)
+            val pensionSplit = if (restoredSingle) 1.0 else 2.0
             val restored = fallback.copy(
                 baseYear = json.optSafeInt("baseYear", fallback.baseYear),
                 primaryAge = json.optSafeInt("primaryAge", fallback.primaryAge),
                 primaryName = json.optStringNonNull("primaryName", fallback.primaryName),
                 spouseName = json.optStringNonNull("spouseName", fallback.spouseName),
-                isSingleHousehold = json.optSafeBoolean("isSingleHousehold", fallback.isSingleHousehold),
+                isSingleHousehold = restoredSingle,
                 dcaAnnualGrowthPct = json.optFiniteDouble("dcaAnnualGrowthPct", fallback.dcaAnnualGrowthPct),
 
                 vSalary = json.optFiniteDouble("vSalary", fallback.vSalary),
@@ -263,14 +321,15 @@ object BackupManager {
                     json.has("vStatePensionMonthly") && !json.isNull("vStatePensionMonthly") ->
                         json.optFiniteDouble("vStatePensionMonthly", fallback.vStatePensionMonthly)
                     json.has("statePensionMonthly") && !json.isNull("statePensionMonthly") ->
-                        json.optFiniteDouble("statePensionMonthly", fallback.vStatePensionMonthly * 2.0) / 2.0
+                        json.optFiniteDouble("statePensionMonthly", fallback.vStatePensionMonthly * pensionSplit) / pensionSplit
                     else -> fallback.vStatePensionMonthly
                 },
                 eStatePensionMonthly = when {
                     json.has("eStatePensionMonthly") && !json.isNull("eStatePensionMonthly") ->
                         json.optFiniteDouble("eStatePensionMonthly", fallback.eStatePensionMonthly)
                     json.has("statePensionMonthly") && !json.isNull("statePensionMonthly") ->
-                        json.optFiniteDouble("statePensionMonthly", fallback.eStatePensionMonthly * 2.0) / 2.0
+                        if (restoredSingle) fallback.eStatePensionMonthly
+                        else json.optFiniteDouble("statePensionMonthly", fallback.eStatePensionMonthly * 2.0) / 2.0
                     else -> fallback.eStatePensionMonthly
                 },
                 lifestyleCostAtFireMonthly = json.optFiniteDouble("lifestyleCostAtFireMonthly", fallback.lifestyleCostAtFireMonthly),
@@ -365,6 +424,8 @@ object BackupManager {
             sanitizeSettings(restored, fallback)
         } catch (_: Exception) {
             null
+        } catch (_: StackOverflowError) {
+            null
         }
     }
 
@@ -398,8 +459,10 @@ object BackupManager {
         fun growthPct(v: Double, fallback: Double): Double = if (v.isFinite() && v in -99.0..1000.0) v else fallback
         fun year(v: Int, fallback: Int): Int = if (v in 1950..2200) v else fallback
         return s.copy(
-            primaryName = s.primaryName.trim().ifEmpty { f.primaryName },
-            spouseName = s.spouseName.trim().ifEmpty { f.spouseName },
+            primaryName = s.primaryName.trim().take(MAX_NAME_CHARS).ifEmpty { f.primaryName },
+            spouseName = s.spouseName.trim().take(MAX_NAME_CHARS).ifEmpty { f.spouseName },
+            child1Name = s.child1Name.trim().take(MAX_NAME_CHARS).ifEmpty { f.child1Name },
+            child2Name = s.child2Name.trim().take(MAX_NAME_CHARS).ifEmpty { f.child2Name },
             primaryAge = if (s.primaryAge in 1..120) s.primaryAge else f.primaryAge,
             baseYear = year(s.baseYear, f.baseYear),
             eReturnYear = year(s.eReturnYear, f.eReturnYear),
@@ -407,8 +470,6 @@ object BackupManager {
             lumpSumYear = year(s.lumpSumYear, f.lumpSumYear),
             vStatePensionAge = if (s.vStatePensionAge in 40..90) s.vStatePensionAge else f.vStatePensionAge,
             eStatePensionAge = if (s.eStatePensionAge in 40..90) s.eStatePensionAge else f.eStatePensionAge,
-            child1Name = s.child1Name.trim().ifEmpty { f.child1Name },
-            child2Name = s.child2Name.trim().ifEmpty { f.child2Name },
             child1BirthYear = year(s.child1BirthYear, f.child1BirthYear),
             child2BirthYear = year(s.child2BirthYear, f.child2BirthYear),
             childSupportUntilAge = if (s.childSupportUntilAge in 0..50) s.childSupportUntilAge else f.childSupportUntilAge,
@@ -534,7 +595,7 @@ object BackupManager {
         val json = JSONObject()
         json.put("_format", "martinu-financials-full-backup")
         json.put("_schema", 2)
-        json.put("settings", JSONObject(serializeSettingsToJson(payload.settings)))
+        json.put("settings", serializeSettingsToJsonObject(payload.settings))
 
         val ledgerArr = org.json.JSONArray()
         for (entry in payload.ledgerEntries) {
@@ -611,8 +672,10 @@ object BackupManager {
 
     fun deserializeFullBackupFromJson(jsonStr: String, fallback: SettingsEntity): FullBackupPayload? {
         if (jsonStr.isBlank() || jsonStr.length > MAX_BACKUP_JSON_CHARS) return null
+        val trimmed = jsonStr.trim()
+        if (!trimmed.startsWith("{") || exceedsJsonDepthLimit(trimmed)) return null
         return try {
-            val root = JSONObject(jsonStr.trim())
+            val root = JSONObject(trimmed)
             val formatTag = root.optString("_format", "").trim()
             // Settings-only backups ("martinu-settings" without a full-backup "settings" object) MUST NOT
             // be parsed as FullBackupPayload, otherwise restoring them would wipe ledger, transactions & lots.
@@ -628,43 +691,51 @@ object BackupManager {
             if (root.has("_schema") && root.optInt("_schema", -1) !in 1..2) {
                 return null
             }
-            val hasFullBackupEnvelope = root.has("settings") ||
-                formatTag.equals("martinu-full-backup", ignoreCase = true) ||
-                root.has("ledgerEntries") ||
-                root.has("actionStates") ||
-                root.has("importedTransactions")
+            val hasExplicitFormat = formatTag.equals("martinu-financials-full-backup", ignoreCase = true) ||
+                formatTag.equals("martinu-full-backup", ignoreCase = true)
+            val hasFullBackupEnvelope = hasExplicitFormat ||
+                (root.optJSONObject("settings")?.let { hasAnyKnownSettingsKey(it) } == true) ||
+                ((root.optJSONArray("ledgerEntries")?.length() ?: 0) > 0) ||
+                ((root.optJSONArray("actionStates")?.length() ?: 0) > 0) ||
+                ((root.optJSONArray("importedTransactions")?.length() ?: 0) > 0)
             if (!hasFullBackupEnvelope) {
                 return null
             }
-            val settingsJson = if (root.has("settings")) {
+            val restoredSettings = if (root.has("settings")) {
                 val settingsObj = root.optJSONObject("settings") ?: return null
-                settingsObj.toString()
+                if (!hasExplicitFormat && !hasAnyKnownSettingsKey(settingsObj)) {
+                    return null
+                }
+                // Pass directly; deserializeSettingsFromJson accepts missing _format when known keys exist
+                deserializeSettingsFromJson(settingsObj.toString(), fallback)
+                    ?: if (hasExplicitFormat && settingsObj.length() == 0) fallback else return null
             } else {
-                root.toString()
+                deserializeSettingsFromJson(root.toString(), fallback)
+                    ?: if (hasExplicitFormat) fallback else return null
             }
-            val restoredSettings = deserializeSettingsFromJson(settingsJson, fallback) ?: return null
 
             val ledgerList = mutableListOf<com.example.data.LedgerEntryEntity>()
             val ledgerArr = root.optJSONArray("ledgerEntries")
             if (!root.isNull("ledgerEntries") && ledgerArr != null) {
+                if (ledgerArr.length() > MAX_LEDGER_ENTRIES) return null
                 for (i in 0 until ledgerArr.length()) {
                     val o = ledgerArr.optJSONObject(i) ?: continue
                     val ym = o.optStringNonNull("yearMonth", "").trim()
-                    if (ym.isBlank()) continue
+                    if (!YEAR_MONTH_PATTERN.matches(ym)) continue
                     ledgerList.add(
                         com.example.data.LedgerEntryEntity(
-                            id = o.optSafeLong("id", 0L),
+                            id = o.optSafeLong("id", 0L).coerceAtLeast(0L),
                             yearMonth = ym,
-                            incVaclav = o.optFiniteDouble("incVaclav", 0.0),
-                            incEleonora = o.optFiniteDouble("incEleonora", 0.0),
-                            incUnforeseen = o.optFiniteDouble("incUnforeseen", 0.0),
-                            expRent = o.optFiniteDouble("expRent", 0.0),
-                            expGroceries = o.optFiniteDouble("expGroceries", 0.0),
-                            expOther = o.optFiniteDouble("expOther", 0.0),
-                            notes = o.optStringNonNull("notes", ""),
-                            portfolioBalanceAtMonthEnd = o.optFiniteDouble("portfolioBalanceAtMonthEnd", 0.0),
-                            pensionBalanceAtMonthEnd = o.optFiniteDouble("pensionBalanceAtMonthEnd", 0.0),
-                            emergencyReserveAtMonthEnd = o.optFiniteDouble("emergencyReserveAtMonthEnd", 0.0)
+                            incVaclav = o.optFiniteDouble("incVaclav", 0.0).coerceAtLeast(0.0),
+                            incEleonora = o.optFiniteDouble("incEleonora", 0.0).coerceAtLeast(0.0),
+                            incUnforeseen = o.optFiniteDouble("incUnforeseen", 0.0).coerceAtLeast(0.0),
+                            expRent = o.optFiniteDouble("expRent", 0.0).coerceAtLeast(0.0),
+                            expGroceries = o.optFiniteDouble("expGroceries", 0.0).coerceAtLeast(0.0),
+                            expOther = o.optFiniteDouble("expOther", 0.0).coerceAtLeast(0.0),
+                            notes = o.optStringNonNull("notes", "").take(2_000),
+                            portfolioBalanceAtMonthEnd = o.optFiniteDouble("portfolioBalanceAtMonthEnd", 0.0).coerceAtLeast(0.0),
+                            pensionBalanceAtMonthEnd = o.optFiniteDouble("pensionBalanceAtMonthEnd", 0.0).coerceAtLeast(0.0),
+                            emergencyReserveAtMonthEnd = o.optFiniteDouble("emergencyReserveAtMonthEnd", 0.0).coerceAtLeast(0.0)
                         )
                     )
                 }
@@ -673,15 +744,16 @@ object BackupManager {
             val actionList = mutableListOf<com.example.data.ActionStateEntity>()
             val actionArr = root.optJSONArray("actionStates")
             if (!root.isNull("actionStates") && actionArr != null) {
+                if (actionArr.length() > MAX_ACTION_STATES) return null
                 for (i in 0 until actionArr.length()) {
                     val o = actionArr.optJSONObject(i) ?: continue
-                    val actionKey = o.optStringNonNull("actionKey", "").trim()
+                    val actionKey = o.optStringNonNull("actionKey", "").trim().take(120)
                     if (actionKey.isBlank()) continue
                     actionList.add(
                         com.example.data.ActionStateEntity(
                             actionKey = actionKey,
                             year = o.optSafeInt("year", restoredSettings.baseYear).coerceIn(1900, 2200),
-                            actionId = o.optStringNonNull("actionId", "").trim(),
+                            actionId = o.optStringNonNull("actionId", "").trim().take(120),
                             isDone = o.optSafeBoolean("isDone", false)
                         )
                     )
@@ -691,29 +763,35 @@ object BackupManager {
             val txList = mutableListOf<com.example.data.ImportedBankTransactionEntity>()
             val txArr = root.optJSONArray("importedTransactions")
             if (!root.isNull("importedTransactions") && txArr != null) {
+                if (txArr.length() > MAX_IMPORTED_TXS) return null
+                val validCategoryNames = BankTransactionType.entries.map { it.name }.toSet()
                 for (i in 0 until txArr.length()) {
                     val o = txArr.optJSONObject(i) ?: continue
                     val ym = o.optStringNonNull("yearMonth", "").trim()
-                    if (ym.isBlank()) continue
+                    if (!YEAR_MONTH_PATTERN.matches(ym)) continue
+                    val rawDate = o.optStringNonNull("date", "").trim()
+                    if (rawDate.isNotBlank() && !ISO_DATE_PATTERN.matches(rawDate)) continue
                     val amount = if (o.has("amount") && !o.isNull("amount")) {
                         o.optFiniteDoubleOrNull("amount") ?: continue
                     } else {
                         0.0
                     }
+                    val rawCat = o.optStringNonNull("category", "LIFESTYLE_LIVING").trim()
+                    val safeCat = if (rawCat in validCategoryNames) rawCat else BankTransactionType.UNCATEGORIZED.name
                     txList.add(
                         com.example.data.ImportedBankTransactionEntity(
-                            id = o.optSafeLong("id", 0L),
+                            id = o.optSafeLong("id", 0L).coerceAtLeast(0L),
                             yearMonth = ym,
-                            bankName = o.optStringNonNull("bankName", "GENERIC").trim().ifBlank { "GENERIC" },
-                            date = o.optStringNonNull("date", "").trim(),
+                            bankName = o.optStringNonNull("bankName", "GENERIC").trim().take(64).ifBlank { "GENERIC" },
+                            date = rawDate.ifBlank { "$ym-01" },
                             amount = amount,
-                            counterpartyAccount = o.optStringNonNull("counterpartyAccount", ""),
-                            counterpartyName = o.optStringNonNull("counterpartyName", ""),
-                            message = o.optStringNonNull("message", ""),
-                            variableSymbol = o.optStringNonNull("variableSymbol", ""),
-                            category = o.optStringNonNull("category", "LIFESTYLE_LIVING").trim().ifBlank { "LIFESTYLE_LIVING" },
+                            counterpartyAccount = o.optStringNonNull("counterpartyAccount", "").take(120),
+                            counterpartyName = o.optStringNonNull("counterpartyName", "").take(200),
+                            message = o.optStringNonNull("message", "").take(1_000),
+                            variableSymbol = o.optStringNonNull("variableSymbol", "").take(40),
+                            category = safeCat,
                             isNetted = o.optSafeBoolean("isNetted", false),
-                            nettingReason = o.optStringNonNull("nettingReason", ""),
+                            nettingReason = o.optStringNonNull("nettingReason", "").take(200),
                             matchedTxId = o.optNullablePositiveLong("matchedTxId")
                         )
                     )
@@ -752,6 +830,8 @@ object BackupManager {
                 investmentLots = lotsList
             )
         } catch (_: Exception) {
+            null
+        } catch (_: StackOverflowError) {
             null
         }
     }
