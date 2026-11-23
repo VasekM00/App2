@@ -1,5 +1,6 @@
 package com.example.util
 
+import android.content.Context
 import com.example.data.SettingsEntity
 import com.example.domain.CzechRegulatoryData
 import com.example.domain.SyncDifferenceItem
@@ -51,12 +52,81 @@ object CzechEconomicSyncService {
     @Volatile
     private var cachedCnbSuccess: CachedCnbResult? = null
 
+    @Volatile
+    private var cachedManifestDefaults: CzechRegulatoryData? = null
+
+    /**
+     * Parses a regulatory_manifest.json payload into [CzechRegulatoryData], falling back safely
+     * to compiled defaults for any missing or non-finite fields.
+     */
+    fun parseRegulatoryManifestJson(jsonString: String): CzechRegulatoryData {
+        val base = localDefaults()
+        if (jsonString.isBlank()) return base
+        return runCatching {
+            val obj = JSONObject(jsonString)
+            fun doubleField(key: String, fallback: Double, minVal: Double = 0.0): Double {
+                if (!obj.has(key) || obj.isNull(key)) return fallback
+                val v = obj.optDouble(key, fallback)
+                return if (v.isFinite() && v >= minVal) v else fallback
+            }
+            fun intField(key: String, fallback: Int, minVal: Int = 1): Int {
+                if (!obj.has(key) || obj.isNull(key)) return fallback
+                val v = obj.optInt(key, fallback)
+                return if (v >= minVal) v else fallback
+            }
+            val effectiveYear = intField("effectiveYear", base.effectiveYear, 2020)
+            val source = obj.optString("source", "").trim().ifBlank { "ČSÚ, ČNB & Sbírka zákonů ČR" }
+            val version = obj.optString("version", "").trim()
+            val label = if (version.isNotBlank()) "Bundled $effectiveYear Czech Statutory Manifest v$version ($source)" else base.sourceName
+            base.copy(
+                sourceName = label,
+                effectiveYear = effectiveYear,
+                csuCpiInflationPct = doubleField("csuCpiInflationPct", base.csuCpiInflationPct, -50.0),
+                csuNationalAverageWageMonthly = doubleField("csuNationalAverageWageMonthly", base.csuNationalAverageWageMonthly, 1.0),
+                baseTaxRatePct = doubleField("baseTaxRatePct", base.baseTaxRatePct),
+                progressiveTaxRatePct = doubleField("progressiveTaxRatePct", base.progressiveTaxRatePct),
+                progressive23ThresholdAnnual = doubleField("progressive23ThresholdAnnual", base.progressive23ThresholdAnnual),
+                taxpayerCreditAnnual = doubleField("taxpayerCreditAnnual", base.taxpayerCreditAnnual),
+                spouseTaxCreditAnnual = doubleField("spouseTaxCreditAnnual", base.spouseTaxCreditAnnual),
+                spouseIncomeLimitAnnual = doubleField("spouseIncomeLimitAnnual", base.spouseIncomeLimitAnnual),
+                child1TaxBonusAnnual = doubleField("child1TaxBonusAnnual", base.child1TaxBonusAnnual),
+                child2TaxBonusAnnual = doubleField("child2TaxBonusAnnual", base.child2TaxBonusAnnual),
+                child3PlusTaxBonusAnnual = doubleField("child3PlusTaxBonusAnnual", base.child3PlusTaxBonusAnnual),
+                dipDpsCombinedCeilingAnnual = doubleField("dipDpsCombinedCeilingAnnual", base.dipDpsCombinedCeilingAnnual),
+                employerRetirementExemptionAnnual = doubleField("employerRetirementExemptionAnnual", base.employerRetirementExemptionAnnual),
+                dpsMinDepositForSubsidy = doubleField("dpsMinDepositForSubsidy", base.dpsMinDepositForSubsidy),
+                dpsDeductionThresholdMonthly = doubleField("dpsDeductionThresholdMonthly", base.dpsDeductionThresholdMonthly),
+                dpsStandardSubsidyMaxMonthly = doubleField("dpsStandardSubsidyMaxMonthly", base.dpsStandardSubsidyMaxMonthly),
+                dpsYouthSubsidyMaxMonthly = doubleField("dpsYouthSubsidyMaxMonthly", base.dpsYouthSubsidyMaxMonthly),
+                dpsYouthAgeLimit = intField("dpsYouthAgeLimit", base.dpsYouthAgeLimit, 18),
+                dpsStatutoryFeeCapPct = doubleField("dpsStatutoryFeeCapPct", base.dpsStatutoryFeeCapPct),
+                minWageMonthly = doubleField("minWageMonthly", base.minWageMonthly),
+                childBonusMinWageMultiplier = doubleField("childBonusMinWageMultiplier", base.childBonusMinWageMultiplier),
+                parentalAllowanceTotalBeforeCutoff = doubleField("parentalAllowanceTotalBeforeCutoff", base.parentalAllowanceTotalBeforeCutoff),
+                parentalAllowanceTotalFromCutoff = doubleField("parentalAllowanceTotalFromCutoff", base.parentalAllowanceTotalFromCutoff),
+                parentalAllowanceCutoffYear = intField("parentalAllowanceCutoffYear", base.parentalAllowanceCutoffYear, 2020)
+            )
+        }.getOrElse { base }
+    }
+
+    fun loadBundledRegulatoryManifest(context: Context?): CzechRegulatoryData {
+        cachedManifestDefaults?.let { return it }
+        if (context == null) return localDefaults()
+        val parsed = runCatching {
+            context.assets.open("regulatory_manifest.json").bufferedReader(Charsets.UTF_8).use { reader ->
+                parseRegulatoryManifestJson(reader.readText())
+            }
+        }.getOrElse { localDefaults() }
+        cachedManifestDefaults = parsed
+        return parsed
+    }
+
     /**
      * Fetches live official Czech National Bank (ČNB) daily exchange rates and
      * couples them with the locally bundled 2026 Czech statutory baseline (Act No. 586/1992 Coll. ZDP).
      * Guaranteed to return a valid CzechRegulatoryData object with zero third-party dependencies.
      */
-    suspend fun fetchLiveRegulatoryData(): CzechRegulatoryData = withContext(Dispatchers.IO) {
+    suspend fun fetchLiveRegulatoryData(context: Context? = null): CzechRegulatoryData = withContext(Dispatchers.IO) {
         val nowMs = System.currentTimeMillis()
         cachedCnbSuccess?.let { cached ->
             val ageMs = nowMs - cached.fetchedAtMs
@@ -74,7 +144,7 @@ object CzechEconomicSyncService {
                 }
             }
 
-            val parsed = localDefaults()
+            val parsed = loadBundledRegulatoryManifest(context)
             val cnbParsed = withTimeoutOrNull(15_000L) {
                 fetchCnbAllRates()
             } ?: ParsedCnbRates(emptyMap(), "")

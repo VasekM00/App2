@@ -70,7 +70,8 @@ internal fun computeCalculationStateInternal(
     retOver: Double?,
     cpiOver: Double?,
     swrOver: Double?,
-    runMonteCarlo: Boolean
+    runMonteCarlo: Boolean,
+    partnerBirthYearOverride: Int? = null
 ): FullCalculationState {
     val effectiveSettings = applySensitivityOverridesToSettings(settings, retOver, cpiOver, swrOver)
     val now = YearMonth.now(ZoneId.of("Europe/Prague"))
@@ -91,7 +92,8 @@ internal fun computeCalculationStateInternal(
         activeEntry,
         now.monthValue,
         ledger,
-        importedTxs
+        importedTxs,
+        partnerBirthYearOverride = partnerBirthYearOverride
     )
 }
 
@@ -100,8 +102,15 @@ internal suspend fun runOneTimeMigrationsInternal(
     repository: FinancialRepository,
     preferencesRepository: AppPreferencesRepository
 ) {
+    repository.rolloverCalendarYearIfNeeded()
     if (!preferencesRepository.isFlagSet("legacy_employer_repaired_v1")) {
-        repository.repairLegacyEmployerContribution()
+        val current = repository.settingsFlow.first()
+        val looksLikeUntouchedLegacyDefault = current.employerRetirementMonthly in 2795.0..2805.0 &&
+            current.vSalary == 53500.0 &&
+            current.portuDcaMonthly == 13000.0
+        if (looksLikeUntouchedLegacyDefault) {
+            repository.repairLegacyEmployerContribution()
+        }
         preferencesRepository.markFlag("legacy_employer_repaired_v1", true)
     }
     if (!preferencesRepository.isFlagSet("legacy_balances_backfilled")) {
@@ -316,7 +325,11 @@ internal fun buildSyntheticAuditTransactions(pending: StatementParseSummary): Li
             variableSymbol = pt.variableSymbol,
             category = pt.category.name,
             isNetted = pt.isNetted,
-            nettingReason = pt.nettingReason
+            nettingReason = pt.nettingReason,
+            accountKey = pt.accountKey.ifBlank { pending.accountKey },
+            originalCurrency = pt.originalCurrency?.ifBlank { "CZK" } ?: "CZK",
+            originalAmount = pt.originalAmount ?: 0.0,
+            fxRateToCzk = pt.exchangeRate?.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
         )
     }
 }

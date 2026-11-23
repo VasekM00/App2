@@ -173,12 +173,17 @@ class BackupManagerAndEngineAuditTest {
     @Test
     fun `test single household mode isolates primary income and excludes spouse assets`() {
         val coupleSettings = SettingsEntity(isSingleHousehold = false)
-        val singleSettings = SettingsEntity(isSingleHousehold = true)
+        val singleSettings = SettingsEntity(
+            isSingleHousehold = true,
+            child1Enabled = false,
+            child2Enabled = false,
+            eParentalAllowanceMonthly = 0.0
+        )
 
         val coupleCalc = FinancialEngine.calculate(coupleSettings, runMonteCarlo = false)
         val singleCalc = FinancialEngine.calculate(singleSettings, runMonteCarlo = false)
 
-        // Single income should not include spouse benefit or lecturing
+        // Single income without children should not include spouse benefit, salary or lecturing
         assertEquals(33500.0 + 2090.0 + 16000.0, singleCalc.currentIncome.totalMonthly, 0.001)
         assertTrue(coupleCalc.currentIncome.totalMonthly > singleCalc.currentIncome.totalMonthly)
 
@@ -193,15 +198,18 @@ class BackupManagerAndEngineAuditTest {
 
     @Test
     fun `test DCA annual growth indexation accelerates 35-year wealth accumulation`() {
-        val staticDca = SettingsEntity(dcaAnnualGrowthPct = 0.0)
-        val indexedDca = SettingsEntity(dcaAnnualGrowthPct = 3.0)
+        // Solvent career income ensures indexed DCA growth isn't capped by living-cost shortfall,
+        // and comparing pre-FIRE year 15 isolates accumulation before post-FIRE DCA stops.
+        val solventBase = SettingsEntity(vSalary = 95_000.0, portuDcaMonthly = 15_000.0)
+        val staticDca = solventBase.copy(dcaAnnualGrowthPct = 0.0)
+        val indexedDca = solventBase.copy(dcaAnnualGrowthPct = 3.0)
 
         val staticTraj = FinancialEngine.buildLiquidPortfolio(staticDca, dualIncome = false)
         val indexedTraj = FinancialEngine.buildLiquidPortfolio(indexedDca, dualIncome = false)
 
         assertTrue(
-            "Indexed DCA should yield a higher final 35-year portfolio balance",
-            indexedTraj.last().portfolio > staticTraj.last().portfolio
+            "Indexed DCA should yield a higher accumulation-phase portfolio balance",
+            indexedTraj[15].portfolio > staticTraj[15].portfolio
         )
     }
 }

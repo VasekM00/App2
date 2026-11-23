@@ -44,7 +44,24 @@ class RetirementSurvivalTest {
             baseline.copy(liquidPortfolioCurrent = 5_000_000.0, eLiquidPortfolioCurrent = 0.0)
         )
         assertTrue(rich.fireProbabilityPct >= poor.fireProbabilityPct)
-        assertTrue(rich.successRatePct >= poor.successRatePct)
+        val richJointSurvival = rich.fireProbabilityPct * rich.successRatePct
+        val poorJointSurvival = poor.fireProbabilityPct * poor.successRatePct
+        assertTrue(
+            "Unconditional survival probability must never decrease with higher starting capital ($richJointSurvival vs $poorJointSurvival)",
+            richJointSurvival + 0.01 >= poorJointSurvival
+        )
+
+        val fixedTriggerBase = baseline.copy(
+            primaryAge = 60,
+            vStatePensionMonthly = 0.0,
+            eStatePensionMonthly = 0.0,
+            childExpensesEnabled = false,
+            prolongChildSupportInFire = false,
+            fireTargetOverride = 8_000_000.0
+        )
+        val fixedPoor = FinancialEngine.runRetirementSurvival(fixedTriggerBase.copy(liquidPortfolioCurrent = 8_000_000.0))
+        val fixedRich = FinancialEngine.runRetirementSurvival(fixedTriggerBase.copy(liquidPortfolioCurrent = 14_000_000.0))
+        assertTrue(fixedRich.successRatePct >= fixedPoor.successRatePct)
     }
 
     @Test

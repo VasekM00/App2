@@ -17,7 +17,7 @@ object MerchantCategoryManager {
     private const val LEGACY_PREFS_NAME = "merchant_category_overrides"
     private const val KEY_OVERRIDES_JSON = com.example.data.AppPreferencesRepository.KEY_MERCHANT_OVERRIDES_JSON
     private const val MAX_RULES_JSON_CHARS = 2_000_000
-    private val prefsLock = Any()
+    private val prefsLock get() = com.example.data.AppPreferencesRepository.PREFS_LOCK
 
     fun canonicalRuleKey(merchantPattern: String): String =
         CzechMerchantCatalog.normalizeSimple(merchantPattern)
@@ -85,9 +85,10 @@ object MerchantCategoryManager {
 
         synchronized(prefsLock) {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-            val currentMap = readOverridesLocked(prefs).toMutableMap()
+            val currentMap = getOverrides(context, prefsName).toMutableMap()
             currentMap[cleanPattern] = category
             prefs.edit { putString(KEY_OVERRIDES_JSON, serializeRulesToJson(currentMap)) }
+            com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
         }
     }
 
@@ -106,12 +107,9 @@ object MerchantCategoryManager {
         synchronized(prefsLock) {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             prefs.edit {
-                if (normalized.isEmpty()) {
-                    remove(KEY_OVERRIDES_JSON)
-                } else {
-                    putString(KEY_OVERRIDES_JSON, serializeRulesToJson(normalized))
-                }
+                putString(KEY_OVERRIDES_JSON, if (normalized.isEmpty()) "{}" else serializeRulesToJson(normalized))
             }
+            com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
         }
     }
 
@@ -120,7 +118,7 @@ object MerchantCategoryManager {
         val rawLower = merchantPattern.trim().lowercase(Locale.ROOT)
         synchronized(prefsLock) {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-            val currentMap = readOverridesLocked(prefs).toMutableMap()
+            val currentMap = getOverrides(context, prefsName).toMutableMap()
             if (cleanPattern.isNotBlank()) {
                 currentMap.remove(cleanPattern)
             }
@@ -131,19 +129,20 @@ object MerchantCategoryManager {
                 currentMap.keys.removeAll { existing -> canonicalRuleKey(existing) == cleanPattern }
             }
             prefs.edit {
-                if (currentMap.isEmpty()) {
-                    remove(KEY_OVERRIDES_JSON)
-                } else {
-                    putString(KEY_OVERRIDES_JSON, serializeRulesToJson(currentMap))
-                }
+                putString(KEY_OVERRIDES_JSON, if (currentMap.isEmpty()) "{}" else serializeRulesToJson(currentMap))
             }
+            com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
         }
     }
 
     fun clearOverrides(context: Context, prefsName: String = PREFS_NAME) {
         synchronized(prefsLock) {
             val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-            prefs.edit { remove(KEY_OVERRIDES_JSON) }
+            prefs.edit { putString(KEY_OVERRIDES_JSON, "{}") }
+            if (prefsName == PREFS_NAME) {
+                context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE).edit { remove(KEY_OVERRIDES_JSON) }
+            }
+            com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
         }
     }
 }

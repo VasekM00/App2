@@ -2,6 +2,7 @@ package com.example.util.statement
 
 import com.example.util.BankTransactionType
 import com.example.util.BankType
+import com.example.util.CrossStatementReconciliationEngine
 import com.example.util.CzechMerchantCatalog
 import com.example.util.ParsedBankTransaction
 import com.example.util.PdfTextExtractor
@@ -64,7 +65,19 @@ internal object PdfStatementParser {
             BankType.MBANK -> parseMbankPdf(lines, extractedText, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
             else -> parseGenericPdf(lines, extractedText, knownFamilyAccounts, compiledOverrides, bankType, householdNames, knownParentalGiftAccounts)
         }
-        return parsed.copy(isPdfSource = true)
+        val ownBankCode = CrossStatementReconciliationEngine.bankCodeForBankName(parsed.detectedBank.name)
+        val ownAccountKey = parsed.accountKey.ifBlank {
+            CzechValueParsers.extractOwnStatementAccountKey(lines, bankCode = ownBankCode, limitLines = 35)
+        }
+        return parsed.copy(
+            isPdfSource = true,
+            accountKey = ownAccountKey,
+            transactions = if (ownAccountKey.isNotBlank()) {
+                parsed.transactions.map { if (it.accountKey.isBlank()) it.copy(accountKey = ownAccountKey) else it }
+            } else {
+                parsed.transactions
+            }
+        )
     }
 
     private fun isPageHeaderOrFooter(line: String): Boolean {

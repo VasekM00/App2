@@ -374,7 +374,20 @@ fun TwoBucketLiquidityBridgeCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (yearsTo60 == 0) "Capital fully unlocked" else "Required liquid: ${fmtCZK(bridgeRequired)} · Tap for details",
+                            text = if (yearsTo60 == 0) {
+                                "Capital fully unlocked"
+                            } else if (!state.snapshot.isFireAchievedToday && state.snapshot.activeFireAge != null) {
+                                val atFireText = if (state.bridgeYearsFromFireTo60 <= 0) {
+                                    "At FIRE (age ${state.snapshot.activeFireAge}): 60+ unlocked"
+                                } else if (state.isBridgeFundedAtFire) {
+                                    "At FIRE (${state.bridgeYearsFromFireTo60}y to 60): Funded"
+                                } else {
+                                    "At FIRE (${state.bridgeYearsFromFireTo60}y to 60): Gap ${fmtCZK(state.bridgeDeficitAtFire)}"
+                                }
+                                "Retiring today: ${fmtCZK(bridgeRequired)} needed · $atFireText"
+                            } else {
+                                "Required liquid: ${fmtCZK(bridgeRequired)} · Tap for details"
+                            },
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontSize = 11.sp,
                                 fontFamily = BodyFontFamily,

@@ -59,8 +59,11 @@ class Area3AdvancedFinancialModelingTest {
         val preBaristaPoint = trajectory.first { it.year > baseYear && it.year < baristaStartYear }
         assertTrue("Pre-barista invested annual must exceed 200,000", preBaristaPoint.investedAnnual > 200000.0)
 
-        // At and after baristaStartYear, points before FIRE target must be tagged "Barista Active"
-        val baristaPoints = trajectory.filter { it.year >= baristaStartYear && it.totalPortfolio < it.target }
+        // During and after baristaStartYear (sy >= baristaStartYear -> end-of-year point.year > baristaStartYear),
+        // pre-pension points before FIRE target must be tagged "Barista Active"
+        val baristaPoints = trajectory.filter {
+            it.year > baristaStartYear && it.age < s.vStatePensionAge && it.totalPortfolio < it.target
+        }
         if (baristaPoints.isNotEmpty()) {
             for (p in baristaPoints) {
                 assertEquals("Barista Active", p.status)
@@ -136,9 +139,9 @@ class Area3AdvancedFinancialModelingTest {
 
         // Remaining headroom: 48000 - 7000 = 41000 CZK
         assertEquals(41000.0, status.remainingHeadroomAnnual, 0.001)
-        // Months remaining: 12 - 2 + 1 = 11 months
-        assertEquals(11, status.monthsRemainingInYear)
-        assertEquals(41000.0 / 11.0, status.recommendedMonthlyPace, 0.01)
+        // Months remaining: 12 - 2 = 10 remaining full months (Mar..Dec)
+        assertEquals(10, status.monthsRemainingInYear)
+        assertEquals(41000.0 / 10.0, status.recommendedMonthlyPace, 0.01)
         assertFalse(status.isCeilingReached)
     }
 

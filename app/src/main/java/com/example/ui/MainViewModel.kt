@@ -116,6 +116,11 @@ class MainViewModel internal constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val partnerBirthYear: StateFlow<Int?> = preferencesRepository.snapshot
+        .map { it.partnerBirthYear }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, preferencesRepository.snapshot.value.partnerBirthYear)
+
     val isPreferencesHydrated: StateFlow<Boolean> = preferencesRepository.snapshot
         .map { it.isHydrated }
         .distinctUntilChanged()
@@ -287,12 +292,13 @@ class MainViewModel internal constructor(
     }
 
     private data class SensitivityOverrides(val retOver: Double?, val cpiOver: Double?, val swrOver: Double?)
+    private data class CalcOverrides(val sensitivity: SensitivityOverrides, val partnerBirthYear: Int?)
     private data class CalcInput(
         val settings: SettingsEntity,
         val actions: Map<String, Boolean>,
         val ledger: List<LedgerEntryEntity>,
         val importedTxs: List<ImportedBankTransactionEntity>,
-        val overrides: SensitivityOverrides
+        val overrides: CalcOverrides
     )
 
     private data class StochasticSnapshot(
@@ -317,7 +323,9 @@ class MainViewModel internal constructor(
         repository.actionStatesFlow.distinctUntilChanged(),
         repository.ledgerFlow.distinctUntilChanged(),
         importedTransactionsShared.distinctUntilChanged(),
-        sensitivityOverrides.distinctUntilChanged()
+        combine(sensitivityOverrides.distinctUntilChanged(), partnerBirthYear) { sens, pBirth ->
+            CalcOverrides(sens, pBirth)
+        }.distinctUntilChanged()
     ) { settings, actions, ledger, importedTxs, overrides ->
         CalcInput(settings, actions, ledger, importedTxs, overrides)
     }
@@ -325,8 +333,9 @@ class MainViewModel internal constructor(
             flow {
                 val fastState = computeCalculationStateInternal(
                     input.settings, input.actions, input.ledger, input.importedTxs,
-                    input.overrides.retOver, input.overrides.cpiOver, input.overrides.swrOver,
-                    runMonteCarlo = false
+                    input.overrides.sensitivity.retOver, input.overrides.sensitivity.cpiOver, input.overrides.sensitivity.swrOver,
+                    runMonteCarlo = false,
+                    partnerBirthYearOverride = input.overrides.partnerBirthYear
                 )
                 val prev = lastStochasticSnapshot.get()
                 val immediateState = if (prev != null) {
@@ -346,8 +355,9 @@ class MainViewModel internal constructor(
                 delay(120L)
                 val fullState = computeCalculationStateInternal(
                     input.settings, input.actions, input.ledger, input.importedTxs,
-                    input.overrides.retOver, input.overrides.cpiOver, input.overrides.swrOver,
-                    runMonteCarlo = true
+                    input.overrides.sensitivity.retOver, input.overrides.sensitivity.cpiOver, input.overrides.sensitivity.swrOver,
+                    runMonteCarlo = true,
+                    partnerBirthYearOverride = input.overrides.partnerBirthYear
                 )
                 lastStochasticSnapshot.set(
                     StochasticSnapshot(
@@ -369,12 +379,17 @@ class MainViewModel internal constructor(
             initialValue = computeCalculationStateInternal(
                 SettingsEntity.freshDefaults(), emptyMap(), emptyList(), emptyList(),
                 sensitivityReturnOverride.value, sensitivityCpiOverride.value, sensitivitySwrOverride.value,
-                runMonteCarlo = false
+                runMonteCarlo = false,
+                partnerBirthYearOverride = preferencesRepository.snapshot.value.partnerBirthYear
             )
         )
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch(Dispatchers.IO) { preferencesRepository.setThemeMode(mode) }
+    }
+
+    fun setPartnerBirthYear(year: Int?) {
+        viewModelScope.launch(Dispatchers.IO) { preferencesRepository.setPartnerBirthYear(year) }
     }
 
     fun setFlagSecureEnabled(enabled: Boolean) {

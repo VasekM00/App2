@@ -15,13 +15,21 @@ object BackupManager {
     private val YEAR_MONTH_PATTERN = Regex("""^\d{4}-(0[1-9]|1[0-2])$""")
     private val ISO_DATE_PATTERN = Regex("""^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$""")
 
-    private val KNOWN_SETTINGS_KEYS = setOf(
-        "baseYear", "primaryAge", "primaryName", "spouseName", "isSingleHousehold",
-        "vSalary", "eStartingSalary", "rentMonthly", "groceriesMonthly", "liquidPortfolioCurrent",
-        "dpsBalanceCurrent", "dipBalanceCurrent", "emergencyReserveCurrent", "safeWithdrawalRatePct",
-        "portfolioNominalReturnPct", "cpiInflationPct", "guardrailsUpperThresholdPct",
-        "baristaTransitionEnabled", "monteCarloSeed", "merchantRulesJson"
-    )
+    private val KNOWN_SETTINGS_KEYS: Set<String> by lazy {
+        val keys = linkedSetOf<String>()
+        val sample = serializeSettingsToJsonObject(SettingsEntity())
+        val it = sample.keys()
+        while (it.hasNext()) {
+            val k = it.next()
+            if (k != "_format" && k != "_schema") {
+                keys.add(k)
+            }
+        }
+        keys.add("familyGiftMonthly")
+        keys.add("statePensionAge")
+        keys.add("statePensionMonthly")
+        keys
+    }
 
     private fun safeFinite(v: Double): Double = if (v.isFinite()) v else 0.0
 
@@ -249,7 +257,7 @@ object BackupManager {
             if (json !== rawJson && json.has("_schema") && json.optInt("_schema", -1) != 1) {
                 return null
             }
-            if (!rawJson.has("_format") && !hasAnyKnownSettingsKey(json)) {
+            if (!rawJson.has("_format") && json.length() > 0 && !hasAnyKnownSettingsKey(json)) {
                 return null
             }
             val restoredVGifts = json.optFiniteDouble(
@@ -643,6 +651,10 @@ object BackupManager {
             o.put("isNetted", tx.isNetted)
             o.put("nettingReason", tx.nettingReason)
             if (tx.matchedTxId != null) o.put("matchedTxId", tx.matchedTxId)
+            o.put("accountKey", tx.accountKey)
+            o.put("originalCurrency", tx.originalCurrency)
+            o.put("originalAmount", safeFinite(tx.originalAmount))
+            o.put("fxRateToCzk", safeFinite(tx.fxRateToCzk).takeIf { it > 0.0 } ?: 1.0)
             txArr.put(o)
         }
         json.put("importedTransactions", txArr)
@@ -778,6 +790,17 @@ object BackupManager {
                     }
                     val rawCat = o.optStringNonNull("category", "LIFESTYLE_LIVING").trim()
                     val safeCat = if (rawCat in validCategoryNames) rawCat else BankTransactionType.UNCATEGORIZED.name
+                    val rawOrigCurr = o.optStringNonNull("originalCurrency", "CZK").trim().uppercase(java.util.Locale.ROOT).take(8).ifBlank { "CZK" }
+                    val rawOrigAmt = if (o.has("originalAmount") && !o.isNull("originalAmount")) {
+                        o.optFiniteDouble("originalAmount", 0.0)
+                    } else {
+                        0.0
+                    }
+                    val rawFx = if (o.has("fxRateToCzk") && !o.isNull("fxRateToCzk")) {
+                        o.optFiniteDouble("fxRateToCzk", 1.0).takeIf { it > 0.0 } ?: 1.0
+                    } else {
+                        1.0
+                    }
                     txList.add(
                         com.example.data.ImportedBankTransactionEntity(
                             id = o.optSafeLong("id", 0L).coerceAtLeast(0L),
@@ -792,7 +815,11 @@ object BackupManager {
                             category = safeCat,
                             isNetted = o.optSafeBoolean("isNetted", false),
                             nettingReason = o.optStringNonNull("nettingReason", "").take(200),
-                            matchedTxId = o.optNullablePositiveLong("matchedTxId")
+                            matchedTxId = o.optNullablePositiveLong("matchedTxId"),
+                            accountKey = o.optStringNonNull("accountKey", "").trim().take(80),
+                            originalCurrency = rawOrigCurr,
+                            originalAmount = rawOrigAmt,
+                            fxRateToCzk = rawFx
                         )
                     )
                 }

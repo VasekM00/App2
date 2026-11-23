@@ -95,6 +95,72 @@ object MonteCarloEngine {
         12.5   // 2025
     )
 
+    /**
+     * Matched annual CPI inflation rates (%) from 1970 to 2025 (56 years), paired 1:1 with
+     * [HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT] to preserve real stagflation / deflation correlations
+     * (e.g. 1973-74 oil shock, 1979-81 inflation spike, 2009 deflation, 2022 inflation/rate shock).
+     */
+    val HISTORICAL_ANNUAL_INFLATION_PCT = doubleArrayOf(
+         5.7,  // 1970
+         4.4,  // 1971
+         3.2,  // 1972
+         6.2,  // 1973
+        11.0,  // 1974
+         9.1,  // 1975
+         5.8,  // 1976
+         6.5,  // 1977
+         7.6,  // 1978
+        11.3,  // 1979
+        13.5,  // 1980
+        10.3,  // 1981
+         6.2,  // 1982
+         3.2,  // 1983
+         4.3,  // 1984
+         3.6,  // 1985
+         1.9,  // 1986
+         3.6,  // 1987
+         4.1,  // 1988
+         4.8,  // 1989
+         5.4,  // 1990
+         4.2,  // 1991
+         3.0,  // 1992
+         3.0,  // 1993
+         2.6,  // 1994
+         2.8,  // 1995
+         3.0,  // 1996
+         2.3,  // 1997
+         1.6,  // 1998
+         2.2,  // 1999
+         3.4,  // 2000
+         2.8,  // 2001
+         1.6,  // 2002
+         2.3,  // 2003
+         2.7,  // 2004
+         3.4,  // 2005
+         3.2,  // 2006
+         2.8,  // 2007
+         3.8,  // 2008
+        -0.4,  // 2009
+         1.6,  // 2010
+         3.2,  // 2011
+         2.1,  // 2012
+         1.5,  // 2013
+         1.6,  // 2014
+         0.1,  // 2015
+         1.3,  // 2016
+         2.1,  // 2017
+         2.4,  // 2018
+         1.8,  // 2019
+         1.2,  // 2020
+         4.7,  // 2021
+         8.0,  // 2022
+         4.1,  // 2023
+         2.9,  // 2024
+         2.7   // 2025
+    )
+
+    private val HIST_MEAN_INFLATION_PCT: Double = HISTORICAL_ANNUAL_INFLATION_PCT.average()
+
 
     private class BoundedLruCache<K, V>(private val maxEntries: Int = 16) {
         private val map = object : java.util.LinkedHashMap<K, V>(maxEntries + 1, 0.75f, true) {
@@ -124,18 +190,25 @@ object MonteCarloEngine {
     private data class MonteCarloKey(
         val settings: SettingsEntity,
         val horizonYears: Int,
-        val initialCrashPct: Double = 0.0
+        val initialCrashPct: Double = 0.0,
+        val partnerBirthYearOverride: Int? = null
     )
 
     private val mcCache = BoundedLruCache<MonteCarloKey, MonteCarloResult>(maxEntries = 16)
 
-    fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35, initialCrashPct: Double = 0.0): MonteCarloResult {
+    fun runMonteCarlo(
+        settings: SettingsEntity,
+        horizonYears: Int = FireTargetAndTrajectoryEngine.projectionHorizonYears(settings),
+        initialCrashPct: Double = 0.0,
+        partnerBirthYearOverride: Int? = null
+    ): MonteCarloResult {
         val safeHorizon = horizonYears.coerceIn(1, 100)
         val safeCrashPct = initialCrashPct.finiteNonNegative()
         val currentKey = MonteCarloKey(
             settings = mcCacheNormalizedSettings(settings),
             horizonYears = safeHorizon,
-            initialCrashPct = safeCrashPct
+            initialCrashPct = safeCrashPct,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
 
         mcCache.get(currentKey)?.let { return it }
@@ -150,16 +223,19 @@ object MonteCarloEngine {
 
         val baseYear = settings.baseYear
         val baseAge = settings.primaryAge
-        val initialTarget = FireTargetAndTrajectoryEngine.fireTargetYear(baseYear, settings, baseAge)
+        val initialTarget = FireTargetAndTrajectoryEngine.fireTargetYear(baseYear, settings, baseAge, partnerBirthYearOverride)
         val includeSpouse = !settings.isSingleHousehold
-        val dpsFee = min(settings.dpsAnnualFeePct.finiteNonNegative(), settings.dpsStatutoryFeeCapPct.finiteNonNegative())
-        val dpsRet = ((settings.dpsGrossReturnPct.finiteOr(0.0) - dpsFee) / 100.0).coerceAtLeast(-0.99)
-        val dpsFactor = max(0.0, 1.0 + dpsRet)
-        val dpsHalfRet = 1.0 + dpsRet * 0.5
+        val dpsBaseNetRet = (DpsDipEngine.effectiveDpsNetReturnPct(settings) / 100.0).coerceAtLeast(-0.99)
+        val dpsBeta = ((settings.dpsGrossReturnPct.finiteOr(6.0) - 2.0) / 5.0).coerceIn(0.15, 0.90)
 
-        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(settings, includeSpouse, yearsCount = safeHorizon)
+        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(
+            settings,
+            includeSpouse,
+            yearsCount = safeHorizon,
+            partnerBirthYearOverride = partnerBirthYearOverride
+        )
         val targets = DoubleArray(safeHorizon) { y ->
-            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1)
+            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1, partnerBirthYearOverride)
         }
 
         val yearlyBalances = Array(safeHorizon + 1) { DoubleArray(sims) }
@@ -187,9 +263,13 @@ object MonteCarloEngine {
                 val ret = exp(muLog + sigmaLog * nextGaussian(random)) - 1.0
                 val eqFactor = max(0.0, 1.0 + ret)
                 val eqHalf = 1.0 + ret * 0.5
-                liquidBal = max(0.0, liquidBal * eqFactor + plan.liquidNetInflow * eqHalf)
+                val dpsYearRet = (dpsBaseNetRet + dpsBeta * (ret - meanReturn)).coerceAtLeast(-0.99)
+                val dpsFactor = max(0.0, 1.0 + dpsYearRet)
+                val dpsHalf = 1.0 + dpsYearRet * 0.5
+                val liquidFlow = if (plan.liquidNetInflow >= 0.0) plan.liquidNetInflow * eqHalf else plan.liquidNetInflow
+                liquidBal = max(0.0, liquidBal * eqFactor + liquidFlow)
                 dipBal = max(0.0, dipBal * eqFactor + plan.dipInflowAnnual * eqHalf)
-                dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalfRet)
+                dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalf)
                 val totalBal = liquidBal + dipBal + dpsBal
                 yearlyBalances[y + 1][i] = totalBal
 
@@ -248,20 +328,22 @@ object MonteCarloEngine {
         val settings: SettingsEntity,
         val horizonYears: Int,
         val initialCrashPct: Double = 0.0,
-        val blockSize: Int = 3
+        val blockSize: Int = 3,
+        val partnerBirthYearOverride: Int? = null
     )
 
     private val histMcCache = BoundedLruCache<HistoricalMonteCarloKey, MonteCarloResult>(maxEntries = 16)
 
     /**
      * Empirical Block-Bootstrap Monte Carlo simulation resampling from 1970-2025 equity history.
-     * Preserves fat tails and multi-year sequence-of-returns drawdowns, while accounting for dividend tax drag.
+     * Preserves fat tails, crash magnitudes via additive mean shift, and coupled inflation regimes.
      */
     fun runHistoricalMonteCarlo(
         settings: SettingsEntity,
-        horizonYears: Int = 35,
+        horizonYears: Int = FireTargetAndTrajectoryEngine.projectionHorizonYears(settings),
         initialCrashPct: Double = 0.0,
-        blockSize: Int = 3
+        blockSize: Int = 3,
+        partnerBirthYearOverride: Int? = null
     ): MonteCarloResult {
         val safeHorizon = horizonYears.coerceIn(1, 100)
         val safeCrashPct = initialCrashPct.finiteNonNegative()
@@ -270,7 +352,8 @@ object MonteCarloEngine {
             settings = mcCacheNormalizedSettings(settings),
             horizonYears = safeHorizon,
             initialCrashPct = safeCrashPct,
-            blockSize = effectiveBlockSize
+            blockSize = effectiveBlockSize,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
 
         histMcCache.get(currentKey)?.let { return it }
@@ -278,24 +361,26 @@ object MonteCarloEngine {
         val sims = settings.monteCarloN.coerceIn(100, 2000)
         val taxDrag = FireTargetAndTrajectoryEngine.dividendTaxDragPct(settings)
         val meanReturn = FireTargetAndTrajectoryEngine.netTaxableNominalReturnPct(settings) / 100.0
-        // Calibrate arithmetic mean to match parametric MC expected return (eliminates +41% geometric bias)
-        val histArithFactor = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.map { max(0.01, 1.0 + (it - taxDrag) / 100.0) }.average()
-        val targetFactor = 1.0 + meanReturn
-        val scaleFactor = if (histArithFactor > 0.0 && histArithFactor.isFinite()) targetFactor / histArithFactor else 1.0
+        // Additive mean shift preserves exact historical drawdown amplitudes (e.g. -37% in 2008)
+        val histMeanNetReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.map { (it - taxDrag) / 100.0 }.average()
+        val meanShift = meanReturn - histMeanNetReturn
         val random = Random(settings.monteCarloSeed + 101L)
 
         val baseYear = settings.baseYear
         val baseAge = settings.primaryAge
-        val initialTarget = FireTargetAndTrajectoryEngine.fireTargetYear(baseYear, settings, baseAge)
+        val initialTarget = FireTargetAndTrajectoryEngine.fireTargetYear(baseYear, settings, baseAge, partnerBirthYearOverride)
         val includeSpouse = !settings.isSingleHousehold
-        val dpsFee = min(settings.dpsAnnualFeePct.finiteNonNegative(), settings.dpsStatutoryFeeCapPct.finiteNonNegative())
-        val dpsRet = ((settings.dpsGrossReturnPct.finiteOr(0.0) - dpsFee) / 100.0).coerceAtLeast(-0.99)
-        val dpsFactor = max(0.0, 1.0 + dpsRet)
-        val dpsHalfRet = 1.0 + dpsRet * 0.5
+        val dpsBaseNetRet = (DpsDipEngine.effectiveDpsNetReturnPct(settings) / 100.0).coerceAtLeast(-0.99)
+        val dpsBeta = ((settings.dpsGrossReturnPct.finiteOr(6.0) - 2.0) / 5.0).coerceIn(0.15, 0.90)
 
-        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(settings, includeSpouse, yearsCount = safeHorizon)
+        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(
+            settings,
+            includeSpouse,
+            yearsCount = safeHorizon,
+            partnerBirthYearOverride = partnerBirthYearOverride
+        )
         val targets = DoubleArray(safeHorizon) { y ->
-            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1)
+            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1, partnerBirthYearOverride)
         }
 
         val yearlyBalances = Array(safeHorizon + 1) { DoubleArray(sims) }
@@ -326,8 +411,7 @@ object MonteCarloEngine {
                     if (yOffset + b < safeHorizon) {
                         val histIdx = (startIdx + b) % nHistory
                         val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
-                        val rawFactor = max(0.01, 1.0 + (rawReturn - taxDrag) / 100.0)
-                        val netReturn = max(-0.99, rawFactor * scaleFactor - 1.0)
+                        val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0 + meanShift)
                         pathReturns[yOffset + b] = netReturn
                     }
                 }
@@ -340,9 +424,13 @@ object MonteCarloEngine {
                 val ret = pathReturns[y]
                 val eqFactor = max(0.0, 1.0 + ret)
                 val eqHalf = 1.0 + ret * 0.5
-                liquidBal = max(0.0, liquidBal * eqFactor + plan.liquidNetInflow * eqHalf)
+                val dpsYearRet = (dpsBaseNetRet + dpsBeta * (ret - meanReturn)).coerceAtLeast(-0.99)
+                val dpsFactor = max(0.0, 1.0 + dpsYearRet)
+                val dpsHalf = 1.0 + dpsYearRet * 0.5
+                val liquidFlow = if (plan.liquidNetInflow >= 0.0) plan.liquidNetInflow * eqHalf else plan.liquidNetInflow
+                liquidBal = max(0.0, liquidBal * eqFactor + liquidFlow)
                 dipBal = max(0.0, dipBal * eqFactor + plan.dipInflowAnnual * eqHalf)
-                dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalfRet)
+                dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalf)
                 val totalBal = liquidBal + dipBal + dpsBal
                 yearlyBalances[y + 1][i] = totalBal
 
@@ -399,24 +487,25 @@ object MonteCarloEngine {
 
     private data class SurvivalCacheKey(
         val settings: SettingsEntity,
-        val useHistoricalBootstrap: Boolean
+        val useHistoricalBootstrap: Boolean,
+        val partnerBirthYearOverride: Int? = null
     )
 
     private val parametricSurvivalCache = BoundedLruCache<SurvivalCacheKey, RetirementSurvivalResult>(maxEntries = 16)
     private val histSurvivalCache = BoundedLruCache<SurvivalCacheKey, RetirementSurvivalResult>(maxEntries = 16)
 
     /**
-     * Simulates accumulation to FIRE and then a full withdrawal phase to the configured
-     * retirement horizon. Success = the portfolio never depletes among paths that reach FIRE.
-     * Incorporates dividend tax drag, Guyton-Klinger dynamic spending guardrails, separate DPS/DIP
-     * compounding, Barista transition cashflows, and supports both parametric log-normal and
-     * historical empirical block-bootstrap resampling.
+     * Simulates accumulation to FIRE (enforcing the pre-60 liquid bridge) and then a full
+     * beginning-of-year withdrawal phase to the configured retirement horizon.
+     * Incorporates dividend tax drag, stochastic DPS volatility, coupled historical inflation,
+     * prolonged age-tiered child costs, Guyton-Klinger guardrails, and causal cash-cushion defense.
      */
     fun runRetirementSurvival(
         settings: SettingsEntity,
-        useHistoricalBootstrap: Boolean = false
+        useHistoricalBootstrap: Boolean = false,
+        partnerBirthYearOverride: Int? = null
     ): RetirementSurvivalResult {
-        val currentKey = SurvivalCacheKey(mcCacheNormalizedSettings(settings), useHistoricalBootstrap)
+        val currentKey = SurvivalCacheKey(mcCacheNormalizedSettings(settings), useHistoricalBootstrap, partnerBirthYearOverride)
         if (useHistoricalBootstrap) {
             histSurvivalCache.get(currentKey)?.let { return it }
         } else {
@@ -433,23 +522,20 @@ object MonteCarloEngine {
 
         val baseYear = settings.baseYear
         val baseAge = settings.primaryAge
-        val partnerBirth = partnerBirthYear(settings)
+        val partnerBirth = partnerBirthYear(settings, partnerBirthYearOverride)
         val cpi = (settings.cpiInflationPct.finiteOr(0.0) / 100.0).coerceAtLeast(-0.99)
-        val maxAccumYears = 35
+        val maxAccumYears = FireTargetAndTrajectoryEngine.projectionHorizonYears(settings)
         val horizon = settings.retirementHorizonYears.coerceIn(10, 60)
         val totalMaxOffset = maxAccumYears + horizon + 5
         val nHistory = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.size
         val taxDrag = FireTargetAndTrajectoryEngine.dividendTaxDragPct(settings)
-        val histArithFactor = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.map { max(0.01, 1.0 + (it - taxDrag) / 100.0) }.average()
-        val targetFactor = 1.0 + meanReturn
-        val scaleFactor = if (histArithFactor > 0.0 && histArithFactor.isFinite()) targetFactor / histArithFactor else 1.0
+        val histMeanNetReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT.map { (it - taxDrag) / 100.0 }.average()
+        val meanShift = meanReturn - histMeanNetReturn
         val blockSize = 3
         val includeSpouse = !settings.isSingleHousehold
 
-        val dpsFee = min(settings.dpsAnnualFeePct.finiteNonNegative(), settings.dpsStatutoryFeeCapPct.finiteNonNegative())
-        val dpsRet = ((settings.dpsGrossReturnPct.finiteOr(0.0) - dpsFee) / 100.0).coerceAtLeast(-0.99)
-        val dpsFactor = max(0.0, 1.0 + dpsRet)
-        val dpsHalfRet = 1.0 + dpsRet * 0.5
+        val dpsBaseNetRet = (DpsDipEngine.effectiveDpsNetReturnPct(settings) / 100.0).coerceAtLeast(-0.99)
+        val dpsBeta = ((settings.dpsGrossReturnPct.finiteOr(6.0) - 2.0) / 5.0).coerceIn(0.15, 0.90)
 
         val lifestyleToday = FireTargetAndTrajectoryEngine.baselineLivingCostAtFireMonthly(settings)
         val vPensionToday = settings.vStatePensionMonthly.finiteNonNegative()
@@ -461,24 +547,30 @@ object MonteCarloEngine {
         val initialDip = settings.dipBalanceCurrent.finiteNonNegative() + eDip
         val initialDps = settings.dpsBalanceCurrent.finiteNonNegative() + eDps
 
-        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(settings, includeSpouse, yearsCount = maxAccumYears)
+        val preFirePlan = FireTargetAndTrajectoryEngine.buildPreFirePlan(
+            settings,
+            includeSpouse,
+            yearsCount = maxAccumYears,
+            partnerBirthYearOverride = partnerBirthYearOverride
+        )
         val indexationTable = DoubleArray(totalMaxOffset + 1) { offset ->
             (1.0 + cpi).coerceAtLeast(0.0).pow(offset).finiteOr(1.0)
         }
         val targets = DoubleArray(maxAccumYears) { y ->
-            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1)
+            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + y + 1, settings, baseAge + y + 1, partnerBirthYearOverride)
         }
         val plannedTargetsByOffset = DoubleArray(totalMaxOffset + 1) { offset ->
-            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + offset, settings, baseAge + offset).coerceAtLeast(1.0)
+            FireTargetAndTrajectoryEngine.fireTargetYear(baseYear + offset, settings, baseAge + offset, partnerBirthYearOverride).coerceAtLeast(1.0)
         }
 
+        val rReal = FireTargetAndTrajectoryEngine.netRealReturnRate(settings)
         val livingSpec = HouseholdCashFlowEngine.LivingCostSpec.from(settings)
         val hasLifestyleOverride = settings.lifestyleCostAtFireMonthly.finiteOr(0.0) > 0.0
-        val rentShareInLiving = if (!hasLifestyleOverride) {
-            val totalBase = livingSpec.baseRentMonthly + livingSpec.nonRentBaseMonthly
-            if (totalBase > 0.0) (livingSpec.baseRentMonthly / totalBase).coerceIn(0.0, 1.0) else 0.0
+        val rentShareInLiving = if (!hasLifestyleOverride && lifestyleToday > 0.0) {
+            (livingSpec.baseRentMonthly / lifestyleToday).coerceIn(0.0, 1.0)
         } else 0.0
         val rentGrowthRate = (livingSpec.rentGrowthPct / 100.0).coerceAtLeast(-0.99)
+        val rentSpread = rentGrowthRate - cpi
         val livingIndexationTable = DoubleArray(totalMaxOffset + 1) { offset ->
             val cpiF = indexationTable[offset]
             if (rentShareInLiving > 0.0) {
@@ -490,7 +582,28 @@ object MonteCarloEngine {
         }
 
         val initialTarget0 = plannedTargetsByOffset[0]
-        val canRetireAtYear0 = (initialLiquid + initialDip + initialDps) >= initialTarget0
+        val bridgeReq0 = FireTargetAndTrajectoryEngine.computeBridgeTo60Required(
+            annualLiving = lifestyleToday * 12.0,
+            yearsTo60 = max(0, 60 - baseAge),
+            rReal = rReal,
+            totalFireTarget = initialTarget0
+        )
+        val bridgeRequiredByYear = DoubleArray(maxAccumYears) { y ->
+            val ageAtY = baseAge + y + 1
+            val livingForBridge = if (hasLifestyleOverride) {
+                lifestyleToday * 12.0 * preFirePlan[y].inflationFactor
+            } else {
+                preFirePlan[y].annualLivingAtTargetYear
+            }
+            FireTargetAndTrajectoryEngine.computeBridgeTo60Required(
+                annualLiving = livingForBridge,
+                yearsTo60 = max(0, 60 - ageAtY),
+                rReal = rReal,
+                totalFireTarget = targets[y]
+            )
+        }
+        val canRetireAtYear0 = (initialLiquid + initialDip + initialDps) >= initialTarget0 &&
+            (baseAge >= 60 || initialLiquid >= bridgeReq0)
 
         val reserveTargetAnnual = effectiveEmergencyReserveTarget(settings).finiteNonNegative()
         val initialCashCushion = settings.emergencyReserveCurrent.finiteNonNegative()
@@ -508,6 +621,7 @@ object MonteCarloEngine {
 
         for (i in 0 until sims) {
             val pathReturns = DoubleArray(totalMaxOffset)
+            val pathCpis = DoubleArray(totalMaxOffset) { cpi }
             if (useHistoricalBootstrap) {
                 var yOffset = 0
                 while (yOffset < totalMaxOffset) {
@@ -516,9 +630,10 @@ object MonteCarloEngine {
                         if (yOffset + b < totalMaxOffset) {
                             val histIdx = (startIdx + b) % nHistory
                             val rawReturn = HISTORICAL_GLOBAL_EQUITY_RETURNS_PCT[histIdx]
-                            val rawFactor = max(0.01, 1.0 + (rawReturn - taxDrag) / 100.0)
-                            val netReturn = max(-0.99, rawFactor * scaleFactor - 1.0)
+                            val netReturn = max(-0.99, (rawReturn - taxDrag) / 100.0 + meanShift)
                             pathReturns[yOffset + b] = netReturn
+                            val cpiOffset = (HISTORICAL_ANNUAL_INFLATION_PCT[histIdx] - HIST_MEAN_INFLATION_PCT) / 100.0
+                            pathCpis[yOffset + b] = (cpi + cpiOffset).coerceAtLeast(-0.05)
                         }
                     }
                     yOffset += blockSize
@@ -533,17 +648,26 @@ object MonteCarloEngine {
             var dipBal = initialDip
             var dpsBal = initialDps
             var fireYear = if (canRetireAtYear0) baseYear else -1
+            var prevYearRet = 0.0
 
             if (fireYear < 0) {
                 for (y in 0 until maxAccumYears) {
                     val plan = preFirePlan[y]
+                    val ageAtEnd = baseAge + y + 1
                     val ret = pathReturns[y]
+                    prevYearRet = ret
                     val eqFactor = max(0.0, 1.0 + ret)
                     val eqHalf = 1.0 + ret * 0.5
-                    liquidBal = max(0.0, liquidBal * eqFactor + plan.liquidNetInflow * eqHalf)
+                    val dpsYearRet = (dpsBaseNetRet + dpsBeta * (ret - meanReturn)).coerceAtLeast(-0.99)
+                    val dpsFactor = max(0.0, 1.0 + dpsYearRet)
+                    val dpsHalf = 1.0 + dpsYearRet * 0.5
+                    val liquidFlow = if (plan.liquidNetInflow >= 0.0) plan.liquidNetInflow * eqHalf else plan.liquidNetInflow
+                    liquidBal = max(0.0, liquidBal * eqFactor + liquidFlow)
                     dipBal = max(0.0, dipBal * eqFactor + plan.dipInflowAnnual * eqHalf)
-                    dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalfRet)
-                    if ((liquidBal + dipBal + dpsBal) >= targets[y]) {
+                    dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalf)
+                    val totalNow = liquidBal + dipBal + dpsBal
+                    val bridgeOk = ageAtEnd >= 60 || liquidBal >= bridgeRequiredByYear[y]
+                    if (totalNow >= targets[y] && bridgeOk) {
                         fireYear = baseYear + y + 1
                         break
                     }
@@ -556,12 +680,18 @@ object MonteCarloEngine {
             var guardrailTriggeredInPath = false
             var spendingScale = 1.0
             val fireOffset = (fireYear - baseYear).coerceIn(0, totalMaxOffset)
-            var cashCushion = initialCashCushion * indexationTable[fireOffset]
+            var pathCpiFactor = indexationTable[fireOffset]
+            var pathRentFactor = if (rentShareInLiving > 0.0) {
+                (1.0 + rentGrowthRate).coerceAtLeast(0.0).pow(fireOffset).finiteOr(1.0)
+            } else pathCpiFactor
+            var cashCushion = initialCashCushion * pathCpiFactor
             var bal = liquidBal + dipBal + dpsBal + cashCushion
+
             for (k in 0 until horizon) {
                 val yearOffset = (fireYear - baseYear) + k
+                val calYear = baseYear + yearOffset
                 val age = baseAge + yearOffset
-                val eAge = (baseYear + yearOffset) - partnerBirth
+                val eAge = calYear - partnerBirth
 
                 // Statutory Czech lock-in guard (Act No. 586/1992 Coll. § 15a & Act No. 427/2011 Coll. § 94):
                 // Pension assets (DIP/DPS) unlock into the liquid spending pool at age 60.
@@ -572,9 +702,29 @@ object MonteCarloEngine {
                 }
 
                 val safeOffset = yearOffset.coerceIn(0, totalMaxOffset)
-                val indexation = indexationTable[safeOffset]
-                val livingIndexation = livingIndexationTable[safeOffset]
-                val lifestyleAnnual = lifestyleToday * 12.0 * livingIndexation * spendingScale
+                val stepCpi = if (useHistoricalBootstrap) pathCpis.getOrElse(yearOffset) { cpi } else cpi
+                val stepRentRate = if (useHistoricalBootstrap && rentShareInLiving > 0.0) {
+                    (stepCpi + rentSpread).coerceAtLeast(-0.05)
+                } else rentGrowthRate
+                val indexation = if (useHistoricalBootstrap) pathCpiFactor else indexationTable[safeOffset]
+                val livingIndexation = if (useHistoricalBootstrap) {
+                    if (rentShareInLiving > 0.0) {
+                        rentShareInLiving * pathRentFactor + (1.0 - rentShareInLiving) * pathCpiFactor
+                    } else pathCpiFactor
+                } else livingIndexationTable[safeOffset]
+
+                val childAnnualToday = if (settings.childExpensesEnabled && settings.prolongChildSupportInFire) {
+                    val c1 = if (settings.child1Enabled) {
+                        HouseholdCashFlowEngine.childMonthlyExpense(settings.child1BirthYear, calYear, settings)
+                    } else 0.0
+                    val c2 = if (settings.child2Enabled) {
+                        HouseholdCashFlowEngine.childMonthlyExpense(settings.child2BirthYear, calYear, settings)
+                    } else 0.0
+                    (c1 + c2) * 12.0
+                } else 0.0
+                val childAnnualNominal = childAnnualToday * indexation
+
+                val lifestyleAnnual = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
                 var pensionAnnual = 0.0
                 if (age >= settings.vStatePensionAge) pensionAnnual += vPensionToday * 12.0 * indexation
                 if (includeSpouse && eAge >= settings.eStatePensionAge) {
@@ -583,7 +733,7 @@ object MonteCarloEngine {
                 var need = max(0.0, lifestyleAnnual - pensionAnnual)
 
                 val currentTotalBal = liquidBal + dipBal + dpsBal + cashCushion
-                val baseNeedAtAge = max(0.0, lifestyleToday * 12.0 * livingIndexation - pensionAnnual)
+                val baseNeedAtAge = max(0.0, lifestyleToday * 12.0 * livingIndexation + childAnnualNominal - pensionAnnual)
                 if (settings.guardrailsEnabled && currentTotalBal > 0.0 && baseNeedAtAge > 0.0) {
                     val plannedTargetAtAge = plannedTargetsByOffset[safeOffset]
                     val referenceSwr = (baseNeedAtAge / plannedTargetAtAge).coerceAtLeast(0.001)
@@ -591,39 +741,24 @@ object MonteCarloEngine {
 
                     val isSunsetPhase = horizon > 15 && k >= horizon - 15
                     if (!isSunsetPhase && currentWithdrawalRate > referenceSwr * upperThreshold) {
-                        // Upper Guardrail (Capital Preservation Rule):
-                        // Reduce discretionary spending, protected by customizable essential floor,
-                        // subject to Guyton-Klinger 15-year sunset rule (only when horizon > 15y)
                         spendingScale = (spendingScale * cutMultiplier).coerceAtLeast(floorMultiplier)
-                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale
+                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
                         need = max(0.0, adjustedLifestyle - pensionAnnual)
                         guardrailTriggeredInPath = true
                     } else if (currentWithdrawalRate < referenceSwr * lowerThreshold) {
-                        // Lower Guardrail (Prosperity Rule): boost spending
                         spendingScale = min(1.30, spendingScale * boostMultiplier)
-                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale
+                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
                         need = max(0.0, adjustedLifestyle - pensionAnnual)
                     }
                 }
 
-                val ret = pathReturns.getOrNull(yearOffset) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
-
-                // 1. Compound balances first for the investment year
-                val eqFactor = max(0.0, 1.0 + ret)
-                liquidBal *= eqFactor
-                dipBal *= eqFactor
-                dpsBal *= dpsFactor
-                cashCushion *= (1.0 + cpi).coerceAtLeast(0.0)
-
-                // 2. Dynamic cash cushion sequence-of-returns defense:
-                // During market drawdowns (ret < 0), draw living expenses from emergency cash reserve
-                // first rather than liquidating equity at market troughs.
+                // 1. Causal beginning-of-year cash-cushion defense based strictly on PRIOR year's realized return
                 val indexedReserveTarget = reserveTargetAnnual * indexation
-                if (ret < 0.0 && cashCushion > 0.0) {
+                if (k > 0 && prevYearRet < 0.0 && cashCushion > 0.0) {
                     val drawFromCash = min(cashCushion, need)
                     cashCushion -= drawFromCash
                     need -= drawFromCash
-                } else if (ret > 0.05 && cashCushion < indexedReserveTarget) {
+                } else if (k > 0 && prevYearRet > 0.05 && cashCushion < indexedReserveTarget) {
                     val replenishBase = liquidBal + (if (age >= 60) dipBal + dpsBal else 0.0)
                     val replenish = min(indexedReserveTarget - cashCushion, replenishBase * 0.02)
                     if (age < 60 && liquidBal > replenish) {
@@ -644,11 +779,12 @@ object MonteCarloEngine {
                     }
                 }
 
+                // 2. Beginning-of-year living withdrawal before equity compounding
                 if (age < 60) {
                     if (liquidBal < need) {
                         val deficit = need - liquidBal
-                        if (cashCushion >= deficit) {
-                            cashCushion -= deficit
+                        if (cashCushion + 0.001 >= deficit) {
+                            cashCushion = max(0.0, cashCushion - deficit)
                             liquidBal = 0.0
                             need = 0.0
                         } else {
@@ -660,13 +796,12 @@ object MonteCarloEngine {
                         liquidBal -= need
                         need = 0.0
                     }
-                    bal = liquidBal + dipBal + dpsBal + cashCushion
                 } else {
                     var available = liquidBal + dipBal + dpsBal
                     if (available < need) {
                         val deficit = need - available
-                        if (cashCushion >= deficit) {
-                            cashCushion -= deficit
+                        if (cashCushion + 0.001 >= deficit) {
+                            cashCushion = max(0.0, cashCushion - deficit)
                             available = 0.0
                             need = 0.0
                         } else {
@@ -681,8 +816,22 @@ object MonteCarloEngine {
                     liquidBal = available
                     dipBal = 0.0
                     dpsBal = 0.0
-                    bal = liquidBal + cashCushion
                 }
+
+                // 3. Compound remaining balances over year `k`
+                val ret = pathReturns.getOrNull(yearOffset) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
+                val eqFactor = max(0.0, 1.0 + ret)
+                val dpsYearRet = (dpsBaseNetRet + dpsBeta * (ret - meanReturn)).coerceAtLeast(-0.99)
+                val dpsFactor = max(0.0, 1.0 + dpsYearRet)
+                liquidBal *= eqFactor
+                dipBal *= eqFactor
+                dpsBal *= dpsFactor
+                cashCushion *= (1.0 + stepCpi).coerceAtLeast(0.0)
+                bal = liquidBal + dipBal + dpsBal + cashCushion
+
+                prevYearRet = ret
+                pathCpiFactor *= (1.0 + stepCpi).coerceAtLeast(0.0)
+                pathRentFactor *= (1.0 + stepRentRate).coerceAtLeast(0.0)
             }
 
             if (depletedAge == null) {
@@ -694,7 +843,7 @@ object MonteCarloEngine {
                 pathsWithGuardrailsTriggered++
             }
             val totalYearsFromBase = max(0, (fireYear - baseYear) + horizon)
-            val deflator = indexationTable[totalYearsFromBase.coerceIn(0, totalMaxOffset)]
+            val deflator = if (useHistoricalBootstrap) pathCpiFactor else indexationTable[totalYearsFromBase.coerceIn(0, totalMaxOffset)]
             endBalancesToday.add(if (deflator.isFinite() && deflator > 0.0) bal / deflator else bal)
         }
 
@@ -722,7 +871,8 @@ object MonteCarloEngine {
             medianDepletionAge = medianDepletionAge,
             sampleSize = sims,
             guardrailsActive = settings.guardrailsEnabled,
-            guardrailTriggeredPct = guardrailTriggeredPct
+            guardrailTriggeredPct = guardrailTriggeredPct,
+            fireReachedCount = fireReached
         )
         if (useHistoricalBootstrap) {
             histSurvivalCache.put(currentKey, result)

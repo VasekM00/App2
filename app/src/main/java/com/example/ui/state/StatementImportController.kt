@@ -114,7 +114,10 @@ internal class StatementImportController(
                 val existingEntry = repository.getLedgerEntryByYearMonth(yearMonth)
                 if (remainingTxs.isEmpty()) {
                     if (existingEntry != null) {
-                        if (existingEntry.notes.startsWith("Imported from", ignoreCase = true) || existingEntry.notes.isBlank()) {
+                        val isStatementGeneratedNote = existingEntry.notes.isBlank() ||
+                            existingEntry.notes.startsWith("Imported from", ignoreCase = true) ||
+                            existingEntry.notes.startsWith("Direct Bank Statement", ignoreCase = true)
+                        if (isStatementGeneratedNote) {
                             repository.deleteLedgerEntry(existingEntry.id)
                         } else {
                             repository.updateLedgerEntry(

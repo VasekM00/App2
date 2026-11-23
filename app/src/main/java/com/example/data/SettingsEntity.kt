@@ -48,7 +48,7 @@ data class SettingsEntity(
     val portfolioNominalReturnPct: Double = 7.0,
     val dpsOwnContributionMonthly: Double = 1700.0,
     val dpsGrossReturnPct: Double = 6.0,
-    val dpsAnnualFeePct: Double = 0.5, // Statutory cap under Lepší penzijko
+    val dpsAnnualFeePct: Double = 1.0, // Statutory management fee cap under Act No. 427/2011 Coll. § 60(3)
     val dipContributionMonthly: Double = 1700.0,
     val employerRetirementMonthly: Double = 233.0, // 2 800 Kč/yr ÷ 12
     // Eleonora's Investments & Accounts

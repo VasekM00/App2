@@ -132,6 +132,7 @@ fun MainScreen(
     val dismissedSubscriptionMerchants by viewModel.dismissedSubscriptionMerchants.collectAsStateWithLifecycle()
     val biometricLockEnabled by viewModel.biometricLockEnabled.collectAsStateWithLifecycle()
     val flagSecureEnabled by viewModel.flagSecureEnabled.collectAsStateWithLifecycle()
+    val partnerBirthYear by viewModel.partnerBirthYear.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var targetCashFlowSubTab by rememberSaveable { mutableIntStateOf(0) }
@@ -645,7 +646,9 @@ fun MainScreen(
                                 onPrepareExportRequest = { full, enc, phrase ->
                                     viewModel.setPendingExportRequest(full, enc, phrase)
                                 },
-                                onConsumeExportRequest = { viewModel.consumePendingExportRequest() }
+                                onConsumeExportRequest = { viewModel.consumePendingExportRequest() },
+                                partnerBirthYear = partnerBirthYear,
+                                onUpdatePartnerBirthYear = { viewModel.setPartnerBirthYear(it) }
                             )
                         }
                     }

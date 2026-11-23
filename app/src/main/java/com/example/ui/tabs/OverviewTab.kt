@@ -239,14 +239,23 @@ fun OverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 5. Strategic Highlights (Executive 2x2 Strategic Readiness Matrix)
+        val fireBridgeYears = state.bridgeYearsFromFireTo60
+        val fireBridgeFunded = state.isBridgeFundedAtFire
+        val fireBridgeRequired = state.bridgeRequiredAtFire
+        val fireBridgeDeficit = state.bridgeDeficitAtFire
+        val fireAgeLabel = state.snapshot.activeFireAge ?: state.effectiveSettings.primaryAge
         val liquidBridgeInfo = MetricInfo(
             title = "Pre-60 Liquid Bridge",
             category = "Two-Bucket Liquidity Architecture",
-            formulaOrRule = "Required Bridge = Annual Living Cost × Years from FIRE to Age 60",
-            explanation = "In the Czech Republic, DIP and DPS tax-advantaged accounts cannot be accessed without penalty before age 60. Therefore, retiring early requires sufficient liquid taxable investments (Portu / brokerage) to bridge spending until age 60.",
+            formulaOrRule = "Required Bridge at FIRE = Annual Living Cost × PV Factor ($fireBridgeYears years to Age 60)",
+            explanation = "In the Czech Republic, DIP and DPS tax-advantaged accounts cannot be accessed without penalty before age 60. Retiring early at age $fireAgeLabel requires ${fmtCZK(fireBridgeRequired)} in liquid taxable investments (Portu / brokerage) to fund the $fireBridgeYears years until age 60 (retiring today requires ${fmtCZK(state.liquidBridgeTo60RequiredToday)}).",
             statutoryReference = "§ 15a Act No. 586/1992 Coll. (ZDP) & Act No. 427/2011 Coll.",
-            practicalImplication = if (state.isLiquidBridgeFundedToday) "Your liquid Portu balance is already sufficient to bridge early retirement to age 60 without tapping locked pension accounts." else "Focus contributions on liquid taxable brokerage to ensure pre-60 cash needs are covered.",
-            accentColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+            practicalImplication = when {
+                fireBridgeYears <= 0 -> "At your projected FIRE age, pension accounts are already unlocked (age 60+), so no taxable liquid bridge is required."
+                fireBridgeFunded -> "Your liquid Portu balance is projected to fully bridge early retirement for all $fireBridgeYears years to age 60 without tapping locked pension accounts."
+                else -> "Focus contributions on liquid taxable brokerage to close the projected ${fmtCZK(fireBridgeDeficit)} pre-60 bridge gap."
+            },
+            accentColor = if (fireBridgeFunded) GoodGreen else BrandGold
         )
 
         val coastMilestone = state.fireMilestones.coastFire
@@ -260,34 +269,48 @@ fun OverviewTab(
             accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
         )
 
-        val survivalRate = state.historicalRetirementSurvival.successRatePct
+        val survivalRes = state.historicalRetirementSurvival
+        val survivalRate = survivalRes.successRatePct
+        val survivalSubLabel = if (survivalRes.isLowConfidenceSample) {
+            "Low sample (n=${survivalRes.fireReachedCount})"
+        } else {
+            "Historical crash test"
+        }
         val survivalInfo = MetricInfo(
             title = "Historical Survival Probability",
             category = "Actuarial Longevity & Sequence Risk",
-            formulaOrRule = "Survival Rate = Non-depleted Paths / Total Simulated Historical Market Paths",
-            explanation = "Tests your decumulation strategy through 56 years (1970–2025) of global equity market cycles and drawdown periods (including 1970s stagflation, 2000 dot-com bust, and 2008 global financial crisis) with sequence-of-returns risk.",
+            formulaOrRule = "Survival Rate = Non-depleted Paths / Total Simulated Paths Reaching FIRE (${survivalRes.fireReachedCount}/${survivalRes.sampleSize})",
+            explanation = "Tests your decumulation strategy through 56 years (1970–2025) of global equity market cycles and historical inflation shocks (including 1970s stagflation, 2000 dot-com bust, and 2008 global financial crisis) with sequence-of-returns risk.",
             statutoryReference = "Historical Block-Bootstrap Simulation (1970–2025)",
-            practicalImplication = "A rate above 90% provides strong actuarial confidence that your portfolio will outlive you without depleting principal.",
+            practicalImplication = if (survivalRes.isLowConfidenceSample) {
+                "Only ${survivalRes.fireReachedCount} of ${survivalRes.sampleSize} simulated historical paths reached FIRE within the horizon, so treat this survival score as low-confidence."
+            } else {
+                "A rate above 90% provides strong actuarial confidence that your portfolio will outlive you without depleting principal."
+            },
             accentColor = if (survivalRate >= 95.0) GoodGreen else BrandTeal
         )
 
         val taxHelper = state.taxReturnHelper
         val taxRefundTotal = taxHelper.totalIncrementalValue
+        val unembeddedChildRefund = maxOf(0.0, taxRefundTotal - taxHelper.spouseCredit - taxHelper.dipSaving)
         val taxReliefParts = buildList {
             if (taxHelper.spouseCredit > 0.0) add("Partner Credit (${fmtCZK(taxHelper.spouseCredit)})")
-            if (taxHelper.childBonus > 0.0) add("Child Tax Credit (${fmtCZK(taxHelper.childBonus)})")
+            if (unembeddedChildRefund > 1.0) add("Refundable Child Bonus (${fmtCZK(unembeddedChildRefund)})")
             if (taxHelper.dipSaving > 0.0) add("DIP & DPS Tax Deduction (${fmtCZK(taxHelper.dipSaving)})")
         }
         val taxFormulaText = if (taxReliefParts.isNotEmpty()) {
-            "Annual Relief = ${taxReliefParts.joinToString(" + ")} (Total: ${fmtCZK(taxRefundTotal)}/year)"
+            "Spring Refund = ${taxReliefParts.joinToString(" + ")} (Total: ${fmtCZK(taxRefundTotal)}/year)"
         } else {
-            "Annual Relief = Partner Credit (${fmtCZK(taxHelper.spouseCredit)}) + Child Tax Credit (${fmtCZK(taxHelper.childBonus)}) + DIP & DPS Tax Deduction (${fmtCZK(taxHelper.dipSaving)}) (Total: ${fmtCZK(taxRefundTotal)}/year)"
+            "Spring Refund = ${fmtCZK(taxRefundTotal)}/year"
         }
+        val embeddedNote = if (taxHelper.childBonus > unembeddedChildRefund + 1.0) {
+            " Note: ${fmtCZK(taxHelper.childBonus - unembeddedChildRefund)}/year in child tax credits is already reflected in your monthly net paycheck."
+        } else ""
         val taxRefundInfo = MetricInfo(
             title = "Annual Tax Refund & Relief",
             category = "Czech Tax Optimization",
             formulaOrRule = taxFormulaText,
-            explanation = "This is not direct money you save from monthly spending. Rather, it is an annual statutory tax refund or cash rebate from the state paid out in spring after your annual employer tax reconciliation or via your personal income tax return.",
+            explanation = "This is not direct money you save from monthly spending. Rather, it is an annual statutory tax refund or cash rebate from the state paid out in spring after your annual employer tax reconciliation or via your personal income tax return.$embeddedNote",
             statutoryReference = "§ 15a, § 35ba, § 35c Act No. 586/1992 Coll. (ZDP)",
             practicalImplication = "Because this is an annual cash rebate returned to you by the tax authority, it represents unbudgeted lump-sum liquidity each spring that can be directly invested into your portfolio without reducing your monthly living budget.",
             accentColor = GoodGreen
@@ -313,9 +336,17 @@ fun OverviewTab(
 
                 val useSingleColumnHealth = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 385 &&
                     androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.35f
-                val bridgeValue = if (state.isLiquidBridgeFundedToday) "Ready (100%)" else "Gap ${fmtCompact(state.liquidBridgeDeficitToday)}"
-                val bridgeSub = if (state.isLiquidBridgeFundedToday) "Covers pre-60 years" else "Needed before age 60"
-                val bridgeColor = if (state.isLiquidBridgeFundedToday) GoodGreen else BrandGold
+                val bridgeValue = when {
+                    fireBridgeYears <= 0 -> "Unlocked (60+)"
+                    fireBridgeFunded -> "Ready (100%)"
+                    else -> "Gap ${fmtCompact(fireBridgeDeficit)}"
+                }
+                val bridgeSub = when {
+                    fireBridgeYears <= 0 -> "No bridge needed at FIRE"
+                    fireBridgeFunded -> "Covers ${fireBridgeYears}y to age 60"
+                    else -> "${fireBridgeYears}y to age 60 gap"
+                }
+                val bridgeColor = if (fireBridgeFunded) GoodGreen else BrandGold
                 val coastValue = if (coastMilestone.isAchieved) "Achieved" else "${fmtPct(coastMilestone.progressPct, 0)} funded"
                 val coastSub = if (coastMilestone.isAchieved) "Grows by $coastTargetYear" else "Goal: ${fmtCompact(coastMilestone.targetAmountToday)}"
                 val coastColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
@@ -359,7 +390,7 @@ fun OverviewTab(
                         StrategicMetricTile(
                             label = "Market Stress Score",
                             value = "${survivalRate.roundToInt()}% Pass",
-                            subLabel = "Historical crash test",
+                            subLabel = survivalSubLabel,
                             accentColor = survivalColor,
                             icon = Icons.Default.CheckCircle,
                             info = survivalInfo,
@@ -424,7 +455,7 @@ fun OverviewTab(
                             StrategicMetricTile(
                                 label = "Market Stress Score",
                                 value = "${survivalRate.roundToInt()}% Pass",
-                                subLabel = "Historical crash test",
+                                subLabel = survivalSubLabel,
                                 accentColor = survivalColor,
                                 icon = Icons.Default.CheckCircle,
                                 info = survivalInfo,

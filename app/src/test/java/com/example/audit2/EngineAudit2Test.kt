@@ -179,7 +179,10 @@ class EngineAudit2Test {
             eDpsBalanceCurrent = 100000.0,
             eDipBalanceCurrent = 100000.0,
             ePortuDcaMonthly = 10000.0,
-            eDpsOwnContributionMonthly = 3000.0
+            eDpsOwnContributionMonthly = 3000.0,
+            child1Enabled = false,
+            child2Enabled = false,
+            eParentalAllowanceMonthly = 0.0
         )
         val calc = FinancialEngine.calculate(sSingle, runMonteCarlo = false)
         assertEquals(0.0, calc.currentIncome.eleonoraSalary, 0.001)

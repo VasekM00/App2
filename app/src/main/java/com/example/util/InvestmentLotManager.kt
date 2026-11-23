@@ -109,7 +109,7 @@ object InvestmentLotManager {
     private const val PREFS_NAME = com.example.data.AppPreferencesRepository.DEFAULT_PREFS_NAME
     private const val LEGACY_PREFS_NAME = "investment_lots_prefs"
     private const val KEY_LOTS_JSON = com.example.data.AppPreferencesRepository.KEY_LOTS_JSON
-    private val prefsLock = Any()
+    private val prefsLock get() = com.example.data.AppPreferencesRepository.PREFS_LOCK
 
     private fun safeFinite(value: Double): Double = if (value.isFinite()) value else 0.0
 
@@ -177,11 +177,16 @@ object InvestmentLotManager {
     fun persistLots(context: Context, lots: List<UserInvestmentLot>, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
         val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         prefs.edit { putString(KEY_LOTS_JSON, serializeLotsToJson(lots.map(::sanitizeLot))) }
+        com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
     }
 
     fun clearAll(context: Context, prefsName: String = PREFS_NAME) = synchronized(prefsLock) {
         val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-        prefs.edit { remove(KEY_LOTS_JSON) }
+        prefs.edit { putString(KEY_LOTS_JSON, "[]") }
+        if (prefsName == PREFS_NAME) {
+            context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE).edit { remove(KEY_LOTS_JSON) }
+        }
+        com.example.data.AppPreferencesRepository.notifyStoreMutatedLocked(prefsName)
     }
 
     fun parseLotsFromJson(jsonStr: String): List<UserInvestmentLot> {

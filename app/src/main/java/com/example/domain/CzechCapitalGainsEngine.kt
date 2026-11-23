@@ -129,7 +129,10 @@ object CzechCapitalGainsEngine {
         saleOrders: List<LotSaleOrder>,
         asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague")),
         priorNonExemptGrossSalesAnnualCzk: Double = 0.0,
-        taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT
+        taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT,
+        otherTaxableIncomeAnnualCzk: Double = 0.0,
+        highBracketThresholdAnnualCzk: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026,
+        highTaxRatePct: Double = STATUTORY_HIGH_TAX_RATE_PCT
     ): SaleTaxSimulationResult {
         val lotMap = lots.associateBy { it.id }
         val remainingUnitsByLot = lots.associate { it.id to it.units.finiteNonNegative() }.toMutableMap()
@@ -186,8 +189,16 @@ object CzechCapitalGainsEngine {
         }
 
         val safeRatePct = taxRatePct.finiteIn(0.0, 50.0, STATUTORY_BASE_TAX_RATE_PCT)
+        val safeHighRatePct = highTaxRatePct.finiteIn(safeRatePct, 60.0, STATUTORY_HIGH_TAX_RATE_PCT)
         val rateBase = safeRatePct / 100.0
-        val estimatedAtConfiguredRate = netTaxableGain * rateBase
+        val rateHigh = safeHighRatePct / 100.0
+        val otherIncome = otherTaxableIncomeAnnualCzk.finiteNonNegative()
+        val threshold = highBracketThresholdAnnualCzk
+            .finiteNonNegative(RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026)
+        val remainingBaseHeadroom = max(0.0, threshold - otherIncome)
+        val gainAtBaseRate = min(netTaxableGain, remainingBaseHeadroom)
+        val gainAtHighRate = max(0.0, netTaxableGain - gainAtBaseRate)
+        val progressiveTax = (gainAtBaseRate * rateBase + gainAtHighRate * rateHigh).finiteNonNegative()
         val taxLiability15 = netTaxableGain * (STATUTORY_BASE_TAX_RATE_PCT / 100.0)
         val taxLiability23 = netTaxableGain * (STATUTORY_HIGH_TAX_RATE_PCT / 100.0)
         val taxSavedByTimeTest = max(0.0, exemptGain) * rateBase
@@ -195,7 +206,12 @@ object CzechCapitalGainsEngine {
         val effectiveWaitingGain = if (netTaxableGain > 0.0) min(potentialWaitingGain, netTaxableGain) else 0.0
         val taxSavedByWaiting = effectiveWaitingGain * rateBase
 
-        val recommendation = when {
+        val requires38v = exemptGross > RegulatoryConstants.STATUTORY_EXEMPT_INCOME_REPORTING_THRESHOLD_CZK
+        val warning38v = if (requires38v) {
+            "Mandatory ZDP § 38v notice: Exempt proceeds (${Formatters.fmtExactCZK(exemptGross)}) exceed ${Formatters.fmtExactCZK(RegulatoryConstants.STATUTORY_EXEMPT_INCOME_REPORTING_THRESHOLD_CZK)} — report to the Tax Office by the tax return deadline or face penalties up to 15% under ZDP § 38w."
+        } else null
+
+        val baseRecommendation = when {
             netTaxableGain <= 0.0 && qualifiesFor100k && nonExemptGross > 0.0 ->
                 "Sale is fully tax-exempt under the 3-year time test and annual 100\u00A0000\u00A0Kč total gross proceeds limit."
             netTaxableGain <= 0.0 && nonExemptGross == 0.0 ->
@@ -203,10 +219,11 @@ object CzechCapitalGainsEngine {
             netTaxableGain <= 0.0 ->
                 "Sale generates no net taxable capital gain (losses offset gains). Tax liability is 0\u00A0Kč."
             taxSavedByWaiting > 0.0 ->
-                "Notice: Selling lots close to maturity incurs ${Formatters.fmtExactCZK(estimatedAtConfiguredRate)} (${safeRatePct.toInt()}%) tax. Postponing sale past the 3-year mark saves ${Formatters.fmtExactCZK(taxSavedByWaiting)}."
+                "Notice: Selling lots close to maturity incurs ${Formatters.fmtExactCZK(progressiveTax)} tax. Postponing sale past the 3-year mark saves ${Formatters.fmtExactCZK(taxSavedByWaiting)}."
             else ->
-                "Sale is subject to capital gains tax on ${Formatters.fmtExactCZK(netTaxableGain)} net gain: ${Formatters.fmtExactCZK(taxLiability15)} (15%) or ${Formatters.fmtExactCZK(taxLiability23)} (23%)."
+                "Sale is subject to capital gains tax on ${Formatters.fmtExactCZK(netTaxableGain)} net gain: ${Formatters.fmtExactCZK(progressiveTax)} progressive (${Formatters.fmtExactCZK(taxLiability15)} at 15% / ${Formatters.fmtExactCZK(taxLiability23)} at 23%)."
         }
+        val recommendation = if (warning38v != null) "$baseRecommendation $warning38v" else baseRecommendation
 
         return SaleTaxSimulationResult(
             totalGrossProceedsCzk = totalGross,
@@ -218,23 +235,29 @@ object CzechCapitalGainsEngine {
             estimatedTaxLiability23Pct = taxLiability23,
             taxSavedBy3yTimeTestCzk = taxSavedByTimeTest,
             potentialTaxSavingByWaitingCzk = taxSavedByWaiting,
-            recommendation = recommendation
+            recommendation = recommendation,
+            progressiveTaxLiabilityCzk = progressiveTax,
+            requiresSection38vNotification = requires38v,
+            section38vWarning = warning38v
         )
     }
 
     /**
      * Recommends tax-optimal lots to sell to achieve a desired cash liquidation target:
      * 1. Sells lots already exempt under the 3-year time-test (0% tax drag).
-     * 2. Sells lots with capital losses to offset any taxable gains.
-     * 3. Sells non-exempt lots within the 100 000 CZK gross exemption ceiling.
-     * 4. Avoids selling lots approaching exemption (within 6 months of 3 years).
+     * 2. Sells lots with gains inside the 100 000 CZK gross exemption ceiling when the full need fits.
+     * 3. Sells lots with capital losses to offset any taxable gains.
+     * 4. Sells remaining TAXABLE lots before APPROACHING_EXEMPTION lots.
      */
     fun recommendOptimalHarvest(
         lots: List<InvestmentLot>,
         targetCashCzk: Double,
         asOfDate: LocalDate = LocalDate.now(ZoneId.of("Europe/Prague")),
         priorNonExemptGrossSalesAnnualCzk: Double = 0.0,
-        taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT
+        taxRatePct: Double = STATUTORY_BASE_TAX_RATE_PCT,
+        otherTaxableIncomeAnnualCzk: Double = 0.0,
+        highBracketThresholdAnnualCzk: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026,
+        highTaxRatePct: Double = STATUTORY_HIGH_TAX_RATE_PCT
     ): TaxOptimalHarvestRecommendation {
         val safeTarget = targetCashCzk.finiteNonNegative()
         val safePriorGross = priorNonExemptGrossSalesAnnualCzk.finiteNonNegative()
@@ -291,15 +314,18 @@ object CzechCapitalGainsEngine {
         }
 
         // If the entire remaining cash target fits inside the remaining 100,000 Kč annual gross cap,
-        // prioritize TAXABLE gain lots first (highest gain ratio) to step up cost basis tax-free
+        // prioritize gain lots first (TAXABLE then APPROACHING, highest gain ratio) to step up cost basis tax-free
         // rather than wasting the 100k exemption on loss lots.
         if (remainingCashNeeded > 0.001 && remainingCashNeeded <= remaining100kLimit + 0.001) {
-            val taxableGainLots = lots.filter {
-                lotStatusById[it.id] == TimeTestStatus.TAXABLE &&
+            val nonExemptGainLots = lots.filter {
+                lotStatusById[it.id] != TimeTestStatus.EXEMPT_TIME_TEST &&
                     it.currentPricePerUnitCzk.finiteNonNegative() >= it.acquisitionPricePerUnitCzk.finiteNonNegative() &&
                     (remainingUnitsByLot[it.id] ?: 0.0) > 1e-9
-            }.sortedByDescending { gainRatio(it) }
-            for (lot in taxableGainLots) {
+            }.sortedWith(
+                compareBy<InvestmentLot> { if (lotStatusById[it.id] == TimeTestStatus.TAXABLE) 0 else 1 }
+                    .thenByDescending { gainRatio(it) }
+            )
+            for (lot in nonExemptGainLots) {
                 if (remainingCashNeeded <= 0.001 || remaining100kLimit <= 0.0) break
                 takeFromLot(lot, maxCashCap = remaining100kLimit)
             }
@@ -349,16 +375,27 @@ object CzechCapitalGainsEngine {
         val orders = soldUnitsByLot.entries
             .filter { it.value > 0.0 }
             .map { LotSaleOrder(it.key, it.value) }
-        val sim = simulateSale(lots, orders, asOfDate, safePriorGross, taxRatePct)
-        val effectiveRate = taxRatePct.finiteIn(0.0, 50.0, STATUTORY_BASE_TAX_RATE_PCT) / 100.0
+        val sim = simulateSale(
+            lots = lots,
+            saleOrders = orders,
+            asOfDate = asOfDate,
+            priorNonExemptGrossSalesAnnualCzk = safePriorGross,
+            taxRatePct = taxRatePct,
+            otherTaxableIncomeAnnualCzk = otherTaxableIncomeAnnualCzk,
+            highBracketThresholdAnnualCzk = highBracketThresholdAnnualCzk,
+            highTaxRatePct = highTaxRatePct
+        )
+        val baseExplanation = "Tax-minimization strategy: Prioritized 3-year time-test exempt positions, 100\u00A0000\u00A0Kč total annual gross exemption headroom, and offsetting loss lots."
+        val fullExplanation = if (sim.section38vWarning != null) "$baseExplanation ${sim.section38vWarning}" else baseExplanation
 
         return TaxOptimalHarvestRecommendation(
             targetCashCzk = safeTarget,
             totalCashRaisedCzk = sim.totalGrossProceedsCzk,
             saleOrders = orders,
-            taxLiabilityCzk = sim.taxableGainCzk * effectiveRate,
+            taxLiabilityCzk = sim.progressiveTaxLiabilityCzk,
             taxSavedCzk = sim.taxSavedBy3yTimeTestCzk,
-            explanation = "Tax-minimization strategy: Prioritized 3-year time-test exempt positions, 100\u00A0000\u00A0Kč total annual gross exemption headroom, and offsetting loss lots."
+            explanation = fullExplanation,
+            requiresSection38vNotification = sim.requiresSection38vNotification
         )
     }
 }
@@ -470,7 +507,10 @@ data class SaleTaxSimulationResult(
     val estimatedTaxLiability23Pct: Double,
     val taxSavedBy3yTimeTestCzk: Double,
     val potentialTaxSavingByWaitingCzk: Double,
-    val recommendation: String
+    val recommendation: String,
+    val progressiveTaxLiabilityCzk: Double = estimatedTaxLiability15Pct,
+    val requiresSection38vNotification: Boolean = false,
+    val section38vWarning: String? = null
 )
 
 /**
@@ -483,5 +523,6 @@ data class TaxOptimalHarvestRecommendation(
     val saleOrders: List<LotSaleOrder>,
     val taxLiabilityCzk: Double,
     val taxSavedCzk: Double,
-    val explanation: String
+    val explanation: String,
+    val requiresSection38vNotification: Boolean = false
 )

@@ -164,7 +164,8 @@ class HistoricalBootstrapAndTaxDragTest {
         assertNotNull("Historical Monte Carlo must be populated", state.historicalMonteCarlo)
         assertTrue("Parametric fan points must be populated", state.monteCarlo.fanPoints.isNotEmpty())
         assertTrue("Historical fan points must be populated", state.historicalMonteCarlo.fanPoints.isNotEmpty())
-        assertEquals(36, state.monteCarlo.fanPoints.size)
-        assertEquals(36, state.historicalMonteCarlo.fanPoints.size)
+        val expectedLen = com.example.domain.FireTargetAndTrajectoryEngine.projectionHorizonYears(settings) + 1
+        assertEquals(expectedLen, state.monteCarlo.fanPoints.size)
+        assertEquals(expectedLen, state.historicalMonteCarlo.fanPoints.size)
     }
 }

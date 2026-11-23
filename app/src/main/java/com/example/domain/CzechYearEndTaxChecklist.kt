@@ -30,7 +30,9 @@ object CzechYearEndTaxChecklist {
         spouseOwnIncomeAnnual: Double? = null,
         hasChildUnder3: Boolean? = null,
         actualDipContributedAnnual: Double? = null,
-        actualDpsContributedAnnual: Double? = null
+        actualDpsContributedAnnual: Double? = null,
+        actualDpsQualifyingAnnual: Double? = null,
+        partnerBirthYearOverride: Int? = null
     ): YearEndTaxChecklistReport {
         val items = mutableListOf<ChecklistItem>()
         var totalPotentialSavings = 0.0
@@ -55,9 +57,11 @@ object CzechYearEndTaxChecklist {
         val effectiveDpsThreshold = if (vAge >= settings.vStatePensionAge) 0.0 else dpsThreshold
         val dipAnnual = actualDipContributedAnnual?.finiteNonNegative()
             ?: (settings.dipContributionMonthly.finiteNonNegative() * 12.0)
-        val dpsAboveThresholdAnnual = actualDpsContributedAnnual?.let {
-            max(0.0, it.finiteNonNegative() - effectiveDpsThreshold * 12.0)
-        } ?: (max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - effectiveDpsThreshold) * 12.0)
+        val dpsAboveThresholdAnnual = actualDpsQualifyingAnnual?.finiteNonNegative()
+            ?: actualDpsContributedAnnual?.let {
+                max(0.0, it.finiteNonNegative() - effectiveDpsThreshold * 12.0)
+            }
+            ?: (max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - effectiveDpsThreshold) * 12.0)
 
         val taxThreshold = settings.taxSecondBracketThresholdAnnual.finiteNonNegative(
             RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026
@@ -65,13 +69,7 @@ object CzechYearEndTaxChecklist {
         val basicCredit = settings.taxpayerCreditAnnual.finiteNonNegative(
             RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026
         )
-        val vGrossAnnual = CzechTaxEngine.netToGrossAnnual(
-            netMonthly = FinancialEngine.vaclavSalaryMonthly(taxYear, settings),
-            taxpayerCreditAnnual = basicCredit,
-            highBracketThresholdAnnual = taxThreshold,
-            baseTaxRatePct = baseRatePct,
-            highTaxRatePct = highRatePct
-        )
+        val vGrossAnnual = CzechTaxEngine.primaryGrossAnnual(settings, taxYear)
         val resolvedChildUnder3 = hasChildUnder3 ?: CzechTaxEngine.hasChildUnder3(settings, taxYear)
         val activeSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(
             settings = settings,
@@ -144,7 +142,7 @@ object CzechYearEndTaxChecklist {
 
         // Secondary Earner DIP/DPS in dual household
         if (!settings.isSingleHousehold) {
-            val eAge = taxYear - FinancialEngine.partnerBirthYear(settings)
+            val eAge = taxYear - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride)
             val eEffectiveDpsThreshold = if (eAge >= settings.eStatePensionAge) 0.0 else dpsThreshold
             val eDipAnnual = settings.eDipContributionMonthly.finiteNonNegative() * 12.0
             val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly.finiteNonNegative() - eEffectiveDpsThreshold) * 12.0
@@ -357,6 +355,55 @@ object CzechYearEndTaxChecklist {
                 )
             )
             totalPotentialSavings += mortgageTaxSaving
+        }
+
+        // 5. Charitable Donations Deduction (ZDP § 15(1))
+        val deletedSet = parseDeletedCategories(settings.deletedCategoriesJson)
+        val charityAnnual = if ("charity" !in deletedSet) settings.charityMonthly.finiteNonNegative() * 12.0 else 0.0
+        if (charityAnnual >= RegulatoryConstants.STATUTORY_CHARITY_MIN_ANNUAL_CZK) {
+            val maxBasePct = if (taxYear <= 2026) {
+                RegulatoryConstants.STATUTORY_CHARITY_MAX_BASE_PCT_TEMP_2026
+            } else {
+                RegulatoryConstants.STATUTORY_CHARITY_MAX_BASE_PCT_STANDARD
+            }
+            val charityCap = (vGrossAnnual * (maxBasePct / 100.0)).finiteNonNegative()
+            val deductibleCharity = min(charityAnnual, charityCap)
+            val vTaxSavedWithCharity = CzechTaxEngine.singleEarnerRetirementTaxSaved(
+                taxableGrossAnnual = vGrossAnnual,
+                deductionAnnual = min(vQualifyingTotal, retirementCeiling) + deductibleCharity,
+                thresholdHighBracket = taxThreshold,
+                baseRate = baseRate,
+                highRate = highRate,
+                basicTaxpayerCredit = basicCredit,
+                additionalCredits = activeSpouseCredit
+            )
+            val charityTaxSaving = max(0.0, vTaxSavedWithCharity - vTaxSavedCurrent)
+            val charityStatus = if (charityTaxSaving > 0.0) ChecklistStatus.ACTION_REQUIRED else ChecklistStatus.NOT_APPLICABLE
+            items.add(
+                ChecklistItem(
+                    id = "charity_donations_deduction",
+                    title = "Charitable Donations Tax Deduction (${fmtExactCZK(charityAnnual)}/yr)",
+                    category = ChecklistCategory.CHARITY_DONATIONS,
+                    status = charityStatus,
+                    statutoryReference = "ZDP § 15(1)",
+                    deadline = "February 15 (payroll) / tax return",
+                    currentValueCzk = deductibleCharity,
+                    ceilingOrThresholdCzk = charityCap,
+                    remainingHeadroomCzk = max(0.0, charityCap - deductibleCharity),
+                    potentialTaxSavingCzk = charityTaxSaving,
+                    actionDescription = if (charityTaxSaving > 0.0) {
+                        "Submit charity gift confirmations for $taxYear"
+                    } else {
+                        "No remaining income tax liability to offset"
+                    },
+                    detailedAdvice = if (charityTaxSaving > 0.0) {
+                        "Qualifying charitable donations of ${fmtExactCZK(deductibleCharity)} (min ${fmtExactCZK(RegulatoryConstants.STATUTORY_CHARITY_MIN_ANNUAL_CZK)}/yr, capped at ${maxBasePct.toInt()}% of tax base) lower your $taxYear tax base and save ${fmtExactCZK(charityTaxSaving)}."
+                    } else {
+                        "Donations meet the ${fmtExactCZK(RegulatoryConstants.STATUTORY_CHARITY_MIN_ANNUAL_CZK)} annual minimum, but your taxable income is already absorbed by credits and retirement deductions."
+                    }
+                )
+            )
+            totalPotentialSavings += charityTaxSaving
         }
 
         val requiredCount = items.count { it.status == ChecklistStatus.ACTION_REQUIRED }

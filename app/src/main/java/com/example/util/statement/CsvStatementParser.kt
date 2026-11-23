@@ -2,6 +2,7 @@ package com.example.util.statement
 
 import com.example.util.BankTransactionType
 import com.example.util.BankType
+import com.example.util.CrossStatementReconciliationEngine
 import com.example.util.CzechMerchantCatalog
 import com.example.util.FxRateService
 import com.example.util.ParsedBankTransaction
@@ -181,17 +182,41 @@ internal object CsvStatementParser {
         knownParentalGiftAccounts: Set<String> = emptySet()
     ): StatementParseSummary {
         val compiledOverrides = CzechMerchantCatalog.compileOverrides(userOverrides)
+        val headerBoundary = lines.indexOfFirst { line ->
+            val f = StatementTextDecoder.foldHeader(line)
+            (f.contains("datum") || f.contains("date")) &&
+                (f.contains("castka") || f.contains("objem") || f.contains("amount") || f.contains("debet") || f.contains("completed"))
+        }.let { if (it > 0) it else minOf(lines.size, 25) }
+        val bankCode = CrossStatementReconciliationEngine.bankCodeForBankName(bankType.name)
+        val preambleAccountKey = CzechValueParsers.extractOwnStatementAccountKey(
+            lines = lines.take(headerBoundary),
+            bankCode = bankCode,
+            limitLines = headerBoundary
+        )
+
+        fun attachOwnAccountKey(summary: StatementParseSummary): StatementParseSummary {
+            if (summary.accountKey.isNotBlank() || preambleAccountKey.isBlank()) return summary
+            return summary.copy(
+                accountKey = preambleAccountKey,
+                transactions = summary.transactions.map {
+                    if (it.accountKey.isBlank()) it.copy(accountKey = preambleAccountKey) else it
+                }
+            )
+        }
+
         val legacy = when (bankType) {
             BankType.MONETA -> parseMonetaCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
             BankType.CSOB -> parseCsobCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
             BankType.MBANK -> parseMbankCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
             else -> null
         }
-        if (legacy != null && legacy.transactions.isNotEmpty()) return legacy
+        if (legacy != null && legacy.transactions.isNotEmpty()) return attachOwnAccountKey(legacy)
 
         val universal = parseUniversalCsv(lines, bankType, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
-        if (universal.transactions.isNotEmpty()) return universal
-        return legacy ?: parseGenericCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
+        if (universal.transactions.isNotEmpty()) return attachOwnAccountKey(universal)
+        return attachOwnAccountKey(
+            legacy ?: parseGenericCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
+        )
     }
 
     private fun parseMonetaCsv(

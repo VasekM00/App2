@@ -63,7 +63,9 @@ fun LazyListScope.settingsHouseholdSubTab(
     onShowAddCategory: () -> Unit,
     onShowAddLumpSum: (CustomLumpSumItem?) -> Unit,
     onShowInfo: (MetricInfo) -> Unit,
-    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
+    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
+    partnerBirthYear: Int? = null,
+    onUpdatePartnerBirthYear: ((Int?) -> Unit)? = null
 ) {
     val s = state.settings
     fun patchSettings(transform: (SettingsEntity) -> SettingsEntity) {
@@ -120,6 +122,19 @@ fun LazyListScope.settingsHouseholdSubTab(
                     value = s.spouseName,
                     onValueChange = { v -> patchSettings { it.copy(spouseName = v) } },
                     fieldKey = "spouse_profile"
+                )
+                val resolvedPartnerBirthYear = partnerBirthYear ?: (s.baseYear - s.primaryAge)
+                val partnerAge = (s.baseYear - resolvedPartnerBirthYear).coerceIn(1, 120)
+                NumberSettingField(
+                    label = "$sName's Current Age",
+                    value = partnerAge.toDouble(),
+                    minValue = 1.0,
+                    maxValue = 120.0,
+                    onValueChange = { v ->
+                        val newAge = v.toInt().coerceIn(1, 120)
+                        onUpdatePartnerBirthYear?.invoke(s.baseYear - newAge)
+                    },
+                    fieldKey = "partner_age"
                 )
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -429,6 +444,14 @@ fun LazyListScope.settingsHouseholdSubTab(
         ) {
             BooleanSettingField(label = "Enable Family Child Expenses", checked = s.childExpensesEnabled, onCheckedChange = { v -> patchSettings { it.copy(childExpensesEnabled = v) } })
             if (s.childExpensesEnabled) {
+                if (s.isSingleHousehold && (s.child1Enabled || s.child2Enabled)) {
+                    NumberSettingField(
+                        label = "Parental Allowance Monthly",
+                        value = s.eParentalAllowanceMonthly,
+                        onValueChange = { v -> patchSettings { it.copy(eParentalAllowanceMonthly = v) } },
+                        fieldKey = "single_parental"
+                    )
+                }
                 BooleanSettingField(
                     label = "Current Child Costs in Monthly Budget",
                     checked = s.currentChildCostsInBaseline,

@@ -26,5 +26,9 @@ data class ImportedBankTransactionEntity(
     val category: String = "LIFESTYLE_LIVING", // BankTransactionType name
     val isNetted: Boolean = false,
     val nettingReason: String = "",
-    val matchedTxId: Long? = null
+    val matchedTxId: Long? = null,
+    val accountKey: String = "",
+    val originalCurrency: String = "CZK",
+    val originalAmount: Double = 0.0,
+    val fxRateToCzk: Double = 1.0
 )

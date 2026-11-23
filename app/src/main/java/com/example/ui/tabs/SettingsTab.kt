@@ -102,6 +102,8 @@ fun SettingsTab(
     onToggleFlagSecure: (Boolean) -> Unit = {},
     onPrepareExportRequest: ((Boolean, Boolean, String) -> Unit)? = null,
     onConsumeExportRequest: (() -> MainViewModel.PendingExportState?)? = null,
+    partnerBirthYear: Int? = null,
+    onUpdatePartnerBirthYear: ((Int?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -424,7 +426,9 @@ fun SettingsTab(
                         showAddLumpSumDialog = true
                     },
                     onShowInfo = { infoState.show(it) },
-                    onReduceSettings = onReduceSettings
+                    onReduceSettings = onReduceSettings,
+                    partnerBirthYear = partnerBirthYear,
+                    onUpdatePartnerBirthYear = onUpdatePartnerBirthYear
                 )
                 1 -> settingsFireSubTab(
                     state = state,

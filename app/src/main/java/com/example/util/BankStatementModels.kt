@@ -66,7 +66,8 @@ data class ParsedBankTransaction(
     val isExcluded: Boolean = false,
     val originalCurrency: String? = null,
     val originalAmount: Double? = null,
-    val exchangeRate: Double? = null
+    val exchangeRate: Double? = null,
+    val accountKey: String = ""
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L
@@ -94,7 +95,8 @@ data class StatementParseSummary(
     val monthEndBalance: Double? = null,
     val transactions: List<ParsedBankTransaction>,
     val isPdfSource: Boolean = false,
-    val monthEndBalancesByBank: Map<String, Map<String, Double>> = emptyMap()
+    val monthEndBalancesByBank: Map<String, Map<String, Double>> = emptyMap(),
+    val accountKey: String = ""
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L

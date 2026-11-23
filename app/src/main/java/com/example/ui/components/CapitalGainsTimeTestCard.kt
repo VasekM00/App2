@@ -105,7 +105,13 @@ fun CapitalGainsTimeTestCard(
     val portfolioSummary = remember(domainLots) {
         com.example.domain.CzechCapitalGainsEngine.analyzePortfolio(domainLots)
     }
-    val optimalHarvestRecommendation = remember(domainLots, state.effectiveSettings.taxRatePct) {
+    val optimalHarvestRecommendation = remember(
+        domainLots,
+        state.effectiveSettings.taxRatePct,
+        state.effectiveSettings.taxRateSecondPct,
+        state.effectiveSettings.taxSecondBracketThresholdAnnual,
+        state.pensionOptimization.primaryGrossAnnual
+    ) {
         if (domainLots.isEmpty()) null
         else {
             val totalValue = domainLots.sumOf { it.currentPricePerUnitCzk.finiteOrZero() * it.units.finiteOrZero() }
@@ -114,7 +120,10 @@ fun CapitalGainsTimeTestCard(
                 com.example.domain.CzechCapitalGainsEngine.recommendOptimalHarvest(
                     lots = domainLots,
                     targetCashCzk = harvestTarget,
-                    taxRatePct = state.effectiveSettings.taxRatePct
+                    taxRatePct = state.effectiveSettings.taxRatePct,
+                    otherTaxableIncomeAnnualCzk = state.pensionOptimization.primaryGrossAnnual,
+                    highBracketThresholdAnnualCzk = state.effectiveSettings.taxSecondBracketThresholdAnnual,
+                    highTaxRatePct = state.effectiveSettings.taxRateSecondPct
                 )
             } else null
         }

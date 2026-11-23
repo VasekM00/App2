@@ -2,6 +2,7 @@ package com.example.domain
 
 import com.example.data.SettingsEntity
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -14,13 +15,47 @@ import kotlin.math.pow
 object DpsDipEngine {
 
     /**
-     * Lepší penzijko Reform Projection: Capped 0.5% TER & One-Third Partial Withdrawal at Age 36.
+     * Effective net annual DPS return after both management fee (capped at statutory 1.0%)
+     * and dynamic/balanced DPS performance fee (10%-15% of positive annual returns under Act No. 427/2011 Coll. § 60(4)).
      */
-    fun buildDpsProjection(settings: SettingsEntity): DpsProjection {
-        val years = max(0, 60 - settings.primaryAge)
+    fun effectiveDpsNetReturnPct(settings: SettingsEntity): Double {
         val feeCap = settings.dpsStatutoryFeeCapPct.finiteNonNegative(RegulatoryConstants.LEPSI_PENZIJKO_STATUTORY_FEE_CAP_PCT)
-        val fee = min(settings.dpsAnnualFeePct.finiteNonNegative(), feeCap) // Statutory fee cap
-        val annualRateDPS = max(-0.99, (settings.dpsGrossReturnPct.finiteOr(0.0) - fee) / 100.0)
+        val fee = min(settings.dpsAnnualFeePct.finiteNonNegative(), feeCap)
+        val gross = settings.dpsGrossReturnPct.finiteOr(0.0)
+        val afterMgmt = gross - fee
+        val perfFeePct = when {
+            gross >= 5.5 -> RegulatoryConstants.STATUTORY_DPS_DYNAMIC_PERFORMANCE_FEE_PCT
+            gross >= 4.0 -> RegulatoryConstants.STATUTORY_DPS_BALANCED_PERFORMANCE_FEE_PCT
+            else -> 0.0
+        }
+        return if (afterMgmt > 0.0) {
+            (afterMgmt * (1.0 - perfFeePct / 100.0)).finiteOr(0.0)
+        } else {
+            afterMgmt
+        }
+    }
+
+    /**
+     * Statutory penalty-free unlock age under ZDP § 15b (minimum age 60 AND 120 months / 10 years duration).
+     * Contracts opened after age 50 remain locked past age 60 until 10 years have elapsed.
+     */
+    fun pensionUnlockAge(age0: Int, currentBalance: Double, annualInflow: Double): Int {
+        val pastYears = if (currentBalance > 0.0) {
+            min(
+                RegulatoryConstants.STATUTORY_PENSION_MIN_LOCK_IN_YEARS,
+                floor(currentBalance / max(6000.0, annualInflow)).toInt()
+            )
+        } else 0
+        val remainingLockIn = max(0, RegulatoryConstants.STATUTORY_PENSION_MIN_LOCK_IN_YEARS - pastYears)
+        return max(60, age0 + remainingLockIn)
+    }
+
+    /**
+     * Lepší penzijko / DPS Projection: Management & performance fees, 120-month lock-in rule,
+     * 15% lump-sum exit tax on gains + employer contributions, and age-36 1/3 withdrawal gating.
+     */
+    fun buildDpsProjection(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): DpsProjection {
+        val annualRateDPS = max(-0.99, effectiveDpsNetReturnPct(settings).finiteOr(0.0) / 100.0)
         val monthlyRateDPS = (1.0 + annualRateDPS).pow(1.0 / 12.0) - 1.0
 
         val annualRateETF = max(-0.99, FinancialEngine.netTaxableNominalReturnPct(settings).finiteOr(0.0) / 100.0)
@@ -41,6 +76,9 @@ object DpsDipEngine {
         val eEmpEffective = if (!settings.isSingleHousehold && eHasDps) min(eEmp, empCap) else 0.0
         val emp = vEmp + eEmpEffective
 
+        val unlockAge = pensionUnlockAge(settings.primaryAge, vDpsBal0, (vDpsOwn + vEmp) * 12.0)
+        val years = max(0, unlockAge - settings.primaryAge)
+
         var dpsBal = vDpsBal0 + eDpsBal
         var etfBal = vDpsBal0 + eDpsBal
         var totalSubsidy = 0.0
@@ -55,7 +93,7 @@ object DpsDipEngine {
         for (m in 0 until totalMonths) {
             val currentYear = settings.baseYear + (m / 12)
             val currentAge = settings.primaryAge + (m / 12)
-            val eAgeCurrent = (currentYear - FinancialEngine.partnerBirthYear(settings))
+            val eAgeCurrent = (currentYear - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride))
             val subV = CzechTaxEngine.dpsSubsidy(vDpsOwn, currentAge, settings, currentYear, settings.vStatePensionAge)
             val subE = if (!settings.isSingleHousehold) CzechTaxEngine.dpsSubsidy(eDpsOwn, eAgeCurrent, settings, currentYear, settings.eStatePensionAge) else 0.0
             val sub = subV + subE
@@ -67,12 +105,16 @@ object DpsDipEngine {
             dpsBal = max(0.0, (dpsBal + own + sub + emp) * max(0.0, 1.0 + monthlyRateDPS))
             etfBal = max(0.0, (etfBal + own + empNetEtfEquivalent) * max(0.0, 1.0 + monthlyRateETF))
         }
+        val dpsGrossBal = dpsBal.finiteNonNegative()
+        // ZDP § 8(1)(e)/(f): lump-sum DPS exit triggers 15% withholding tax on investment gains + employer contributions
+        val taxableLumpBase = max(0.0, dpsGrossBal - (vDpsBal0 + eDpsBal) - totalOwn - totalSubsidy)
+        val lumpSumExitTax = (taxableLumpBase * baseRateFrac).finiteNonNegative()
+        val dpsNetBal = max(0.0, dpsGrossBal - lumpSumExitTax).finiteNonNegative()
 
-        // Statutory one-third early withdrawal under Lepší penzijko:
-        // Evaluated per individual contract based on individual age and 10-year saving requirement
+        // Statutory one-third early withdrawal under Lepší penzijko (effective 2027+ only, strictly before age 36):
         val earlyAge = RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_AGE
         val vAge0 = settings.primaryAge
-        val eAge0 = settings.baseYear - FinancialEngine.partnerBirthYear(settings)
+        val eAge0 = settings.baseYear - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride)
         val vMonthsTo36 = max(0, (earlyAge - vAge0) * 12)
         val eMonthsTo36 = max(0, (earlyAge - eAge0) * 12)
 
@@ -102,20 +144,19 @@ object DpsDipEngine {
         }
         val balAt36 = vBalAt36 + eBalAt36
 
+        val reformActive = settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR
         val vPastYears = if (vDpsBal0 > 0.0) {
             min(10.0, vDpsBal0 / max(6000.0, (vDpsOwn + vEmp) * 12.0))
         } else 0.0
-        val vTenYearMet = (vAge0 <= earlyAge - 10) ||
-                (vAge0 < earlyAge && (vPastYears + (earlyAge - vAge0) >= 10.0)) ||
-                (vAge0 >= earlyAge && vPastYears >= 10.0)
+        val vTenYearMet = reformActive && vAge0 < earlyAge && (
+            (vAge0 <= earlyAge - 10) || (vPastYears + (earlyAge - vAge0) >= 10.0)
+        )
 
         val ePastYears = if (!settings.isSingleHousehold && eDpsBal > 0.0) {
             min(10.0, eDpsBal / max(6000.0, (eDpsOwn + eEmpEffective) * 12.0))
         } else 0.0
-        val eTenYearMet = !settings.isSingleHousehold && (
-                (eAge0 <= earlyAge - 10) ||
-                (eAge0 < earlyAge && (ePastYears + (earlyAge - eAge0) >= 10.0)) ||
-                (eAge0 >= earlyAge && ePastYears >= 10.0)
+        val eTenYearMet = reformActive && !settings.isSingleHousehold && eAge0 < earlyAge && (
+            (eAge0 <= earlyAge - 10) || (ePastYears + (earlyAge - eAge0) >= 10.0)
         )
         val vEarlyLimit = if (vTenYearMet) vOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
         val eEarlyLimit = if (eTenYearMet) eOwnValueTo36 * (RegulatoryConstants.LEPSI_PENZIJKO_EARLY_WITHDRAWAL_SHARE_PCT / 100.0) else 0.0
@@ -141,14 +182,17 @@ object DpsDipEngine {
         val taxpayerCredit = settings.taxpayerCreditAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026)
 
-        val vTaxableGross = CzechTaxEngine.netToGrossAnnual(
-            netMonthly = FinancialEngine.vaclavSalaryMonthly(settings.baseYear, settings),
-            taxpayerCreditAnnual = taxpayerCredit,
-            highBracketThresholdAnnual = taxThreshold,
-            baseTaxRatePct = baseTaxRatePct,
-            highTaxRatePct = highTaxRatePct
-        )
+        val vTaxableGross = CzechTaxEngine.primaryGrossAnnual(settings, settings.baseYear)
         val activeSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(settings, settings.baseYear)
+        val baselineDipTaxSaved = CzechTaxEngine.singleEarnerRetirementTaxSaved(
+            taxableGrossAnnual = vTaxableGross,
+            deductionAnnual = dipUtilizedAnnual,
+            thresholdHighBracket = taxThreshold,
+            baseRate = baseTaxRatePct / 100.0,
+            highRate = highTaxRatePct / 100.0,
+            basicTaxpayerCredit = taxpayerCredit,
+            additionalCredits = activeSpouseCredit
+        )
 
         val vAgeScenario = settings.primaryAge
         val effectiveScenarioThreshold = if (vAgeScenario >= settings.vStatePensionAge) 0.0 else dpsThreshold
@@ -158,15 +202,16 @@ object DpsDipEngine {
             val dpsAboveThreshold = max(0.0, monthly - effectiveScenarioThreshold)
             val dpsDeductionBase = dpsAboveThreshold * 12.0
             val effectiveDpsDeduction = min(dpsDeductionBase, remainingTaxHeadroom)
-            val taxSavedAnnual = CzechTaxEngine.singleEarnerRetirementTaxSaved(
+            val combinedSaved = CzechTaxEngine.singleEarnerRetirementTaxSaved(
                 taxableGrossAnnual = vTaxableGross,
-                deductionAnnual = effectiveDpsDeduction,
+                deductionAnnual = min(ceiling, dipUtilizedAnnual + effectiveDpsDeduction),
                 thresholdHighBracket = taxThreshold,
                 baseRate = baseTaxRatePct / 100.0,
                 highRate = highTaxRatePct / 100.0,
                 basicTaxpayerCredit = taxpayerCredit,
                 additionalCredits = activeSpouseCredit
             )
+            val taxSavedAnnual = max(0.0, combinedSaved - baselineDipTaxSaved)
             val totalBenefit = subAnnual + taxSavedAnnual
             val badge = when {
                 abs(monthly - 5700.0) < 1.0 -> if (remainingTaxHeadroom > 0.0) "DPS + DIP MAX" else "ABOVE SUBSIDY CAP"
@@ -191,23 +236,28 @@ object DpsDipEngine {
             ownTotal = totalOwn,
             subsidyTotal = totalSubsidy,
             employerTotal = totalEmp,
-            dpsBalance = dpsBal.finiteNonNegative(),
+            dpsBalance = dpsNetBal,
             etfBalance = etfBal.finiteNonNegative(),
-            margin = (dpsBal - etfBal).finiteOr(0.0),
+            margin = (dpsNetBal - etfBal).finiteOr(0.0),
             balanceAt36 = balAt36.finiteNonNegative(),
             earlyWithdrawalLimitAt36 = earlyWithdrawalLimitAt36,
             youthSubsidyActive = (settings.primaryAge < settings.dpsYouthAgeLimit) && (settings.baseYear >= RegulatoryConstants.LEPSI_PENZIJKO_EFFECTIVE_YEAR),
-            scenarios = scenarios
+            scenarios = scenarios,
+            dpsGrossBalance = dpsGrossBal,
+            lumpSumExitTax = lumpSumExitTax,
+            unlockAge = unlockAge
         )
     }
 
     /**
      * Projections and optimization matrix for DIP.
      */
-    fun buildDipProjection(settings: SettingsEntity): DipProjection {
-        val years = max(0, 60 - settings.primaryAge)
-        val tsCombined = CzechTaxEngine.dipTaxSavingYear(settings)
-        val tsDpsOnly = CzechTaxEngine.dipTaxSavingYear(settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0))
+    fun buildDipProjection(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): DipProjection {
+        val tsCombined = CzechTaxEngine.dipTaxSavingYear(settings, partnerBirthYearOverride)
+        val tsDpsOnly = CzechTaxEngine.dipTaxSavingYear(
+            settings.copy(dipContributionMonthly = 0.0, eDipContributionMonthly = 0.0),
+            partnerBirthYearOverride
+        )
         val tsYear = max(0.0, tsCombined - tsDpsOnly)
         val vDipMonthly = settings.dipContributionMonthly.finiteNonNegative()
         val eDipMonthly = if (!settings.isSingleHousehold) settings.eDipContributionMonthly.finiteNonNegative() else 0.0
@@ -244,7 +294,8 @@ object DpsDipEngine {
                 dipContributionMonthly = 0.0,
                 eDipContributionMonthly = 0.0,
                 eDpsOwnContributionMonthly = 0.0
-            )
+            ),
+            partnerBirthYearOverride
         )
 
         val scenarios = dipLevels.map { monthly: Double ->
@@ -253,7 +304,7 @@ object DpsDipEngine {
                 eDipContributionMonthly = 0.0,
                 eDpsOwnContributionMonthly = 0.0
             )
-            val asave = max(0.0, CzechTaxEngine.dipTaxSavingYear(scenarioSettings) - vDpsOnlyBaseline)
+            val asave = max(0.0, CzechTaxEngine.dipTaxSavingYear(scenarioSettings, partnerBirthYearOverride) - vDpsOnlyBaseline)
             val dipAnnual = monthly * 12.0
 
             val risk = when {
@@ -275,20 +326,23 @@ object DpsDipEngine {
         val vDipBal0 = settings.dipBalanceCurrent.finiteNonNegative()
         val eDipBal = if (!settings.isSingleHousehold) settings.eDipBalanceCurrent.finiteNonNegative() else 0.0
         var dipBal = vDipBal0 + eDipBal
+        val unlockAge = pensionUnlockAge(settings.primaryAge, vDipBal0, (vDipMonthly + vEmpToDip) * 12.0)
+        val years = max(0, unlockAge - settings.primaryAge)
         val totalMonths = years * 12
         for (m in 0 until totalMonths) {
             dipBal = max(0.0, (dipBal + totalDipContributionWithMatchMonthly) * max(0.0, 1.0 + monthlyRate))
         }
 
         val totalCeiling = if (settings.isSingleHousehold) ceiling else ceiling * 2.0
-        val totalUtilized = CzechTaxEngine.annualRetirementDeduction(settings)
+        val totalUtilized = CzechTaxEngine.annualRetirementDeduction(settings, settings.baseYear, partnerBirthYearOverride)
 
         return DipProjection(
             taxSavedYear = tsYear,
             netCostMonthly = max(0.0, totalMonthlyDip - tsYear / 12.0),
             scenarios = scenarios,
             headroom = max(0.0, totalCeiling - totalUtilized),
-            dipBalanceAt60 = dipBal.finiteNonNegative()
+            dipBalanceAt60 = dipBal.finiteNonNegative(),
+            unlockAge = unlockAge
         )
     }
 }

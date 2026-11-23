@@ -825,7 +825,7 @@ fun SettingsResetDialog(
         },
         text = {
             Text(
-                text = "This will reset all your settings (like income, expenses, and FIRE target) back to their default values. This action cannot be undone.",
+                text = "This will reset your modeling settings (income, expenses, and FIRE target) back to defaults. Your ledger history, investment lots, and learned merchant rules will be preserved.",
                 style = MaterialTheme.typography.bodyMedium
             )
         },
@@ -905,7 +905,7 @@ fun SettingsClearDataDialog(
         },
         text = {
             Text(
-                text = "This will PERMANENTLY delete all your ledger entries, action plan checks, and reset all your settings. Are you absolutely sure?",
+                text = "This will PERMANENTLY delete all your ledger entries, imported bank transactions, investment lots, learned merchant rules, action plan checks, and reset all settings. Are you absolutely sure?",
                 style = MaterialTheme.typography.bodyMedium
             )
         },

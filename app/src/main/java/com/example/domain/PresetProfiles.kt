@@ -98,9 +98,9 @@ object PresetProfiles {
 
     val LATER_RETIREMENT = FireScenarioPreset(
         id = "later_retirement",
-        title = "Retire 3 Years Later",
+        title = "State Pension +3 Years",
         badge = "PENSION",
-        description = "Moves state-pension age three years out, shrinking the private bridge period.",
+        description = "Shifts state-pension age three years later (pension reform stress test), extending the private bridge period and raising your FIRE target.",
         transform = { s ->
             s.copy(
                 vStatePensionAge = maxOf(s.vStatePensionAge, (s.vStatePensionAge + 3).coerceAtMost(75)),

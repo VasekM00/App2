@@ -68,7 +68,8 @@ class RoomFullMigrationChainTest {
         AppDatabase.MIGRATION_34_35,
         AppDatabase.MIGRATION_35_36,
         AppDatabase.MIGRATION_36_37,
-        AppDatabase.MIGRATION_37_38
+        AppDatabase.MIGRATION_37_38,
+        AppDatabase.MIGRATION_38_39
     )
 
     private fun buildVersionedSqliteDb(
@@ -184,12 +185,12 @@ class RoomFullMigrationChainTest {
     }
 
     @Test
-    fun v16ToV37_migrateCleanlyToV38() {
+    fun v16ToV38_migrateCleanlyToV39() {
         val context = ApplicationProvider.getApplicationContext<Application>()
-        val expectedV38Schema = loadSchemaJson(38)
-        val expectedEntities = expectedV38Schema.getJSONArray("entities")
+        val expectedV39Schema = loadSchemaJson(39)
+        val expectedEntities = expectedV39Schema.getJSONArray("entities")
 
-        for (startVersion in 16..37) {
+        for (startVersion in 16..38) {
             val dbName = "v$startVersion.db"
             val dbFile = context.getDatabasePath(dbName)
             dbFile.parentFile?.mkdirs()
@@ -207,9 +208,9 @@ class RoomFullMigrationChainTest {
 
                 try {
                     val supportDb = roomDb.openHelper.writableDatabase
-                    assertEquals("DB must reach v38 from v$startVersion", 38, supportDb.version)
+                    assertEquals("DB must reach v39 from v$startVersion", 39, supportDb.version)
 
-                    // Verify every table columns & indices match 38.json
+                    // Verify every table columns & indices match 39.json
                     for (i in 0 until expectedEntities.length()) {
                         val entity = expectedEntities.getJSONObject(i)
                         val tableName = entity.getString("tableName")
@@ -371,13 +372,14 @@ class RoomFullMigrationChainTest {
                         AppDatabase.MIGRATION_34_35,
                         AppDatabase.MIGRATION_35_36,
                         AppDatabase.MIGRATION_36_37,
-                        AppDatabase.MIGRATION_37_38
+                        AppDatabase.MIGRATION_37_38,
+                        AppDatabase.MIGRATION_38_39
                     )
                     .allowMainThreadQueries()
                     .build()
                 try {
                     val supportDb = roomDb.openHelper.writableDatabase
-                    assertEquals(38, supportDb.version)
+                    assertEquals(39, supportDb.version)
                     supportDb.query("SELECT primaryName FROM app_settings WHERE id = 1").use { c ->
                         assertTrue(c.moveToFirst())
                         assertEquals("UserV$startVersion", c.getString(0))
@@ -407,7 +409,7 @@ class RoomFullMigrationChainTest {
                 .build()
             try {
                 val supportDb = recoveredDb.openHelper.writableDatabase
-                assertEquals(38, supportDb.version)
+                assertEquals(39, supportDb.version)
             } finally {
                 recoveredDb.close()
             }

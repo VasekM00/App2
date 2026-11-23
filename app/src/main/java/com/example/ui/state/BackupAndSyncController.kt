@@ -65,7 +65,7 @@ internal class BackupAndSyncController(
             }
             if (parsedRates.isNotEmpty() && liveRegulatoryData.value == null) {
                 val savedDate = obj.optString("rateDate", "").trim()
-                val defaults = CzechRegulatoryData()
+                val defaults = CzechEconomicSyncService.loadBundledRegulatoryManifest(application)
                 liveRegulatoryData.value = defaults.copy(
                     sourceName = if (savedDate.isNotBlank()) {
                         "Saved ČNB FX ($savedDate) & Bundled 2026 Statutory Constants"
@@ -90,7 +90,7 @@ internal class BackupAndSyncController(
         isSyncing.value = true
         syncJob = scope.launch(Dispatchers.IO) {
             try {
-                val data = CzechEconomicSyncService.fetchLiveRegulatoryData()
+                val data = CzechEconomicSyncService.fetchLiveRegulatoryData(application)
                 liveRegulatoryData.value = data
                 if (data.isFxLive) {
                     val liveMap = linkedMapOf(
@@ -135,10 +135,13 @@ internal class BackupAndSyncController(
             try {
                 importMutex.withLock {
                     val now = YearMonth.now(ZoneId.of("Europe/Prague")).toString()
+                    val prevRulesJson = runCatching { repository.settingsFlow.first().merchantRulesJson }.getOrNull()
                     val clean = repository.updateSettingsTransformAndSyncLedger(now, transform)
                     if (clean != null) {
-                        val parsedRules = MerchantCategoryManager.parseRulesFromJson(clean.merchantRulesJson)
-                        MerchantCategoryManager.saveAllOverrides(application, parsedRules, preferencesRepository.storeName)
+                        if (prevRulesJson != null && clean.merchantRulesJson != prevRulesJson) {
+                            val parsedRules = MerchantCategoryManager.parseRulesFromJson(clean.merchantRulesJson)
+                            MerchantCategoryManager.saveAllOverrides(application, parsedRules, preferencesRepository.storeName)
+                        }
                         if (pendingSettingsWrites.decrementAndGet() == 0) {
                             liveSettings.value = clean
                         }
@@ -253,14 +256,13 @@ internal class BackupAndSyncController(
     suspend fun resetSettingsToDefault() {
         try {
             importMutex.withLock {
-                val defaults = SettingsEntity.freshDefaults()
+                val curMerchantRules = runCatching { repository.settingsFlow.first().merchantRulesJson }.getOrDefault("{}")
+                val defaults = SettingsEntity.freshDefaults().copy(merchantRulesJson = curMerchantRules)
                 val currentYm = YearMonth.now(ZoneId.of("Europe/Prague")).toString()
                 repository.updateSettingsAndSyncLedger(defaults, currentYm)
                 if (pendingSettingsWrites.get() == 0) {
                     liveSettings.value = defaults
                 }
-                MerchantCategoryManager.clearOverrides(application, preferencesRepository.storeName)
-                InvestmentLotManager.clearAll(application, preferencesRepository.storeName)
                 clearSensitivityOverrides()
                 emitSnackbar("Reset all settings to default")
             }

@@ -200,7 +200,8 @@ internal object TransactionCategorizer {
             bankType = summary.detectedBank,
             transactions = updatedTransactions,
             monthEndBalance = summary.monthEndBalance,
-            forcedYearMonth = summary.yearMonth.takeIf { StatementTextDecoder.YEAR_MONTH_REGEX.matches(it) }
+            forcedYearMonth = summary.yearMonth.takeIf { StatementTextDecoder.YEAR_MONTH_REGEX.matches(it) },
+            accountKey = summary.accountKey
         ).copy(
             isPdfSource = summary.isPdfSource,
             monthEndBalancesByBank = summary.monthEndBalancesByBank
@@ -211,7 +212,8 @@ internal object TransactionCategorizer {
         bankType: BankType,
         transactions: List<ParsedBankTransaction>,
         monthEndBalance: Double? = null,
-        forcedYearMonth: String? = null
+        forcedYearMonth: String? = null,
+        accountKey: String = ""
     ): StatementParseSummary {
         if (transactions.isEmpty()) return emptySummary(bankType)
 
@@ -299,6 +301,19 @@ internal object TransactionCategorizer {
         val totalExpenses = expRent + expGroceries + expOther
         val totalInvested = invPortu + invDip + invDps
 
+        val resolvedAccountKey = accountKey.ifBlank {
+            val distinctAccKeys = transactions.mapNotNull { it.accountKey.takeIf(String::isNotBlank) }.distinct()
+            if (distinctAccKeys.size == 1) distinctAccKeys[0] else ""
+        }
+        val taggedTransactions = transactions.map { tx ->
+            val withBank = if (bankType != BankType.GENERIC && tx.bankType == BankType.GENERIC) tx.copy(bankType = bankType) else tx
+            if (resolvedAccountKey.isNotBlank() && withBank.accountKey.isBlank()) {
+                withBank.copy(accountKey = resolvedAccountKey)
+            } else {
+                withBank
+            }
+        }
+
         return StatementParseSummary(
             detectedBank = bankType,
             yearMonth = predominantYm,
@@ -317,11 +332,8 @@ internal object TransactionCategorizer {
             internalTransfersCount = internalTransfers,
             totalNettedAmount = totalNettedAmount,
             monthEndBalance = monthEndBalance,
-            transactions = if (bankType != BankType.GENERIC) {
-                transactions.map { if (it.bankType == BankType.GENERIC) it.copy(bankType = bankType) else it }
-            } else {
-                transactions
-            }
+            transactions = taggedTransactions,
+            accountKey = resolvedAccountKey
         )
     }
 
@@ -332,25 +344,40 @@ internal object TransactionCategorizer {
         val seen = mutableSetOf<String>()
         val uniqueTxs = mutableListOf<ParsedBankTransaction>()
         val balancesByMonthAndBank = mutableMapOf<String, MutableMap<String, Double>>()
-        for (s in summaries) {
+        // Track whether multiple distinct same-bank statements without accountKey were imported together
+        val multiUnkeyedBanks = summaries.groupBy { it.yearMonth to it.detectedBank.name }
+            .filter { (_, grp) ->
+                grp.size > 1 && grp.any { it.accountKey.isBlank() } &&
+                    grp.mapNotNull { it.monthEndBalance }.distinct().size > 1
+            }.keys
+        for ((idx, s) in summaries.withIndex()) {
             val summaryCounts = mutableMapOf<String, Int>()
+            val isAmbiguousUnkeyed = s.accountKey.isBlank() && (s.yearMonth to s.detectedBank.name) in multiUnkeyedBanks
+            val balanceBankKey = when {
+                s.accountKey.isNotBlank() -> "${s.detectedBank.name}#${s.accountKey}"
+                isAmbiguousUnkeyed -> "${s.detectedBank.name}#ACC_${idx + 1}"
+                else -> s.detectedBank.name
+            }
             if (s.monthEndBalance != null && s.monthEndBalance.isFinite() && StatementTextDecoder.YEAR_MONTH_REGEX.matches(s.yearMonth)) {
-                balancesByMonthAndBank.getOrPut(s.yearMonth) { mutableMapOf() }[s.detectedBank.name] = s.monthEndBalance
+                balancesByMonthAndBank.getOrPut(s.yearMonth) { mutableMapOf() }[balanceBankKey] = s.monthEndBalance
             }
             s.monthEndBalancesByBank.forEach { (ym, bankMap) ->
                 balancesByMonthAndBank.getOrPut(ym) { mutableMapOf() }.putAll(bankMap)
             }
+            val summaryBalDiscriminator = if (isAmbiguousUnkeyed && s.monthEndBalance != null && s.monthEndBalance.isFinite()) {
+                "bal:${String.format(Locale.ROOT, "%.2f", s.monthEndBalance)}"
+            } else ""
             for (tx in s.transactions) {
                 val effectiveBank = if (tx.bankType != BankType.GENERIC) tx.bankType else s.detectedBank
-                val taggedTx = if (tx.bankType == BankType.GENERIC && effectiveBank != BankType.GENERIC) {
-                    tx.copy(bankType = effectiveBank)
-                } else {
-                    tx
-                }
+                val effectiveAccKey = tx.accountKey.ifBlank { s.accountKey }
+                val taggedTx = tx.copy(
+                    bankType = if (tx.bankType == BankType.GENERIC && effectiveBank != BankType.GENERIC) effectiveBank else tx.bankType,
+                    accountKey = effectiveAccKey
+                )
                 val formattedAmount = String.format(Locale.ROOT, "%.2f", tx.amount)
-                // Preserve explicit per-bank transactions as distinct while deduplicating GENERIC overlap across files.
-                val bankKey = if (tx.bankType != BankType.GENERIC) tx.bankType.name else ""
-                val baseKey = "$bankKey|${tx.date}|$formattedAmount|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
+                val bankKey = if (effectiveBank != BankType.GENERIC) effectiveBank.name else ""
+                val accKeyScope = effectiveAccKey.ifBlank { summaryBalDiscriminator }
+                val baseKey = "$bankKey|$accKeyScope|${tx.date}|$formattedAmount|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
                 val count = summaryCounts[baseKey] ?: 0
                 summaryCounts[baseKey] = count + 1
                 val globalKey = "$baseKey#$count"

@@ -61,10 +61,10 @@ class FullSettingsReactivityAuditTest {
         assertEquals(0.0, inc2028BeforeReturn.eleonoraSalary, 0.001)
         assertTrue(inc2028AfterReturn.eleonoraSalary > 0)
 
-        // eReturnMonth (e.g. July return -> 6 months work, 6 months leave on active Child 2 pot born 2028 under Act 117/1995 § 30(1))
+        // eReturnMonth (e.g. July return -> 6 months work salary + full-year non-forfeited parental allowance under Act 117/1995 § 30)
         val julyReturn = FinancialEngine.householdIncome(2029, base.copy(child2BirthYear = 2028, eReturnYear = 2029, eReturnMonth = 7, eStartingSalary = 40000.0, eParentalAllowanceMonthly = 14000.0, eLecturingMonthly = 8000.0))
         assertEquals(20000.0, julyReturn.eleonoraSalary, 0.001) // 40000 * 6/12 = 20000
-        assertEquals(7000.0, julyReturn.benefit, 0.001) // 14000 * 6/12 = 7000
+        assertEquals(14000.0, julyReturn.benefit, 0.001) // Return to work never forfeits Czech parental allowance
         assertEquals(4000.0, julyReturn.lecturing, 0.001) // 8000 * 6/12 = 4000
 
         // eOtherInflowsMonthly

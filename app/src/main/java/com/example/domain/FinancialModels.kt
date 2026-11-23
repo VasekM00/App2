@@ -298,7 +298,10 @@ data class DpsProjection(
     val balanceAt36: Double,
     val earlyWithdrawalLimitAt36: Double,
     val youthSubsidyActive: Boolean,
-    val scenarios: List<DpsScenario> = emptyList()
+    val scenarios: List<DpsScenario> = emptyList(),
+    val dpsGrossBalance: Double = dpsBalance,
+    val lumpSumExitTax: Double = 0.0,
+    val unlockAge: Int = 60
 )
 
 @Immutable
@@ -317,7 +320,8 @@ data class DipProjection(
     val netCostMonthly: Double,
     val scenarios: List<DipScenario>,
     val headroom: Double,
-    val dipBalanceAt60: Double
+    val dipBalanceAt60: Double,
+    val unlockAge: Int = 60
 )
 
 @Immutable
@@ -375,8 +379,12 @@ data class RetirementSurvivalResult(
     val medianDepletionAge: Int?,
     val sampleSize: Int,
     val guardrailsActive: Boolean = false,
-    val guardrailTriggeredPct: Double = 0.0
-)
+    val guardrailTriggeredPct: Double = 0.0,
+    val fireReachedCount: Int = sampleSize
+) {
+    val isLowConfidenceSample: Boolean
+        get() = fireReachedCount in 1 until 30
+}
 
 @Immutable
 data class StressScenarioResult(
@@ -433,7 +441,12 @@ data class YtdTaxShieldStatus(
     val remainingHeadroomAnnual: Double,
     val monthsRemainingInYear: Int,
     val recommendedMonthlyPace: Double,
-    val isCeilingReached: Boolean
+    val isCeilingReached: Boolean,
+    val isFromImportedTransactions: Boolean = false,
+    val partnerYtdDipContributed: Double = 0.0,
+    val partnerYtdDpsContributed: Double = 0.0,
+    val partnerRemainingHeadroomAnnual: Double = 0.0,
+    val householdCeilingAnnual: Double = statutoryCeilingAnnual
 )
 
 @Immutable
@@ -481,7 +494,11 @@ data class FullCalculationState(
     val capitalGainsSummary: CapitalGainsPortfolioSummary? = null,
     val effectiveSettings: SettingsEntity = settings,
     val snapshot: CanonicalHouseholdSnapshot = CanonicalHouseholdSnapshot.EMPTY,
-    val pensionOptimization: PensionOptimizationSnapshot = PensionOptimizationSnapshot.EMPTY
+    val pensionOptimization: PensionOptimizationSnapshot = PensionOptimizationSnapshot.EMPTY,
+    val bridgeYearsFromFireTo60: Int = 0,
+    val bridgeRequiredAtFire: Double = 0.0,
+    val isBridgeFundedAtFire: Boolean = true,
+    val bridgeDeficitAtFire: Double = 0.0
 )
 
 @Immutable
@@ -525,7 +542,11 @@ data class CanonicalHouseholdSnapshot(
     val bridgeRequiredToday: Double = 0.0,
     val isBridgeFundedToday: Boolean = true,
     val bridgeDeficitToday: Double = 0.0,
-    val bridgeWaitYears: Int = 0
+    val bridgeWaitYears: Int = 0,
+    val bridgeYearsFromFireTo60: Int = 0,
+    val bridgeRequiredAtFire: Double = 0.0,
+    val isBridgeFundedAtFire: Boolean = true,
+    val bridgeDeficitAtFire: Double = 0.0
 ) {
     companion object {
         val EMPTY = CanonicalHouseholdSnapshot()

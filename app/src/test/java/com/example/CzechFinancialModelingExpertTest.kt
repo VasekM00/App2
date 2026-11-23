@@ -75,12 +75,11 @@ class CzechFinancialModelingExpertTest {
         )
 
         // In year 2, portfolio is down to ~ (10M - 400k) * 0.70 = 6.72M.
-        // Tentative withdrawal is 400k * 1.028 = 411,200 CZK.
-        // Current withdrawal rate = 411,200 / 6,720,000 = 6.12%, which exceeds 4.0% * 1.20 = 4.8%.
-        // Capital Preservation rule must trigger 10% cut!
+        // Guyton-Klinger Inflation-Skip Rule freezes CPI raise after a losing year with elevated SWR (400k base),
+        // then Capital Preservation triggers the 10% guardrail cut -> 400,000 * 0.90 = 360,000 CZK.
         val year2 = path[1]
         assertTrue("Year 2 must trigger guardrail cut", year2.isGuardrailCut)
-        val expectedNominalAfterCut = (initialNeed * 1.028) * 0.90 // 411,200 * 0.9 = 370,080 CZK
+        val expectedNominalAfterCut = initialNeed * 0.90 // 400,000 * 0.9 = 360,000 CZK
         assertEquals(expectedNominalAfterCut, year2.withdrawalNominal, 1.0)
     }
 

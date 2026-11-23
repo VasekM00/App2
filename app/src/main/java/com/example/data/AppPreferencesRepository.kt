@@ -25,6 +25,7 @@ data class AppPreferencesSnapshot(
     val cnbFxRatesJson: String = "{}",
     val biometricLockEnabled: Boolean = false,
     val flagSecureEnabled: Boolean = false,
+    val partnerBirthYear: Int? = null,
     val isHydrated: Boolean = false
 )
 
@@ -38,7 +39,6 @@ class AppPreferencesRepository(
 ) {
     val storeName: String get() = prefsName
     private val appContext: Context = context.applicationContext
-    private val prefsLock = Any()
 
     private val prefs: SharedPreferences by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         appContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -47,15 +47,19 @@ class AppPreferencesRepository(
     private val _snapshot = MutableStateFlow(AppPreferencesSnapshot())
     val snapshot: StateFlow<AppPreferencesSnapshot> = _snapshot.asStateFlow()
 
+    init {
+        activeRepositories.add(java.lang.ref.WeakReference(this))
+    }
+
     suspend fun hydrate(): AppPreferencesSnapshot = withContext(Dispatchers.IO) {
-        val loaded = synchronized(prefsLock) {
+        synchronized(PREFS_LOCK) {
             if (!prefs.getBoolean(KEY_LEGACY_MIGRATED_V1, false) && prefsName == DEFAULT_PREFS_NAME) {
                 runCatching { migrateLegacyStoresLocked() }
             }
-            readSnapshotLocked().copy(isHydrated = true)
+            val loaded = readSnapshotLocked().copy(isHydrated = true)
+            _snapshot.value = loaded
+            loaded
         }
-        _snapshot.value = loaded
-        loaded
     }
 
     private fun migrateLegacyStoresLocked() {
@@ -158,6 +162,9 @@ class AppPreferencesRepository(
         val fxJson = prefs.getString(KEY_CNB_FX_JSON, "{}") ?: "{}"
         val bio = runCatching { prefs.getBoolean(KEY_BIOMETRIC_LOCK, false) }.getOrDefault(false)
         val secure = runCatching { prefs.getBoolean(KEY_FLAG_SECURE, false) }.getOrDefault(false)
+        val partnerBirthYr = if (prefs.contains(KEY_PARTNER_BIRTH_YEAR)) {
+            runCatching { prefs.getInt(KEY_PARTNER_BIRTH_YEAR, Int.MIN_VALUE) }.getOrNull()?.takeIf { it in 1900..2100 }
+        } else null
 
         val balances = mutableMapOf<String, Double>()
         val bankTimes = mutableMapOf<String, Long>()
@@ -192,6 +199,7 @@ class AppPreferencesRepository(
             cnbFxRatesJson = fxJson,
             biometricLockEnabled = bio,
             flagSecureEnabled = secure,
+            partnerBirthYear = partnerBirthYr,
             isHydrated = _snapshot.value.isHydrated
         )
     }
@@ -207,6 +215,16 @@ class AppPreferencesRepository(
 
     suspend fun setFlagSecureEnabled(enabled: Boolean) = updateOnIo {
         prefs.edit { putBoolean(KEY_FLAG_SECURE, enabled) }
+    }
+
+    suspend fun setPartnerBirthYear(year: Int?) = updateOnIo {
+        prefs.edit {
+            if (year != null && year in 1900..2100) {
+                putInt(KEY_PARTNER_BIRTH_YEAR, year)
+            } else {
+                remove(KEY_PARTNER_BIRTH_YEAR)
+            }
+        }
     }
 
     suspend fun setLastImportTimestamp(bankName: String?, timestampMs: Long) = updateOnIo {
@@ -256,11 +274,28 @@ class AppPreferencesRepository(
     }
 
     suspend fun removeBankBalanceForMonthBank(yearMonth: String, bankName: String) = updateOnIo {
-        val exactKey = "bank_bal_${yearMonth}_${bankName.uppercase(java.util.Locale.ROOT)}"
+        val bankUpper = bankName.uppercase(java.util.Locale.ROOT)
+        val exactKey = "bank_bal_${yearMonth}_$bankUpper"
+        val accountPrefix = "${exactKey}#"
         val rawKey = "bank_bal_${yearMonth}_$bankName"
+        val rawPrefix = "${rawKey}#"
         prefs.edit {
             remove(exactKey)
             remove(rawKey)
+            prefs.all.keys
+                .filter { it.startsWith(accountPrefix) || it.startsWith(rawPrefix) }
+                .forEach { remove(it) }
+        }
+    }
+
+    suspend fun removeBankBalanceForMonthBankAccount(yearMonth: String, bankName: String, accountKey: String) = updateOnIo {
+        val bankUpper = bankName.uppercase(java.util.Locale.ROOT)
+        val suffix = if (accountKey.isNotBlank()) "#${accountKey.uppercase(java.util.Locale.ROOT)}" else ""
+        val keyUpper = "bank_bal_${yearMonth}_${bankUpper}$suffix"
+        val keyRaw = "bank_bal_${yearMonth}_$bankName${if (accountKey.isNotBlank()) "#$accountKey" else ""}"
+        prefs.edit {
+            remove(keyUpper)
+            remove(keyRaw)
         }
     }
 
@@ -270,16 +305,13 @@ class AppPreferencesRepository(
 
     suspend fun setMerchantOverridesJson(jsonStr: String?) = updateOnIo {
         prefs.edit {
-            if (jsonStr.isNullOrBlank() || jsonStr.trim() == "{}") {
-                remove(KEY_MERCHANT_OVERRIDES_JSON)
-            } else {
-                putString(KEY_MERCHANT_OVERRIDES_JSON, jsonStr)
-            }
+            val clean = if (jsonStr.isNullOrBlank()) "{}" else jsonStr
+            putString(KEY_MERCHANT_OVERRIDES_JSON, clean)
         }
     }
 
     suspend fun isFlagSet(key: String): Boolean = withContext(Dispatchers.IO) {
-        synchronized(prefsLock) {
+        synchronized(PREFS_LOCK) {
             runCatching { prefs.getBoolean(key, false) }.getOrDefault(false)
         }
     }
@@ -289,7 +321,7 @@ class AppPreferencesRepository(
     }
 
     suspend fun exportPreferencesForBackup(): Map<String, String> = withContext(Dispatchers.IO) {
-        synchronized(prefsLock) {
+        synchronized(PREFS_LOCK) {
             val out = mutableMapOf<String, String>()
             val snap = readSnapshotLocked()
             if (snap.dismissedSubscriptionMerchants.isNotEmpty()) {
@@ -302,6 +334,9 @@ class AppPreferencesRepository(
             out["theme_mode"] = snap.themeMode
             out["biometric_lock_enabled"] = snap.biometricLockEnabled.toString()
             out["flag_secure_enabled"] = snap.flagSecureEnabled.toString()
+            if (snap.partnerBirthYear != null) {
+                out[KEY_PARTNER_BIRTH_YEAR] = snap.partnerBirthYear.toString()
+            }
             out
         }
     }
@@ -343,6 +378,9 @@ class AppPreferencesRepository(
             prefMap["flag_secure_enabled"]?.toBooleanStrictOrNull()?.let {
                 putBoolean(KEY_FLAG_SECURE, it)
             }
+            prefMap[KEY_PARTNER_BIRTH_YEAR]?.toIntOrNull()?.takeIf { it in 1900..2100 }?.let {
+                putInt(KEY_PARTNER_BIRTH_YEAR, it)
+            }
             // Mark one-time migrations complete so restored historical zero-balance entries aren't overwritten
             putBoolean("legacy_balances_backfilled", true)
             putBoolean("legacy_employer_repaired_v1", true)
@@ -350,7 +388,7 @@ class AppPreferencesRepository(
     }
 
     suspend fun clearAllUserData() = withContext(Dispatchers.IO) {
-        synchronized(prefsLock) {
+        synchronized(PREFS_LOCK) {
             prefs.edit(commit = true) { clear() }
             if (prefsName == DEFAULT_PREFS_NAME) {
                 for (legacy in LEGACY_STORES) {
@@ -358,19 +396,38 @@ class AppPreferencesRepository(
                 }
             }
             prefs.edit(commit = true) { putBoolean(KEY_LEGACY_MIGRATED_V1, true) }
+            _snapshot.value = AppPreferencesSnapshot(isHydrated = true)
+            notifyStoreMutatedLocked(prefsName)
         }
-        _snapshot.value = AppPreferencesSnapshot(isHydrated = true)
     }
 
     private suspend fun updateOnIo(block: () -> Unit) = withContext(Dispatchers.IO) {
-        val updated = synchronized(prefsLock) {
+        synchronized(PREFS_LOCK) {
             block()
-            readSnapshotLocked().copy(isHydrated = true)
+            val updated = readSnapshotLocked().copy(isHydrated = true)
+            _snapshot.value = updated
         }
-        _snapshot.value = updated
     }
 
     companion object {
+        internal val PREFS_LOCK = Any()
+        private val activeRepositories = java.util.concurrent.CopyOnWriteArrayList<java.lang.ref.WeakReference<AppPreferencesRepository>>()
+
+        internal fun notifyStoreMutatedLocked(targetPrefsName: String) {
+            val stale = mutableListOf<java.lang.ref.WeakReference<AppPreferencesRepository>>()
+            for (ref in activeRepositories) {
+                val repo = ref.get()
+                if (repo == null) {
+                    stale.add(ref)
+                } else if (repo.prefsName == targetPrefsName) {
+                    repo._snapshot.value = repo.readSnapshotLocked().copy(isHydrated = true)
+                }
+            }
+            if (stale.isNotEmpty()) {
+                activeRepositories.removeAll(stale.toSet())
+            }
+        }
+
         const val DEFAULT_PREFS_NAME = "app_user_prefs"
         private const val KEY_LEGACY_MIGRATED_V1 = "legacy_prefs_migrated_v1"
         private const val KEY_THEME_MODE = "theme_mode"
@@ -382,6 +439,7 @@ class AppPreferencesRepository(
         private const val KEY_CNB_FX_JSON = "cnb_fx_rates_json"
         private const val KEY_BIOMETRIC_LOCK = "biometric_lock_enabled"
         private const val KEY_FLAG_SECURE = "flag_secure_enabled"
+        private const val KEY_PARTNER_BIRTH_YEAR = "partner_birth_year"
 
         private val MIGRATION_FLAG_KEYS = setOf(
             "legacy_employer_repaired_v1",
@@ -398,6 +456,7 @@ class AppPreferencesRepository(
         }
 
         private val LEGACY_STORES = listOf(
+            "app_theme_prefs",
             "statement_import_prefs",
             "subscription_auditor_prefs",
             "czech_sync_prefs",

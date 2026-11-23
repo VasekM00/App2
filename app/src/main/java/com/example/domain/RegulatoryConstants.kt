@@ -84,6 +84,24 @@ object RegulatoryConstants {
     const val STATUTORY_SECURITIES_TIME_TEST_YEARS = 3
     const val STATUTORY_SECURITIES_TIME_TEST_MONTHS = 36
     const val STATUTORY_SECURITIES_ANNUAL_EXEMPTION_LIMIT_CZK = 100000.0
+
+    // --- Rodičovský příspěvek pro vícerčata (zákon č. 117/1995 Sb. § 30 odst. 1 ve znění od 2026) ---
+    const val PARENTAL_ALLOWANCE_TWINS_MULTIPLIER_2026 = 2.0
+
+    // --- ZDP § 38v - Oznamovací povinnost o osvobozených příjmech nad 5 000 000 Kč ---
+    const val STATUTORY_EXEMPT_INCOME_REPORTING_THRESHOLD_CZK = 5_000_000.0
+
+    // --- DPS zákonné stropy výkonnostní odměny (zákon č. 427/2011 Sb. § 60 odst. 4) ---
+    const val STATUTORY_DPS_DYNAMIC_PERFORMANCE_FEE_PCT = 15.0
+    const val STATUTORY_DPS_BALANCED_PERFORMANCE_FEE_PCT = 10.0
+
+    // --- Minimální doba trvání penzijních produktů (120 měsíců = 10 let, ZDP § 15b) ---
+    const val STATUTORY_PENSION_MIN_LOCK_IN_YEARS = 10
+
+    // --- ZDP § 15 odst. 1 - Odpočet bezúplatných plnění (darů) ---
+    const val STATUTORY_CHARITY_MIN_ANNUAL_CZK = 1_000.0
+    const val STATUTORY_CHARITY_MAX_BASE_PCT_TEMP_2026 = 30.0
+    const val STATUTORY_CHARITY_MAX_BASE_PCT_STANDARD = 15.0
 }
 
 /**

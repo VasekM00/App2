@@ -180,8 +180,14 @@ class FinancialRepository(
                         val primaryPension = (pensionBalance - spousePension).coerceAtLeast(0.0)
                         val curPrimary = cur.dpsBalanceCurrent + cur.dipBalanceCurrent
                         if (curPrimary != primaryPension) {
-                            // Preserve the existing DPS/DIP split instead of collapsing everything into DPS.
-                            val dpsShare = if (curPrimary > 0.0) cur.dpsBalanceCurrent / curPrimary else 1.0
+                            // Preserve existing DPS/DIP split; if balances are 0, weight by contributions (or 50/50) instead of dumping 100% into DPS.
+                            val contribSum = cur.dpsOwnContributionMonthly.coerceAtLeast(0.0) +
+                                cur.dipContributionMonthly.coerceAtLeast(0.0)
+                            val dpsShare = when {
+                                curPrimary > 0.0 -> cur.dpsBalanceCurrent / curPrimary
+                                contribSum > 0.0 -> cur.dpsOwnContributionMonthly.coerceAtLeast(0.0) / contribSum
+                                else -> 0.5
+                            }
                             val newDps = primaryPension * dpsShare
                             updated = updated.copy(
                                 dpsBalanceCurrent = newDps,
@@ -223,10 +229,39 @@ class FinancialRepository(
         )
     }
 
+    private fun applyCalendarYearRollover(
+        current: SettingsEntity,
+        targetCalendarYear: Int
+    ): SettingsEntity {
+        if (current.baseYear !in 2026 until targetCalendarYear) return current
+        val delta = targetCalendarYear - current.baseYear
+        return current.copy(
+            baseYear = targetCalendarYear,
+            primaryAge = (current.primaryAge + delta).coerceIn(15, 100)
+        )
+    }
+
     /**
-     * One-time repair for databases written by older app versions that stored the employer
-     * retirement contribution as 2800 (monthly) instead of the correct 233 CZK/month
-     * (2800 CZK/yr), plus automatic calendar-year rollover when the real Czech year advances.
+     * Advances `baseYear` and `primaryAge` when the real Prague calendar year rolls over.
+     * Safe to invoke on every startup without modifying user-entered employer contributions.
+     */
+    suspend fun rolloverCalendarYearIfNeeded(
+        targetCalendarYear: Int = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
+    ) = withContext(Dispatchers.IO) {
+        safeDbWrite("rollover_calendar_year", Unit) {
+            database.withTransaction {
+                val current = settingsDao.getSettingsDirect() ?: return@withTransaction
+                val updated = applyCalendarYearRollover(current, targetCalendarYear)
+                val clean = com.example.util.BackupManager.sanitizeSettings(updated, current)
+                if (clean != current) {
+                    settingsDao.saveSettings(clean)
+                }
+            }
+        }
+    }
+
+    /**
+     * Legacy migration helper for older DB rows storing 2800 (annual) in monthly employer field.
      */
     suspend fun repairLegacyEmployerContribution(
         targetCalendarYear: Int = java.time.YearMonth.now(java.time.ZoneId.of("Europe/Prague")).year
@@ -238,13 +273,7 @@ class FinancialRepository(
                 if (updated.employerRetirementMonthly >= 2795.0 && updated.employerRetirementMonthly <= 2805.0) {
                     updated = updated.copy(employerRetirementMonthly = 233.0)
                 }
-                if (updated.baseYear in 2026 until targetCalendarYear) {
-                    val delta = targetCalendarYear - updated.baseYear
-                    updated = updated.copy(
-                        baseYear = targetCalendarYear,
-                        primaryAge = (updated.primaryAge + delta).coerceIn(15, 100)
-                    )
-                }
+                updated = applyCalendarYearRollover(updated, targetCalendarYear)
                 val clean = com.example.util.BackupManager.sanitizeSettings(updated, current)
                 if (clean != current) {
                     settingsDao.saveSettings(clean)
@@ -362,6 +391,19 @@ class FinancialRepository(
         }
     }
 
+    suspend fun deleteImportedTransactionsForBankAccountAndMonth(
+        yearMonth: String,
+        bankName: String,
+        accountKey: String
+    ) = withContext(Dispatchers.IO) {
+        safeDbWrite("delete_imported_bank_account_month", Unit) {
+            database.withTransaction {
+                importedTransactionDao.deleteTransactionsForBankAccountAndMonth(yearMonth, bankName, accountKey)
+                importedTransactionDao.clearStaleMatchedTransactionLinks()
+            }
+        }
+    }
+
     fun getAllImportedTransactions(): Flow<List<ImportedBankTransactionEntity>> {
         return importedTransactionDao.getAllImportedTransactions()
             .catch { e ->
@@ -386,12 +428,18 @@ class FinancialRepository(
     suspend fun saveImportedTransactionsSmartMerge(
         yearMonth: String,
         bankName: String,
-        newTransactions: List<ImportedBankTransactionEntity>
+        newTransactions: List<ImportedBankTransactionEntity>,
+        accountKey: String = ""
     ): List<ImportedBankTransactionEntity> = withContext(Dispatchers.IO) {
         // Read-modify-write must be atomic: two concurrent imports of the same
-        // bank/month would otherwise both observe the same existing set and double-insert.
+        // bank/account/month would otherwise both observe the same existing set and double-insert.
+        val cleanScopeKey = accountKey.trim().take(80)
         database.withTransaction {
-            val existing = importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+            val existing = if (cleanScopeKey.isNotEmpty()) {
+                importedTransactionDao.getTransactionsForBankAccountAndMonthDirect(yearMonth, bankName, cleanScopeKey)
+            } else {
+                importedTransactionDao.getTransactionsForBankAndMonthDirect(yearMonth, bankName)
+            }
             val cleanIncoming = newTransactions.map(::sanitizeTransaction)
             if (existing.isEmpty()) {
                 importedTransactionDao.insertTransactions(cleanIncoming)
@@ -401,7 +449,7 @@ class FinancialRepository(
             val existingCounts = mutableMapOf<String, Int>()
             for (tx in existing) {
                 val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
-                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol, tx.accountKey
                 )
                 existingCounts[fp] = (existingCounts[fp] ?: 0) + 1
             }
@@ -410,7 +458,7 @@ class FinancialRepository(
             val toInsert = mutableListOf<ImportedBankTransactionEntity>()
             for (tx in cleanIncoming) {
                 val fp = com.example.util.CrossStatementReconciliationEngine.computeFingerprint(
-                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol
+                    tx.date, tx.bankName, tx.amount, tx.counterpartyAccount, tx.counterpartyName, tx.message, tx.variableSymbol, tx.accountKey
                 )
                 val seen = incomingCounts[fp] ?: 0
                 val existingCount = existingCounts[fp] ?: 0
@@ -546,7 +594,11 @@ class FinancialRepository(
         date = tx.date.trim(),
         amount = finiteOrZero(tx.amount),
         category = tx.category.trim().ifBlank { "LIFESTYLE_LIVING" },
-        matchedTxId = tx.matchedTxId?.takeIf { it > 0L }
+        matchedTxId = tx.matchedTxId?.takeIf { it > 0L },
+        accountKey = tx.accountKey.trim().take(80),
+        originalCurrency = tx.originalCurrency.trim().uppercase(java.util.Locale.ROOT).take(8).ifBlank { "CZK" },
+        originalAmount = finiteOrZero(tx.originalAmount),
+        fxRateToCzk = tx.fxRateToCzk.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
     )
 }
 

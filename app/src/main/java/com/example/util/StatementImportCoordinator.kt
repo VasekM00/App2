@@ -189,7 +189,10 @@ class StatementImportCoordinator(
         val autoNotes = "Imported from $banksSummary (${allMonthTxs.size} txs)$nettingNote$investNote"
 
         if (existingEntry != null) {
-            val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from", ignoreCase = true)) {
+            val preservedNotes = if (existingEntry.notes.isBlank() ||
+                existingEntry.notes.startsWith("Imported from", ignoreCase = true) ||
+                existingEntry.notes.startsWith("Direct Bank Statement", ignoreCase = true)
+            ) {
                 autoNotes
             } else {
                 existingEntry.notes
@@ -227,10 +230,17 @@ class StatementImportCoordinator(
         var latestAuditReport: CrossStatementAuditReport? = null
         val pendingBankBalanceWrites = mutableMapOf<String, Double>()
 
+        val currentCzechYm = YearMonth.now(java.time.ZoneId.of("Europe/Prague")).toString()
         repository.withTransaction {
             for ((targetYm, monthTxs) in txsByMonth) {
-                val byBank = monthTxs.groupBy { if (it.bankType != BankType.GENERIC) it.bankType.name else summary.detectedBank.name }
-                for ((bankName, bTxs) in byBank) {
+                val isHistoricalMonth = targetYm < currentCzechYm
+                val byBankAccount = monthTxs.groupBy { tx ->
+                    val bank = if (tx.bankType != BankType.GENERIC) tx.bankType.name else summary.detectedBank.name
+                    val accKey = tx.accountKey.ifBlank { summary.accountKey }.trim().take(80)
+                    bank to accKey
+                }
+                for ((keyPair, bTxs) in byBankAccount) {
+                    val (bankName, accKey) = keyPair
                     val txEntities = bTxs.map { tx ->
                         ImportedBankTransactionEntity(
                             yearMonth = targetYm,
@@ -243,10 +253,14 @@ class StatementImportCoordinator(
                             variableSymbol = tx.variableSymbol,
                             category = tx.category.name,
                             isNetted = tx.isNetted,
-                            nettingReason = tx.nettingReason
+                            nettingReason = tx.nettingReason,
+                            accountKey = accKey,
+                            originalCurrency = tx.originalCurrency?.ifBlank { "CZK" } ?: "CZK",
+                            originalAmount = tx.originalAmount ?: 0.0,
+                            fxRateToCzk = tx.exchangeRate?.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
                         )
                     }
-                    repository.saveImportedTransactionsSmartMerge(targetYm, bankName, txEntities)
+                    repository.saveImportedTransactionsSmartMerge(targetYm, bankName, txEntities, accKey)
                 }
 
                 val boundaryTxs = fetchBoundaryTransactions(targetYm)
@@ -274,12 +288,17 @@ class StatementImportCoordinator(
                     if (monthEndBal != null && monthEndBal.isFinite()) {
                         val isTargetBalanceMonth = (targetYm == summary.yearMonth) || (summary.yearMonth !in txsByMonth.keys && targetYm == latestMonth)
                         if (isTargetBalanceMonth) {
-                            val balBankKey = if (summary.detectedBank != BankType.GENERIC) {
+                            val baseBankKey = if (summary.detectedBank != BankType.GENERIC) {
                                 summary.detectedBank.name
-                            } else if (byBank.size == 1) {
-                                byBank.keys.first()
+                            } else if (byBankAccount.size == 1) {
+                                byBankAccount.keys.first().first
                             } else {
                                 summary.detectedBank.name
+                            }
+                            val balBankKey = if (summary.accountKey.isNotBlank()) {
+                                "$baseBankKey#${summary.accountKey}"
+                            } else {
+                                baseBankKey
                             }
                             storedBalances[balBankKey] = monthEndBal
                             pendingBankBalanceWrites["${targetYm}_$balBankKey"] = monthEndBal
@@ -325,10 +344,13 @@ class StatementImportCoordinator(
                 val snapLiquid = cur.liquidPortfolioCurrent + if (!isSingle) cur.eLiquidPortfolioCurrent else 0.0
                 val snapPension = cur.dipBalanceCurrent + cur.dpsBalanceCurrent + if (!isSingle) (cur.eDipBalanceCurrent + cur.eDpsBalanceCurrent) else 0.0
                 val parsedReserveBal = auditReport.combinedEmergencyReserve?.takeIf { it.isFinite() && it > 0.0 }
-                val effectiveReserveForLedger = parsedReserveBal ?: cur.emergencyReserveCurrent
+                val currentMonthReserveDefault = cur.emergencyReserveCurrent.takeIf { it > 0.0 } ?: (parsedReserveBal ?: 0.0)
 
                 if (existingEntry != null) {
-                    val preservedNotes = if (existingEntry.notes.isBlank() || existingEntry.notes.startsWith("Imported from", ignoreCase = true)) {
+                    val preservedNotes = if (existingEntry.notes.isBlank() ||
+                        existingEntry.notes.startsWith("Imported from", ignoreCase = true) ||
+                        existingEntry.notes.startsWith("Direct Bank Statement", ignoreCase = true)
+                    ) {
                         autoNotes
                     } else {
                         existingEntry.notes
@@ -341,9 +363,21 @@ class StatementImportCoordinator(
                         expGroceries = agg.expGroceries,
                         expOther = agg.expOther,
                         notes = preservedNotes,
-                        portfolioBalanceAtMonthEnd = if (existingEntry.portfolioBalanceAtMonthEnd > 0) existingEntry.portfolioBalanceAtMonthEnd else snapLiquid,
-                        pensionBalanceAtMonthEnd = if (existingEntry.pensionBalanceAtMonthEnd > 0) existingEntry.pensionBalanceAtMonthEnd else snapPension,
-                        emergencyReserveAtMonthEnd = parsedReserveBal ?: (if (existingEntry.emergencyReserveAtMonthEnd > 0) existingEntry.emergencyReserveAtMonthEnd else cur.emergencyReserveCurrent)
+                        portfolioBalanceAtMonthEnd = when {
+                            isHistoricalMonth -> existingEntry.portfolioBalanceAtMonthEnd
+                            existingEntry.portfolioBalanceAtMonthEnd > 0.0 -> existingEntry.portfolioBalanceAtMonthEnd
+                            else -> snapLiquid
+                        },
+                        pensionBalanceAtMonthEnd = when {
+                            isHistoricalMonth -> existingEntry.pensionBalanceAtMonthEnd
+                            existingEntry.pensionBalanceAtMonthEnd > 0.0 -> existingEntry.pensionBalanceAtMonthEnd
+                            else -> snapPension
+                        },
+                        emergencyReserveAtMonthEnd = when {
+                            existingEntry.emergencyReserveAtMonthEnd > 0.0 -> existingEntry.emergencyReserveAtMonthEnd
+                            isHistoricalMonth -> parsedReserveBal ?: 0.0
+                            else -> currentMonthReserveDefault
+                        }
                     )
                     repository.updateLedgerEntry(updated)
                 } else {
@@ -356,9 +390,9 @@ class StatementImportCoordinator(
                         expGroceries = agg.expGroceries,
                         expOther = agg.expOther,
                         notes = autoNotes,
-                        portfolioBalanceAtMonthEnd = snapLiquid,
-                        pensionBalanceAtMonthEnd = snapPension,
-                        emergencyReserveAtMonthEnd = effectiveReserveForLedger
+                        portfolioBalanceAtMonthEnd = if (isHistoricalMonth) 0.0 else snapLiquid,
+                        pensionBalanceAtMonthEnd = if (isHistoricalMonth) 0.0 else snapPension,
+                        emergencyReserveAtMonthEnd = if (isHistoricalMonth) (parsedReserveBal ?: 0.0) else currentMonthReserveDefault
                     )
                     repository.addLedgerEntry(newEntry)
                 }

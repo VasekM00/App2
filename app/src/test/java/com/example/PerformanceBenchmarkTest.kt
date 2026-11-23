@@ -79,7 +79,8 @@ class PerformanceBenchmarkTest {
         val trajectory = FinancialEngine.buildLiquidPortfolio(settings, dualIncome = true)
         val elapsedMs = System.currentTimeMillis() - startTime
 
-        assertEquals(36, trajectory.size) // Base year + 35 projection years
+        val expectedLen = com.example.domain.FireTargetAndTrajectoryEngine.projectionHorizonYears(settings) + 1
+        assertEquals(expectedLen, trajectory.size) // Dynamic projection horizon through retirement age
         println("8.3: buildLiquidPortfolio completed in $elapsedMs ms")
         assertTrue(
             "buildLiquidPortfolio took $elapsedMs ms, expected < 100ms",

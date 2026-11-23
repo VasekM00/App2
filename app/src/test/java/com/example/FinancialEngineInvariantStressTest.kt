@@ -196,7 +196,12 @@ class FinancialEngineInvariantStressTest {
 
     @Test
     fun test1_15_SingleHousehold() {
-        val settings = SettingsEntity(isSingleHousehold = true)
+        val settings = SettingsEntity(
+            isSingleHousehold = true,
+            child1Enabled = false,
+            child2Enabled = false,
+            eParentalAllowanceMonthly = 0.0
+        )
         val result = FinancialEngine.calculate(settings, runMonteCarlo = false)
         assertEquals(0.0, result.currentIncome.eleonoraSalary, 1e-9)
         assertEquals(0.0, result.currentIncome.benefit, 1e-9)

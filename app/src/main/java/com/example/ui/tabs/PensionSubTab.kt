@@ -117,7 +117,7 @@ fun PensionSubTab(
                     .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                val hasFamilyCredits = !s.isSingleHousehold && (state.taxReturnHelper.childBonus > 0.0 || state.taxReturnHelper.spouseCredit > 0.0)
+                val hasFamilyCredits = !s.isSingleHousehold && state.taxReturnHelper.spouseCredit > 0.0
                 KpiCard(
                     title = "Annual Tax Refund",
                     value = "+${fmtCZK(yearlyTaxSaved)}",

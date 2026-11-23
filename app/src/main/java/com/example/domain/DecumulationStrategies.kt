@@ -143,6 +143,7 @@ object DecumulationStrategies {
         initialNeed: Double,
         initialSwr: Double,
         previousWithdrawalNominal: Double,
+        previousMarketReturn: Double,
         inflationFactor: Double,
         cpi: Double,
         gkUpperThresholdPct: Double,
@@ -160,7 +161,15 @@ object DecumulationStrategies {
             }
 
             DecumulationStrategyType.GUYTON_KLINGER_GUARDRAILS -> {
-                val tentative = if (year == 1) initialNeed else previousWithdrawalNominal * (1.0 + cpi)
+                // Guyton-Klinger Inflation-Skip Rule: after a negative market year where the current
+                // withdrawal rate exceeds the initial SWR, freeze nominal withdrawal (skip CPI raise).
+                val skipInflation = year > 1 && previousMarketReturn < 0.0 &&
+                    (balance <= 0.0 || (previousWithdrawalNominal / balance) > initialSwr)
+                val tentative = when {
+                    year == 1 -> initialNeed
+                    skipInflation -> previousWithdrawalNominal
+                    else -> previousWithdrawalNominal * (1.0 + cpi)
+                }
                 val currentRate = if (balance > 0.0) tentative / balance else 1.0
                 val upperThreshold = initialSwr * (1.0 + gkUpperThresholdPct.finiteNonNegative(20.0) / 100.0)
                 val lowerThreshold = initialSwr * (1.0 - gkLowerThresholdPct.finiteIn(0.0, 100.0, 20.0) / 100.0)
@@ -209,7 +218,8 @@ object DecumulationStrategies {
         gkFloorPctOfInitial: Double = 70.0,
         vpdRatePct: Double = 4.5,
         vpdFloorPctOfInitial: Double = 70.0,
-        vpdCeilingPctOfInitial: Double = 130.0
+        vpdCeilingPctOfInitial: Double = 130.0,
+        pensionStreams: List<Pair<Int, Double>> = emptyList()
     ): List<SinglePathYearResult> {
         val horizon = annualReturns.size
         if (horizon == 0) return emptyList()
@@ -221,26 +231,12 @@ object DecumulationStrategies {
         val initialNeed = initialAnnualWithdrawal.finiteNonNegative()
         val initialSwr = if (balance > 0.0) initialNeed / balance else 0.04
         var previousWithdrawalNominal = initialNeed
+        var previousReturn = 0.0
 
         for (y in 0 until horizon) {
             val year = y + 1
             val ret = annualReturns[y].finiteAtLeast(-1.0, 0.0)
             val inflationFactor = inflationFactors[y]
-
-            if (balance <= 0.0) {
-                results.add(
-                    SinglePathYearResult(
-                        year = year,
-                        startingPortfolio = 0.0,
-                        withdrawalNominal = 0.0,
-                        withdrawalReal = 0.0,
-                        marketReturnPct = ret * 100.0,
-                        endingPortfolio = 0.0,
-                        isDepleted = true
-                    )
-                )
-                continue
-            }
 
             val step = computeWithdrawalStep(
                 type = type,
@@ -250,6 +246,7 @@ object DecumulationStrategies {
                 initialNeed = initialNeed,
                 initialSwr = initialSwr,
                 previousWithdrawalNominal = previousWithdrawalNominal,
+                previousMarketReturn = previousReturn,
                 inflationFactor = inflationFactor,
                 cpi = cpi,
                 gkUpperThresholdPct = gkUpperThresholdPct,
@@ -262,26 +259,33 @@ object DecumulationStrategies {
                 vpdCeilingPctOfInitial = vpdCeilingPctOfInitial
             )
 
-            val actualWithdrawal = min(balance, step.withdrawalNominal)
-            previousWithdrawalNominal = actualWithdrawal
-            val postWithdrawalBal = balance - actualWithdrawal
+            val pensionNominal = pensionStreams.sumOf { (startYearIdx, realAnnual) ->
+                if (y >= startYearIdx) realAnnual.finiteNonNegative() * inflationFactor else 0.0
+            }
+            val portfolioNeed = max(0.0, step.withdrawalNominal - pensionNominal)
+            val cantPayFull = balance + 0.001 < portfolioNeed
+            val actualPortfolioDraw = min(balance, portfolioNeed)
+            val totalSpendingCovered = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal)
+            previousWithdrawalNominal = step.withdrawalNominal
+            val postWithdrawalBal = balance - actualPortfolioDraw
             val endingBal = max(0.0, postWithdrawalBal * (1.0 + ret)).finiteNonNegative()
 
             results.add(
                 SinglePathYearResult(
                     year = year,
                     startingPortfolio = balance,
-                    withdrawalNominal = actualWithdrawal,
-                    withdrawalReal = actualWithdrawal / inflationFactor,
+                    withdrawalNominal = totalSpendingCovered,
+                    withdrawalReal = totalSpendingCovered / inflationFactor,
                     marketReturnPct = ret * 100.0,
                     endingPortfolio = endingBal,
                     isGuardrailCut = step.isCut,
                     isGuardrailBoost = step.isBoost,
-                    isDepleted = endingBal <= 0.0
+                    isDepleted = cantPayFull
                 )
             )
 
             balance = endingBal
+            previousReturn = ret
         }
 
         return results
@@ -312,6 +316,7 @@ object DecumulationStrategies {
         for (i in 0 until nSims) {
             var balance = initialBal
             var previousWithdrawalNominal = initialNeed
+            var previousReturn = 0.0
             var depletedYear: Int? = null
             var pathMaxDrop = 0.0
             var prevRealWithdrawal = initialNeed
@@ -321,17 +326,6 @@ object DecumulationStrategies {
                 val ret = returnPaths[i][y]
                 val inflationFactor = inflationFactors[y]
 
-                if (balance <= 0.0) {
-                    if (depletedYear == null) depletedYear = year
-                    if (y > 0 && prevRealWithdrawal > 0.0) {
-                        pathMaxDrop = 100.0
-                    }
-                    repeat(horizon - y) {
-                        allRealWithdrawals.add(0.0)
-                    }
-                    break
-                }
-
                 val step = computeWithdrawalStep(
                     type = type,
                     year = year,
@@ -340,6 +334,7 @@ object DecumulationStrategies {
                     initialNeed = initialNeed,
                     initialSwr = initialSwrRate,
                     previousWithdrawalNominal = previousWithdrawalNominal,
+                    previousMarketReturn = previousReturn,
                     inflationFactor = inflationFactor,
                     cpi = cpi,
                     gkUpperThresholdPct = config.gkUpperThresholdPct,
@@ -352,9 +347,19 @@ object DecumulationStrategies {
                     vpdCeilingPctOfInitial = config.vpdCeilingPctOfInitial
                 )
 
-                val actualWithdrawal = min(balance, step.withdrawalNominal)
-                previousWithdrawalNominal = actualWithdrawal
-                val realWithdrawal = actualWithdrawal / inflationFactor
+                val pensionNominal = config.pensionStreams.sumOf { (startYearIdx, realAnnual) ->
+                    if (y >= startYearIdx) realAnnual.finiteNonNegative() * inflationFactor else 0.0
+                }
+                val portfolioNeed = max(0.0, step.withdrawalNominal - pensionNominal)
+
+                if (balance + 0.001 < portfolioNeed && depletedYear == null) {
+                    depletedYear = year
+                }
+
+                val actualPortfolioDraw = min(balance, portfolioNeed)
+                val totalCoveredNominal = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal)
+                previousWithdrawalNominal = step.withdrawalNominal
+                val realWithdrawal = totalCoveredNominal / inflationFactor
                 allRealWithdrawals.add(realWithdrawal)
 
                 if (y > 0 && prevRealWithdrawal > 0.0) {
@@ -363,18 +368,14 @@ object DecumulationStrategies {
                 }
                 prevRealWithdrawal = realWithdrawal
 
-                val postWithdrawalBal = balance - actualWithdrawal
-                val endingBal = max(0.0, postWithdrawalBal * (1.0 + ret))
-                balance = endingBal
-
-                if (balance <= 0.001 && depletedYear == null) {
-                    depletedYear = year
-                }
+                val postWithdrawalBal = balance - actualPortfolioDraw
+                balance = max(0.0, postWithdrawalBal * (1.0 + ret))
+                previousReturn = ret
             }
 
-            if (balance > 0.001) {
+            if (depletedYear == null) {
                 survivedCount++
-            } else if (depletedYear != null) {
+            } else {
                 depletionYears.add(depletedYear)
             }
 
@@ -402,10 +403,13 @@ object DecumulationStrategies {
         val maxObservedDrop = if (maxYearlyDrops.isNotEmpty()) maxYearlyDrops.maxOrNull() ?: 0.0 else 0.0
         val avgDepletionYear = if (depletionYears.isNotEmpty()) depletionYears.average() else null
 
+        val swrLabel = String.format(java.util.Locale.US, "%.1f%%", initialSwrRate * 100.0)
+        val vpdLabel = String.format(java.util.Locale.US, "%.1f%%", config.vpdRatePct.finiteIn(0.5, 20.0, 4.5))
         val name = when (type) {
-            DecumulationStrategyType.CONSTANT_REAL_SWR -> "Constant Real SWR (Bengen 4% + CPI)"
-            DecumulationStrategyType.GUYTON_KLINGER_GUARDRAILS -> "Guyton-Klinger Guardrails (±20% Band / ±10% Adj.)"
-            DecumulationStrategyType.VARIABLE_PERCENTAGE -> "Variable Percentage Decumulation (Floor/Ceiling Dynamic)"
+            DecumulationStrategyType.CONSTANT_REAL_SWR -> "Constant Real SWR (Bengen $swrLabel + CPI)"
+            DecumulationStrategyType.GUYTON_KLINGER_GUARDRAILS ->
+                "Guyton-Klinger Guardrails (+${config.gkUpperThresholdPct.toInt()}%/-${config.gkLowerThresholdPct.toInt()}% Band / -${config.gkCutPct.toInt()}%/+${config.gkBoostPct.toInt()}%)"
+            DecumulationStrategyType.VARIABLE_PERCENTAGE -> "Variable Percentage Decumulation ($vpdLabel Dynamic)"
         }
 
         return StrategyMetrics(
@@ -485,7 +489,8 @@ data class DecumulationConfig(
     val gkInitialWithdrawalMultiplier: Double = 1.0,
     val vpdRatePct: Double = 4.5,
     val vpdFloorPctOfInitial: Double = 70.0,
-    val vpdCeilingPctOfInitial: Double = 130.0
+    val vpdCeilingPctOfInitial: Double = 130.0,
+    val pensionStreams: List<Pair<Int, Double>> = emptyList()
 )
 
 /**

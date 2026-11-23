@@ -48,11 +48,57 @@ object CzechTaxEngine {
     }
 
     /**
+     * Annual child tax credit (ZDP § 35c) already embedded in the primary earner's
+     * base-year net monthly paycheck (`vSalary`) for enabled children born on or before `baseYear`.
+     */
+    fun baseYearChildCreditAnnual(settings: SettingsEntity): Double {
+        if (settings.vSalary.finiteNonNegative() <= 0.0) return 0.0
+        val baseYear = settings.baseYear
+        val c1Age = baseYear - settings.child1BirthYear
+        val c2Age = baseYear - settings.child2BirthYear
+        val count = (if (settings.child1Enabled && c1Age in 0 until settings.childSupportUntilAge) 1 else 0) +
+            (if (settings.child2Enabled && c2Age in 0 until settings.childSupportUntilAge) 1 else 0)
+        var credit = 0.0
+        if (count >= 1) credit += settings.child1TaxBonusAnnual.finiteNonNegative()
+        if (count >= 2) credit += settings.child2TaxBonusAnnual.finiteNonNegative()
+        return credit.finiteNonNegative()
+    }
+
+    /**
+     * Infers the primary earner's annual gross taxable wage in [year], subtracting the
+     * monthly child tax credit already embedded inside `vSalary` so gross income and
+     * retirement deduction headroom are never inflated.
+     */
+    fun primaryGrossAnnual(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        netMonthlyOverride: Double? = null
+    ): Double {
+        val netMonthly = (netMonthlyOverride ?: FinancialEngine.vaclavSalaryMonthly(year, settings)).finiteNonNegative()
+        if (netMonthly <= 0.0) return 0.0
+        val embeddedMonthly = if (netMonthlyOverride == null) {
+            baseYearChildCreditAnnual(settings) / 12.0
+        } else 0.0
+        return netToGrossAnnual(
+            netMonthly = netMonthly,
+            taxpayerCreditAnnual = settings.taxpayerCreditAnnual,
+            highBracketThresholdAnnual = settings.taxSecondBracketThresholdAnnual,
+            baseTaxRatePct = settings.taxRatePct,
+            highTaxRatePct = settings.taxRateSecondPct,
+            embeddedMonthlyChildCredit = embeddedMonthly
+        )
+    }
+
+    /**
      * Computes annual combined tax deduction for DIP and DPS under Act No. 586/1992 Coll. § 15a/15b.
      * Capped at statutory ceiling per earner (48,000 Kč).
      * Pensioners (age >= statePensionAge) receive no DPS subsidy so their DPS deduction starts from 1 Kč.
      */
-    fun annualRetirementDeduction(settings: SettingsEntity, year: Int = settings.baseYear): Double {
+    fun annualRetirementDeduction(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        partnerBirthYearOverride: Int? = null
+    ): Double {
         val ceiling = settings.taxDeductionCeilingAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026)
         val baseThreshold = settings.dpsDeductionThresholdMonthly
@@ -63,7 +109,7 @@ object CzechTaxEngine {
         val vDpsAboveThreshold = max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - vThreshold) * 12.0
         val vDeduction = min(vDipAnnual + vDpsAboveThreshold, ceiling)
 
-        val eAge = year - FinancialEngine.partnerBirthYear(settings)
+        val eAge = year - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride)
         val eThreshold = if (eAge >= settings.eStatePensionAge) 0.0 else baseThreshold
         val eDipAnnual = settings.eDipContributionMonthly.finiteNonNegative() * 12.0
         val eDpsAboveThreshold = max(0.0, settings.eDpsOwnContributionMonthly.finiteNonNegative() - eThreshold) * 12.0
@@ -109,42 +155,91 @@ object CzechTaxEngine {
         return max(0.0, netTaxBefore - netTaxAfter).finiteNonNegative()
     }
 
-    fun hasChildUnder3(settings: SettingsEntity, year: Int = settings.baseYear): Boolean {
-        if (!settings.hasChildUnder3) return false
-        val c1Age = year - settings.child1BirthYear
-        val c2Age = year - settings.child2BirthYear
-        return (settings.child1Enabled && c1Age in 0..2) ||
-            (settings.child2Enabled && c2Age in 0..2)
+    /**
+     * Counts qualifying calendar months (0..12) in [year] during which the household cares for at least
+     * one dependent child under age 3 (ZDP § 35ba(1)(b), prorated at 1/12 = 2,070 Kč/month per § 35ba(3)).
+     * Note: `settings.hasChildUnder3 == false` applies only to children already born at `baseYear` and
+     * never blocks future-born children (`birthYear > baseYear`).
+     */
+    fun spouseCreditEligibleMonths(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        child1BirthMonth: Int = 1,
+        child2BirthMonth: Int = 1
+    ): Int {
+        val eligibleMonths = BooleanArray(13) // 1..12
+
+        fun markChildMonths(enabled: Boolean, birthYear: Int, birthMonth: Int) {
+            if (!enabled) return
+            if (birthYear <= settings.baseYear && !settings.hasChildUnder3) return
+            val m = birthMonth.coerceIn(1, 12)
+            val age = year - birthYear
+            when (age) {
+                0 -> for (mo in m..12) eligibleMonths[mo] = true
+                1, 2 -> for (mo in 1..12) eligibleMonths[mo] = true
+                3 -> for (mo in 1 until m) eligibleMonths[mo] = true
+            }
+        }
+
+        markChildMonths(settings.child1Enabled, settings.child1BirthYear, child1BirthMonth)
+        markChildMonths(settings.child2Enabled, settings.child2BirthYear, child2BirthMonth)
+        return (1..12).count { eligibleMonths[it] }
     }
+
+    fun hasChildUnder3(settings: SettingsEntity, year: Int = settings.baseYear): Boolean =
+        spouseCreditEligibleMonths(settings, year) > 0
 
     fun eligibleSpouseCreditAnnual(
         settings: SettingsEntity,
         year: Int = settings.baseYear,
         hasChildUnder3Override: Boolean? = null,
-        spouseOwnIncomeOverride: Double? = null
+        spouseOwnIncomeOverride: Double? = null,
+        child1BirthMonth: Int = 1,
+        child2BirthMonth: Int = 1,
+        maternityBenefitPpmAnnual: Double = 0.0
     ): Double {
         if (settings.isSingleHousehold || !settings.includeSpouseCredit) return 0.0
-        val childUnder3 = hasChildUnder3Override ?: hasChildUnder3(settings, year)
-        if (!childUnder3) return 0.0
-        val spouseIncome = (spouseOwnIncomeOverride ?: spouseOwnIncomeAnnual(year, settings)).finiteNonNegative()
+        val months = when (hasChildUnder3Override) {
+            false -> 0
+            true -> {
+                val computed = spouseCreditEligibleMonths(settings, year, child1BirthMonth, child2BirthMonth)
+                if (computed > 0) computed else 12
+            }
+            null -> spouseCreditEligibleMonths(settings, year, child1BirthMonth, child2BirthMonth)
+        }
+        if (months <= 0) return 0.0
+        val spouseIncome = (spouseOwnIncomeOverride
+            ?: spouseOwnIncomeAnnual(year, settings, maternityBenefitPpmAnnual = maternityBenefitPpmAnnual))
+            .finiteNonNegative()
         val spouseLimit = settings.spouseIncomeLimitAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_SPOUSE_INCOME_LIMIT_ANNUAL_2026)
         return if (spouseIncome <= spouseLimit) {
-            settings.spouseTaxCreditAnnual.finiteNonNegative(RegulatoryConstants.STATUTORY_SPOUSE_CREDIT_ANNUAL_2026)
+            val fullAnnual = settings.spouseTaxCreditAnnual
+                .finiteNonNegative(RegulatoryConstants.STATUTORY_SPOUSE_CREDIT_ANNUAL_2026)
+            (fullAnnual * (months / 12.0)).finiteNonNegative()
         } else 0.0
     }
 
     /**
      * Calculates tax refund/savings from statutory retirement deductions (DIP + qualifying DPS).
      */
-    fun annualRetirementTaxSaved(settings: SettingsEntity, year: Int = settings.baseYear): Double =
-        annualRetirementTaxSavedForHousehold(settings, year, includeSpouse = !settings.isSingleHousehold)
+    fun annualRetirementTaxSaved(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        partnerBirthYearOverride: Int? = null
+    ): Double = annualRetirementTaxSavedForHousehold(
+        settings = settings,
+        year = year,
+        includeSpouse = !settings.isSingleHousehold,
+        partnerBirthYearOverride = partnerBirthYearOverride
+    )
 
     internal fun annualRetirementTaxSavedForHousehold(
         settings: SettingsEntity,
         year: Int,
         includeSpouse: Boolean,
-        vGrossOverride: Double? = null
+        vGrossOverride: Double? = null,
+        partnerBirthYearOverride: Int? = null
     ): Double {
         val ceiling = settings.taxDeductionCeilingAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026)
@@ -164,13 +259,7 @@ object CzechTaxEngine {
                 max(0.0, settings.dpsOwnContributionMonthly.finiteNonNegative() - vThreshold) * 12.0,
             ceiling
         )
-        val vGross = (vGrossOverride ?: netToGrossAnnual(
-            netMonthly = FinancialEngine.vaclavSalaryMonthly(year, settings),
-            taxpayerCreditAnnual = credit,
-            highBracketThresholdAnnual = taxThreshold,
-            baseTaxRatePct = baseRate * 100.0,
-            highTaxRatePct = highRate * 100.0
-        )).finiteNonNegative()
+        val vGross = (vGrossOverride ?: primaryGrossAnnual(settings, year)).finiteNonNegative()
         // Account for active non-refundable spouse credit so DIP/DPS deduction isn't overstated
         // when basic + spouse credits already absorb primary earner's income tax.
         val activeSpouseCredit = if (includeSpouse) {
@@ -188,7 +277,7 @@ object CzechTaxEngine {
         )
 
         val eSaved = if (includeSpouse) {
-            val eAge = year - FinancialEngine.partnerBirthYear(settings)
+            val eAge = year - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride)
             val eThreshold = if (eAge >= settings.eStatePensionAge) 0.0 else baseThreshold
             val eDeduction = min(
                 settings.eDipContributionMonthly.finiteNonNegative() * 12.0 +
@@ -212,15 +301,19 @@ object CzechTaxEngine {
     /**
      * Translates net employment wage to statutory gross wage taking into account mandatory social (7.1%),
      * health (4.5%), progressive income tax brackets (15% / 23%), basic taxpayer credit, and statutory social cap.
+     * Optional [embeddedMonthlyChildCredit] strips monthly ZDP § 35c child bonus already paid in the net paycheck.
      */
     fun netToGrossAnnual(
         netMonthly: Double,
         taxpayerCreditAnnual: Double,
         highBracketThresholdAnnual: Double = RegulatoryConstants.STATUTORY_TAX_BRACKET_THRESHOLD_ANNUAL_2026,
         baseTaxRatePct: Double = 15.0,
-        highTaxRatePct: Double = 23.0
+        highTaxRatePct: Double = 23.0,
+        embeddedMonthlyChildCredit: Double = 0.0
     ): Double {
         if (!netMonthly.isFinite() || netMonthly <= 0.0) return 0.0
+        val netWithoutChildCredit = netMonthly - embeddedMonthlyChildCredit.finiteNonNegative()
+        if (!netWithoutChildCredit.isFinite() || netWithoutChildCredit <= 0.0) return 0.0
         val creditMonthly = taxpayerCreditAnnual
             .finiteNonNegative(RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026) / 12.0
         val thresholdMonthly = highBracketThresholdAnnual
@@ -242,10 +335,10 @@ object CzechTaxEngine {
             val netAtSocialCap = netAtThreshold + (socialCapMonthly - thresholdMonthly) * factorHigh
 
             when {
-                netMonthly <= netZeroTax -> netMonthly / (1.0 - socialHealthRate)
-                netMonthly <= netAtThreshold -> (netMonthly - creditMonthly) / factorBase
-                netMonthly <= netAtSocialCap -> thresholdMonthly + (netMonthly - netAtThreshold) / factorHigh
-                else -> socialCapMonthly + (netMonthly - netAtSocialCap) / factorAboveCap
+                netWithoutChildCredit <= netZeroTax -> netWithoutChildCredit / (1.0 - socialHealthRate)
+                netWithoutChildCredit <= netAtThreshold -> (netWithoutChildCredit - creditMonthly) / factorBase
+                netWithoutChildCredit <= netAtSocialCap -> thresholdMonthly + (netWithoutChildCredit - netAtThreshold) / factorHigh
+                else -> socialCapMonthly + (netWithoutChildCredit - netAtSocialCap) / factorAboveCap
             }
         } else {
             // Custom low bracket threshold / high credit where tax remains zero beyond the high-bracket cutoff.
@@ -254,17 +347,17 @@ object CzechTaxEngine {
                 val netAtTax0 = gTax0 * (1.0 - socialHealthRate)
                 val netAtSocialCap = netAtTax0 + (socialCapMonthly - gTax0) * factorHigh
                 when {
-                    netMonthly <= netAtTax0 -> netMonthly / (1.0 - socialHealthRate)
-                    netMonthly <= netAtSocialCap -> gTax0 + (netMonthly - netAtTax0) / factorHigh
-                    else -> socialCapMonthly + (netMonthly - netAtSocialCap) / factorAboveCap
+                    netWithoutChildCredit <= netAtTax0 -> netWithoutChildCredit / (1.0 - socialHealthRate)
+                    netWithoutChildCredit <= netAtSocialCap -> gTax0 + (netWithoutChildCredit - netAtTax0) / factorHigh
+                    else -> socialCapMonthly + (netWithoutChildCredit - netAtSocialCap) / factorAboveCap
                 }
             } else {
                 val netAtSocialCap = socialCapMonthly * (1.0 - socialHealthRate)
                 val netAtTax0 = netAtSocialCap + (gTax0 - socialCapMonthly) * (1.0 - healthOnlyRate)
                 when {
-                    netMonthly <= netAtSocialCap -> netMonthly / (1.0 - socialHealthRate)
-                    netMonthly <= netAtTax0 -> socialCapMonthly + (netMonthly - netAtSocialCap) / (1.0 - healthOnlyRate)
-                    else -> gTax0 + (netMonthly - netAtTax0) / factorAboveCap
+                    netWithoutChildCredit <= netAtSocialCap -> netWithoutChildCredit / (1.0 - socialHealthRate)
+                    netWithoutChildCredit <= netAtTax0 -> socialCapMonthly + (netWithoutChildCredit - netAtSocialCap) / (1.0 - healthOnlyRate)
+                    else -> gTax0 + (netWithoutChildCredit - netAtTax0) / factorAboveCap
                 }
             }
         }
@@ -274,20 +367,30 @@ object CzechTaxEngine {
     /**
      * Computes tax savings specifically for DIP contributions in the base year.
      */
-    fun dipTaxSavingYear(settings: SettingsEntity): Double {
-        return annualRetirementTaxSaved(settings, settings.baseYear)
+    fun dipTaxSavingYear(
+        settings: SettingsEntity,
+        partnerBirthYearOverride: Int? = null
+    ): Double {
+        return annualRetirementTaxSaved(settings, settings.baseYear, partnerBirthYearOverride)
     }
 
     /**
      * Computes spouse earned gross income month-by-month in [year], separating pre-return
-     * DPP lecturing months (0% SP/ZP strictly below 12,000 Kč/mo per § 7a Act No. 187/2006 Coll.)
+     * DPP lecturing months (grossed up for 15% withholding tax below 12,000 Kč/mo per ZDP § 36(2)(m)
+     * when no taxpayer declaration is signed, or SP/ZP above threshold per § 7a Act No. 187/2006 Coll.)
      * from regular employment months.
      */
-    fun spouseEarnedGrossAnnual(year: Int, settings: SettingsEntity): Double {
+    fun spouseEarnedGrossAnnual(
+        year: Int,
+        settings: SettingsEntity,
+        dppSignedTaxDeclaration: Boolean = false
+    ): Double {
         if (settings.isSingleHousehold) return 0.0
         val dppMonthlyLimit = RegulatoryConstants.STATUTORY_DPP_INSURANCE_THRESHOLD_MONTHLY_2026
         val lecMonthly = settings.eLecturingMonthly.finiteNonNegative()
         val returnMonth = settings.eReturnMonth.coerceIn(1, 12)
+        val baseRate = (settings.taxRatePct.finiteIn(0.0, 100.0, RegulatoryConstants.STATUTORY_INCOME_TAX_RATE_BASE_PCT)) / 100.0
+        val srazkovaFactor = (1.0 - baseRate).coerceAtLeast(0.1)
         val fullEmploymentSalaryMonthly = when {
             year > settings.eReturnYear -> FinancialEngine.eleonoraSalaryMonthly(year, settings).finiteNonNegative()
             year == settings.eReturnYear -> settings.eStartingSalary.finiteNonNegative()
@@ -309,9 +412,9 @@ object CzechTaxEngine {
                     ) / 12.0
                 }
             } else if (year <= settings.eReturnYear && settings.eIncludeLecturing && lecMonthly > 0.0) {
-                totalGross += if (lecMonthly < dppMonthlyLimit) {
-                    // DPP strictly below 12,000 Kč/mo threshold: 0% SP/ZP, covered by basic credit
-                    lecMonthly
+                val grossedSrazkova = if (dppSignedTaxDeclaration) lecMonthly else (lecMonthly / srazkovaFactor)
+                totalGross += if (grossedSrazkova < dppMonthlyLimit) {
+                    grossedSrazkova
                 } else {
                     netToGrossAnnual(
                         netMonthly = lecMonthly,
@@ -328,13 +431,27 @@ object CzechTaxEngine {
 
     /**
      * Calculates spouse own gross income for the spouse tax credit qualification threshold (68,000 Kč)
-     * under Act No. 586/1992 Coll. § 35ba(1)(b). Excludes state parental allowance and family gifts.
+     * under Act No. 586/1992 Coll. § 35ba(1)(b). Includes maternity benefit (PPM) and earned/other income;
+     * excludes state parental allowance (rodičovský příspěvek) and family gifts.
      */
-    fun spouseOwnIncomeAnnual(year: Int, settings: SettingsEntity): Double {
+    fun spouseOwnIncomeAnnual(
+        year: Int,
+        settings: SettingsEntity,
+        maternityBenefitPpmAnnual: Double = 0.0,
+        dppSignedTaxDeclaration: Boolean = false
+    ): Double {
         if (settings.isSingleHousehold) return 0.0
-        val grossEarnedAnnual = spouseEarnedGrossAnnual(year, settings)
+        val grossEarnedAnnual = spouseEarnedGrossAnnual(year, settings, dppSignedTaxDeclaration)
         val oth = settings.eOtherInflowsMonthly.finiteNonNegative()
-        return (grossEarnedAnnual + (oth * 12.0)).finiteNonNegative()
+        val implicitPpm = if (maternityBenefitPpmAnnual <= 0.0 && year > settings.eReturnYear &&
+            ((settings.child1Enabled && settings.child1BirthYear == year) ||
+                (settings.child2Enabled && settings.child2BirthYear == year))
+        ) {
+            val priorGross = spouseEarnedGrossAnnual(year - 1, settings, dppSignedTaxDeclaration)
+            (28.0 / 52.0) * 0.70 * priorGross
+        } else 0.0
+        val ppm = max(maternityBenefitPpmAnnual.finiteNonNegative(), implicitPpm)
+        return (grossEarnedAnnual + (oth * 12.0) + ppm).finiteNonNegative()
     }
 
     /**
@@ -351,7 +468,8 @@ object CzechTaxEngine {
         vDeductionAnnualOverride: Double? = null,
         eDeductionAnnualOverride: Double? = null,
         vSpouseCreditAnnual: Double? = null,
-        eligibleChildrenCountOverride: Int? = null
+        eligibleChildrenCountOverride: Int? = null,
+        partnerBirthYearOverride: Int? = null
     ): Double {
         val c1Age = year - settings.child1BirthYear
         val c2Age = year - settings.child2BirthYear
@@ -386,13 +504,7 @@ object CzechTaxEngine {
             return highInc * highRate + baseInc * baseRate
         }
 
-        val vGross = (vGrossAnnualOverride ?: netToGrossAnnual(
-            netMonthly = FinancialEngine.vaclavSalaryMonthly(year, settings),
-            taxpayerCreditAnnual = basicCredit,
-            highBracketThresholdAnnual = taxThreshold,
-            baseTaxRatePct = baseRate * 100.0,
-            highTaxRatePct = highRate * 100.0
-        )).finiteNonNegative()
+        val vGross = (vGrossAnnualOverride ?: primaryGrossAnnual(settings, year)).finiteNonNegative()
         val vAge = settings.primaryAge + (year - settings.baseYear)
         val vDpsThresh = if (vAge >= settings.vStatePensionAge) 0.0 else baseThreshold
         val vDed = (vDeductionAnnualOverride ?: min(
@@ -408,7 +520,7 @@ object CzechTaxEngine {
 
         val eRelief = if (!settings.isSingleHousehold) {
             val eGross = (eGrossAnnualOverride ?: spouseEarnedGrossAnnual(year, settings)).finiteNonNegative()
-            val eAge = year - FinancialEngine.partnerBirthYear(settings)
+            val eAge = year - FinancialEngine.partnerBirthYear(settings, partnerBirthYearOverride)
             val eDpsThresh = if (eAge >= settings.eStatePensionAge) 0.0 else baseThreshold
             val eDed = (eDeductionAnnualOverride ?: min(
                 settings.eDipContributionMonthly.finiteNonNegative() * 12.0 +

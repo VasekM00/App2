@@ -38,15 +38,15 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(16000.0, income2026.gift, 0.001)
         assertEquals(71490.0, income2026.totalMonthly, 0.001)
 
-        // Base case (2029: Eleonora returns to work -> Allowance & Lecturing vanish, replaced by Salary)
+        // Base case (2029: Eleonora returns to work -> Lecturing vanishes, replaced by Salary; remaining Child 2 pot not forfeited)
         val income2029 = FinancialEngine.householdIncome(2029, defaultSettings)
         assertEquals(33500.0, income2029.vaclavNet, 0.001)
         assertEquals(22000.0, income2029.eleonoraSalary, 0.001) // 22k starting salary
-        assertEquals(0.0, income2029.benefit, 0.001) // Vanished
+        assertEquals(38000.0 / 12.0, income2029.benefit, 0.01) // Remainder of Child 2 350k pot after 2027-2028
         assertEquals(0.0, income2029.lecturing, 0.001) // Vanished
         assertEquals(2090.0, income2029.vouchers, 0.001)
         assertEquals(16000.0, income2029.gift, 0.001)
-        assertEquals(73590.0, income2029.totalMonthly, 0.001)
+        assertEquals(73590.0 + (38000.0 / 12.0), income2029.totalMonthly, 0.01)
 
         // Mutate Vaclav salary, other inflows
         val modifiedSettings = defaultSettings.copy(
@@ -73,14 +73,14 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(20000.0, inc2026Mod.gift, 0.001)
         assertEquals(90000.0, inc2026Mod.totalMonthly, 0.001) // 45k + 5k (vOther) + 15k + 0 + 3k + 20k + 2k (eOther)
 
-        // Year 2028 (Eleonora returns)
+        // Year 2028 (Eleonora returns; Child 2 born 2027 still has 170k left on its 350k pot at 15k/mo)
         val inc2028Mod = FinancialEngine.householdIncome(2028, modifiedSettings)
         assertEquals(45000.0, inc2028Mod.vaclavNet, 0.001) // 45000 net salary
         assertEquals(5000.0, inc2028Mod.vaclavOther, 0.001) // 5000 other inflows
         assertEquals(30000.0, inc2028Mod.eleonoraSalary, 0.001)
-        assertEquals(0.0, inc2028Mod.benefit, 0.001) // Parental benefit ends on return
+        assertEquals(170000.0 / 12.0, inc2028Mod.benefit, 0.01) // Non-forfeited remaining Child 2 pot
         assertEquals(0.0, inc2028Mod.lecturing, 0.001)
-        assertEquals(105000.0, inc2028Mod.totalMonthly, 0.001) // 45k + 5k (vOther) + 30k + 0 + 3k + 20k + 2k (eOther)
+        assertEquals(105000.0 + (170000.0 / 12.0), inc2028Mod.totalMonthly, 0.01)
 
         // Year 2029 (Eleonora with 5% salary growth)
         val inc2029Mod = FinancialEngine.householdIncome(2029, modifiedSettings)
@@ -165,13 +165,17 @@ class FinancialEngineExhaustiveAuditTest {
         val overriddenTarget = FinancialEngine.fireTargetBase(overriddenSettings)
         assertEquals(12500000.0, overriddenTarget, 0.001)
 
-        // Test inflation indexing
-        val targetIn5Years = FinancialEngine.fireTargetYear(2031, defaultSettings, age = defaultSettings.primaryAge)
+        // Test inflation indexing (with rent growth matched to CPI vs faster 4% rent growth)
+        val cpiMatched = defaultSettings.copy(rentGrowthPct = defaultSettings.cpiInflationPct)
+        val targetIn5YearsMatched = FinancialEngine.fireTargetYear(2031, cpiMatched, age = defaultSettings.primaryAge)
         val expectedInflated = fireBase * Math.pow(1.0 + defaultSettings.cpiInflationPct / 100.0, 5.0)
-        assertEquals(expectedInflated, targetIn5Years, 0.01)
+        assertEquals(expectedInflated, targetIn5YearsMatched, 0.01)
 
-        val targetIn5YearsWithAging = FinancialEngine.fireTargetYear(2031, defaultSettings)
-        val expectedWithAging = FinancialEngine.fireTargetBase(defaultSettings, age = 31) * Math.pow(1.0 + defaultSettings.cpiInflationPct / 100.0, 5.0)
+        val targetIn5YearsWithRentGrowth = FinancialEngine.fireTargetYear(2031, defaultSettings, age = defaultSettings.primaryAge)
+        assertTrue("4% rentGrowthPct > 2.8% CPI must exceed flat CPI inflation", targetIn5YearsWithRentGrowth > expectedInflated)
+
+        val targetIn5YearsWithAging = FinancialEngine.fireTargetYear(2031, cpiMatched)
+        val expectedWithAging = FinancialEngine.fireTargetBase(cpiMatched, age = 31) * Math.pow(1.0 + defaultSettings.cpiInflationPct / 100.0, 5.0)
         assertEquals(expectedWithAging, targetIn5YearsWithAging, 0.01)
     }
 

@@ -3,8 +3,10 @@ package com.example
 import com.example.data.SettingsEntity
 import com.example.domain.CzechRegulatoryData
 import com.example.domain.RegulatoryConstants
+import com.example.util.CzechEconomicSyncService
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -112,6 +114,27 @@ class ManifestEngineConsistencyTest {
         assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF, live.parentalAllowanceTotalBeforeCutoff, 0.001)
         assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF, live.parentalAllowanceTotalFromCutoff, 0.001)
         assertEquals(RegulatoryConstants.PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR, live.parentalAllowanceCutoffYear)
+    }
+
+    @Test
+    fun bundledAssetsManifestMatchesRootAndParsesAtRuntime() {
+        val rootFile = locateManifest()
+        val assetFile = File(rootFile.parentFile, "app/src/main/assets/regulatory_manifest.json")
+        assertTrue("app/src/main/assets/regulatory_manifest.json must exist", assetFile.exists())
+        assertEquals(
+            "Bundled assets regulatory_manifest.json must match root regulatory_manifest.json",
+            rootFile.readText().trim(),
+            assetFile.readText().trim()
+        )
+
+        val parsed = CzechEconomicSyncService.parseRegulatoryManifestJson(assetFile.readText())
+        val json = JSONObject(assetFile.readText())
+        assertEquals(json.getInt("effectiveYear"), parsed.effectiveYear)
+        assertEquals(json.getDouble("progressive23ThresholdAnnual"), parsed.progressive23ThresholdAnnual, 1.0)
+        assertEquals(json.getDouble("csuNationalAverageWageMonthly"), parsed.csuNationalAverageWageMonthly, 1.0)
+        assertEquals(json.getDouble("csuCpiInflationPct"), parsed.csuCpiInflationPct, 0.001)
+        assertEquals(json.getDouble("minWageMonthly"), parsed.minWageMonthly, 0.001)
+        assertEquals(json.getDouble("parentalAllowanceTotalFromCutoff"), parsed.parentalAllowanceTotalFromCutoff, 0.001)
     }
 
     private fun settings() = SettingsEntity()

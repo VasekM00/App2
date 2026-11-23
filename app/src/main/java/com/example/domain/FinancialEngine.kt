@@ -24,12 +24,14 @@ object FinancialEngine {
         settings: SettingsEntity,
         currentYear: Int = settings.baseYear,
         currentMonth: Int = 1,
-        importedTransactions: List<ImportedBankTransactionEntity> = emptyList()
+        importedTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+        partnerBirthYearOverride: Int? = null
     ): YtdTaxShieldStatus = HouseholdCashFlowEngine.computeYtdTaxShieldStatus(
         settings = settings,
         currentYear = currentYear,
         currentMonth = currentMonth,
-        importedTransactions = importedTransactions
+        importedTransactions = importedTransactions,
+        partnerBirthYearOverride = partnerBirthYearOverride
     )
 
     fun perpetualFireLeverageMultiplier(settings: SettingsEntity): Double =
@@ -41,8 +43,8 @@ object FinancialEngine {
     fun annuityFactor(rate: Double, years: Int): Double =
         FireTargetAndTrajectoryEngine.annuityFactor(rate, years)
 
-    fun partnerBirthYear(settings: SettingsEntity): Int =
-        HouseholdCashFlowEngine.partnerBirthYear(settings)
+    fun partnerBirthYear(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): Int =
+        HouseholdCashFlowEngine.partnerBirthYear(settings, partnerBirthYearOverride)
 
     fun netRealReturnRate(settings: SettingsEntity): Double =
         FireTargetAndTrajectoryEngine.netRealReturnRate(settings)
@@ -65,14 +67,18 @@ object FinancialEngine {
     fun baselineLivingCostAtFireMonthly(settings: SettingsEntity): Double =
         FireTargetAndTrajectoryEngine.baselineLivingCostAtFireMonthly(settings)
 
-    fun fireTargetBase(settings: SettingsEntity, age: Int = settings.primaryAge): Double =
-        FireTargetAndTrajectoryEngine.fireTargetBase(settings, age)
+    fun fireTargetBase(
+        settings: SettingsEntity,
+        age: Int = settings.primaryAge,
+        partnerBirthYearOverride: Int? = null
+    ): Double = FireTargetAndTrajectoryEngine.fireTargetBase(settings, age, partnerBirthYearOverride)
 
     fun fireTargetYear(
         year: Int,
         settings: SettingsEntity,
-        age: Int = settings.primaryAge + (year - settings.baseYear)
-    ): Double = FireTargetAndTrajectoryEngine.fireTargetYear(year, settings, age)
+        age: Int = settings.primaryAge + (year - settings.baseYear),
+        partnerBirthYearOverride: Int? = null
+    ): Double = FireTargetAndTrajectoryEngine.fireTargetYear(year, settings, age, partnerBirthYearOverride)
 
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double =
         HouseholdCashFlowEngine.vaclavSalaryMonthly(year, settings)
@@ -113,11 +119,17 @@ object FinancialEngine {
         statePensionAge: Int = settings?.vStatePensionAge ?: Int.MAX_VALUE
     ): Double = HouseholdCashFlowEngine.dpsSubsidy(monthlyDeposit, age, settings, year, statePensionAge)
 
-    fun annualRetirementDeduction(settings: SettingsEntity): Double =
-        HouseholdCashFlowEngine.annualRetirementDeduction(settings)
+    fun annualRetirementDeduction(
+        settings: SettingsEntity,
+        partnerBirthYearOverride: Int? = null,
+        year: Int = settings.baseYear
+    ): Double = CzechTaxEngine.annualRetirementDeduction(settings, year, partnerBirthYearOverride)
 
-    fun annualRetirementTaxSaved(settings: SettingsEntity, year: Int = settings.baseYear): Double =
-        HouseholdCashFlowEngine.annualRetirementTaxSaved(settings, year)
+    fun annualRetirementTaxSaved(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        partnerBirthYearOverride: Int? = null
+    ): Double = HouseholdCashFlowEngine.annualRetirementTaxSaved(settings, year, partnerBirthYearOverride)
 
     fun netToGrossAnnual(
         netMonthly: Double,
@@ -133,8 +145,8 @@ object FinancialEngine {
         highTaxRatePct = highTaxRatePct
     )
 
-    fun dipTaxSavingYear(settings: SettingsEntity): Double =
-        HouseholdCashFlowEngine.dipTaxSavingYear(settings)
+    fun dipTaxSavingYear(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): Double =
+        CzechTaxEngine.dipTaxSavingYear(settings, partnerBirthYearOverride)
 
     fun childMonthlyExpense(birthYear: Int, currentYear: Int, settings: SettingsEntity): Double =
         HouseholdCashFlowEngine.childMonthlyExpense(birthYear, currentYear, settings)
@@ -172,14 +184,16 @@ object FinancialEngine {
     fun buildLiquidPortfolio(
         settings: SettingsEntity,
         dualIncome: Boolean,
-        initialCrashPct: Double = 0.0
-    ): List<PortfolioYearPoint> = FireTargetAndTrajectoryEngine.buildLiquidPortfolio(settings, dualIncome, initialCrashPct)
+        initialCrashPct: Double = 0.0,
+        partnerBirthYearOverride: Int? = null
+    ): List<PortfolioYearPoint> =
+        FireTargetAndTrajectoryEngine.buildLiquidPortfolio(settings, dualIncome, initialCrashPct, partnerBirthYearOverride)
 
-    fun buildDpsProjection(settings: SettingsEntity): DpsProjection =
-        DpsDipEngine.buildDpsProjection(settings)
+    fun buildDpsProjection(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): DpsProjection =
+        DpsDipEngine.buildDpsProjection(settings, partnerBirthYearOverride)
 
-    fun buildDipProjection(settings: SettingsEntity): DipProjection =
-        DpsDipEngine.buildDipProjection(settings)
+    fun buildDipProjection(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): DipProjection =
+        DpsDipEngine.buildDipProjection(settings, partnerBirthYearOverride)
 
     fun dividendTaxDragPct(settings: SettingsEntity): Double =
         FireTargetAndTrajectoryEngine.dividendTaxDragPct(settings)
@@ -187,26 +201,38 @@ object FinancialEngine {
     fun netTaxableNominalReturnPct(settings: SettingsEntity): Double =
         FireTargetAndTrajectoryEngine.netTaxableNominalReturnPct(settings)
 
-    fun runMonteCarlo(settings: SettingsEntity, horizonYears: Int = 35, initialCrashPct: Double = 0.0): MonteCarloResult =
-        MonteCarloEngine.runMonteCarlo(settings, horizonYears, initialCrashPct)
+    fun runMonteCarlo(
+        settings: SettingsEntity,
+        horizonYears: Int = FireTargetAndTrajectoryEngine.projectionHorizonYears(settings),
+        initialCrashPct: Double = 0.0,
+        partnerBirthYearOverride: Int? = null
+    ): MonteCarloResult = MonteCarloEngine.runMonteCarlo(settings, horizonYears, initialCrashPct, partnerBirthYearOverride)
 
     fun runHistoricalMonteCarlo(
         settings: SettingsEntity,
-        horizonYears: Int = 35,
+        horizonYears: Int = FireTargetAndTrajectoryEngine.projectionHorizonYears(settings),
         initialCrashPct: Double = 0.0,
-        blockSize: Int = 3
-    ): MonteCarloResult = MonteCarloEngine.runHistoricalMonteCarlo(settings, horizonYears, initialCrashPct, blockSize)
+        blockSize: Int = 3,
+        partnerBirthYearOverride: Int? = null
+    ): MonteCarloResult = MonteCarloEngine.runHistoricalMonteCarlo(settings, horizonYears, initialCrashPct, blockSize, partnerBirthYearOverride)
 
     fun runRetirementSurvival(
         settings: SettingsEntity,
-        useHistoricalBootstrap: Boolean = false
-    ): RetirementSurvivalResult = MonteCarloEngine.runRetirementSurvival(settings, useHistoricalBootstrap)
+        useHistoricalBootstrap: Boolean = false,
+        partnerBirthYearOverride: Int? = null
+    ): RetirementSurvivalResult = MonteCarloEngine.runRetirementSurvival(settings, useHistoricalBootstrap, partnerBirthYearOverride)
 
-    fun calculateStressScenarios(settings: SettingsEntity, runMonteCarlo: Boolean = true): List<StressScenarioResult> =
-        FireTargetAndTrajectoryEngine.calculateStressScenarios(settings, runMonteCarlo)
+    fun calculateStressScenarios(
+        settings: SettingsEntity,
+        runMonteCarlo: Boolean = true,
+        partnerBirthYearOverride: Int? = null
+    ): List<StressScenarioResult> = FireTargetAndTrajectoryEngine.calculateStressScenarios(settings, runMonteCarlo, partnerBirthYearOverride)
 
-    fun buildLiquidPortfolioWithInitialCrash(settings: SettingsEntity, crashPct: Double): List<PortfolioYearPoint> =
-        FireTargetAndTrajectoryEngine.buildLiquidPortfolioWithInitialCrash(settings, crashPct)
+    fun buildLiquidPortfolioWithInitialCrash(
+        settings: SettingsEntity,
+        crashPct: Double,
+        partnerBirthYearOverride: Int? = null
+    ): List<PortfolioYearPoint> = FireTargetAndTrajectoryEngine.buildLiquidPortfolioWithInitialCrash(settings, crashPct, partnerBirthYearOverride)
 
     fun calculate(
         settings: SettingsEntity,
@@ -215,7 +241,8 @@ object FinancialEngine {
         activeLedgerEntry: LedgerEntryEntity? = null,
         activeMonth: Int? = null,
         ledgerEntries: List<LedgerEntryEntity> = emptyList(),
-        importedTransactions: List<ImportedBankTransactionEntity> = emptyList()
+        importedTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+        partnerBirthYearOverride: Int? = null
     ): FullCalculationState {
         val ledgerMatchesBaseYear = activeLedgerEntry != null &&
             (activeLedgerEntry.yearMonth.isBlank() || activeLedgerEntry.yearMonth.startsWith("${settings.baseYear}-"))
@@ -268,11 +295,23 @@ object FinancialEngine {
                 if (settings.isSingleHousehold || snapPension >= ePenSum) {
                     val primaryPen = (snapPension - ePenSum).coerceAtLeast(0.0)
                     val curPrimary = settings.dpsBalanceCurrent.finiteNonNegative() + settings.dipBalanceCurrent.finiteNonNegative()
-                    val dpsShare = if (curPrimary > 0.0) settings.dpsBalanceCurrent.finiteNonNegative() / curPrimary else 1.0
+                    val vContribSum = settings.dpsOwnContributionMonthly.finiteNonNegative() +
+                        settings.dipContributionMonthly.finiteNonNegative()
+                    val dpsShare = when {
+                        curPrimary > 0.0 -> settings.dpsBalanceCurrent.finiteNonNegative() / curPrimary
+                        vContribSum > 0.0 -> settings.dpsOwnContributionMonthly.finiteNonNegative() / vContribSum
+                        else -> 0.5
+                    }
                     val newDps = primaryPen * dpsShare
                     updated = updated.copy(dpsBalanceCurrent = newDps, dipBalanceCurrent = primaryPen - newDps)
                 } else {
-                    val eDpsShare = if (ePenSum > 0.0) eDps / ePenSum else 1.0
+                    val eContribSum = settings.eDpsOwnContributionMonthly.finiteNonNegative() +
+                        settings.eDipContributionMonthly.finiteNonNegative()
+                    val eDpsShare = when {
+                        ePenSum > 0.0 -> eDps / ePenSum
+                        eContribSum > 0.0 -> settings.eDpsOwnContributionMonthly.finiteNonNegative() / eContribSum
+                        else -> 0.5
+                    }
                     val newEDps = snapPension * eDpsShare
                     updated = updated.copy(
                         dpsBalanceCurrent = 0.0,
@@ -285,9 +324,6 @@ object FinancialEngine {
             if (hasReserveOverride) {
                 updated = updated.copy(emergencyReserveCurrent = snapReserve)
             }
-            if (ledgerMatchesBaseYear && activeLedgerEntry!!.incVaclav > 0.0) {
-                updated = updated.copy(vSalary = activeLedgerEntry.incVaclav)
-            }
             updated
         }
 
@@ -295,11 +331,12 @@ object FinancialEngine {
             settings = projectionSettings,
             currentYear = currentYear,
             currentMonth = monthForTaxShield,
-            importedTransactions = importedTransactions
+            importedTransactions = importedTransactions,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
-        val fireBase = fireTargetBase(projectionSettings)
-        val dual = buildLiquidPortfolio(projectionSettings, true)
-        val single = buildLiquidPortfolio(projectionSettings, false)
+        val fireBase = fireTargetBase(projectionSettings, partnerBirthYearOverride = partnerBirthYearOverride)
+        val dual = buildLiquidPortfolio(projectionSettings, true, partnerBirthYearOverride = partnerBirthYearOverride)
+        val single = buildLiquidPortfolio(projectionSettings, false, partnerBirthYearOverride = partnerBirthYearOverride)
 
         val fireDualPoint = dual.firstOrNull { it.totalPortfolio >= it.target }
         val fireSinglePoint = single.firstOrNull { it.totalPortfolio >= it.target }
@@ -316,7 +353,12 @@ object FinancialEngine {
             totalLivingCostMonthly(projectionSettings) * 12.0
         }
         val yearsTo60Today = max(0, 60 - projectionSettings.primaryAge)
-        val bridgeReqToday = if (yearsTo60Today == 0) 0.0 else annualLiving * annuityFactor(rReal, yearsTo60Today)
+        val bridgeReqToday = FireTargetAndTrajectoryEngine.computeBridgeTo60Required(
+            annualLiving = annualLiving,
+            yearsTo60 = yearsTo60Today,
+            rReal = rReal,
+            totalFireTarget = fireBase
+        )
         val bridgeFundedToday = if (yearsTo60Today == 0) true else snapLiquid >= bridgeReqToday
         val bridgeDeficitToday = max(0.0, bridgeReqToday - snapLiquid)
 
@@ -331,8 +373,8 @@ object FinancialEngine {
         val reserveSurplusOrDeficit = snapReserve - effectiveReserveTarget
         val reserveContribMonthly = monthlyEmergencyReserveContribution(projectionSettings)
 
-        val dps = buildDpsProjection(projectionSettings)
-        val dip = buildDipProjection(projectionSettings)
+        val dps = buildDpsProjection(projectionSettings, partnerBirthYearOverride = partnerBirthYearOverride)
+        val dip = buildDipProjection(projectionSettings, partnerBirthYearOverride = partnerBirthYearOverride)
 
         val spouseInc = spouseOwnIncomeAnnual(projectionSettings.baseYear, projectionSettings)
         val hasChildUnder3 = CzechTaxEngine.hasChildUnder3(projectionSettings, projectionSettings.baseYear)
@@ -346,27 +388,46 @@ object FinancialEngine {
         val childBonusVal = CzechTaxEngine.annualChildTaxRelief(
             settings = projectionSettings,
             year = projectionSettings.baseYear,
-            vSpouseCreditAnnual = spouseCreditVal
+            vSpouseCreditAnnual = spouseCreditVal,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
-        val retirementTaxSaved = annualRetirementTaxSaved(projectionSettings, projectionSettings.baseYear)
-        val incrementalValue = spouseCreditVal + childBonusVal + retirementTaxSaved
+        val retirementTaxSaved = annualRetirementTaxSaved(
+            projectionSettings,
+            projectionSettings.baseYear,
+            partnerBirthYearOverride = partnerBirthYearOverride
+        )
+        val baseYearEmbeddedChildCredit = CzechTaxEngine.baseYearChildCreditAnnual(projectionSettings)
+        val unembeddedChildCredit = max(0.0, childBonusVal - min(childBonusVal, baseYearEmbeddedChildCredit))
+        val incrementalValue = spouseCreditVal + unembeddedChildCredit + retirementTaxSaved
 
         val taxHelper = TaxReturnHelperData(
             year = projectionSettings.baseYear,
             taxpayerCredit = projectionSettings.taxpayerCreditAnnual,
             spouseCredit = spouseCreditVal,
             childBonus = childBonusVal,
-            retirementDeductionBase = annualRetirementDeduction(projectionSettings),
+            retirementDeductionBase = annualRetirementDeduction(
+                projectionSettings,
+                partnerBirthYearOverride = partnerBirthYearOverride,
+                year = projectionSettings.baseYear
+            ),
             dipSaving = retirementTaxSaved,
             totalIncrementalValue = incrementalValue,
             spouseOwnIncome = spouseInc,
             spouseEligible = spouseEligible
         )
 
-        val monteCarlo = if (runMonteCarlo) runMonteCarlo(projectionSettings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
-        val historicalMonteCarlo = if (runMonteCarlo) runHistoricalMonteCarlo(projectionSettings) else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
+        val monteCarlo = if (runMonteCarlo) {
+            runMonteCarlo(projectionSettings, partnerBirthYearOverride = partnerBirthYearOverride)
+        } else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
+        val historicalMonteCarlo = if (runMonteCarlo) {
+            runHistoricalMonteCarlo(projectionSettings, partnerBirthYearOverride = partnerBirthYearOverride)
+        } else MonteCarloResult(0.0, null, null, null, emptyList(), emptyList())
         val retirementSurvival = if (runMonteCarlo) {
-            runRetirementSurvival(projectionSettings, useHistoricalBootstrap = false)
+            runRetirementSurvival(
+                projectionSettings,
+                useHistoricalBootstrap = false,
+                partnerBirthYearOverride = partnerBirthYearOverride
+            )
         } else {
             RetirementSurvivalResult(
                 successRatePct = 0.0,
@@ -381,9 +442,17 @@ object FinancialEngine {
             )
         }
         val historicalRetirementSurvival = if (runMonteCarlo) {
-            runRetirementSurvival(projectionSettings, useHistoricalBootstrap = true)
+            runRetirementSurvival(
+                projectionSettings,
+                useHistoricalBootstrap = true,
+                partnerBirthYearOverride = partnerBirthYearOverride
+            )
         } else retirementSurvival
-        val stressScenarios = calculateStressScenarios(projectionSettings, runMonteCarlo = runMonteCarlo)
+        val stressScenarios = calculateStressScenarios(
+            projectionSettings,
+            runMonteCarlo = runMonteCarlo,
+            partnerBirthYearOverride = partnerBirthYearOverride
+        )
 
         val monthlyTotalInflowsWithMatch = currentIncome.totalMonthly + employerMatchMonthly
         val savingsRate = if (currentIncome.totalMonthly > 0.0 && monthlyTotalInflowsWithMatch > 0.0) {
@@ -415,6 +484,27 @@ object FinancialEngine {
         val bridgeWaitYears = if (resolvedActivePoint != null && unconstrainedPoint != null) {
             max(0, resolvedActivePoint.year - unconstrainedPoint.year)
         } else 0
+        val bridgeRefPoint = fireLiquidBridgePoint ?: unconstrainedPoint
+        val bridgeYearsAtFire = when {
+            isFireAchievedToday -> yearsTo60Today
+            bridgeRefPoint != null -> max(0, 60 - bridgeRefPoint.age)
+            else -> yearsTo60Today
+        }
+        val bridgeReqAtFire = when {
+            isFireAchievedToday -> bridgeReqToday
+            bridgeRefPoint != null -> bridgeRefPoint.liquidBridgeTo60Required
+            else -> bridgeReqToday
+        }
+        val bridgeFundedAtFire = when {
+            isFireAchievedToday -> bridgeFundedToday
+            bridgeRefPoint != null -> bridgeRefPoint.isLiquidBridgeFunded
+            else -> bridgeFundedToday
+        }
+        val bridgeDeficitAtFire = when {
+            isFireAchievedToday -> bridgeDeficitToday
+            bridgeRefPoint != null -> max(0.0, bridgeRefPoint.liquidBridgeTo60Required - bridgeRefPoint.portfolio)
+            else -> bridgeDeficitToday
+        }
 
         val fireMilestones = FireTargetAndTrajectoryEngine.buildFireMilestones(
             settings = projectionSettings,
@@ -426,7 +516,8 @@ object FinancialEngine {
             snapLiquid = snapLiquid,
             snapPension = snapPension,
             bridgeReqToday = bridgeReqToday,
-            yearsTo60Today = yearsTo60Today
+            yearsTo60Today = yearsTo60Today,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
 
         val perpetualMultiplier = perpetualFireLeverageMultiplier(projectionSettings)
@@ -476,12 +567,17 @@ object FinancialEngine {
             bridgeRequiredToday = bridgeReqToday,
             isBridgeFundedToday = bridgeFundedToday,
             bridgeDeficitToday = bridgeDeficitToday,
-            bridgeWaitYears = bridgeWaitYears
+            bridgeWaitYears = bridgeWaitYears,
+            bridgeYearsFromFireTo60 = bridgeYearsAtFire,
+            bridgeRequiredAtFire = bridgeReqAtFire,
+            isBridgeFundedAtFire = bridgeFundedAtFire,
+            bridgeDeficitAtFire = bridgeDeficitAtFire
         )
 
         val pensionOptimization = HouseholdCashFlowEngine.computePensionOptimizationSnapshot(
             s = projectionSettings,
-            currentIncome = currentIncome
+            currentIncome = currentIncome,
+            partnerBirthYearOverride = partnerBirthYearOverride
         )
 
         val decumulationBase = maxOf(
@@ -490,6 +586,21 @@ object FinancialEngine {
             1_000_000.0
         )
         val decumulationSwr = projectionSettings.safeWithdrawalRatePct.finiteIn(0.5, 20.0, 4.0)
+        val retirementAgeForDecum = activeFireAge ?: projectionSettings.primaryAge
+        val partnerAgeToday = projectionSettings.baseYear - partnerBirthYear(projectionSettings, partnerBirthYearOverride)
+        val partnerAgeAtFire = partnerAgeToday + max(0, retirementAgeForDecum - projectionSettings.primaryAge)
+        val pensionStreams = buildList {
+            val vPenAnnual = projectionSettings.vStatePensionMonthly.finiteNonNegative() * 12.0
+            if (vPenAnnual > 0.0) {
+                add(max(0, projectionSettings.vStatePensionAge - retirementAgeForDecum) to vPenAnnual)
+            }
+            if (!projectionSettings.isSingleHousehold) {
+                val ePenAnnual = projectionSettings.eStatePensionMonthly.finiteNonNegative() * 12.0
+                if (ePenAnnual > 0.0) {
+                    add(max(0, projectionSettings.eStatePensionAge - partnerAgeAtFire) to ePenAnnual)
+                }
+            }
+        }
         val decumulationComparison = if (runMonteCarlo) {
             DecumulationStrategies.compareStrategies(
                 DecumulationConfig(
@@ -506,9 +617,10 @@ object FinancialEngine {
                     gkCutPct = projectionSettings.guardrailsCutPct.finiteIn(1.0, 50.0, 10.0),
                     gkBoostPct = projectionSettings.guardrailsBoostPct.finiteIn(1.0, 50.0, 10.0),
                     gkFloorPctOfInitial = projectionSettings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
-                    gkInitialWithdrawalMultiplier = 1.15,
+                    gkInitialWithdrawalMultiplier = 1.0,
                     vpdRatePct = (decumulationSwr * 1.075).coerceIn(0.5, 20.0),
-                    vpdFloorPctOfInitial = projectionSettings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0)
+                    vpdFloorPctOfInitial = projectionSettings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
+                    pensionStreams = pensionStreams
                 )
             )
         } else null
@@ -557,11 +669,18 @@ object FinancialEngine {
                 settings = projectionSettings,
                 taxYear = projectionSettings.baseYear,
                 spouseOwnIncomeAnnual = spouseInc,
-                hasChildUnder3 = hasChildUnder3
+                hasChildUnder3 = hasChildUnder3,
+                actualDipContributedAnnual = if (ytdTaxShield.isFromImportedTransactions) ytdTaxShield.ytdDipContributed else null,
+                actualDpsQualifyingAnnual = if (ytdTaxShield.isFromImportedTransactions) ytdTaxShield.ytdDpsContributed else null,
+                partnerBirthYearOverride = partnerBirthYearOverride
             ),
             effectiveSettings = projectionSettings,
             snapshot = snapshot,
-            pensionOptimization = pensionOptimization
+            pensionOptimization = pensionOptimization,
+            bridgeYearsFromFireTo60 = bridgeYearsAtFire,
+            bridgeRequiredAtFire = bridgeReqAtFire,
+            isBridgeFundedAtFire = bridgeFundedAtFire,
+            bridgeDeficitAtFire = bridgeDeficitAtFire
         )
     }
 }

@@ -53,26 +53,27 @@ class IncomeReactivityAndGiftTaxExemptionTest {
             eIncludeLecturing = true
         )
 
-        // November 2026 (month 11) must still reflect full 13,000 Kč parental allowance and 71,490 Kč total
+        // For a 2024 child in Nov 2026 at 13,000/mo, remaining pot supports full 13,000 Kč benefit
         val novIncome = FinancialEngine.householdIncome(2026, base, activeLedgerEntry = null, month = 11)
         assertEquals(13000.0, novIncome.benefit, 0.001)
         assertEquals(71490.0, novIncome.totalMonthly, 0.001)
 
-        // Manually raising parental allowance to 25,000 Kč or 40,000 Kč in November must rise immediately
+        // Manually raising parental allowance mid-year (month 8) on a 2026 newborn's 350,000 Kč pot must rise immediately
+        val infant2026 = base.copy(child1BirthYear = 2026)
         val raised25k = FinancialEngine.householdIncome(
             2026,
-            base.copy(eParentalAllowanceMonthly = 25000.0),
+            infant2026.copy(eParentalAllowanceMonthly = 25000.0),
             activeLedgerEntry = null,
-            month = 11
+            month = 8
         )
         assertEquals(25000.0, raised25k.benefit, 0.001)
         assertEquals(71490.0 + 12000.0, raised25k.totalMonthly, 0.001)
 
         val raised40k = FinancialEngine.householdIncome(
             2026,
-            base.copy(eParentalAllowanceMonthly = 40000.0),
+            infant2026.copy(eParentalAllowanceMonthly = 40000.0),
             activeLedgerEntry = null,
-            month = 11
+            month = 8
         )
         assertEquals(40000.0, raised40k.benefit, 0.001)
         assertEquals(71490.0 + 27000.0, raised40k.totalMonthly, 0.001)

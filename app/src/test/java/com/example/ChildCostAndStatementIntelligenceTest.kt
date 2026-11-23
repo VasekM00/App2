@@ -562,13 +562,17 @@ class ChildCostAndStatementIntelligenceTest {
             0.001
         )
 
-        // Early retirement target with prolonging must NOT be inflated by immortal perpetuity of 10,000/mo forever (which is 120,000 / 0.04 = 3,000,000)
+        // Early retirement target with prolonging must match finite age-tiered child PV, NOT perpetual 3,000,000 capital
         val targetEarlyWithoutProlong = FinancialEngine.fireTargetBase(settings.copy(prolongChildSupportInFire = false), age = 26)
         val finiteBridgeCapital = targetEarly - targetEarlyWithoutProlong
         val swr = 0.04
-        val remainingYears = 24
-        val expectedFiniteBridge = 120_000.0 * FinancialEngine.annuityFactor(swr, remainingYears)
-        assertEquals(expectedFiniteBridge, finiteBridgeCapital, 0.01)
+        var expectedAgeTieredBridge = 0.0
+        for (offset in 0 until 24) {
+            val calYr = 2026 + offset
+            val moCost = FinancialEngine.childMonthlyExpense(2024, calYr, settings)
+            expectedAgeTieredBridge += (moCost * 12.0) / Math.pow(1.0 + swr, (offset + 1).toDouble())
+        }
+        assertEquals(expectedAgeTieredBridge, finiteBridgeCapital, 0.01)
         assertTrue(
             "Finite annuity bridge must be strictly less than perpetual 3M capital",
             finiteBridgeCapital < (120_000.0 / 0.04)
@@ -591,19 +595,26 @@ class ChildCostAndStatementIntelligenceTest {
             dipContributionMonthly = 0.0,
             dpsOwnContributionMonthly = 0.0,
             employerRetirementMonthly = 0.0,
+            lumpSumInclude = false,
             monteCarloN = 100,
             lifestyleCostAtFireMonthly = 30_000.0,
             retirementHorizonYears = 30
         )
 
-        // If retiring early at age 35, liquid funds are 0, so decumulation before age 60
-        // cannot draw from locked DIP/DPS. Survival rate must be 0% due to pre-60 liquidity gating!
+        // With pre-60 liquidity gating, deterministic trajectory stays "Bridge Constrained"
+        // before age 60 instead of falsely permitting early retirement with 0 liquid assets,
+        // and survival simulation defers FIRE until pension unlocks at age 60.
+        val lockedTraj = FinancialEngine.buildLiquidPortfolio(lockedWealthOnly, dualIncome = false)
+        assertEquals("Bridge Constrained", lockedTraj.first().status)
+        assertTrue(
+            "All pre-60 points with 0 liquid capital must remain Bridge Constrained",
+            lockedTraj.filter { it.age < 60 && it.totalPortfolio >= it.target }.all { it.status == "Bridge Constrained" }
+        )
+
         val earlyResult = FinancialEngine.runRetirementSurvival(lockedWealthOnly)
-        assertEquals(
-            "Zero liquid funds before age 60 must result in depletion under statutory lock-in",
-            0.0,
-            earlyResult.successRatePct,
-            0.001
+        assertTrue(
+            "Locked-only assets unlock at age 60 rather than prematurely depleting at age 35",
+            earlyResult.successRatePct > 50.0
         )
 
         // Conversely, if starting at age 60, pension assets unlock immediately

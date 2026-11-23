@@ -211,18 +211,25 @@ class DomainExtremeScaleAndParityRedTeamTest {
         )
         assertEquals(96_000.0, CzechTaxEngine.annualRetirementDeduction(overCappedDual), 0.01)
 
-        // Employer § 6(9)(m) 50 000 Kč/year exemption cap (4 166.67 Kč/mo) even when huge monthly entered
-        val overEmployer = SettingsEntity(
+        // Employer § 6(9)(m) 50 000 Kč/year exemption cap (4 166.67 Kč/mo) over remaining lock-in years
+        val existingContractAt59 = SettingsEntity(
             isSingleHousehold = true,
             primaryAge = 59,
             vStatePensionAge = 67,
+            dpsBalanceCurrent = 800_000.0, // Existing >= 10y contract unlocks at age 60 (1 year left)
             dpsOwnContributionMonthly = 1_700.0,
             employerRetirementMonthly = 10_000.0
         )
-        val dpsProj = DpsDipEngine.buildDpsProjection(overEmployer)
+        val dpsProj = DpsDipEngine.buildDpsProjection(existingContractAt59)
         // 1 year to age 60 -> capped annual employer match <= 50,000 Kč + tiny extra rounding
         assertTrue(dpsProj.employerTotal <= 50_000.5)
         assertTrue(dpsProj.employerTotal >= 49_999.5)
+
+        // New contract opened at 59 with 0 balance enforces ZDP § 15b 120-month lock-in (unlockAge = 69)
+        val newContractAt59 = existingContractAt59.copy(dpsBalanceCurrent = 0.0)
+        val newDpsProj = DpsDipEngine.buildDpsProjection(newContractAt59)
+        assertEquals(69, newDpsProj.unlockAge)
+        assertTrue(newDpsProj.employerTotal <= 500_005.0)
 
         // DPS 340 Kč/mo state match & old-age pensioner cutoff
         assertEquals(0.0, CzechTaxEngine.dpsSubsidy(499.99, age = 35, statePensionAge = 67), 0.01)

@@ -91,6 +91,9 @@ interface ImportedTransactionDao {
     @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName ORDER BY date ASC, id ASC")
     suspend fun getTransactionsForBankAndMonthDirect(yearMonth: String, bankName: String): List<ImportedBankTransactionEntity>
 
+    @Query("SELECT * FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName AND accountKey = :accountKey ORDER BY date ASC, id ASC")
+    suspend fun getTransactionsForBankAccountAndMonthDirect(yearMonth: String, bankName: String, accountKey: String): List<ImportedBankTransactionEntity>
+
     @Query("SELECT * FROM imported_bank_transactions ORDER BY date ASC, id ASC")
     fun getAllImportedTransactions(): Flow<List<ImportedBankTransactionEntity>>
 
@@ -114,6 +117,9 @@ interface ImportedTransactionDao {
 
     @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName")
     suspend fun deleteTransactionsForBankAndMonth(yearMonth: String, bankName: String)
+
+    @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth AND bankName = :bankName AND accountKey = :accountKey")
+    suspend fun deleteTransactionsForBankAccountAndMonth(yearMonth: String, bankName: String, accountKey: String)
 
     @Query("DELETE FROM imported_bank_transactions WHERE yearMonth = :yearMonth")
     suspend fun deleteTransactionsForMonth(yearMonth: String)

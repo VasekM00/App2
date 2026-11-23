@@ -83,9 +83,9 @@ private enum class DecumulationStrategy(
     GUYTON_KLINGER(
         title = "Guyton-Klinger Guardrails",
         shortLabel = "Guardrails",
-        swrMultiplier = 1.15,
-        description = "Dynamic capital preservation rules starting +15% above baseline SWR with adaptive cut and boost guardrails.",
-        bearMarketRule = "Capital Preservation: cuts spending when live withdrawal rate exceeds your upper threshold.",
+        swrMultiplier = 1.0,
+        description = "Dynamic capital preservation rules starting at baseline SWR with CPI inflation-skip and adaptive cut/boost guardrails.",
+        bearMarketRule = "Capital Preservation: skips CPI raise after losing years if withdrawal rate rises, and cuts spending when upper threshold is breached.",
         bullMarketRule = "Prosperity Rule: boosts spending when live withdrawal rate drops below your lower threshold.",
         taxEfficiency = "Absorbs bear drawdowns with spending agility, minimizing forced asset liquidations."
     ),
@@ -136,9 +136,21 @@ fun DecumulationComparisonCard(
         portfolioBase, baseSwr, horizonYears, s.cpiInflationPct, s.portfolioNominalReturnPct,
         s.dividendYieldPct, s.dividendTaxRatePct,
         s.monteCarloVolatilityPct, s.guardrailsUpperThresholdPct, s.guardrailsLowerThresholdPct,
-        s.guardrailsCutPct, s.guardrailsBoostPct, s.guardrailsFloorPct, s.monteCarloN, s.monteCarloSeed
+        s.guardrailsCutPct, s.guardrailsBoostPct, s.guardrailsFloorPct, s.monteCarloN, s.monteCarloSeed,
+        s.vStatePensionMonthly, s.vStatePensionAge, s.eStatePensionMonthly, s.eStatePensionAge,
+        s.isSingleHousehold, s.primaryAge, snap.activeFireAge, state.pensionOptimization.partnerAge
     ) {
         val netReturnPct = com.example.domain.FinancialEngine.netTaxableNominalReturnPct(s).finiteOrZero()
+        val fireAge = snap.activeFireAge ?: s.primaryAge
+        val partnerAgeAtFire = state.pensionOptimization.partnerAge + maxOf(0, fireAge - s.primaryAge)
+        val streams = buildList {
+            val vPen = s.vStatePensionMonthly.coerceAtLeast(0.0) * 12.0
+            if (vPen > 0.0) add(maxOf(0, s.vStatePensionAge - fireAge) to vPen)
+            if (!s.isSingleHousehold) {
+                val ePen = s.eStatePensionMonthly.coerceAtLeast(0.0) * 12.0
+                if (ePen > 0.0) add(maxOf(0, s.eStatePensionAge - partnerAgeAtFire) to ePen)
+            }
+        }
         com.example.domain.DecumulationStrategies.compareStrategies(
             com.example.domain.DecumulationConfig(
                 initialPortfolio = portfolioBase,
@@ -156,7 +168,8 @@ fun DecumulationComparisonCard(
                 gkFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
                 gkInitialWithdrawalMultiplier = DecumulationStrategy.GUYTON_KLINGER.swrMultiplier,
                 vpdRatePct = (baseSwr * 1.075).coerceIn(0.5, 20.0),
-                vpdFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0)
+                vpdFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
+                pensionStreams = streams
             )
         )
     }

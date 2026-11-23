@@ -22,6 +22,7 @@ internal object CzechValueParsers {
     )
 
     private val ACC_SLASH_REGEX = Regex("""(?<!\d)(?:\d{1,6}-)?\d{1,10}/\d{4}(?!\d)""")
+    private val OWN_ACC_BARE_REGEX = Regex("""(?<!\d)(?:\d{1,6}-)?\d{6,10}(?!/\d)(?!\d)""")
     private val IBAN_SPACED_REGEX = Regex(
         """(?<![\p{L}\d])(CZ\d{2})[\s\u00A0]*(\d{4})[\s\u00A0]*(\d{6})[\s\u00A0]*(\d{10})(?![\p{L}\d])""",
         RegexOption.IGNORE_CASE
@@ -240,6 +241,51 @@ internal object CzechValueParsers {
             val prefix = iban.substring(8, 14).trimStart('0')
             val acc = iban.substring(14, 24).trimStart('0')
             return if (prefix.isNotBlank()) "$prefix-$acc/$bankCode" else "$acc/$bankCode"
+        }
+        return ""
+    }
+
+    fun formatAboAccountKey(raw16Digits: String, bankCode: String?): String {
+        val clean = raw16Digits.trim()
+        if (clean.length != 16 || !clean.all { it.isDigit() }) return ""
+        val prefix = clean.substring(0, 6)
+        val number = clean.substring(6, 16)
+        val combined = "$prefix-$number"
+        return if (!bankCode.isNullOrBlank()) {
+            canonicalAccountKey("$combined/$bankCode")
+        } else {
+            canonicalAccountKey(combined)
+        }
+    }
+
+    fun extractOwnStatementAccountKey(
+        lines: List<String>,
+        bankCode: String? = null,
+        limitLines: Int = 35
+    ): String {
+        val scanLines = if (lines.size > limitLines) lines.take(limitLines) else lines
+        for (line in scanLines) {
+            val folded = StatementTextDecoder.foldHeader(line)
+            if (folded.contains("protiuc") || folded.contains("protistran")) continue
+            val isExplicitOwnLabel = folded.contains("cislo uctu") ||
+                folded.contains("vlastni ucet") ||
+                folded.contains("muj ucet") ||
+                folded.contains("ucet c") ||
+                folded.contains("account number") ||
+                folded.contains("account no") ||
+                folded.contains("iban") ||
+                folded.startsWith("ucet:") ||
+                folded.startsWith("account:")
+            if (!isExplicitOwnLabel) continue
+
+            val acc = extractAccount(line)
+            if (acc.isNotEmpty()) {
+                return canonicalAccountKey(acc)
+            }
+            val bare = OWN_ACC_BARE_REGEX.find(line)?.value
+            if (!bare.isNullOrBlank()) {
+                return if (!bankCode.isNullOrBlank()) canonicalAccountKey("$bare/$bankCode") else canonicalAccountKey(bare)
+            }
         }
         return ""
     }

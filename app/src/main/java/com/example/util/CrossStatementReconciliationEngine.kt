@@ -123,7 +123,8 @@ object CrossStatementReconciliationEngine {
         counterpartyAccount: String,
         counterpartyName: String,
         message: String,
-        variableSymbol: String
+        variableSymbol: String,
+        accountKey: String = ""
     ): String {
         val amtStr = String.format(Locale.US, "%.2f", amount)
         val cleanAcc = counterpartyAccount.replace(" ", "").replace("-", "").lowercase(Locale.ROOT)
@@ -131,7 +132,9 @@ object CrossStatementReconciliationEngine {
         val cleanMsg = message.trim().lowercase(Locale.ROOT)
         val cleanVs = variableSymbol.trim()
         val normBank = bankName.trim().uppercase(Locale.ROOT)
-        return "$date|$normBank|$amtStr|$cleanAcc|$cleanName|$cleanMsg|$cleanVs"
+        val base = "$date|$normBank|$amtStr|$cleanAcc|$cleanName|$cleanMsg|$cleanVs"
+        val cleanAccountKey = accountKey.trim().lowercase(Locale.ROOT)
+        return if (cleanAccountKey.isNotEmpty()) "$base|$cleanAccountKey" else base
     }
 
     fun computeFingerprint(tx: ImportedBankTransactionEntity): String {
@@ -142,7 +145,8 @@ object CrossStatementReconciliationEngine {
             counterpartyAccount = tx.counterpartyAccount,
             counterpartyName = tx.counterpartyName,
             message = tx.message,
-            variableSymbol = tx.variableSymbol
+            variableSymbol = tx.variableSymbol,
+            accountKey = tx.accountKey
         )
     }
 
@@ -370,6 +374,7 @@ object CrossStatementReconciliationEngine {
         val isKnownFamilyAcc: Boolean,
         val routingBankCode: String?,
         val ownBankCode: String?,
+        val ownAccountKey: String,
         val normBankName: String
     )
 
@@ -401,6 +406,7 @@ object CrossStatementReconciliationEngine {
             isKnownFamilyAcc = !isGiftAcc && isKnownCanonicalMatch(cleanAcc, ctx.knownFamilyCanonical),
             routingBankCode = tx.counterpartyAccount.split("/").getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() },
             ownBankCode = bankCodeForBankName(tx.bankName),
+            ownAccountKey = CzechValueParsers.canonicalAccountKey(tx.accountKey),
             normBankName = CzechMerchantCatalog.normalizeSimple(tx.bankName)
         )
     }
@@ -430,8 +436,10 @@ object CrossStatementReconciliationEngine {
         val debitExplicitInternal = debit.tx.category == BankTransactionType.INTERNAL_TRANSFER.name
         val creditExplicitInternal = credit.tx.category == BankTransactionType.INTERNAL_TRANSFER.name
         val sameAccountKnownFamily = debit.isKnownFamilyAcc || credit.isKnownFamilyAcc
+        val matchesOwnAccountKey = (credit.ownAccountKey.isNotEmpty() && debit.canonicalAccount == credit.ownAccountKey) ||
+            (debit.ownAccountKey.isNotEmpty() && credit.canonicalAccount == debit.ownAccountKey)
 
-        if (!isFlaggedSelf && !debitExplicitInternal && !creditExplicitInternal && !sameAccountKnownFamily) {
+        if (!isFlaggedSelf && !debitExplicitInternal && !creditExplicitInternal && !sameAccountKnownFamily && !matchesOwnAccountKey) {
             val dHasName = debit.normName.isNotEmpty() && !debit.normNameIsBankLabel
             val cHasName = credit.normName.isNotEmpty() && !credit.normNameIsBankLabel
             if (dHasName && cHasName && debit.normName != credit.normName) return null
@@ -439,18 +447,24 @@ object CrossStatementReconciliationEngine {
         }
 
         val isCrossBank = credit.normBankName != debit.normBankName
-        val hasRoutingCodeMatch = (credit.ownBankCode != null && debit.routingBankCode == credit.ownBankCode) ||
+        val isDifferentAccountSameBank = debit.ownAccountKey.isNotEmpty() &&
+            credit.ownAccountKey.isNotEmpty() &&
+            debit.ownAccountKey != credit.ownAccountKey
+        val hasRoutingCodeMatch = matchesOwnAccountKey ||
+            (credit.ownBankCode != null && debit.routingBankCode == credit.ownBankCode) ||
             (debit.ownBankCode != null && credit.routingBankCode == debit.ownBankCode)
 
-        val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch ||
-            debitExplicitInternal || creditExplicitInternal || sameAccountKnownFamily
+        val isSelfOrExplicitTransfer = isFlaggedSelf || hasRoutingCodeMatch || matchesOwnAccountKey ||
+            isDifferentAccountSameBank || debitExplicitInternal || creditExplicitInternal || sameAccountKnownFamily
 
         if (!isCrossBank && !isSelfOrExplicitTransfer) {
             return null
         }
 
         var score = 0
+        if (matchesOwnAccountKey) score += 100
         if (hasRoutingCodeMatch) score += 100
+        if (isDifferentAccountSameBank) score += 40
         if (debit.isSelfTransfer && credit.isSelfTransfer) score += 60 else if (isFlaggedSelf) score += 40
         if (debit.normName.isNotEmpty() && debit.normName == credit.normName) score += 30
         if (isCrossBank) score += 10

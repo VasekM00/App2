@@ -2,6 +2,7 @@ package com.example.util.statement
 
 import com.example.util.BankTransactionType
 import com.example.util.BankType
+import com.example.util.CrossStatementReconciliationEngine
 import com.example.util.CzechMerchantCatalog
 import com.example.util.ParsedBankTransaction
 import com.example.util.StatementParseSummary
@@ -36,6 +37,8 @@ internal object AboGpcParser {
         knownParentalGiftAccounts: Set<String> = emptySet()
     ): StatementParseSummary {
         var detectedBank = BankType.GENERIC
+        var rawOwnAcc16 = ""
+        var headerExplicitAcc = ""
         var statementYm: String? = null
         var closingBalance: Double? = null
         val compiledOverrides = CzechMerchantCatalog.compileOverrides(userOverrides)
@@ -50,6 +53,15 @@ internal object AboGpcParser {
 
             when {
                 line.startsWith("074") -> {
+                    if (line.length >= 19) {
+                        val accField = line.substring(3, 19)
+                        if (accField.all { it.isDigit() } && rawOwnAcc16.isEmpty()) {
+                            rawOwnAcc16 = accField
+                        }
+                    }
+                    if (headerExplicitAcc.isEmpty()) {
+                        headerExplicitAcc = CzechValueParsers.extractAccount(line).let { CzechValueParsers.canonicalAccountKey(it) }
+                    }
                     if (line.length >= 81) {
                         val closeAmtStr = line.substring(66, minOf(line.length, 80)).trim()
                         val closeSign = line.getOrNull(80) ?: '+'
@@ -215,6 +227,26 @@ internal object AboGpcParser {
             if (detectedFromTxs != null) detectedBank = detectedFromTxs
         }
 
-        return TransactionCategorizer.buildSummary(detectedBank, transactions, closingBalance, forcedYearMonth = statementYm)
+        val resolvedOwnKey = when {
+            headerExplicitAcc.isNotEmpty() -> headerExplicitAcc
+            rawOwnAcc16.isNotEmpty() -> {
+                val bankCode = CrossStatementReconciliationEngine.bankCodeForBankName(detectedBank.name)
+                CzechValueParsers.formatAboAccountKey(rawOwnAcc16, bankCode)
+            }
+            else -> ""
+        }
+        val taggedTxs = if (resolvedOwnKey.isNotEmpty()) {
+            transactions.map { it.copy(accountKey = resolvedOwnKey) }
+        } else {
+            transactions
+        }
+
+        return TransactionCategorizer.buildSummary(
+            bankType = detectedBank,
+            transactions = taggedTxs,
+            monthEndBalance = closingBalance,
+            forcedYearMonth = statementYm,
+            accountKey = resolvedOwnKey
+        )
     }
 }

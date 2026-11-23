@@ -3,7 +3,6 @@ package com.example.domain
 import com.example.data.ImportedBankTransactionEntity
 import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -23,7 +22,8 @@ object HouseholdCashFlowEngine {
         settings: SettingsEntity,
         currentYear: Int = settings.baseYear,
         currentMonth: Int = 1,
-        importedTransactions: List<com.example.data.ImportedBankTransactionEntity> = emptyList()
+        importedTransactions: List<ImportedBankTransactionEntity> = emptyList(),
+        partnerBirthYearOverride: Int? = null
     ): YtdTaxShieldStatus {
         val safeMonth = currentMonth.coerceIn(1, 12)
         val baseThresholdMonthly = settings.dpsDeductionThresholdMonthly.finiteNonNegative(
@@ -31,19 +31,27 @@ object HouseholdCashFlowEngine {
         )
         val vAgeAtYear = settings.primaryAge + (currentYear - settings.baseYear)
         val thresholdMonthly = if (vAgeAtYear >= settings.vStatePensionAge) 0.0 else baseThresholdMonthly
+        val eAgeAtYear = currentYear - partnerBirthYear(settings, partnerBirthYearOverride)
+        val eThresholdMonthly = if (eAgeAtYear >= settings.eStatePensionAge) 0.0 else baseThresholdMonthly
         val yearPrefix = "$currentYear"
         val yearTxs = importedTransactions.filter {
             !it.isNetted && (it.yearMonth.startsWith(yearPrefix) || it.date.startsWith(yearPrefix))
         }
         val dipTxs = yearTxs.filter { it.category == "INVESTMENT_DIP" }
         val dpsTxs = yearTxs.filter { it.category == "INVESTMENT_DPS" }
+        val hasImported = dipTxs.isNotEmpty() || dpsTxs.isNotEmpty()
 
-        val (dipYtd, dpsYtd) = if (dipTxs.isNotEmpty() || dpsTxs.isNotEmpty()) {
-            val dipActual = dipTxs.sumOf { abs(it.amount).finiteNonNegative() }
-            val dpsByMonth = dpsTxs.groupBy { if (it.yearMonth.isNotBlank()) it.yearMonth else it.date.take(7) }
-            val dpsActual = dpsByMonth.values.sumOf { txs ->
-                val monthTotal = txs.sumOf { abs(it.amount).finiteNonNegative() }
-                max(0.0, monthTotal - thresholdMonthly)
+        val (dipYtd, dpsYtd) = if (hasImported) {
+            // Signed net outflows: deposits are negative, refunds/reversals are positive (subtract rather than inflate).
+            val dipActual = max(0.0, dipTxs.sumOf { -it.amount.finiteOr(0.0) })
+            val dpsByMonthAndAccount = dpsTxs.groupBy { tx ->
+                val ym = if (tx.yearMonth.isNotBlank()) tx.yearMonth else tx.date.take(7)
+                val acct = tx.accountKey.ifBlank { tx.bankName }
+                ym to acct
+            }
+            val dpsActual = dpsByMonthAndAccount.values.sumOf { txs ->
+                val monthNet = max(0.0, txs.sumOf { -it.amount.finiteOr(0.0) })
+                max(0.0, monthNet - thresholdMonthly)
             }
             dipActual to dpsActual
         } else {
@@ -52,10 +60,21 @@ object HouseholdCashFlowEngine {
             dipPlanned to dpsPlanned
         }
 
-        val totalYtd = (dipYtd + dpsYtd).finiteNonNegative()
         val ceiling = settings.taxDeductionCeilingAnnual.finiteNonNegative(
             RegulatoryConstants.STATUTORY_RETIREMENT_DEDUCTION_CEILING_ANNUAL_2026
         )
+        val partnerDipYtd = if (!settings.isSingleHousehold && !hasImported) {
+            settings.eDipContributionMonthly.finiteNonNegative() * safeMonth
+        } else 0.0
+        val partnerDpsYtd = if (!settings.isSingleHousehold && !hasImported) {
+            max(0.0, settings.eDpsOwnContributionMonthly.finiteNonNegative() - eThresholdMonthly) * safeMonth
+        } else 0.0
+        val partnerRemainingHeadroom = if (!settings.isSingleHousehold) {
+            max(0.0, ceiling - (partnerDipYtd + partnerDpsYtd))
+        } else 0.0
+        val householdCeiling = if (settings.isSingleHousehold) ceiling else ceiling * 2.0
+
+        val totalYtd = (dipYtd + dpsYtd).finiteNonNegative()
         val progressPct = if (ceiling > 0.0) ((totalYtd / ceiling) * 100.0).finiteIn(0.0, 100.0) else 100.0
         val effectiveDeduction = min(ceiling, totalYtd)
         val baseRatePct = settings.taxRatePct.finiteIn(0.0, 100.0, RegulatoryConstants.STATUTORY_INCOME_TAX_RATE_BASE_PCT)
@@ -68,13 +87,7 @@ object HouseholdCashFlowEngine {
         val basicCredit = settings.taxpayerCreditAnnual.finiteNonNegative(
             RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026
         )
-        val vGrossAnnual = CzechTaxEngine.netToGrossAnnual(
-            netMonthly = vaclavSalaryMonthly(currentYear, settings),
-            taxpayerCreditAnnual = basicCredit,
-            highBracketThresholdAnnual = taxThreshold,
-            baseTaxRatePct = baseRatePct,
-            highTaxRatePct = highRatePct
-        )
+        val vGrossAnnual = CzechTaxEngine.primaryGrossAnnual(settings, currentYear)
         val activeSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(settings, currentYear)
         val refund15 = CzechTaxEngine.singleEarnerRetirementTaxSaved(
             taxableGrossAnnual = vGrossAnnual,
@@ -87,7 +100,7 @@ object HouseholdCashFlowEngine {
         ).finiteNonNegative()
         val refund23 = if (vGrossAnnual > 0.0) (effectiveDeduction * highRate).finiteNonNegative() else 0.0
         val remainingHeadroom = max(0.0, ceiling - totalYtd)
-        val monthsRemaining = max(1, 12 - safeMonth + 1)
+        val monthsRemaining = max(1, 12 - safeMonth)
         val recommendedPace = if (remainingHeadroom > 0.0) remainingHeadroom / monthsRemaining else 0.0
 
         return YtdTaxShieldStatus(
@@ -102,24 +115,34 @@ object HouseholdCashFlowEngine {
             remainingHeadroomAnnual = remainingHeadroom,
             monthsRemainingInYear = monthsRemaining,
             recommendedMonthlyPace = recommendedPace,
-            isCeilingReached = totalYtd >= ceiling
+            isCeilingReached = totalYtd >= ceiling,
+            isFromImportedTransactions = hasImported,
+            partnerYtdDipContributed = partnerDipYtd,
+            partnerYtdDpsContributed = partnerDpsYtd,
+            partnerRemainingHeadroomAnnual = partnerRemainingHeadroom,
+            householdCeilingAnnual = householdCeiling
         )
     }
 
-    fun partnerBirthYear(settings: SettingsEntity): Int = settings.baseYear - settings.primaryAge
+    fun partnerBirthYear(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): Int =
+        partnerBirthYearOverride ?: (settings.baseYear - settings.primaryAge)
 
     fun annualPartnerTaxCredit(
         settings: SettingsEntity,
         year: Int,
-        vGrossOverride: Double? = null
+        vGrossOverride: Double? = null,
+        child1BirthMonth: Int = 1,
+        child2BirthMonth: Int = 1,
+        maternityBenefitPpmAnnual: Double = 0.0
     ): Double {
-        if (settings.isSingleHousehold || !settings.includeSpouseCredit) return 0.0
-        if (!CzechTaxEngine.hasChildUnder3(settings, year)) return 0.0
-        val spouseInc = spouseOwnIncomeAnnual(year, settings).finiteNonNegative()
-        val spouseLimit = settings.spouseIncomeLimitAnnual.finiteNonNegative(
-            RegulatoryConstants.STATUTORY_SPOUSE_INCOME_LIMIT_ANNUAL_2026
+        val eligibleSpouseCredit = CzechTaxEngine.eligibleSpouseCreditAnnual(
+            settings = settings,
+            year = year,
+            child1BirthMonth = child1BirthMonth,
+            child2BirthMonth = child2BirthMonth,
+            maternityBenefitPpmAnnual = maternityBenefitPpmAnnual
         )
-        if (spouseInc > spouseLimit) return 0.0
+        if (eligibleSpouseCredit <= 0.0) return 0.0
 
         val credit = settings.taxpayerCreditAnnual.finiteNonNegative(
             RegulatoryConstants.STATUTORY_TAXPAYER_CREDIT_ANNUAL_2026
@@ -130,23 +153,14 @@ object HouseholdCashFlowEngine {
         val baseRatePct = settings.taxRatePct.finiteIn(0.0, 100.0, RegulatoryConstants.STATUTORY_INCOME_TAX_RATE_BASE_PCT)
         val highRatePct = settings.taxRateSecondPct.finiteIn(0.0, 100.0, RegulatoryConstants.STATUTORY_INCOME_TAX_RATE_HIGH_PCT)
 
-        val vGross = (vGrossOverride ?: CzechTaxEngine.netToGrossAnnual(
-            netMonthly = vaclavSalaryMonthly(year, settings),
-            taxpayerCreditAnnual = credit,
-            highBracketThresholdAnnual = highThreshold,
-            baseTaxRatePct = baseRatePct,
-            highTaxRatePct = highRatePct
-        )).finiteNonNegative()
+        val vGross = (vGrossOverride ?: CzechTaxEngine.primaryGrossAnnual(settings, year)).finiteNonNegative()
         val vGrossTaxBeforeDeduction = run {
             val highIncome = max(0.0, vGross - highThreshold)
             val baseIncome = vGross - highIncome
             highIncome * (highRatePct / 100.0) + baseIncome * (baseRatePct / 100.0)
         }
         val vRemainingTaxBeforeDeduction = max(0.0, vGrossTaxBeforeDeduction - credit)
-        val spouseCredit = settings.spouseTaxCreditAnnual.finiteNonNegative(
-            RegulatoryConstants.STATUTORY_SPOUSE_CREDIT_ANNUAL_2026
-        )
-        return min(spouseCredit, vRemainingTaxBeforeDeduction).finiteNonNegative()
+        return min(eligibleSpouseCredit, vRemainingTaxBeforeDeduction).finiteNonNegative()
     }
 
     fun vaclavSalaryMonthly(year: Int, settings: SettingsEntity): Double {
@@ -184,7 +198,7 @@ object HouseholdCashFlowEngine {
         if (birthYear >= 2024) 3 else 4
 
     fun remainingParentalPotAtYearStart(targetYear: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold || targetYear < settings.baseYear) return 0.0
+        if (targetYear < settings.baseYear) return 0.0
         val baseYear = settings.baseYear
         val monthlyDraw = settings.eParentalAllowanceMonthly.finiteNonNegative()
         val c1On = settings.child1Enabled
@@ -193,14 +207,19 @@ object HouseholdCashFlowEngine {
         val y2 = settings.child2BirthYear
 
         // Act No. 117/1995 Coll. § 30(1): younger child birth forfeits any unspent prior child pot.
+        // Multiple birth (twins) multiplier is 2.0x (700k CZK) from 2026 (1.5x prior).
         // Act No. 407/2023 Coll.: entitlement ends at youngest active child age 3 (born >= 2024) or 4 (born < 2024).
+        // Czech law imposes NO employment income limit on parental allowance — returning to work never forfeits it.
         var pot = 0.0
         var activeExpiryYear: Int? = null
 
         fun applyBirth(birthYear: Int) {
             when {
                 c1On && c2On && birthYear == y1 && y1 == y2 -> {
-                    pot = parentalAllowancePot(y1, settings) * 1.5
+                    val twinsMult = if (y1 >= 2026) {
+                        RegulatoryConstants.PARENTAL_ALLOWANCE_TWINS_MULTIPLIER_2026
+                    } else 1.5
+                    pot = parentalAllowancePot(y1, settings) * twinsMult
                     activeExpiryYear = y1 + parentalCutoffAgeYears(y1)
                 }
                 c2On && birthYear == y2 && (!c1On || y2 >= y1) -> {
@@ -214,13 +233,22 @@ object HouseholdCashFlowEngine {
             }
         }
 
-        // Seed state at baseYear using the latest already-born child
+        // Seed state at baseYear using the latest already-born child, deducting estimated draws prior to baseYear
         val bornAtBaseYears = listOfNotNull(
             y1.takeIf { c1On && baseYear >= y1 },
             y2.takeIf { c2On && baseYear >= y2 }
         ).distinct().sorted()
+        var lastSeedBirthYear: Int? = null
         for (by in bornAtBaseYears) {
             applyBirth(by)
+            lastSeedBirthYear = by
+        }
+        if (lastSeedBirthYear != null && lastSeedBirthYear < baseYear && pot > 0.0) {
+            val ageYears = baseYear - lastSeedBirthYear
+            val estPriorMonths = if (ageYears == 1) 6.0 else ((ageYears - 1) * 12.0)
+            val effectiveDrawMonths = (parentalCutoffAgeYears(lastSeedBirthYear) * 12.0 - 6.0).coerceAtLeast(12.0)
+            val priorMonthlyPace = min(monthlyDraw, pot / effectiveDrawMonths)
+            pot = max(0.0, pot - estPriorMonths * priorMonthlyPace)
         }
         if (activeExpiryYear != null && baseYear >= activeExpiryYear!!) {
             pot = 0.0
@@ -234,11 +262,8 @@ object HouseholdCashFlowEngine {
                     pot = 0.0
                 }
             }
-            if (y <= settings.eReturnYear && pot > 0.0) {
-                val months = if (y == settings.eReturnYear) {
-                    (settings.eReturnMonth.coerceIn(1, 12) - 1).toDouble()
-                } else 12.0
-                val desired = monthlyDraw * months
+            if (pot > 0.0) {
+                val desired = monthlyDraw * 12.0
                 val drawn = min(pot, max(0.0, desired))
                 pot -= drawn
             }
@@ -254,37 +279,22 @@ object HouseholdCashFlowEngine {
     }
 
     fun eleonoraBenefitMonthly(year: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold || year < settings.baseYear || year > settings.eReturnYear) return 0.0
+        if (year < settings.baseYear) return 0.0
         val remainingPot = remainingParentalPotAtYearStart(year, settings)
         if (remainingPot <= 0.0) return 0.0
 
-        val monthsInThisYear = if (year == settings.eReturnYear) {
-            val month = settings.eReturnMonth.coerceIn(1, 12)
-            (month - 1).toDouble()
-        } else {
-            12.0
-        }
-        if (monthsInThisYear <= 0.0) return 0.0
-
-        val desiredAnnual = settings.eParentalAllowanceMonthly.finiteNonNegative() * monthsInThisYear
+        val desiredAnnual = settings.eParentalAllowanceMonthly.finiteNonNegative() * 12.0
         val actualAnnual = min(desiredAnnual, remainingPot)
         return actualAnnual / 12.0
     }
 
     fun eleonoraBenefitForMonth(year: Int, month: Int, settings: SettingsEntity): Double {
-        if (settings.isSingleHousehold || year < settings.baseYear || year > settings.eReturnYear) return 0.0
+        if (year < settings.baseYear) return 0.0
         val m = month.coerceIn(1, 12)
-        if (year == settings.eReturnYear && m >= settings.eReturnMonth) return 0.0
         val remainingPotAtStartOfYear = remainingParentalPotAtYearStart(year, settings)
         if (remainingPotAtStartOfYear <= 0.0) return 0.0
 
         val monthlyDraw = settings.eParentalAllowanceMonthly.finiteNonNegative()
-        // In the current base year, honour the user's configured active monthly draw directly
-        // (capped only by the available pot) so raising the monthly allowance late in the calendar year
-        // never collapses current-month income to 0 by retroactively subtracting prior months.
-        if (year == settings.baseYear) {
-            return min(monthlyDraw, remainingPotAtStartOfYear)
-        }
         val drawnPriorInThisYear = (m - 1) * monthlyDraw
         val remainingForThisMonth = max(0.0, remainingPotAtStartOfYear - drawnPriorInThisYear)
         return min(monthlyDraw, max(0.0, remainingForThisMonth))
@@ -352,7 +362,10 @@ object HouseholdCashFlowEngine {
         }
 
         val b = when {
-            isSingle -> 0.0
+            isSingle -> {
+                if (month != null) eleonoraBenefitForMonth(year, month, settings)
+                else eleonoraBenefitMonthly(year, settings)
+            }
             isBeforeReturn -> {
                 if (ledgerMatchesYear && activeLedgerEntry!!.incEleonora > 0.0) {
                     activeLedgerEntry.incEleonora
@@ -364,14 +377,19 @@ object HouseholdCashFlowEngine {
             }
             isReturnYear -> {
                 if (month != null) {
-                    if (month >= settings.eReturnMonth) 0.0
-                    else if (ledgerMatchesYear && activeLedgerEntry!!.incEleonora > 0.0) activeLedgerEntry.incEleonora
-                    else eleonoraBenefitForMonth(year, month, settings)
+                    if (month < settings.eReturnMonth && ledgerMatchesYear && activeLedgerEntry!!.incEleonora > 0.0) {
+                        activeLedgerEntry.incEleonora
+                    } else {
+                        eleonoraBenefitForMonth(year, month, settings)
+                    }
                 } else {
                     eleonoraBenefitMonthly(year, settings)
                 }
             }
-            else -> 0.0
+            else -> {
+                if (month != null) eleonoraBenefitForMonth(year, month, settings)
+                else eleonoraBenefitMonthly(year, settings)
+            }
         }
 
         val lec = when {
@@ -429,11 +447,14 @@ object HouseholdCashFlowEngine {
         statePensionAge: Int = settings?.vStatePensionAge ?: Int.MAX_VALUE
     ): Double = CzechTaxEngine.dpsSubsidy(monthlyDeposit, age, settings, year, statePensionAge)
 
-    fun annualRetirementDeduction(settings: SettingsEntity): Double =
-        CzechTaxEngine.annualRetirementDeduction(settings)
+    fun annualRetirementDeduction(settings: SettingsEntity, partnerBirthYearOverride: Int? = null): Double =
+        CzechTaxEngine.annualRetirementDeduction(settings, settings.baseYear, partnerBirthYearOverride)
 
-    fun annualRetirementTaxSaved(settings: SettingsEntity, year: Int = settings.baseYear): Double =
-        CzechTaxEngine.annualRetirementTaxSaved(settings, year)
+    fun annualRetirementTaxSaved(
+        settings: SettingsEntity,
+        year: Int = settings.baseYear,
+        partnerBirthYearOverride: Int? = null
+    ): Double = CzechTaxEngine.annualRetirementTaxSaved(settings, year, partnerBirthYearOverride)
 
     fun netToGrossAnnual(
         netMonthly: Double,
@@ -629,10 +650,11 @@ object HouseholdCashFlowEngine {
 
     fun computePensionOptimizationSnapshot(
         s: SettingsEntity,
-        currentIncome: YearlyIncome = householdIncome(s.baseYear, s)
+        currentIncome: YearlyIncome = householdIncome(s.baseYear, s),
+        partnerBirthYearOverride: Int? = null
     ): PensionOptimizationSnapshot {
         val vAge = s.primaryAge
-        val eAge = s.baseYear - partnerBirthYear(s)
+        val eAge = s.baseYear - partnerBirthYear(s, partnerBirthYearOverride)
         val vSubsidy = dpsSubsidy(s.dpsOwnContributionMonthly, vAge, s, s.baseYear, s.vStatePensionAge)
         val eSubsidy = if (!s.isSingleHousehold) {
             dpsSubsidy(s.eDpsOwnContributionMonthly, eAge, s, s.baseYear, s.eStatePensionAge)
@@ -661,7 +683,8 @@ object HouseholdCashFlowEngine {
             taxpayerCreditAnnual = taxpayerCredit,
             highBracketThresholdAnnual = taxThreshold,
             baseTaxRatePct = baseRatePct,
-            highTaxRatePct = highRatePct
+            highTaxRatePct = highRatePct,
+            embeddedMonthlyChildCredit = CzechTaxEngine.baseYearChildCreditAnnual(s) / 12.0
         )
         val eGrossAnnual = if (!s.isSingleHousehold) {
             CzechTaxEngine.spouseEarnedGrossAnnual(s.baseYear, s)
@@ -748,7 +771,7 @@ object HouseholdCashFlowEngine {
                 s.eDipContributionMonthly.finiteNonNegative() + s.eDpsOwnContributionMonthly.finiteNonNegative()
             } else 0.0
         val empMatchMonthly = baseEmployerMatchMonthly(s)
-        val dpsNetReturnPct = max(0.0, s.dpsGrossReturnPct.finiteOr(0.0) - min(s.dpsAnnualFeePct.finiteNonNegative(), s.dpsStatutoryFeeCapPct.finiteNonNegative()))
+        val dpsNetReturnPct = DpsDipEngine.effectiveDpsNetReturnPct(s)
 
         return PensionOptimizationSnapshot(
             primaryAge = vAge,

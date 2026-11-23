@@ -77,7 +77,9 @@ internal class LedgerSyncController(
                     )
                     if (existing != null) repository.updateLedgerEntry(entry) else repository.addLedgerEntry(entry)
                 }
-                if (!notes.startsWith("Imported from", ignoreCase = true)) {
+                val isImportedStatementNote = notes.startsWith("Imported from", ignoreCase = true) ||
+                    notes.startsWith("Direct Bank Statement", ignoreCase = true)
+                if (!isImportedStatementNote) {
                     syncLedgerToSettingsIfCurrentMonth(
                         yearMonth = yearMonth,
                         incVaclav = incVaclav,
@@ -107,7 +109,9 @@ internal class LedgerSyncController(
         try {
             importMutex.withLock {
                 repository.updateLedgerEntry(entry)
-                if (!entry.notes.startsWith("Imported from", ignoreCase = true)) {
+                val isImportedStatementNote = entry.notes.startsWith("Imported from", ignoreCase = true) ||
+                    entry.notes.startsWith("Direct Bank Statement", ignoreCase = true)
+                if (!isImportedStatementNote) {
                     syncLedgerToSettingsIfCurrentMonth(
                         yearMonth = entry.yearMonth,
                         incVaclav = entry.incVaclav,
