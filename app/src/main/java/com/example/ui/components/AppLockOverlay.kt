@@ -145,7 +145,6 @@ fun canAuthenticateWithDevice(context: Context): Boolean {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         val status = BiometricManager.from(context).canAuthenticate(
             BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.BIOMETRIC_WEAK or
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL
         )
         return status == BiometricManager.BIOMETRIC_SUCCESS

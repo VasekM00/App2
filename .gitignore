@@ -22,3 +22,6 @@ debug.keystore
 *.bks
 *.pdf
 screen_now.png
+
+# Real bank statements contain PII (names, addresses, account numbers) - never commit them.
+# The blanket *.pdf rule above is intentional; do not force-add PDFs.

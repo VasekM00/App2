@@ -37,6 +37,10 @@ object CrossStatementReconciliationEngine {
     // Statutory interbank clearing window tolerance requested by user
     const val CLEARING_WINDOW_DAYS = 5L
 
+    // Max candidates scored per anchor lookup (across the 3 amount buckets) to keep
+    // reconciliation linear-ish on bulk statements with many identical amounts.
+    private const val MAX_CANDIDATE_SCAN = 200
+
     private val EXTERNAL_EXPENSE_CATEGORIES = setOf(
         BankTransactionType.GROCERIES.name,
         BankTransactionType.HEALTH_DRUGSTORE.name,
@@ -495,9 +499,16 @@ object CrossStatementReconciliationEngine {
         var bestDaysApart = 0L
         var bestCandidate: TxMeta? = null
 
+        // Bound the scan: a bulk statement with many identical amounts would otherwise make this
+        // O(bucket size) per lookup (O(n^2) overall) while holding importMutex. Candidates are in
+        // insertion (date-sorted) order, so the first MAX_CANDIDATE_SCAN entries are the closest
+        // in time to the anchor's statement window in practice.
+        var scanned = 0
         for (b in (centerBucket - 1)..(centerBucket + 1)) {
             val list = candidateBuckets[b] ?: continue
             for (idx in list.indices) {
+                if (scanned >= MAX_CANDIDATE_SCAN) break
+                scanned++
                 val cand = list[idx]
                 val scored = if (isAnchorDebit) {
                     scoreTransferPair(anchor, cand)
@@ -512,6 +523,7 @@ object CrossStatementReconciliationEngine {
                     bestIdxInBucket = idx
                 }
             }
+            if (scanned >= MAX_CANDIDATE_SCAN) break
         }
 
         if (bestCandidate == null || bestIdxInBucket == -1) return null

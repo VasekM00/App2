@@ -71,7 +71,9 @@ object RegulatoryConstants {
     // --- Rodičovský příspěvek (zákon č. 117/1995 Sb., o státní sociální podpoře) ---
     // Celková částka je určena na každé narozené dítě: 350 000 Kč
     const val PARENTAL_ALLOWANCE_TOTAL_BEFORE_CUTOFF = 350000.0
-    const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 350000.0
+    // Act No. 117/1995 Coll. as amended from 1.1.2027: total parental allowance rises to 400,000 CZK
+    // (800,000 CZK for twins/multiple births) for children born on/after 2027.
+    const val PARENTAL_ALLOWANCE_TOTAL_FROM_CUTOFF = 400000.0
     const val PARENTAL_ALLOWANCE_HIGHER_TOTAL_CUTOFF_YEAR = 2027
 
     // --- ZDP § 15 odst. 3 & 4 - Odpočet úroků z hypotečního úvěru na bytové potřeby ---

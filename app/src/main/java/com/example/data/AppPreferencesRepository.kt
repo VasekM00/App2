@@ -372,12 +372,10 @@ class AppPreferencesRepository(
             prefMap["theme_mode"]?.let {
                 putString(KEY_THEME_MODE, normalizeThemeMode(it))
             }
-            prefMap["biometric_lock_enabled"]?.toBooleanStrictOrNull()?.let {
-                putBoolean(KEY_BIOMETRIC_LOCK, it)
-            }
-            prefMap["flag_secure_enabled"]?.toBooleanStrictOrNull()?.let {
-                putBoolean(KEY_FLAG_SECURE, it)
-            }
+            // Security posture is device-local and must NOT be overwritten by a backup restore:
+            // a backup from a device without the lock enabled would silently downgrade this
+            // device's app lock / FLAG_SECURE. biometric_lock_enabled / flag_secure_enabled are
+            // deliberately excluded from the restored key set.
             prefMap[KEY_PARTNER_BIRTH_YEAR]?.toIntOrNull()?.takeIf { it in 1900..2100 }?.let {
                 putInt(KEY_PARTNER_BIRTH_YEAR, it)
             }

@@ -15,6 +15,9 @@ internal object StatementTextDecoder {
     /** Hard upper bound for statement imports to avoid OOM on pathological files. */
     const val MAX_STATEMENT_BYTES: Int = 25 * 1024 * 1024
 
+    /** Max CSV rows retained from one statement; bounds token/object allocation on hostile files. */
+    const val MAX_CSV_LINES: Int = 200_000
+
     val COMBINING_MARKS_REGEX = Regex("""\p{M}+""")
     val MULTI_SPACE_REGEX = Regex("""\s+""")
     val YEAR_MONTH_REGEX = Regex("""\d{4}-\d{2}""")
@@ -160,7 +163,11 @@ internal object StatementTextDecoder {
                     }
                     val line = sb.toString().trim()
                     if (line.isNotBlank()) {
-                        lines.add(line)
+                        if (lines.size < MAX_CSV_LINES) {
+                            lines.add(line)
+                        } else {
+                            return lines // row cap reached; ignore the rest of the file
+                        }
                     }
                     sb.setLength(0)
                 }

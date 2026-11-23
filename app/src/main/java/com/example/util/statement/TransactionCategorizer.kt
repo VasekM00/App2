@@ -375,9 +375,13 @@ internal object TransactionCategorizer {
                     accountKey = effectiveAccKey
                 )
                 val formattedAmount = String.format(Locale.ROOT, "%.2f", tx.amount)
-                val bankKey = if (effectiveBank != BankType.GENERIC) effectiveBank.name else ""
+                // Dedup key intentionally excludes the detected bank: the same physical transaction
+                // can surface in statements of different banks (e.g. misdetected bank or a re-exported
+                // file). Identity is established by date + amount + counterparty account/name/message/VS,
+                // scoped by the source account key (or balance discriminator for ambiguous unkeyed files).
+                // Opposite-sign internal transfers never collide because the signed amount differs.
                 val accKeyScope = effectiveAccKey.ifBlank { summaryBalDiscriminator }
-                val baseKey = "$bankKey|$accKeyScope|${tx.date}|$formattedAmount|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
+                val baseKey = "$accKeyScope|${tx.date}|$formattedAmount|${tx.counterpartyAccount}|${tx.counterpartyName}|${tx.message}|${tx.variableSymbol}"
                 val count = summaryCounts[baseKey] ?: 0
                 summaryCounts[baseKey] = count + 1
                 val globalKey = "$baseKey#$count"

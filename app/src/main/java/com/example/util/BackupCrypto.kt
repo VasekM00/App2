@@ -24,7 +24,11 @@ object BackupCrypto {
     const val PBKDF2_ITERATIONS: Int = 600_000
     const val MIN_ITERATIONS: Int = 100_000
     const val MIN_LEGACY_ITERATIONS: Int = 10_000
-    const val MAX_ITERATIONS: Int = 1_000_000
+    // Cap accepted KDF work factor at the value we actually use for new envelopes (600k).
+    // Envelope-supplied iteration counts are attacker-controlled on import; without a tight cap a
+    // hostile backup could force ~1M PBKDF2 iterations per guess (CPU-DoS). Legacy v1 envelopes
+    // are still accepted via MIN_LEGACY_ITERATIONS.
+    const val MAX_ITERATIONS: Int = 600_000
     const val MAX_ENCRYPTED_ENVELOPE_CHARS: Int = 16_000_000
     const val SALT_BYTES: Int = 16
     const val IV_BYTES: Int = 12

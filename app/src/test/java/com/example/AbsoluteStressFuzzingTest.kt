@@ -281,7 +281,11 @@ class AbsoluteStressFuzzingTest {
             val expectedLeaveFraction = (month - 1) / 12.0
 
             assertEquals(24_000.0 * expectedWorkFraction, inc.eleonoraSalary, 0.001)
-            assertEquals(12_000.0 * expectedLeaveFraction, inc.benefit, 0.001)
+            // Czech law (Act 117/1995 Coll.): returning to work does NOT forfeit the parental
+            // allowance, so the benefit stays at the full pot-backed monthly amount in the return
+            // year (pot at 2029 is 256k >= 144k desired). Only salary/lecturing ramp with the
+            // return month.
+            assertEquals(12_000.0, inc.benefit, 0.001)
             assertEquals(6_000.0 * expectedLeaveFraction, inc.lecturing, 0.001)
         }
     }

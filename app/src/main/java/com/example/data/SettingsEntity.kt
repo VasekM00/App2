@@ -102,7 +102,7 @@ data class SettingsEntity(
     val employerRetirementExemptionAnnual: Double = 50000.0,
     val childBonusMinWageMultiplier: Double = 6.0,
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0,
-    val parentalAllowanceTotalFromCutoff: Double = 350000.0,
+    val parentalAllowanceTotalFromCutoff: Double = 400000.0,
     val parentalAllowanceCutoffYear: Int = 2027,
     // Child expenses & Multi-child settings (ZDP § 35c)
     val child1Name: String = "Child 1",

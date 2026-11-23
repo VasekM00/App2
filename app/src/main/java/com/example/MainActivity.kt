@@ -53,6 +53,13 @@ class MainActivity : FragmentActivity() {
     companion object {
         private const val PICKER_GUARD_WINDOW_MS = 60_000L
 
+        // Process-scoped: rememberSaveable state survives process death, so a restored
+        // hasEvaluatedColdLock/isLocked pair would otherwise skip the cold-lock prompt entirely
+        // and reopen the app with all financial data unlocked. This flag is false in every
+        // fresh process and forces the cold-lock evaluation to run once per process lifetime.
+        @Volatile
+        private var coldLockEvaluatedThisProcess = false
+
         internal fun shouldLockOnStop(
             biometricEnabled: Boolean,
             isChangingConfigurations: Boolean,
@@ -150,9 +157,10 @@ class MainActivity : FragmentActivity() {
                             .setTitle("Unlock Martinu Financials")
                             .setSubtitle("Authenticate to access your household data")
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            // Class-3 (strong) biometrics or device credential only: a finance app
+                            // must not be unlockable with weak (Class-2) biometrics.
                             builder.setAllowedAuthenticators(
                                 BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                                    BiometricManager.Authenticators.BIOMETRIC_WEAK or
                                     BiometricManager.Authenticators.DEVICE_CREDENTIAL
                             )
                         } else {
@@ -175,8 +183,13 @@ class MainActivity : FragmentActivity() {
                     authErrorMessage = null
                     if (isPreferencesHydrated) {
                         hasEvaluatedColdLock = true
+                        coldLockEvaluatedThisProcess = true
                     }
-                } else if (isPreferencesHydrated && !hasEvaluatedColdLock) {
+                } else if (isPreferencesHydrated && !coldLockEvaluatedThisProcess) {
+                    // Gate on the process-scoped flag, NOT on the saveable hasEvaluatedColdLock:
+                    // after process death the saveable flag is restored as true, which must not
+                    // skip the lock prompt.
+                    coldLockEvaluatedThisProcess = true
                     hasEvaluatedColdLock = true
                     if (!canAuthenticateWithDevice(this@MainActivity)) {
                         isLocked = false
@@ -198,7 +211,7 @@ class MainActivity : FragmentActivity() {
                 if (pendingIncomingUris.isNotEmpty() &&
                     shouldProcessPendingIncomingImports(
                         isPreferencesHydrated = isPreferencesHydrated,
-                        hasEvaluatedColdLock = hasEvaluatedColdLock,
+                        hasEvaluatedColdLock = hasEvaluatedColdLock && coldLockEvaluatedThisProcess,
                         biometricEnabled = biometricLockEnabled,
                         isLocked = isLocked
                     )

@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,6 +26,10 @@ jobs:
           java-version: '21'
 
       - uses: android-actions/setup-android@v3
+        with:
+          # compileSdk 37 requires the android-37 platform
+          accept-android-sdk-licenses: true
+          cmdline-tools: latest
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -29,7 +40,9 @@ jobs:
         run: ./gradlew testDebugUnitTest lintDebug --console=plain
 
       - name: Screenshot regression (Roborazzi verify)
-        run: ./gradlew testDebugUnitTest --tests "com.example.ScreenshotAuditTest" -Proborazzi.test.verify=true --rerun --console=plain
+        # verifyRoborazziDebug is the plugin-provided task; it runs the screenshot tests in
+        # verify mode against the recorded images (equivalent to -Proborazzi.test.verify=true).
+        run: ./gradlew verifyRoborazziDebug --console=plain
 
       - name: Assemble release (R8)
         run: ./gradlew assembleRelease --console=plain
@@ -42,4 +55,4 @@ jobs:
           path: |
             app/build/reports/**
             app/build/test-results/**
-            app/build/roborazzi/**
+            app/build/outputs/roborazzi/**

@@ -42,11 +42,11 @@ class FinancialEngineExhaustiveAuditTest {
         val income2029 = FinancialEngine.householdIncome(2029, defaultSettings)
         assertEquals(33500.0, income2029.vaclavNet, 0.001)
         assertEquals(22000.0, income2029.eleonoraSalary, 0.001) // 22k starting salary
-        assertEquals(38000.0 / 12.0, income2029.benefit, 0.01) // Remainder of Child 2 350k pot after 2027-2028
+        assertEquals(88000.0 / 12.0, income2029.benefit, 0.01) // Remainder of Child 2 400k pot (from 2027) after 2027-2028 draws
         assertEquals(0.0, income2029.lecturing, 0.001) // Vanished
         assertEquals(2090.0, income2029.vouchers, 0.001)
         assertEquals(16000.0, income2029.gift, 0.001)
-        assertEquals(73590.0 + (38000.0 / 12.0), income2029.totalMonthly, 0.01)
+        assertEquals(73590.0 + (88000.0 / 12.0), income2029.totalMonthly, 0.01)
 
         // Mutate Vaclav salary, other inflows
         val modifiedSettings = defaultSettings.copy(
@@ -78,9 +78,9 @@ class FinancialEngineExhaustiveAuditTest {
         assertEquals(45000.0, inc2028Mod.vaclavNet, 0.001) // 45000 net salary
         assertEquals(5000.0, inc2028Mod.vaclavOther, 0.001) // 5000 other inflows
         assertEquals(30000.0, inc2028Mod.eleonoraSalary, 0.001)
-        assertEquals(170000.0 / 12.0, inc2028Mod.benefit, 0.01) // Non-forfeited remaining Child 2 pot
+        assertEquals(15000.0, inc2028Mod.benefit, 0.01) // Non-forfeited: 400k pot (child born 2027) still covers the full 15k/mo in 2028
         assertEquals(0.0, inc2028Mod.lecturing, 0.001)
-        assertEquals(105000.0 + (170000.0 / 12.0), inc2028Mod.totalMonthly, 0.01)
+        assertEquals(105000.0 + 15000.0, inc2028Mod.totalMonthly, 0.01)
 
         // Year 2029 (Eleonora with 5% salary growth)
         val inc2029Mod = FinancialEngine.householdIncome(2029, modifiedSettings)

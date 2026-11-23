@@ -161,7 +161,19 @@ class RoomMigrationAndStateResilienceTest {
     @Test
     fun test6_databaseVersion_matchesLatest() {
         val version = db.openHelper.readableDatabase.version
-        assertEquals(38, version)
+        // The DB version must match the newest exported Room schema file instead of a
+        // hardcoded number that goes stale on every schema bump.
+        // And it must match the newest exported schema file (39.json at the time of writing).
+        val schemaDir = listOf(
+            java.io.File("schemas/com.example.data.AppDatabase"),
+            java.io.File("app/schemas/com.example.data.AppDatabase")
+        ).firstOrNull { it.isDirectory }
+        val latestSchema = schemaDir
+            ?.listFiles { f -> f.name.endsWith(".json") }
+            ?.map { it.name.removeSuffix(".json").toInt() }
+            ?.maxOrNull()
+        assertNotNull("schema directory must be resolvable from the test working directory", latestSchema)
+        assertEquals("DB version must equal the latest exported Room schema", latestSchema, version)
     }
 
     @Test

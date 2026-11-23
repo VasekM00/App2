@@ -121,9 +121,12 @@ fun SettingsTab(
     var fallbackExportPending by rememberSaveable { mutableStateOf(false) }
     var fallbackExportFull by rememberSaveable { mutableStateOf(false) }
     var fallbackExportEncrypt by rememberSaveable { mutableStateOf(false) }
-    var fallbackExportPhrase by rememberSaveable { mutableStateOf("") }
-    var pendingEncryptedImportEnvelope by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingImportRawJson by rememberSaveable { mutableStateOf<String?>(null) }
+    // Secrets (export passphrase, raw backup JSON/envelope) must never be written to the
+    // saved-instance-state Bundle, which Android persists to disk. Keep them in plain
+    // remember so they vanish on process death / configuration-independent restore.
+    var fallbackExportPhrase by androidx.compose.runtime.remember { mutableStateOf("") }
+    var pendingEncryptedImportEnvelope by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
+    var pendingImportRawJson by androidx.compose.runtime.remember { mutableStateOf<String?>(null) }
     val pendingImportPreview = androidx.compose.runtime.remember(pendingImportRawJson, s) {
         pendingImportRawJson?.let { parseBackupJsonForPreview(it, s) }
     }

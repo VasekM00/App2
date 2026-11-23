@@ -252,6 +252,7 @@ class AuditRegressionVerificationTest {
             baseYear = 2026,
             primaryAge = 30,
             vStatePensionAge = 65,
+            customGoalsJson = "[]", // isolate pure portfolio compounding from default goal outlays
             liquidPortfolioCurrent = 500000.0,
             dpsBalanceCurrent = 200000.0,
             dipBalanceCurrent = 100000.0,
@@ -340,6 +341,8 @@ class AuditRegressionVerificationTest {
         // 3. Post career return (e.g. 2029):
         val futureIncome = FinancialEngine.householdIncome(2029, baseSettings)
         assertTrue(futureIncome.eleonoraSalary > 0.0)
-        assertEquals(0.0, futureIncome.benefit, 0.001)
+        // Parental allowance is NOT forfeited by returning to work (Act 117/1995 Coll.):
+        // Child 2 (born 2027, 400k pot from 2027) has 88k left after the 2027-2028 draws.
+        assertEquals(88000.0 / 12.0, futureIncome.benefit, 0.01)
     }
 }

@@ -160,9 +160,9 @@ class RetirementSurvivalTest {
         val monthlyAfter = FinancialEngine.eleonoraBenefitMonthly(2028, from2027)
         assertTrue(monthlyAfter > monthlyBefore)
 
-        // And under current statutory law, default settings have equal pots (350k flat)
+        // Statutory law: 350k for children born before 2027, 400k for children born from 2027.
         val statutoryDefault = SettingsEntity()
         assertEquals(350000.0, FinancialEngine.parentalAllowancePot(2026, statutoryDefault), 0.001)
-        assertEquals(350000.0, FinancialEngine.parentalAllowancePot(2027, statutoryDefault), 0.001)
+        assertEquals(400000.0, FinancialEngine.parentalAllowancePot(2027, statutoryDefault), 0.001)
     }
 }

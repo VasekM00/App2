@@ -30,6 +30,10 @@ object PdfTextExtractor {
 
     private const val MAX_BF_RANGE_SPAN = 4096
     private const val MAX_GLOBAL_CMAP_ENTRIES = 65_536
+
+    /** Caps on extracted text objects: a hostile PDF can emit millions of tiny text-show ops. */
+    private const val MAX_EXTRACTED_LINES = 100_000
+    private const val MAX_FRAGMENTS_PER_STREAM = 100_000
     private val ENCRYPT_DICT_REGEX = Regex("""/Encrypt(?:\s+\d+\s+\d+\s+R|\s*<<)""")
     private val STREAM_LENGTH_REGEX = Regex("""/Length\s+(\d+)\b""")
 
@@ -176,9 +180,16 @@ object PdfTextExtractor {
             if (isNonContentStreamDict(dict)) continue
 
             val decompressed = decompressedStreams[idx] ?: continue
+            if (extractedLines.size >= MAX_EXTRACTED_LINES) break
             val linesFromStream = extractTextFromDecompressedStream(decompressed, stream.objectNumber, fontIndex)
             if (linesFromStream.isNotEmpty()) {
-                extractedLines.addAll(linesFromStream)
+                val room = MAX_EXTRACTED_LINES - extractedLines.size
+                if (room >= linesFromStream.size) {
+                    extractedLines.addAll(linesFromStream)
+                } else {
+                    extractedLines.addAll(linesFromStream.take(room))
+                    break
+                }
             }
         }
 
@@ -777,7 +788,11 @@ object PdfTextExtractor {
 
         fun recordFragment(text: String) {
             if (text.isNotBlank()) {
-                fragments.add(TextFragment(curX, curY, text))
+                if (fragments.size < MAX_FRAGMENTS_PER_STREAM) {
+                    fragments.add(TextFragment(curX, curY, text))
+                } else {
+                    return // cap reached; drop the rest of this stream's fragments
+                }
             }
             curX += text.length * currentFontSize * 0.5 * tmScaleX
         }

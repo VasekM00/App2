@@ -48,7 +48,7 @@ data class CzechRegulatoryData(
     val dpsStatutoryFeeCapPct: Double = 1.0, // Statutory dynamic/balanced DPS management fee cap (Act No. 427/2011 Coll. § 60(3))
     val childBonusMinWageMultiplier: Double = 6.0, // ZDP § 35c(4) min wage multiplier
     val parentalAllowanceTotalBeforeCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)
-    val parentalAllowanceTotalFromCutoff: Double = 350000.0, // Statutory total pot (350 000 CZK)
+    val parentalAllowanceTotalFromCutoff: Double = 400000.0, // Statutory total pot from 1.1.2027 (400 000 CZK; 800 000 for twins)
     val parentalAllowanceCutoffYear: Int = 2027
 )
 

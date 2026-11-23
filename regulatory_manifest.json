@@ -25,6 +25,6 @@
   "minWageMonthly": 22400.0,
   "childBonusMinWageMultiplier": 6.0,
   "parentalAllowanceTotalBeforeCutoff": 350000.0,
-  "parentalAllowanceTotalFromCutoff": 350000.0,
+  "parentalAllowanceTotalFromCutoff": 400000.0,
   "parentalAllowanceCutoffYear": 2027
 }
