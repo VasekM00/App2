@@ -216,7 +216,7 @@ fun SettingsTab(
                         } else {
                             Toast.makeText(
                                 context,
-                                "Selected file is not a valid Martinu Financials backup.",
+                                "Selected file is not a valid backup.",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -250,6 +250,7 @@ fun SettingsTab(
     val unusedIconCheck = liveRegulatoryData?.isFxLive
 
     var lastHandledFocusTrigger by rememberSaveable { mutableIntStateOf(0) }
+    var lastScrolledTab by rememberSaveable { mutableIntStateOf(selectedTab) }
     LaunchedEffect(selectedTab, focusedSectionTrigger, focusedSectionKey) {
         val targetIndex = when (selectedTab) {
             0 -> when (focusedSectionKey) {
@@ -278,10 +279,12 @@ fun SettingsTab(
         }
         if (focusedSectionTrigger > lastHandledFocusTrigger && targetIndex != null) {
             lastHandledFocusTrigger = focusedSectionTrigger
+            lastScrolledTab = selectedTab
             listState.animateScrollToItem(targetIndex)
             kotlinx.coroutines.delay(50)
             onConsumeFocusedSection?.invoke()
-        } else {
+        } else if (selectedTab != lastScrolledTab) {
+            lastScrolledTab = selectedTab
             listState.scrollToItem(0)
         }
     }
@@ -513,10 +516,10 @@ fun SettingsTab(
                 }
                 val dateSuffix = LocalDate.now().toString()
                 val fileName = when {
-                    fullScope && encryptEnabled -> "martinu_financials_full_encrypted_$dateSuffix.json"
-                    fullScope -> "martinu_financials_full_backup_$dateSuffix.json"
-                    encryptEnabled -> "martinu_financials_settings_encrypted_$dateSuffix.json"
-                    else -> "martinu_financials_settings_backup_$dateSuffix.json"
+                    fullScope && encryptEnabled -> "personal_finance_full_encrypted_$dateSuffix.json"
+                    fullScope -> "personal_finance_full_backup_$dateSuffix.json"
+                    encryptEnabled -> "personal_finance_settings_encrypted_$dateSuffix.json"
+                    else -> "personal_finance_settings_backup_$dateSuffix.json"
                 }
                 onExternalPickerLaunching()
                 exportDocumentLauncher.launch(fileName)

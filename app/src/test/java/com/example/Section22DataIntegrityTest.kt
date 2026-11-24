@@ -367,7 +367,7 @@ class Section22DataIntegrityTest {
     }
 
     private fun buildAbo074(ownAcc16: String, bankLabel: String, closingCzk: Long, dateDdMmYy: String): String {
-        val buf = CharArray(120) { '0' }
+        val buf = CharArray(128) { '0' }
         fun put(pos: Int, str: String) {
             str.forEachIndexed { idx, c -> if (pos + idx < buf.size) buf[pos + idx] = c }
         }
@@ -375,10 +375,10 @@ class Section22DataIntegrityTest {
         put(3, ownAcc16.padStart(16, '0').take(16))
         put(19, bankLabel.padEnd(20, ' ').take(20))
         put(39, dateDdMmYy)
-        put(65, "+")
-        put(66, String.format(Locale.US, "%014d", closingCzk * 100))
-        put(80, "+")
-        put(112, dateDdMmYy)
+        put(59, "+")
+        put(60, String.format(Locale.US, "%014d", closingCzk * 100))
+        put(74, "+")
+        put(108, dateDdMmYy)
         return String(buf)
     }
 
@@ -400,7 +400,11 @@ class Section22DataIntegrityTest {
         put(48, String.format(Locale.US, "%012d", amountCzk * 100))
         put(60, code.toString())
         put(61, "0000001234")
-        put(71, bankCode.padStart(4, '0').take(4))
+        put(71, "00")
+        put(73, bankCode.padStart(4, '0').take(4))
+        put(91, dateDdMmYy)
+        put(97, "                    ")
+        put(118, "0203")
         put(122, dateDdMmYy)
         return String(buf)
     }

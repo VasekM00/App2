@@ -269,6 +269,7 @@ internal class StatementImportController(
                 val parsedSummaries = mutableListOf<StatementParseSummary>()
                 var failedCount = 0
                 var encryptedPdfCount = 0
+                var firstDiagnosticWarning: String? = null
 
                 for (bytes in byteList) {
                     try {
@@ -283,6 +284,9 @@ internal class StatementImportController(
                         if (bankSummary.transactions.isNotEmpty() && bankSummary.yearMonth.matches(Regex("""\d{4}-\d{2}"""))) {
                             parsedSummaries.add(bankSummary)
                         } else {
+                            if (firstDiagnosticWarning == null && !bankSummary.parseWarning.isNullOrBlank()) {
+                                firstDiagnosticWarning = bankSummary.parseWarning
+                            }
                             if (isEncrypted) encryptedPdfCount++
                             failedCount++
                         }
@@ -310,7 +314,9 @@ internal class StatementImportController(
                     return
                 }
 
-                if (encryptedPdfCount > 0) {
+                if (firstDiagnosticWarning != null) {
+                    emitSnackbar(firstDiagnosticWarning!!)
+                } else if (encryptedPdfCount > 0) {
                     emitSnackbar("This PDF is password-protected or encrypted. Export as CSV, ABO/GPC, or an unencrypted PDF from your bank.")
                 } else {
                     emitSnackbar("No transactions found. Supported: Moneta, ČSOB, mBank PDF/CSV, or ledger CSV.")

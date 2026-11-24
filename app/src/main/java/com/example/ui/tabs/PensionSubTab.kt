@@ -59,8 +59,8 @@ import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.roundToInt
 
 @Composable
@@ -120,7 +120,7 @@ fun PensionSubTab(
                 val hasFamilyCredits = !s.isSingleHousehold && state.taxReturnHelper.spouseCredit > 0.0
                 KpiCard(
                     title = "Annual Tax Refund",
-                    value = "+${fmtCZK(yearlyTaxSaved)}",
+                    value = "+${fmtExactCZK(yearlyTaxSaved)}",
                     hint = if (hasFamilyCredits) "DIP/DPS + family tax credits" else "${String.format(java.util.Locale.ROOT, "%.0f", s.taxRatePct)}% relief via tax return",
                     accentColor = GoodGreen,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -133,7 +133,7 @@ fun PensionSubTab(
                 } else 0
                 KpiCard(
                     title = "Monthly Deposit",
-                    value = fmtCZK(totalMonthlyRetirement),
+                    value = fmtExactCZK(totalMonthlyRetirement),
                     hint = if (totalMonthlyRetirement > 0.0) {
                         "DIP $dipSharePct% · DPS ${100 - dipSharePct}% split"
                     } else {
@@ -154,8 +154,8 @@ fun PensionSubTab(
             ) {
                 KpiCard(
                     title = "State Cash Match",
-                    value = "+${fmtCZK(totalSubsidyMonthly * 12.0)}",
-                    hint = "${fmtCZK(totalSubsidyMonthly)}/month · ${if (dps.youthSubsidyActive) "${s.dpsSubsidyRateYouthPct.toInt()}% youth" else "${s.dpsSubsidyRateStandardPct.toInt()}% match"}",
+                    value = "+${fmtExactCZK(totalSubsidyMonthly * 12.0)}",
+                    hint = "${fmtExactCZK(totalSubsidyMonthly)}/month · ${if (dps.youthSubsidyActive) "${s.dpsSubsidyRateYouthPct.toInt()}% youth" else "${s.dpsSubsidyRateStandardPct.toInt()}% match"}",
                     accentColor = BrandGold,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     info = PlanMetricInfos.dpsLepsiPenzijko,

@@ -33,7 +33,7 @@ import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.max
 import kotlin.math.min
 
@@ -140,7 +140,7 @@ fun EarnerOptimizationCard(
                         text = if (isMaxed) {
                             if (!hasTaxableIncome) "DPS OPTIMIZED" else "100% OPTIMIZED"
                         } else {
-                            "${fmtCZK(totalOptimizedMonthly)} / ${fmtCZK(totalTargetMonthly)}"
+                            "${fmtExactCZK(totalOptimizedMonthly)} / ${fmtExactCZK(totalTargetMonthly)}"
                         },
                         color = if (isMaxed) GoodGreen else BrandTeal,
                         fontSize = 9.5.sp,
@@ -150,7 +150,7 @@ fun EarnerOptimizationCard(
                     )
                 } else {
                     ColorPill(
-                        text = if (!hasTaxableIncome) "0 / ${fmtCZK(subsidyCapMonthly)} · PARENTAL" else "0 / ${fmtCZK(totalTargetMonthly)} · UNUSED",
+                        text = if (!hasTaxableIncome) "0 / ${fmtExactCZK(subsidyCapMonthly)} · PARENTAL" else "0 / ${fmtExactCZK(totalTargetMonthly)} · UNUSED",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
@@ -209,7 +209,7 @@ fun EarnerOptimizationCard(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = fmtCZK(subsidyDeposit),
+                                text = fmtExactCZK(subsidyDeposit),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = BodyFontFamily,
                                     fontWeight = FontWeight.Bold,
@@ -219,7 +219,7 @@ fun EarnerOptimizationCard(
                                 maxLines = 1
                             )
                             Text(
-                                text = "/ ${fmtCZK(subsidyCapMonthly)}",
+                                text = "/ ${fmtExactCZK(subsidyCapMonthly)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = BodyFontFamily,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -267,7 +267,7 @@ fun EarnerOptimizationCard(
                                 modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             Text(
-                                text = "+${fmtCZK(subsidyMonthly)}",
+                                text = "+${fmtExactCZK(subsidyMonthly)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = BodyFontFamily,
                                     color = BrandGold,
@@ -325,7 +325,7 @@ fun EarnerOptimizationCard(
                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
-                                    text = fmtCZK(taxShieldDeposit),
+                                    text = fmtExactCZK(taxShieldDeposit),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontFamily = BodyFontFamily,
                                         fontWeight = FontWeight.Bold,
@@ -335,7 +335,7 @@ fun EarnerOptimizationCard(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "/ ${fmtCZK(taxShieldCapMonthly)}",
+                                    text = "/ ${fmtExactCZK(taxShieldCapMonthly)}",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = BodyFontFamily,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -396,7 +396,7 @@ fun EarnerOptimizationCard(
                                 modifier = Modifier.weight(1f).padding(end = 4.dp)
                             )
                             Text(
-                                text = if (hasTaxableIncome) "+${fmtCZK(annualTaxSaved / 12.0)}" else "No tax base",
+                                text = if (hasTaxableIncome) "+${fmtExactCZK(annualTaxSaved / 12.0)}" else "No tax base",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = if (hasTaxableIncome) BodyFontFamily else null,
                                     color = if (hasTaxableIncome) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -438,7 +438,7 @@ fun EarnerOptimizationCard(
                             )
                         )
                         Text(
-                            text = "+${fmtCZK(totalAnnualBenefit)}",
+                            text = "+${fmtExactCZK(totalAnnualBenefit)}",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = BodyFontFamily,
                                 color = if (totalAnnualBenefit > 0.0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -448,7 +448,7 @@ fun EarnerOptimizationCard(
                         )
                     }
                     Text(
-                        text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtCZK(headroomMonthly)}",
+                        text = if (headroomMonthly <= 0.5) "Fully optimized" else "Headroom: ${fmtExactCZK(headroomMonthly)}",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = if (headroomMonthly > 0.5) BodyFontFamily else null,
                             color = if (headroomMonthly <= 0.5) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,

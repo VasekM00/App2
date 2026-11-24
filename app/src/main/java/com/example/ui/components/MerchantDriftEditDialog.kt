@@ -59,8 +59,8 @@ import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankTransactionType
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtEditableAmount
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.parseUserAmountOrNull
 
 sealed class MerchantEditTarget {
@@ -92,9 +92,12 @@ internal fun EditMerchantSpendTargetDialog(
     when (target) {
         is MerchantEditTarget.StatementMerchant -> {
             if (onUpdateImportedTransactionCategory == null) return
-            var selectedCategory by remember(target.merchantKey) { mutableStateOf(target.currentCategory) }
+            var selectedCategory by rememberSaveable(
+                target.merchantKey,
+                stateSaver = bankTransactionTypeSaver(target.currentCategory)
+            ) { mutableStateOf(target.currentCategory) }
             var menuExpanded by remember { mutableStateOf(false) }
-            var rememberRule by remember(target.merchantKey) { mutableStateOf(true) }
+            var rememberRule by rememberSaveable(target.merchantKey) { mutableStateOf(true) }
 
             val editableCategories = remember {
                 listOf(
@@ -135,7 +138,7 @@ internal fun EditMerchantSpendTargetDialog(
                         Column {
                             Text(target.displayName, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                             Text(
-                                text = "Period Spend: ${fmtCZK(target.totalSpend)}",
+                                text = "Period Spend: ${fmtExactCZK(target.totalSpend)}",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }

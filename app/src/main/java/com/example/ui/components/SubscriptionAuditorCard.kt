@@ -58,6 +58,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 import com.example.util.SubscriptionAuditor
 import java.util.Locale
@@ -75,11 +76,14 @@ fun SubscriptionAuditorCard(
     initiallyExpanded: Boolean = false
 ) {
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    var showDismissedSection by remember { mutableStateOf(false) }
-    var selectedItemForDetail by remember { mutableStateOf<RecurringSubscriptionItem?>(null) }
+    var showDismissedSection by rememberSaveable { mutableStateOf(false) }
+    var selectedMerchantKeyForDetail by rememberSaveable { mutableStateOf<String?>(null) }
 
     val audit = remember(transactions, swrPct, safetyBufferPct, dismissedMerchantKeys) {
         SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys, safetyBufferPct)
+    }
+    val selectedItemForDetail = selectedMerchantKeyForDetail?.let { key ->
+        audit.items.firstOrNull { it.merchantKey == key }
     }
 
     Card(
@@ -114,7 +118,7 @@ fun SubscriptionAuditorCard(
                         text = if (audit.items.isEmpty()) {
                             "Auto-detected recurring bills"
                         } else {
-                            "${audit.items.size} recurring · ${fmtCZK(audit.totalMonthlyBurn)} monthly"
+                            "${audit.items.size} recurring · ${fmtExactCZK(audit.totalMonthlyBurn)} monthly"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -210,7 +214,7 @@ fun SubscriptionAuditorCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = fmtCZK(audit.totalMonthlyBurn.finiteOrZero()),
+                                    text = fmtExactCZK(audit.totalMonthlyBurn.finiteOrZero()),
                                     style = MaterialTheme.typography.titleSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily
@@ -218,7 +222,7 @@ fun SubscriptionAuditorCard(
                                     color = BrandGold
                                 )
                                 Text(
-                                    text = "${fmtCZK(audit.annualizedBurn.finiteOrZero())} annual",
+                                    text = "${fmtExactCZK(audit.annualizedBurn.finiteOrZero())} annual",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = BodyFontFamily
                                     ),
@@ -247,8 +251,10 @@ fun SubscriptionAuditorCard(
                                     ),
                                     color = BrandTeal
                                 )
+                                val safeBuffer = safetyBufferPct.finiteOrZero().coerceAtLeast(0.0)
+                                val bufferNote = if (safeBuffer > 0.0) " (+${fmtPct(safeBuffer, 0)} buffer)" else ""
                                 Text(
-                                    text = "to fund forever at ${fmtPct(swrPct)} SWR",
+                                    text = "to fund forever at ${fmtPct(swrPct)} SWR$bufferNote",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = BodyFontFamily
                                     ),
@@ -272,9 +278,10 @@ fun SubscriptionAuditorCard(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        val safeBufferMult = 1.0 + safetyBufferPct.finiteOrZero().coerceAtLeast(0.0) / 100.0
                         audit.items.forEach { item ->
                             val itemAnnualBurn = item.normalizedMonthlyAmount.finiteOrZero() * 12.0
-                            val itemFireCapital = (itemAnnualBurn / (swrPct.finiteOrZero() / 100.0).coerceAtLeast(0.001)).finiteOrZero()
+                            val itemFireCapital = ((itemAnnualBurn / (swrPct.finiteOrZero() / 100.0).coerceAtLeast(0.001)) * safeBufferMult).finiteOrZero()
 
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
@@ -286,7 +293,7 @@ fun SubscriptionAuditorCard(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedItemForDetail = item }
+                                    .clickable { selectedMerchantKeyForDetail = item.merchantKey }
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(
@@ -349,9 +356,9 @@ fun SubscriptionAuditorCard(
                                                 val isNonMonthly = item.billingCadence != "MONTHLY"
                                                 Text(
                                                     text = if (isNonMonthly) {
-                                                        fmtCZK(item.normalizedMonthlyAmount)
+                                                        fmtExactCZK(item.normalizedMonthlyAmount)
                                                     } else {
-                                                        fmtCZK(item.latestMonthlyAmount)
+                                                        fmtExactCZK(item.latestMonthlyAmount)
                                                     },
                                                     style = MaterialTheme.typography.bodyMedium.copy(
                                                         fontWeight = FontWeight.Bold,
@@ -361,9 +368,9 @@ fun SubscriptionAuditorCard(
                                                     softWrap = true
                                                 )
                                                 val cadenceSubtitle = when (item.billingCadence) {
-                                                    "ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/year · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "QUARTERLY" -> "${fmtCZK(item.latestMonthlyAmount)}/quarter · FIRE: ${fmtCZK(itemFireCapital)}"
-                                                    "SEMI_ANNUAL" -> "${fmtCZK(item.latestMonthlyAmount)}/6 months · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "ANNUAL" -> "${fmtExactCZK(item.latestMonthlyAmount)}/year · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "QUARTERLY" -> "${fmtExactCZK(item.latestMonthlyAmount)}/quarter · FIRE: ${fmtCZK(itemFireCapital)}"
+                                                    "SEMI_ANNUAL" -> "${fmtExactCZK(item.latestMonthlyAmount)}/6 months · FIRE: ${fmtCZK(itemFireCapital)}"
                                                     else -> "FIRE: ${fmtCZK(itemFireCapital)}"
                                                 }
                                                 Text(
@@ -421,7 +428,7 @@ fun SubscriptionAuditorCard(
                                                         modifier = Modifier.size(14.dp)
                                                     )
                                                     Text(
-                                                        text = "Price Increase: +${fmtCZK(item.priceCreepDelta)} (+${String.format(Locale.ROOT, "%.1f", item.priceCreepPct)}%)",
+                                                        text = "Price Increase: +${fmtExactCZK(item.priceCreepDelta)} (+${fmtPct(item.priceCreepPct, 1)})",
                                                         style = MaterialTheme.typography.labelSmall.copy(
                                                             fontWeight = FontWeight.Bold,
                                                             fontFamily = BodyFontFamily
@@ -433,7 +440,7 @@ fun SubscriptionAuditorCard(
                                                 }
                                                 if (item.previousMonthlyAmount != null) {
                                                     Text(
-                                                        text = "was ${fmtCZK(item.previousMonthlyAmount)}",
+                                                        text = "was ${fmtExactCZK(item.previousMonthlyAmount)}",
                                                         style = MaterialTheme.typography.labelSmall.copy(
                                                             fontFamily = BodyFontFamily
                                                         ),
@@ -537,11 +544,12 @@ fun SubscriptionAuditorCard(
         SubscriptionDetailDialog(
             item = item,
             swrPct = swrPct,
+            safetyBufferPct = safetyBufferPct,
             onDismissItem = {
                 onDismissMerchant?.invoke(item.merchantKey)
-                selectedItemForDetail = null
+                selectedMerchantKeyForDetail = null
             },
-            onClose = { selectedItemForDetail = null }
+            onClose = { selectedMerchantKeyForDetail = null }
         )
     }
 }

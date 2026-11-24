@@ -1,6 +1,9 @@
 package com.example.util
 
 import com.example.data.ImportedBankTransactionEntity
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -36,6 +39,8 @@ data class SubscriptionAuditSummary(
 object SubscriptionAuditor {
 
     private val SPLIT_ALNUM_REGEX = Regex("[^a-z0-9]+")
+    private val GYM_WORD_REGEX = Regex("""\bgym\b""")
+    private val SIPO_WORD_REGEX = Regex("""\bsipo\b""")
     private val ANNUAL_HINT_REGEX = Regex("""\b(?:rok|roky|roku|rocni|rocne|annual|annually|yearly)\b""", RegexOption.IGNORE_CASE)
     private val SEMI_ANNUAL_HINT_REGEX = Regex("""\b(?:pololeti|pololetni|pololetne|semiannual|semi-annual|half-year)\b""", RegexOption.IGNORE_CASE)
     private val QUARTERLY_HINT_REGEX = Regex("""\b(?:ctvrtleti|ctvrtletni|ctvrtletne|ctvrtlet|quarter|quarterly|kvartal|kvartalni|kvartalne)\b""", RegexOption.IGNORE_CASE)
@@ -48,6 +53,7 @@ object SubscriptionAuditor {
         BankTransactionType.HEALTH_DRUGSTORE,
         BankTransactionType.ATM_CASH,
         BankTransactionType.HOUSING_RENT,
+        BankTransactionType.CHARITY_DONATION,
         BankTransactionType.INVESTMENT_PORTU,
         BankTransactionType.INVESTMENT_DIP,
         BankTransactionType.INVESTMENT_DPS,
@@ -105,6 +111,8 @@ object SubscriptionAuditor {
         "komunalni odpad", "poplatek za psa", "sipo",
         // Transit & Passes
         "litacka", "salinkarta", "pid litacka", "dpmb", "dpp",
+        // Fitness / Wellness memberships
+        "multisport",
         // Insurance
         "kooperativa", "generali", "ceska pojistovna", "allianz", "uniqa", "pillow", "direct",
         "slavia", "vzp", "ozp", "vozp", "cpzp", "rbp", "pvzp", "pojisteni", "pojist", "povinne ruceni", "havarijni"
@@ -112,7 +120,7 @@ object SubscriptionAuditor {
 
     private val RECURRING_TEXT_HINTS = listOf(
         "predplatne", "pausal", "inkaso", "trvaly", "clenstvi", "clenske",
-        "poplatek", "dar", "fitness", "posilovna", "gym", "membership", "subscr"
+        "poplatek", "fitness", "posilovna", "gym", "multisport", "membership", "subscr"
     )
 
     fun extractMerchantKey(tx: ImportedBankTransactionEntity): String {
@@ -157,7 +165,9 @@ object SubscriptionAuditor {
         // Known TV/streaming verified plans ("O2 TV Sport", "Canal+ Sport") must not be rejected by retail "sport"
         if (!isVerified && words.contains("sport")) return true
         if (words.contains("market") && !isVerified) return true
+        val isSipo = isVerified && SIPO_WORD_REGEX.containsMatchIn(simple)
         return EXCLUDED_MERCHANT_KEYWORDS.any { kw ->
+            if (isSipo && (kw == "posta" || kw == "ceska posta")) return@any false
             when {
                 kw.contains(' ') -> paddedSimple.contains(" $kw ") || norm.contains(kw)
                 kw.length <= 4 -> words.contains(kw)
@@ -211,6 +221,16 @@ object SubscriptionAuditor {
             )
         }
 
+        val importedMonths = transactions.asSequence()
+            .mapNotNull { tx ->
+                val ymStr = tx.yearMonth.ifBlank { tx.date.take(7) }
+                try { YearMonth.parse(ymStr) } catch (_: Exception) { null }
+            }
+            .distinct()
+            .sorted()
+            .toList()
+        val latestImportedYm = importedMonths.maxOrNull()
+
         // Group debits by robust normalized merchant key
         val byMerchant = debits.groupBy { tx -> extractMerchantKey(tx) }
 
@@ -253,8 +273,25 @@ object SubscriptionAuditor {
             }.eachCount()
             val primaryCat = catCounts.maxByOrNull { it.value }?.key ?: BankTransactionType.GENERAL_EXPENSE
 
-            // 2. Strict exclusion filter by category (including HOUSING_RENT, handled separately from discretionary subscriptions)
-            if (primaryCat in EXCLUDED_CATEGORIES) {
+            val normCombined = CzechMerchantCatalog.normalizeSimple("$merchantKey $combinedRawText")
+            val isGymOrFitness = !normCombined.contains("gymbeam") &&
+                !normCombined.contains("drogerie") &&
+                !normCombined.contains("lekarn") &&
+                (GYM_WORD_REGEX.containsMatchIn(normCombined) ||
+                    normCombined.contains("fitness") ||
+                    normCombined.contains("posilovna") ||
+                    normCombined.contains("multisport"))
+            val isSipo = SIPO_WORD_REGEX.containsMatchIn(normCombined)
+
+            val bypassesExcludedCategory = when (primaryCat) {
+                BankTransactionType.TRANSPORTATION -> isVerifiedProvider
+                BankTransactionType.HOUSING_RENT -> isSipo
+                BankTransactionType.HEALTH_DRUGSTORE -> isGymOrFitness
+                else -> false
+            }
+
+            // 2. Strict exclusion filter by category (including CHARITY_DONATION and regular rent)
+            if (primaryCat in EXCLUDED_CATEGORIES && !bypassesExcludedCategory) {
                 continue
             }
 
@@ -273,12 +310,12 @@ object SubscriptionAuditor {
                     val a1 = abs(list[1].amount)
                     val isSimilarAmount = a0 > 0.0 && a1 > 0.0 && (max(a0, a1) / kotlin.math.min(a0, a1)) <= 1.25
                     val sortedDates = list.mapNotNull {
-                        try { java.time.LocalDate.parse(it.date) } catch (_: Exception) { null }
+                        try { LocalDate.parse(it.date) } catch (_: Exception) { null }
                     }.sorted()
                     val isDriftDates = if (sortedDates.size == 2) {
                         val d0 = sortedDates[0]
                         val d1 = sortedDates[1]
-                        val daysBetween = java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
+                        val daysBetween = ChronoUnit.DAYS.between(d0, d1)
                         daysBetween >= 24 || (d0.dayOfMonth <= 5 && d1.dayOfMonth >= 25)
                     } else false
 
@@ -301,7 +338,7 @@ object SubscriptionAuditor {
 
             if (latestAmount <= 0.0) continue
 
-            // 3. Cadence and occurrence validation
+            // 3. Cadence and occurrence validation (weekly detection runs across single or multiple months)
             var cadence = "MONTHLY"
             var normalizedAmount = latestAmount
 
@@ -310,8 +347,27 @@ object SubscriptionAuditor {
             val hasSemiAnnualHint = SEMI_ANNUAL_HINT_REGEX.containsMatchIn(normRaw)
             val hasQuarterlyHint = QUARTERLY_HINT_REGEX.containsMatchIn(normRaw)
             val isTypicallyAnnualOnly = normRaw.contains("odpad") || normRaw.contains("poplatek za psa") || normRaw.contains("dalnicni znamk")
+            val isExplicitCategory = primaryCat in EXPLICIT_RECURRING_CATEGORIES || bypassesExcludedCategory
 
-            if (distinctMonths.size == 1) {
+            val parsedChargeDates = sortedTxs.mapNotNull {
+                try { LocalDate.parse(it.date) } catch (_: Exception) { null }
+            }.sorted()
+            val interChargeDayGaps = if (parsedChargeDates.size >= 4) {
+                (0 until parsedChargeDates.size - 1).map { idx ->
+                    ChronoUnit.DAYS.between(parsedChargeDates[idx], parsedChargeDates[idx + 1])
+                }.sorted()
+            } else emptyList()
+            val medianDayGap = if (interChargeDayGaps.isNotEmpty()) {
+                interChargeDayGaps[interChargeDayGaps.size / 2].toDouble()
+            } else Double.NaN
+            val isWeeklyCadence = sortedTxs.size >= 4 && medianDayGap.isFinite() && medianDayGap in 5.0..9.0
+
+            if (isWeeklyCadence) {
+                val sortedCharges = sortedTxs.map { abs(it.amount) }.sorted()
+                val medianCharge = sortedCharges[sortedCharges.size / 2]
+                cadence = "WEEKLY"
+                normalizedAmount = medianCharge * (52.0 / 12.0)
+            } else if (distinctMonths.size == 1) {
                 val isBroadMarketplace = normRaw.contains("google play") ||
                     normRaw.contains("apple com bill") ||
                     normRaw.contains("app store") ||
@@ -334,25 +390,25 @@ object SubscriptionAuditor {
 
                 if (isBroadMarketplace && !hasExplicitSubKeyword) {
                     continue
-                } else if ((isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) &&
+                } else if ((isVerifiedProvider || isExplicitCategory) &&
                     (hasAnnualHint || (isVerifiedProvider && isTypicallyAnnualOnly)) &&
                     latestAmount >= 1200.0
                 ) {
                     cadence = "ANNUAL"
                     normalizedAmount = latestAmount / 12.0
-                } else if ((isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) &&
+                } else if ((isVerifiedProvider || isExplicitCategory) &&
                     hasSemiAnnualHint &&
                     latestAmount >= 600.0
                 ) {
                     cadence = "SEMI_ANNUAL"
                     normalizedAmount = latestAmount / 6.0
-                } else if ((isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) &&
+                } else if ((isVerifiedProvider || isExplicitCategory) &&
                     hasQuarterlyHint &&
                     latestAmount >= 300.0
                 ) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
-                } else if (isVerifiedProvider || primaryCat in EXPLICIT_RECURRING_CATEGORIES) {
+                } else if (isVerifiedProvider || isExplicitCategory) {
                     cadence = "MONTHLY"
                     normalizedAmount = latestAmount
                 } else {
@@ -361,15 +417,14 @@ object SubscriptionAuditor {
                 }
             } else {
                 val maxMonthlyCount = txsByMonth.values.maxOfOrNull { it.size } ?: 0
-                if (maxMonthlyCount > 2) continue
+                if (!isVerifiedProvider && !isExplicitCategory && maxMonthlyCount > 5) continue
 
                 val monthSums = monthlySums.values.toList()
                 val minMonthly = monthSums.minOrNull() ?: 0.0
                 val maxMonthly = monthSums.maxOrNull() ?: 0.0
-                if (minMonthly <= 0.0 || (maxMonthly / minMonthly) > 1.80) continue
-
-                val isExplicitCategory = primaryCat in EXPLICIT_RECURRING_CATEGORIES
-                if (!isExplicitCategory && !isVerifiedProvider) {
+                if (!isVerifiedProvider && !isExplicitCategory) {
+                    val maxRatio = if (hasRecurringTextHint(combinedRawText)) 3.0 else 1.80
+                    if (minMonthly <= 0.0 || (maxMonthly / minMonthly) > maxRatio) continue
                     val hasHint = hasRecurringTextHint(combinedRawText)
                     if (!hasHint && distinctMonths.size < 3) {
                         continue
@@ -377,33 +432,53 @@ object SubscriptionAuditor {
                 }
 
                 val sortedMonths = distinctMonths.mapNotNull {
-                    try { java.time.YearMonth.parse(it) } catch (_: Exception) { null }
+                    try { YearMonth.parse(it) } catch (_: Exception) { null }
                 }.sorted()
 
-                val avgGapMonths = if (sortedMonths.size >= 2) {
-                    val gaps = (0 until sortedMonths.size - 1).map { i ->
-                        java.time.temporal.ChronoUnit.MONTHS.between(sortedMonths[i], sortedMonths[i + 1])
-                    }
-                    gaps.average()
+                val effectiveGaps = if (sortedMonths.size >= 2) {
+                    (0 until sortedMonths.size - 1).map { idx ->
+                        val m0 = sortedMonths[idx]
+                        val m1 = sortedMonths[idx + 1]
+                        val skipped = importedMonths.count { it > m0 && it < m1 }
+                        (skipped + 1).toDouble()
+                    }.sorted()
+                } else emptyList()
+                val medianEffectiveGap = if (effectiveGaps.isNotEmpty()) {
+                    effectiveGaps[effectiveGaps.size / 2]
                 } else 1.0
 
-                // Observed gap takes priority when it clearly reflects monthly billing (avgGapMonths < 2.2)
-                if (avgGapMonths < 2.2) {
+                // Observed gap (accounting for non-contiguous imports) takes priority when monthly (< 2.2)
+                if (medianEffectiveGap < 2.2) {
                     cadence = "MONTHLY"
                     normalizedAmount = latestAmount
-                } else if (avgGapMonths in 2.4..3.6 || (avgGapMonths >= 2.2 && hasQuarterlyHint)) {
+                } else if (medianEffectiveGap in 2.4..3.6 || (medianEffectiveGap >= 2.2 && hasQuarterlyHint)) {
                     cadence = "QUARTERLY"
                     normalizedAmount = latestAmount / 3.0
-                } else if (avgGapMonths in 5.4..6.6 || (avgGapMonths >= 4.0 && hasSemiAnnualHint)) {
+                } else if (medianEffectiveGap in 5.4..6.6 || (medianEffectiveGap >= 4.0 && hasSemiAnnualHint)) {
                     cadence = "SEMI_ANNUAL"
                     normalizedAmount = latestAmount / 6.0
-                } else if (avgGapMonths >= 10.0 || hasAnnualHint) {
+                } else if (medianEffectiveGap >= 10.0 || hasAnnualHint) {
                     cadence = "ANNUAL"
                     normalizedAmount = latestAmount / 12.0
                 } else {
                     cadence = "MONTHLY"
                     normalizedAmount = latestAmount
                 }
+            }
+
+            // Exclude canceled/expired subscriptions that haven't billed in newer imported months
+            val lastBilledYm = try { YearMonth.parse(latestMonth) } catch (_: Exception) { null }
+            if (latestImportedYm != null && lastBilledYm != null && lastBilledYm < latestImportedYm) {
+                val importedMonthsAfterLast = importedMonths.count { it > lastBilledYm }
+                val calMonthsAfterLast = ChronoUnit.MONTHS.between(lastBilledYm, latestImportedYm)
+                val isExpired = when (cadence) {
+                    "WEEKLY", "MONTHLY" -> (importedMonthsAfterLast >= 2) || (calMonthsAfterLast >= 3 && importedMonthsAfterLast >= 1)
+                    "QUARTERLY" -> calMonthsAfterLast >= 5 && importedMonthsAfterLast >= 2
+                    "SEMI_ANNUAL" -> calMonthsAfterLast >= 8 && importedMonthsAfterLast >= 2
+                    "ANNUAL" -> calMonthsAfterLast >= 14 && importedMonthsAfterLast >= 2
+                    else -> false
+                }
+                if (isExpired) continue
             }
 
             val latestTx = sortedTxs.last()

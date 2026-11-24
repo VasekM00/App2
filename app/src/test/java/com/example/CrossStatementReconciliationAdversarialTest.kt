@@ -53,7 +53,7 @@ class CrossStatementReconciliationAdversarialTest {
         assertEquals(2, result.auditReport.matchedPairs.size)
         assertTrue(result.currentMonthTxs.all { it.isNetted })
         assertEquals(0, result.auditReport.singleSideNettedTransfers.size)
-        assertEquals(20000.0, result.auditReport.totalNettedAmount, 0.001)
+        assertEquals(10000.0, result.auditReport.totalNettedAmount, 0.001)
     }
 
     @Test
@@ -74,8 +74,8 @@ class CrossStatementReconciliationAdversarialTest {
         assertEquals(1, result.auditReport.matchedPairs.size)
         assertEquals(1, result.auditReport.singleSideNettedTransfers.size)
         assertEquals(3L, result.auditReport.singleSideNettedTransfers[0].id)
-        // Total netted: (2000 * 2) from pair + 2000 from single = 6000
-        assertEquals(6000.0, result.auditReport.totalNettedAmount, 0.001)
+        // Total netted: 2000 from pair (counted once) + 2000 from single = 4000
+        assertEquals(4000.0, result.auditReport.totalNettedAmount, 0.001)
     }
 
     @Test

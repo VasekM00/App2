@@ -12,7 +12,7 @@ import com.example.ui.theme.BrandBlueDarkTheme
 import com.example.ui.theme.BrandGoldDarkTheme
 import com.example.ui.theme.BrandTealDark
 import com.example.ui.theme.GoodGreenDark
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 
 @Immutable
@@ -93,7 +93,7 @@ fun buildInflowNodes(
                         color = cViolet,
                         category = "Tax-Exempt Employer Benefit",
                         description = "Direct employer contribution paid into DPS/DIP retirement accounts outside take-home salary.",
-                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtExactCZK(s.employerRetirementExemptionAnnual)}/year"
                     )
                 )
             }
@@ -126,7 +126,7 @@ fun buildInflowNodes(
                         color = cSpouse,
                         category = "Earned Employment Income",
                         description = "Net monthly salary upon return to employment, accounting for progressive tax credits.",
-                        statutoryNote = "Includes annual taxpayer credit (${fmtCZK(s.taxpayerCreditAnnual)}/year)"
+                        statutoryNote = "Includes annual taxpayer credit (${fmtExactCZK(s.taxpayerCreditAnnual)}/year)"
                     )
                 )
             }
@@ -171,7 +171,7 @@ fun buildInflowNodes(
                         color = cBlue,
                         category = "State Social Support",
                         description = "Monthly parental allowance, fully tax-exempt.",
-                        statutoryNote = "Total entitlement (${fmtCZK(s.parentalAllowanceTotalBeforeCutoff)}) is 100% exempt from income taxes and social levies"
+                        statutoryNote = "Total entitlement (${fmtExactCZK(s.parentalAllowanceTotalBeforeCutoff)}) is 100% exempt from income taxes and social levies"
                     )
                 )
             }
@@ -216,7 +216,7 @@ fun buildInflowNodes(
                         color = cViolet,
                         category = "Tax-Exempt Employer Benefit",
                         description = "Direct employer contribution paid into DPS/DIP retirement accounts outside take-home salary.",
-                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtExactCZK(s.employerRetirementExemptionAnnual)}/year"
                     )
                 )
             }
@@ -245,7 +245,9 @@ fun buildOutflowNodes(
     val totalExpenses = snap.monthlyLivingCosts.finiteOrZero().coerceAtLeast(0.0)
     val ownInvestMonthly = snap.monthlyOwnInvesting.finiteOrZero().coerceAtLeast(0.0)
     val empMatchTotal = snap.monthlyEmployerMatch.finiteOrZero().coerceAtLeast(0.0)
-    val unallocatedSurplus = (totalInflows - totalExpenses - ownInvestMonthly).finiteOrZero().coerceAtLeast(0.0)
+    val reserveContribMonthly = snap.monthlyReserveContribution.finiteOrZero().coerceAtLeast(0.0)
+    val unallocatedSurplus = snap.monthlyUnallocatedCash.finiteOrZero().coerceAtLeast(0.0)
+    val cSky = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7)
 
     val deletedSet = parseDeletedCategories(s.deletedCategoriesJson)
     val effectiveRent = if ("rent" in deletedSet) 0.0 else s.rentMonthly.finiteOrZero().coerceAtLeast(0.0)
@@ -299,7 +301,22 @@ fun buildOutflowNodes(
                         color = cViolet,
                         category = "Employer Retirement Contribution",
                         description = "Tax-advantaged employer contributions to DPS/DIP retirement accounts within the annual exemption cap.",
-                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtExactCZK(s.employerRetirementExemptionAnnual)}/year"
+                    )
+                )
+            }
+            if (reserveContribMonthly > 0.0) {
+                add(
+                    SankeyNode(
+                        id = "out_reserve",
+                        title = "Emergency Reserve",
+                        shortLabel = "Reserve",
+                        subtitle = "Scheduled reserve build",
+                        amount = reserveContribMonthly,
+                        color = cSky,
+                        category = "Emergency Liquidity Buffer",
+                        description = "Scheduled monthly emergency fund contribution accumulating toward your target safety runway.",
+                        statutoryNote = "Liquid emergency reserve protecting against sequence-of-returns risk"
                     )
                 )
             }
@@ -389,8 +406,8 @@ fun buildOutflowNodes(
                 add(
                     SankeyNode(
                         id = "out_portu",
-                        title = "Brokerage ETF (Portu)",
-                        shortLabel = "Portu ETF",
+                        title = "Liquid Brokerage ETF",
+                        shortLabel = "Liquid ETF",
                         subtitle = "Global equity index",
                         amount = portuTotal,
                         color = cTeal,
@@ -413,7 +430,7 @@ fun buildOutflowNodes(
                         color = cGreen,
                         category = "Tax-Sheltered Pension (DIP)",
                         description = "DIP retirement account enabling index ETF compounding with pre-tax income.",
-                        statutoryNote = "Up to ${fmtCZK(s.taxDeductionCeilingAnnual)} annual deduction with 120-month holding rule and age 60 requirement"
+                        statutoryNote = "Up to ${fmtExactCZK(s.taxDeductionCeilingAnnual)} annual deduction with 120-month holding rule and age 60 requirement"
                     )
                 )
             }
@@ -429,8 +446,8 @@ fun buildOutflowNodes(
                         amount = dpsTotal,
                         color = cPurple,
                         category = "Supplementary State-Subsidized Pension",
-                        description = "DPS pension account with up to ${fmtCZK(s.dpsStandardSubsidyMaxMonthly)} monthly direct state matching.",
-                        statutoryNote = "State contribution of ${fmtPct(s.dpsSubsidyRateStandardPct, 0)} on monthly deposits from ${fmtCZK(s.dpsMinDepositForSubsidy)} to ${fmtCZK(s.dpsDeductionThresholdMonthly)} (up to ${fmtCZK(s.dpsStandardSubsidyMaxMonthly)}/month)"
+                        description = "DPS pension account with up to ${fmtExactCZK(s.dpsStandardSubsidyMaxMonthly)} monthly direct state matching.",
+                        statutoryNote = "State contribution of ${fmtPct(s.dpsSubsidyRateStandardPct, 0)} on monthly deposits from ${fmtExactCZK(s.dpsMinDepositForSubsidy)} to ${fmtExactCZK(s.dpsDeductionThresholdMonthly)} (up to ${fmtExactCZK(s.dpsStandardSubsidyMaxMonthly)}/month)"
                     )
                 )
             }
@@ -445,7 +462,22 @@ fun buildOutflowNodes(
                         color = cViolet,
                         category = "Employer Retirement Contribution",
                         description = "Tax-advantaged employer contributions to DPS/DIP retirement accounts within the annual exemption cap.",
-                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtCZK(s.employerRetirementExemptionAnnual)}/year"
+                        statutoryNote = "Exempt from employee income tax and social/health levies up to ${fmtExactCZK(s.employerRetirementExemptionAnnual)}/year"
+                    )
+                )
+            }
+            if (reserveContribMonthly > 0.0) {
+                add(
+                    SankeyNode(
+                        id = "out_reserve",
+                        title = "Emergency Reserve",
+                        shortLabel = "Reserve",
+                        subtitle = "Scheduled reserve build",
+                        amount = reserveContribMonthly,
+                        color = cSky,
+                        category = "Emergency Liquidity Buffer",
+                        description = "Scheduled monthly emergency fund contribution accumulating toward your target safety runway.",
+                        statutoryNote = "Liquid emergency reserve in high-yield cash protecting against sequence risk"
                     )
                 )
             }
@@ -455,7 +487,7 @@ fun buildOutflowNodes(
                         id = "out_buffer",
                         title = "Unallocated Buffer",
                         shortLabel = "Buffer",
-                        subtitle = "Liquid reserve building",
+                        subtitle = "Discretionary cash surplus",
                         amount = unallocatedSurplus,
                         color = cGold,
                         category = "Liquid Reserve Capital",

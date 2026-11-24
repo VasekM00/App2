@@ -52,6 +52,23 @@ object PdfTextExtractor {
     private val CONTENTS_SINGLE_REGEX = Regex("""/Contents\s+(\d+)\s+\d+\s+R\b""")
     private val CONTENTS_ARRAY_REGEX = Regex("""/Contents\s*\[([^\]]*)\]""")
     private val OBJ_REF_REGEX = Regex("""(\d+)\s+\d+\s+R\b""")
+    private val OBJ_STM_N_REGEX = Regex("""/N\s+(\d+)\b""")
+    private val OBJ_STM_FIRST_REGEX = Regex("""/First\s+(\d+)\b""")
+    private val WHITESPACE_SPLIT_REGEX = Regex("""\s+""")
+
+    enum class PdfExtractionDiagnostic {
+        NONE,
+        ENCRYPTED_PDF,
+        OBJECT_STREAM_OR_UNSUPPORTED_COMPRESSION,
+        SCANNED_OR_IMAGE_ONLY
+    }
+
+    data class PdfExtractionResult(
+        val text: String,
+        val isEncrypted: Boolean = false,
+        val hasObjectStreams: Boolean = false,
+        val diagnostic: PdfExtractionDiagnostic = PdfExtractionDiagnostic.NONE
+    )
 
     private data class PdfStream(
         val dictionary: String,
@@ -114,6 +131,14 @@ object PdfTextExtractor {
         return ENCRYPT_DICT_REGEX.containsMatchIn(text)
     }
 
+    private fun hasUnsupportedFilterDict(dict: String): Boolean {
+        return dict.contains("/LZWDecode") ||
+            dict.contains("/ASCII85Decode") ||
+            dict.contains("/ASCIIHexDecode") ||
+            dict.contains("/RunLengthDecode") ||
+            dict.contains("/Crypt")
+    }
+
     private fun collectNonStreamBytes(pdfBytes: ByteArray, streams: List<PdfStream>): ByteArray {
         val out = ByteArrayOutputStream()
         var cursor = 0
@@ -132,21 +157,44 @@ object PdfTextExtractor {
         return out.toByteArray()
     }
 
-    fun extractText(pdfBytes: ByteArray): String {
-        if (!isPdf(pdfBytes)) return ""
+    fun extractText(pdfBytes: ByteArray): String = extractTextDetailed(pdfBytes).text
+
+    fun extractTextDetailed(pdfBytes: ByteArray): PdfExtractionResult {
+        if (!isPdf(pdfBytes)) return PdfExtractionResult("")
 
         val streams = extractRawStreams(pdfBytes)
+        val nonStreamBytes = collectNonStreamBytes(pdfBytes, streams)
+        val nonStreamAscii = String(nonStreamBytes, Charsets.US_ASCII)
+        val isEncrypted = ENCRYPT_DICT_REGEX.containsMatchIn(nonStreamAscii)
+
         val decompressedStreams = arrayOfNulls<ByteArray?>(streams.size)
         val isCMapStreamFlags = BooleanArray(streams.size)
         val globalCMap = ParsedCMap()
         val cMapsByObj = mutableMapOf<Int, ParsedCMap>()
         var remainingBudget = MAX_TOTAL_INFLATED_BYTES.toLong()
+        var hasObjectStreams = false
+        var hasUnsupportedFilters = false
+        var hasImageStreams = false
 
         // 1. First pass: Decompress non-binary streams once within cumulative budget and parse /ToUnicode CMaps
         for (idx in streams.indices) {
             val stream = streams[idx]
-            if (isBinaryResourceDict(stream.dictionary)) continue
-            val decompressed = decompressStream(stream, remainingBudget) ?: continue
+            val dict = stream.dictionary
+            if (dict.contains("/Type /ObjStm") || dict.contains("/Type/ObjStm")) {
+                hasObjectStreams = true
+            }
+            if (dict.contains("/Subtype /Image") || dict.contains("/Subtype/Image")) {
+                hasImageStreams = true
+            }
+            if (isBinaryResourceDict(dict)) continue
+            if (hasUnsupportedFilterDict(dict)) {
+                hasUnsupportedFilters = true
+            }
+            val decompressed = decompressStream(stream, remainingBudget)
+            if (decompressed == null) {
+                if (!isNonContentStreamDict(dict)) hasUnsupportedFilters = true
+                continue
+            }
             if (decompressed !== stream.data) {
                 remainingBudget = (remainingBudget - decompressed.size).coerceAtLeast(0L)
             }
@@ -154,7 +202,7 @@ object PdfTextExtractor {
 
             val sampleLen = minOf(4096, decompressed.size)
             val textSample = String(decompressed, 0, sampleLen, Charsets.US_ASCII)
-            val isCMapStream = stream.dictionary.contains("/ToUnicode") ||
+            val isCMapStream = dict.contains("/ToUnicode") ||
                 textSample.contains("beginbfchar") ||
                 textSample.contains("beginbfrange") ||
                 textSample.contains("begincmap")
@@ -169,7 +217,7 @@ object PdfTextExtractor {
             }
         }
 
-        val fontIndex = buildFontCMapIndex(pdfBytes, streams, globalCMap, cMapsByObj)
+        val fontIndex = buildFontCMapIndex(pdfBytes, streams, decompressedStreams, globalCMap, cMapsByObj, nonStreamAscii)
 
         // 2. Second pass: Extract text from cached decompressed content streams (skipping CMap & non-content streams)
         val extractedLines = mutableListOf<String>()
@@ -193,16 +241,45 @@ object PdfTextExtractor {
             }
         }
 
-        // 3. Fallback: if no content stream produced text, scan uncompressed ASCII segments
+        // 3. Fallback: if no content stream produced text (and PDF is not encrypted), scan uncompressed ASCII segments
         if (extractedLines.isEmpty()) {
+            if (isEncrypted) {
+                return PdfExtractionResult(
+                    text = "",
+                    isEncrypted = true,
+                    hasObjectStreams = hasObjectStreams,
+                    diagnostic = PdfExtractionDiagnostic.ENCRYPTED_PDF
+                )
+            }
             val rawText = String(pdfBytes, cp1250Charset)
             val fallbackLines = extractFallbackText(rawText)
             if (fallbackLines.isNotEmpty()) {
-                return fallbackLines.joinToString("\n")
+                return PdfExtractionResult(
+                    text = fallbackLines.joinToString("\n"),
+                    isEncrypted = false,
+                    hasObjectStreams = hasObjectStreams,
+                    diagnostic = PdfExtractionDiagnostic.NONE
+                )
             }
+            val diagnostic = when {
+                hasObjectStreams || hasUnsupportedFilters -> PdfExtractionDiagnostic.OBJECT_STREAM_OR_UNSUPPORTED_COMPRESSION
+                hasImageStreams -> PdfExtractionDiagnostic.SCANNED_OR_IMAGE_ONLY
+                else -> PdfExtractionDiagnostic.NONE
+            }
+            return PdfExtractionResult(
+                text = "",
+                isEncrypted = false,
+                hasObjectStreams = hasObjectStreams,
+                diagnostic = diagnostic
+            )
         }
 
-        return extractedLines.joinToString("\n")
+        return PdfExtractionResult(
+            text = extractedLines.joinToString("\n"),
+            isEncrypted = isEncrypted,
+            hasObjectStreams = hasObjectStreams,
+            diagnostic = PdfExtractionDiagnostic.NONE
+        )
     }
 
     private fun isBinaryResourceDict(dict: String): Boolean {
@@ -224,8 +301,10 @@ object PdfTextExtractor {
     private fun buildFontCMapIndex(
         pdfBytes: ByteArray,
         streams: List<PdfStream>,
+        decompressedStreams: Array<ByteArray?>,
         globalCMap: ParsedCMap,
-        cMapsByStreamObj: Map<Int, ParsedCMap>
+        cMapsByStreamObj: Map<Int, ParsedCMap>,
+        nonStreamAscii: String
     ): FontCMapIndex {
         if (cMapsByStreamObj.isEmpty()) {
             return FontCMapIndex(
@@ -238,7 +317,7 @@ object PdfTextExtractor {
             )
         }
 
-        val catalogText = String(collectNonStreamBytes(pdfBytes, streams), Charsets.US_ASCII)
+        val catalogText = nonStreamAscii.ifEmpty { String(collectNonStreamBytes(pdfBytes, streams), Charsets.US_ASCII) }
 
         val objects = mutableMapOf<Int, String>()
         for (m in OBJ_HEADER_REGEX.findAll(catalogText)) {
@@ -247,6 +326,43 @@ object PdfTextExtractor {
             val endObjIdx = catalogText.indexOf("endobj", bodyStart)
             if (endObjIdx > bodyStart) {
                 objects[id] = catalogText.substring(bodyStart, endObjIdx)
+            }
+        }
+
+        // Parse PDF 1.5+ compressed /ObjStm object streams (/N <count> /First <offset>)
+        for (idx in streams.indices) {
+            val dict = streams[idx].dictionary
+            if (!dict.contains("/Type /ObjStm") && !dict.contains("/Type/ObjStm")) continue
+            val decompressed = decompressedStreams[idx] ?: continue
+            val n = OBJ_STM_N_REGEX.find(dict)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: continue
+            val first = OBJ_STM_FIRST_REGEX.find(dict)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: continue
+            if (n !in 1..10_000 || first !in 1..decompressed.size) continue
+
+            val headerStr = String(decompressed, 0, first, Charsets.US_ASCII)
+            val headerTokens = headerStr.trim().split(WHITESPACE_SPLIT_REGEX).filter { it.isNotEmpty() }
+            val pairs = mutableListOf<Pair<Int, Int>>()
+            var k = 0
+            while (k + 1 < headerTokens.size && pairs.size < n) {
+                val objId = headerTokens[k].toIntOrNull()
+                val relOffset = headerTokens[k + 1].toIntOrNull()
+                if (objId != null && objId > 0 && relOffset != null && relOffset >= 0 && first + relOffset < decompressed.size) {
+                    pairs.add(objId to relOffset)
+                }
+                k += 2
+            }
+            val sortedByOffset = pairs.sortedBy { it.second }
+            for (pIdx in sortedByOffset.indices) {
+                val (objId, relOffset) = sortedByOffset[pIdx]
+                val startByte = first + relOffset
+                val endByte = if (pIdx + 1 < sortedByOffset.size) {
+                    minOf(first + sortedByOffset[pIdx + 1].second, decompressed.size)
+                } else {
+                    decompressed.size
+                }
+                if (startByte in first until endByte) {
+                    val objBody = String(decompressed, startByte, endByte - startByte, Charsets.US_ASCII)
+                    objects.putIfAbsent(objId, objBody)
+                }
             }
         }
 
@@ -801,8 +917,10 @@ object PdfTextExtractor {
         while (i < len) {
             val b = (bytes[i].toInt() and 0xFF).toChar()
 
-            // Check for BT / ET operators
-            if (b == 'B' && i + 1 < len && bytes[i + 1].toInt().toChar() == 'T' && isTokenBoundary(bytes, i - 1, i + 2)) {
+            // Check for BT / ET operators (require pendingToken empty so /BT, /ET, SET never match)
+            if (b == 'B' && i + 1 < len && bytes[i + 1].toInt().toChar() == 'T' &&
+                pendingToken.isEmpty() && isTokenBoundary(bytes, i - 1, i + 2)
+            ) {
                 inText = true
                 curX = 0.0
                 curY = 0.0
@@ -815,7 +933,9 @@ object PdfTextExtractor {
                 i += 2
                 continue
             }
-            if (b == 'E' && i + 1 < len && bytes[i + 1].toInt().toChar() == 'T' && isTokenBoundary(bytes, i - 1, i + 2)) {
+            if (b == 'E' && i + 1 < len && bytes[i + 1].toInt().toChar() == 'T' &&
+                pendingToken.isEmpty() && isTokenBoundary(bytes, i - 1, i + 2)
+            ) {
                 inText = false
                 numBuffer.clear()
                 pendingToken.setLength(0)
@@ -830,6 +950,23 @@ object PdfTextExtractor {
 
             // Inside BT ... ET:
             when {
+                // Comment: % ... EOL
+                b == '%' -> {
+                    flushPendingToken()
+                    while (i < len) {
+                        val ch = (bytes[i].toInt() and 0xFF).toChar()
+                        if (ch == '\r' || ch == '\n') break
+                        i++
+                    }
+                }
+
+                // Name token start: /FontName (handles compact `Tm/F1 10 Tf` without whitespace before `/`)
+                b == '/' -> {
+                    flushPendingToken()
+                    pendingToken.append('/')
+                    i++
+                }
+
                 // String literal: (...)
                 b == '(' -> {
                     flushPendingToken()
@@ -841,7 +978,8 @@ object PdfTextExtractor {
 
                     var opIdx = if (strEnd < len) strEnd + 1 else len
                     while (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar().isWhitespace()) opIdx++
-                    if (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar() == '\'') {
+                    val opChar = if (opIdx < len) (bytes[opIdx].toInt() and 0xFF).toChar() else '\u0000'
+                    if (opChar == '\'' || opChar == '"') {
                         val stepY = (if (hasExplicitLeading) textLeading else currentFontSize) * tmScaleY
                         lineStartY -= stepY
                         curX = lineStartX
@@ -869,7 +1007,15 @@ object PdfTextExtractor {
 
                     var opIdx = if (hexEnd < len) hexEnd + 1 else len
                     while (opIdx < len && (bytes[opIdx].toInt() and 0xFF).toChar().isWhitespace()) opIdx++
-                    if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'j') {
+                    val opChar = if (opIdx < len) (bytes[opIdx].toInt() and 0xFF).toChar() else '\u0000'
+                    if (opChar == '\'' || opChar == '"') {
+                        val stepY = (if (hasExplicitLeading) textLeading else currentFontSize) * tmScaleY
+                        lineStartY -= stepY
+                        curX = lineStartX
+                        curY = lineStartY
+                        recordFragment(decoded)
+                        i = opIdx + 1
+                    } else if (opIdx + 1 < len && bytes[opIdx].toInt().toChar() == 'T' && bytes[opIdx + 1].toInt().toChar() == 'j') {
                         recordFragment(decoded)
                         i = opIdx + 2
                     } else {
@@ -907,6 +1053,7 @@ object PdfTextExtractor {
 
                 else -> {
                     pendingToken.append(b)
+                    // If next byte is E and current buffered token ends with something followed by ET? No, delimiter check below handles )ET.
                     i++
                 }
             }
@@ -943,9 +1090,15 @@ object PdfTextExtractor {
         return result
     }
 
+    private fun isPdfDelimiter(c: Char): Boolean =
+        c == '(' || c == ')' || c == '<' || c == '>' || c == '[' || c == ']' ||
+            c == '{' || c == '}' || c == '/' || c == '%'
+
     private fun isTokenBoundary(bytes: ByteArray, before: Int, after: Int): Boolean {
-        val bValid = before < 0 || bytes[before].toInt().toChar().isWhitespace() || bytes[before].toInt().toChar() == '/'
-        val aValid = after >= bytes.size || bytes[after].toInt().toChar().isWhitespace() || bytes[after].toInt().toChar() == '/'
+        val bChar = if (before >= 0) (bytes[before].toInt() and 0xFF).toChar() else ' '
+        val aChar = if (after < bytes.size) (bytes[after].toInt() and 0xFF).toChar() else ' '
+        val bValid = before < 0 || bChar.isWhitespace() || isPdfDelimiter(bChar)
+        val aValid = after >= bytes.size || aChar.isWhitespace() || isPdfDelimiter(aChar)
         return bValid && aValid
     }
 

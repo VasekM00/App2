@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
@@ -46,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -141,11 +144,12 @@ fun SettingsExportBackupDialog(
     onDismiss: () -> Unit,
     onConfirmExport: (fullBackupScope: Boolean, encryptEnabled: Boolean, passphrase: String) -> Unit
 ) {
-    var fullBackupScope by remember { mutableStateOf(true) }
-    var encryptEnabled by remember { mutableStateOf(true) }
+    var fullBackupScope by rememberSaveable { mutableStateOf(true) }
+    var encryptEnabled by rememberSaveable { mutableStateOf(true) }
+    // Keep secret passphrases strictly in plain remember (never serialized to saved-instance-state Bundle).
     var passphrase by remember { mutableStateOf("") }
     var confirmPassphrase by remember { mutableStateOf("") }
-    var showPassphrase by remember { mutableStateOf(false) }
+    var showPassphrase by rememberSaveable { mutableStateOf(false) }
 
     val passphraseValid = !encryptEnabled || (passphrase.length >= 8 && passphrase == confirmPassphrase)
     val validationHint = when {
@@ -280,12 +284,14 @@ fun SettingsExportBackupDialog(
 
                 if (encryptEnabled) {
                     val visual = if (showPassphrase) VisualTransformation.None else PasswordVisualTransformation()
+                    val passwordKeyboard = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
                     OutlinedTextField(
                         value = passphrase,
                         onValueChange = { passphrase = it },
                         label = { Text("Passphrase (min 8 characters)") },
                         singleLine = true,
                         visualTransformation = visual,
+                        keyboardOptions = passwordKeyboard,
                         trailingIcon = {
                             IconButton(
                                 onClick = { showPassphrase = !showPassphrase },
@@ -307,6 +313,7 @@ fun SettingsExportBackupDialog(
                         label = { Text("Confirm Passphrase") },
                         singleLine = true,
                         visualTransformation = visual,
+                        keyboardOptions = passwordKeyboard,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("export_confirm_passphrase_input")
@@ -358,8 +365,8 @@ internal fun SettingsPassphrasePromptDialog(
 ) {
     val scope = rememberCoroutineScope()
     var passphrase by remember { mutableStateOf("") }
-    var showPassphrase by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showPassphrase by rememberSaveable { mutableStateOf(false) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var isDecrypting by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -414,6 +421,7 @@ internal fun SettingsPassphrasePromptDialog(
                     label = { Text("Backup Passphrase") },
                     singleLine = true,
                     visualTransformation = if (showPassphrase) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                     trailingIcon = {
                         IconButton(
                             onClick = { showPassphrase = !showPassphrase },
@@ -463,7 +471,7 @@ internal fun SettingsPassphrasePromptDialog(
                                         passphrase = ""
                                         onDecryptedPreview(preview)
                                     } else {
-                                        errorMessage = "Decrypted file is not a valid Martinu Financials backup."
+                                        errorMessage = "Decrypted file is not a valid backup."
                                     }
                                 }
                                 BackupCrypto.DecryptResult.WrongPassphraseOrTampered -> {

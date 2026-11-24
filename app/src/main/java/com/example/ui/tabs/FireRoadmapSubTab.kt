@@ -47,6 +47,7 @@ import com.example.ui.components.HouseholdTimelineCard
 import com.example.ui.components.MetricInfo
 import com.example.ui.components.PhasedPreRetirementBaristaCard
 import com.example.ui.components.TwoBucketLiquidityBridgeCard
+import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandTeal
 import kotlin.math.roundToInt
@@ -121,8 +122,9 @@ fun FireRoadmapSubTab(
     } ?: "Target: Beyond 35y horizon (${currentYear + 35}+)"
     val primaryProgress = snap.fireProgressPct
 
-    val completedActionsCount = remember(actionStates, currentYear) {
-        ActionMeta.items.count { meta ->
+    val actionItems = remember(sEff) { ActionMeta.itemsFor(sEff) }
+    val completedActionsCount = remember(actionItems, actionStates, currentYear) {
+        actionItems.count { meta ->
             actionStates["${currentYear}_${meta.id}"] == true
         }
     }
@@ -167,7 +169,7 @@ fun FireRoadmapSubTab(
                     modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
                 ColorPill(
-                    text = "${primaryProgress.roundToInt()}% of Goal",
+                    text = "${primaryProgress.finiteOrZero().coerceIn(0.0, 100.0).roundToInt()}% of Goal",
                     color = BrandTeal,
                     fontFamily = BodyFontFamily,
                     fontSize = 10.5.sp
@@ -240,7 +242,7 @@ fun FireRoadmapSubTab(
         // Accordion: Annual Execution Checklist
         RoadmapAccordionCard(
             title = "Annual Action Checklist ($currentYear)",
-            subtitle = "$completedActionsCount / ${ActionMeta.items.size} tasks completed",
+            subtitle = "$completedActionsCount / ${actionItems.size} tasks completed",
             expanded = checklistExpanded,
             onToggle = { checklistExpanded = !checklistExpanded }
         ) {

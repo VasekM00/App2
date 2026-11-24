@@ -3,6 +3,9 @@ package com.example.ui.tabs
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,7 +55,20 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
+
+private val BUILT_IN_EXPENSE_CATEGORY_LABELS = mapOf(
+    "rent" to "Rent / Housing",
+    "groceries" to "Groceries & Daily Living",
+    "cafes" to "Cafes & Restaurants",
+    "therapy" to "Therapy / Physio",
+    "charity" to "Charity",
+    "other_discretionary" to "Other Discretionary",
+    "entertainment" to "Entertainment",
+    "transport" to "Transport",
+    "subscriptions" to "Subscriptions"
+)
 
 fun LazyListScope.settingsHouseholdSubTab(
     state: FullCalculationState,
@@ -409,6 +426,90 @@ fun LazyListScope.settingsHouseholdSubTab(
                 }
             }
 
+            if (deletedSet.isNotEmpty()) {
+                val sortedDeleted = deletedSet.sorted()
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Hidden Built-In Categories (${sortedDeleted.size})",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    TextButton(
+                        onClick = {
+                            patchSettings { cur ->
+                                cur.copy(deletedCategoriesJson = serializeDeletedCategories(emptySet()))
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("restore_all_builtin_categories")
+                    ) {
+                        Text(
+                            text = "Restore All",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = BrandTeal
+                            )
+                        )
+                    }
+                }
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    sortedDeleted.forEach { key ->
+                        val label = BUILT_IN_EXPENSE_CATEGORY_LABELS[key]
+                            ?: key.replace('_', ' ').replaceFirstChar { it.uppercase() }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = BrandTeal.copy(alpha = 0.10f),
+                            border = BorderStroke(1.dp, BrandTeal.copy(alpha = 0.35f)),
+                            onClick = {
+                                patchSettings { cur ->
+                                    val remaining = parseDeletedCategories(cur.deletedCategoriesJson) - key
+                                    cur.copy(deletedCategoriesJson = serializeDeletedCategories(remaining))
+                                }
+                            },
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("restore_builtin_category_$key")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Restore $label",
+                                    tint = BrandTeal,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = BrandTeal
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedButton(
@@ -430,7 +531,7 @@ fun LazyListScope.settingsHouseholdSubTab(
     item {
         SettingsGroupCard(
             title = "Family & Children",
-            subtitle = "Bonus +${fmtCZK(state.taxReturnHelper.childBonus)} yearly",
+            subtitle = "Bonus +${fmtExactCZK(state.taxReturnHelper.childBonus)} yearly",
             initiallyExpanded = false,
             badgeText = if (s.childExpensesEnabled) "ACTIVE" else "OFF",
             badgeColor = BrandTeal,
@@ -478,14 +579,6 @@ fun LazyListScope.settingsHouseholdSubTab(
                 TextSettingField(label = "Child 1 Name", value = s.child1Name, onValueChange = { v -> patchSettings { it.copy(child1Name = v) } })
                 NumberSettingField(label = "Child 1 Birth Year", value = s.child1BirthYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(child1BirthYear = v.toInt()) } })
                 NumberSettingField(label = "Child 1 Tax Bonus Annual", value = s.child1TaxBonusAnnual, onValueChange = { v -> patchSettings { it.copy(child1TaxBonusAnnual = v) } })
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Stage Expense Estimates (per Child)", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
-                NumberSettingField(label = "Toddler Monthly", value = s.childToddlerMonthly, onValueChange = { v -> patchSettings { it.copy(childToddlerMonthly = v) } })
-                NumberSettingField(label = "Preschool Monthly", value = s.childPreschoolMonthly, onValueChange = { v -> patchSettings { it.copy(childPreschoolMonthly = v) } })
-                NumberSettingField(label = "School Monthly", value = s.childSchoolMonthly, onValueChange = { v -> patchSettings { it.copy(childSchoolMonthly = v) } })
-                NumberSettingField(label = "Teen Monthly", value = s.childTeenMonthly, onValueChange = { v -> patchSettings { it.copy(childTeenMonthly = v) } })
-                NumberSettingField(label = "University Monthly", value = s.childUniMonthly, onValueChange = { v -> patchSettings { it.copy(childUniMonthly = v) } })
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -494,6 +587,16 @@ fun LazyListScope.settingsHouseholdSubTab(
                 TextSettingField(label = "Child 2 Name", value = s.child2Name, onValueChange = { v -> patchSettings { it.copy(child2Name = v) } })
                 NumberSettingField(label = "Child 2 Planned Birth Year", value = s.child2BirthYear.toDouble(), onValueChange = { v -> patchSettings { it.copy(child2BirthYear = v.toInt()) } })
                 NumberSettingField(label = "Child 2 Tax Bonus Annual", value = s.child2TaxBonusAnnual, onValueChange = { v -> patchSettings { it.copy(child2TaxBonusAnnual = v) } })
+            }
+
+            if (s.child1Enabled || s.child2Enabled) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(text = "Stage Expense Estimates (per Child)", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                NumberSettingField(label = "Toddler Monthly", value = s.childToddlerMonthly, onValueChange = { v -> patchSettings { it.copy(childToddlerMonthly = v) } })
+                NumberSettingField(label = "Preschool Monthly", value = s.childPreschoolMonthly, onValueChange = { v -> patchSettings { it.copy(childPreschoolMonthly = v) } })
+                NumberSettingField(label = "School Monthly", value = s.childSchoolMonthly, onValueChange = { v -> patchSettings { it.copy(childSchoolMonthly = v) } })
+                NumberSettingField(label = "Teen Monthly", value = s.childTeenMonthly, onValueChange = { v -> patchSettings { it.copy(childTeenMonthly = v) } })
+                NumberSettingField(label = "University Monthly", value = s.childUniMonthly, onValueChange = { v -> patchSettings { it.copy(childUniMonthly = v) } })
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

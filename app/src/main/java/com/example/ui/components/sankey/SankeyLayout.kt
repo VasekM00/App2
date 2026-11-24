@@ -575,12 +575,20 @@ fun SankeyCanvasDiagram(
                         // 4. Ribbons (with prebuilt Gradient Brushes)
                         val ribbons = buildList {
                             if (is3Pillar) {
-                                val inLayout = rawInLayouts.firstOrNull()
-                                if (inLayout != null) {
+                                val pairings = compute3PillarRibbonIndices(
+                                    inNodeIds = rawInLayouts.map { it.node.id },
+                                    outNodeIds = rawOutLayouts.map { it.node.id }
+                                )
+                                pairings.groupBy { it.first }.forEach { (inIdx, pairs) ->
+                                    val inLayout = rawInLayouts.getOrNull(inIdx) ?: return@forEach
                                     val inUsableH = (inLayout.yBottom - inLayout.yTop).coerceAtLeast(1f)
+                                    val targetOutLayouts = pairs.mapNotNull { rawOutLayouts.getOrNull(it.second) }
+                                    val groupTotalOut = targetOutLayouts.sumOf {
+                                        it.node.amount.finiteOrZero().coerceAtLeast(0.0)
+                                    }.coerceAtLeast(1.0)
                                     var curSourceY = inLayout.yTop
-                                    rawOutLayouts.forEach { outLayout ->
-                                        val frac = safeFraction(outLayout.node.amount, safeSumOut)
+                                    targetOutLayouts.forEach { outLayout ->
+                                        val frac = safeFraction(outLayout.node.amount, groupTotalOut)
                                         val sliceH = frac * inUsableH
                                         val sourceTop = curSourceY
                                         val sourceBottom = curSourceY + sliceH
@@ -921,6 +929,30 @@ fun SankeyCanvasDiagram(
                 labelPaint.color = textColor
 
                 drawContext.canvas.restore()
+            }
+        }
+    }
+}
+
+/**
+ * Computes source-to-target index pairs in 3-Pillar mode so `in_employer_match`
+ * connects directly 1:1 to `out_employer_match` without being orphaned, while the primary
+ * cash inflow node fans out across all non-match outflows.
+ */
+internal fun compute3PillarRibbonIndices(
+    inNodeIds: List<String>,
+    outNodeIds: List<String>
+): List<Pair<Int, Int>> {
+    if (inNodeIds.isEmpty() || outNodeIds.isEmpty()) return emptyList()
+    val empInIdx = inNodeIds.indexOf("in_employer_match")
+    val empOutIdx = outNodeIds.indexOf("out_employer_match")
+    val primaryInIdx = inNodeIds.indexOfFirst { it != "in_employer_match" }.takeIf { it >= 0 } ?: 0
+    return buildList {
+        outNodeIds.indices.forEach { outIdx ->
+            if (empInIdx >= 0 && outIdx == empOutIdx) {
+                add(empInIdx to outIdx)
+            } else {
+                add(primaryInIdx to outIdx)
             }
         }
     }

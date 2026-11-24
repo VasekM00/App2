@@ -4,7 +4,7 @@ import android.content.Context
 import com.example.data.SettingsEntity
 import com.example.domain.CzechRegulatoryData
 import com.example.domain.SyncDifferenceItem
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -47,7 +47,10 @@ object CzechEconomicSyncService {
         val rateDate: String
     )
 
-    private val SUPPORTED_CNB_CURRENCIES = setOf("EUR", "USD", "GBP", "PLN", "CHF", "HUF")
+    private val SUPPORTED_CNB_CURRENCIES = setOf(
+        "EUR", "USD", "GBP", "PLN", "CHF", "HUF",
+        "JPY", "SEK", "NOK", "DKK", "CAD", "AUD"
+    )
 
     @Volatile
     private var cachedCnbSuccess: CachedCnbResult? = null
@@ -200,12 +203,33 @@ object CzechEconomicSyncService {
     }
 
     /**
-     * Compares live official data against the user's current settings.
+     * Compares live official data against the user's current settings across all 25 synced statutory & macro fields.
      */
     fun computeDifferences(current: SettingsEntity, live: CzechRegulatoryData): List<SyncDifferenceItem> {
         val list = mutableListOf<SyncDifferenceItem>()
 
-        // 1. Inflation & Macro
+        fun addDoubleItem(
+            category: String,
+            label: String,
+            currentVal: Double,
+            liveVal: Double,
+            tolerance: Double,
+            formatter: (Double) -> String,
+            impactHint: String
+        ) {
+            list.add(
+                SyncDifferenceItem(
+                    category = category,
+                    label = label,
+                    currentValueFormatted = formatter(currentVal),
+                    liveValueFormatted = formatter(liveVal),
+                    isDifferent = differsBy(currentVal, liveVal, tolerance),
+                    impactHint = impactHint
+                )
+            )
+        }
+
+        // 1. Macro
         val isCpiDiff = differsBy(current.cpiInflationPct, live.csuCpiInflationPct, 0.05)
         list.add(
             SyncDifferenceItem(
@@ -218,118 +242,55 @@ object CzechEconomicSyncService {
             )
         )
 
-        // 2. Child 1 Tax Bonus
-        val isChild1Diff = differsBy(current.child1TaxBonusAnnual, live.child1TaxBonusAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Child Tax Framework",
-                label = "Child 1 Tax Bonus",
-                currentValueFormatted = fmtCZK(current.child1TaxBonusAnnual),
-                liveValueFormatted = fmtCZK(live.child1TaxBonusAnnual),
-                isDifferent = isChild1Diff,
-                impactHint = "Annual tax credit reduction for 1st child"
-            )
-        )
+        // 2-4. Income Tax Brackets
+        addDoubleItem("Income Tax", "Base Income Tax Rate (§ 16 ZDP)", current.taxRatePct, live.baseTaxRatePct, 0.05, { fmtPct(it) }, "Statutory 15% base personal income tax rate")
+        addDoubleItem("Income Tax", "Progressive Higher Tax Rate (§ 16 ZDP)", current.taxRateSecondPct, live.progressiveTaxRatePct, 0.05, { fmtPct(it) }, "Higher bracket rate above 36x average wage")
+        addDoubleItem("Progressive Tax Threshold", "23% Tax Bracket Threshold", current.taxSecondBracketThresholdAnnual, live.progressive23ThresholdAnnual, 1.0, { fmtExactCZK(it) }, "36x national average wage")
 
-        // 3. Child 2 Tax Bonus
-        val isChild2Diff = differsBy(current.child2TaxBonusAnnual, live.child2TaxBonusAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Child Tax Framework",
-                label = "Child 2 Tax Bonus",
-                currentValueFormatted = fmtCZK(current.child2TaxBonusAnnual),
-                liveValueFormatted = fmtCZK(live.child2TaxBonusAnnual),
-                isDifferent = isChild2Diff,
-                impactHint = "Annual tax credit reduction for 2nd child"
-            )
-        )
+        // 5-7. Personal & Spouse Tax Credits
+        addDoubleItem("Personal Tax Credits", "Basic Taxpayer Credit", current.taxpayerCreditAnnual, live.taxpayerCreditAnnual, 1.0, { fmtExactCZK(it) }, "Universal personal annual tax credit (§ 35ba(1)(a))")
+        addDoubleItem("Personal Tax Credits", "Spouse Tax Credit", current.spouseTaxCreditAnnual, live.spouseTaxCreditAnnual, 1.0, { fmtExactCZK(it) }, "Annual tax relief for caring spouse (§ 35ba(1)(b))")
+        addDoubleItem("Personal Tax Credits", "Spouse Income Eligibility Limit", current.spouseIncomeLimitAnnual, live.spouseIncomeLimitAnnual, 1.0, { fmtExactCZK(it) }, "Max annual own income to claim spouse credit")
 
-        // 4. Basic Taxpayer Credit
-        val isTaxpayerCreditDiff = differsBy(current.taxpayerCreditAnnual, live.taxpayerCreditAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Personal Tax Credits",
-                label = "Basic Taxpayer Credit",
-                currentValueFormatted = fmtCZK(current.taxpayerCreditAnnual),
-                liveValueFormatted = fmtCZK(live.taxpayerCreditAnnual),
-                isDifferent = isTaxpayerCreditDiff,
-                impactHint = "Universal personal annual tax credit"
-            )
-        )
+        // 8-12. Child Tax Credits & Eligibility
+        addDoubleItem("Child Tax Framework", "Child 1 Tax Bonus", current.child1TaxBonusAnnual, live.child1TaxBonusAnnual, 1.0, { fmtExactCZK(it) }, "Annual tax credit reduction for 1st child")
+        addDoubleItem("Child Tax Framework", "Child 2 Tax Bonus", current.child2TaxBonusAnnual, live.child2TaxBonusAnnual, 1.0, { fmtExactCZK(it) }, "Annual tax credit reduction for 2nd child")
+        addDoubleItem("Child Tax Framework", "Child 3+ Tax Bonus", current.child3PlusTaxBonusAnnual, live.child3PlusTaxBonusAnnual, 1.0, { fmtExactCZK(it) }, "Annual tax credit reduction for 3rd and each further child")
+        addDoubleItem("Child Tax Framework", "Statutory Monthly Minimum Wage", current.minWageMonthly, live.minWageMonthly, 1.0, { fmtExactCZK(it) }, "Baseline for § 35c(4) child tax bonus eligibility")
+        addDoubleItem("Child Tax Framework", "Child Bonus Min-Wage Multiplier", current.childBonusMinWageMultiplier, live.childBonusMinWageMultiplier, 0.05, { String.format(Locale.ROOT, "%.1fx", it) }, "Required annual earnings multiple of monthly min wage")
 
-        // 5. DIP & DPS Combined Tax Deduction Ceiling
-        val isDeductionCeilingDiff = differsBy(current.taxDeductionCeilingAnnual, live.dipDpsCombinedCeilingAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Retirement Deductions",
-                label = "DIP + DPS Combined Tax Deduction",
-                currentValueFormatted = fmtCZK(current.taxDeductionCeilingAnnual),
-                liveValueFormatted = fmtCZK(live.dipDpsCombinedCeilingAnnual),
-                isDifferent = isDeductionCeilingDiff,
-                impactHint = "Saves up to 7 200 Kč (15%) or 11 040 Kč (23%) yearly"
-            )
-        )
-
-        // 6. DPS Subsidy Cap
-        val isYouthSubsidyDiff = differsBy(current.dpsYouthSubsidyMaxMonthly, live.dpsYouthSubsidyMaxMonthly, 1.0)
+        // 13-22. Retirement Tax Shield & DPS Parameters
+        addDoubleItem("Retirement Deductions", "DIP + DPS Combined Tax Deduction", current.taxDeductionCeilingAnnual, live.dipDpsCombinedCeilingAnnual, 1.0, { fmtExactCZK(it) }, "Saves up to 7 200 Kč (15%) or 11 040 Kč (23%) yearly")
+        addDoubleItem("Retirement Tax Shield", "Employer Contribution Exemption Cap", current.employerRetirementExemptionAnnual, live.employerRetirementExemptionAnnual, 1.0, { "${fmtExactCZK(it)}/yr" }, "Tax-exempt annual employer contribution limit (§ 6(9)(m))")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Min Deposit for State Subsidy", current.dpsMinDepositForSubsidy, live.dpsMinDepositForSubsidy, 1.0, { "${fmtExactCZK(it)} monthly" }, "Minimum own monthly DPS contribution for 20% match")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Tax Deduction Monthly Threshold", current.dpsDeductionThresholdMonthly, live.dpsDeductionThresholdMonthly, 1.0, { "${fmtExactCZK(it)} monthly" }, "Monthly deposit threshold above which contributions are tax-deductible")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Standard Subsidy Cap", current.dpsStandardSubsidyMaxMonthly, live.dpsStandardSubsidyMaxMonthly, 1.0, { "${fmtExactCZK(it)} monthly" }, "Max monthly state DPS contribution (standard)")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Subsidy Cap (State Match)", current.dpsYouthSubsidyMaxMonthly, live.dpsYouthSubsidyMaxMonthly, 1.0, { "${fmtExactCZK(it)} monthly" }, "20% state match up to ${fmtExactCZK(live.dpsYouthSubsidyMaxMonthly)} monthly")
         list.add(
             SyncDifferenceItem(
                 category = "Pension Regulations (DPS)",
-                label = "DPS Subsidy Cap (State Match)",
-                currentValueFormatted = "${fmtCZK(current.dpsYouthSubsidyMaxMonthly)} monthly",
-                liveValueFormatted = "${fmtCZK(live.dpsYouthSubsidyMaxMonthly)} monthly",
-                isDifferent = isYouthSubsidyDiff,
-                impactHint = "20% state match up to ${fmtCZK(live.dpsYouthSubsidyMaxMonthly)} monthly"
+                label = "DPS Youth Age Cutoff",
+                currentValueFormatted = "${current.dpsYouthAgeLimit} yrs",
+                liveValueFormatted = "${live.dpsYouthAgeLimit} yrs",
+                isDifferent = current.dpsYouthAgeLimit != live.dpsYouthAgeLimit,
+                impactHint = "Age cutoff for youth DPS tier evaluation"
             )
         )
+        addDoubleItem("Pension Regulations (DPS)", "DPS Standard State Match Rate", current.dpsSubsidyRateStandardPct, live.dpsSubsidyRateStandardPct, 0.05, { fmtPct(it) }, "State matching percentage on eligible DPS deposits")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Youth State Match Rate", current.dpsSubsidyRateYouthPct, live.dpsSubsidyRateYouthPct, 0.05, { fmtPct(it) }, "Youth tier state matching percentage on DPS deposits")
+        addDoubleItem("Pension Regulations (DPS)", "DPS Statutory Management Fee Cap", current.dpsStatutoryFeeCapPct, live.dpsStatutoryFeeCapPct, 0.01, { fmtPct(it, digits = 2) }, "Act No. 427/2011 Coll. § 60(3) annual fee ceiling")
 
-        // 7. Progressive Tax 23% Threshold
-        val isProgThresholdDiff = differsBy(current.taxSecondBracketThresholdAnnual, live.progressive23ThresholdAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Progressive Tax Threshold",
-                label = "23% Tax Bracket Threshold",
-                currentValueFormatted = fmtCZK(current.taxSecondBracketThresholdAnnual),
-                liveValueFormatted = fmtCZK(live.progressive23ThresholdAnnual),
-                isDifferent = isProgThresholdDiff,
-                impactHint = "36x national average wage"
-            )
-        )
-
-        // 8. Parental Allowance Pot
-        val fromDiffers = differsBy(current.parentalAllowanceTotalFromCutoff, live.parentalAllowanceTotalFromCutoff, 1.0)
-        val beforeDiffers = differsBy(current.parentalAllowanceTotalBeforeCutoff, live.parentalAllowanceTotalBeforeCutoff, 1.0)
-        val isParentalDiff = fromDiffers || beforeDiffers
-        val showBeforeDetail = !fromDiffers && beforeDiffers
+        // 23-25. Parental Allowance Framework
+        addDoubleItem("Social & Parental Support", "Parental Benefit Pot (Pre-Cutoff)", current.parentalAllowanceTotalBeforeCutoff, live.parentalAllowanceTotalBeforeCutoff, 1.0, { fmtExactCZK(it) }, "Total state parental allowance for children born before cutoff")
+        addDoubleItem("Social & Parental Support", "Parental Benefit Pot (Post-Cutoff)", current.parentalAllowanceTotalFromCutoff, live.parentalAllowanceTotalFromCutoff, 1.0, { fmtExactCZK(it) }, "${fmtExactCZK(live.parentalAllowanceTotalFromCutoff)} total state benefit entitlement")
         list.add(
             SyncDifferenceItem(
                 category = "Social & Parental Support",
-                label = "Parental Benefit Pot",
-                currentValueFormatted = if (showBeforeDetail) {
-                    "${fmtCZK(current.parentalAllowanceTotalFromCutoff)} (pre-cutoff ${fmtCZK(current.parentalAllowanceTotalBeforeCutoff)})"
-                } else {
-                    fmtCZK(current.parentalAllowanceTotalFromCutoff)
-                },
-                liveValueFormatted = if (showBeforeDetail) {
-                    "${fmtCZK(live.parentalAllowanceTotalFromCutoff)} (pre-cutoff ${fmtCZK(live.parentalAllowanceTotalBeforeCutoff)})"
-                } else {
-                    fmtCZK(live.parentalAllowanceTotalFromCutoff)
-                },
-                isDifferent = isParentalDiff,
-                impactHint = "${fmtCZK(live.parentalAllowanceTotalFromCutoff)} total state benefit entitlement"
-            )
-        )
-
-        // 9. Employer Retirement Exemption
-        val isEmployerDiff = differsBy(current.employerRetirementExemptionAnnual, live.employerRetirementExemptionAnnual, 1.0)
-        list.add(
-            SyncDifferenceItem(
-                category = "Retirement Tax Shield",
-                label = "Employer Contribution Exemption Cap",
-                currentValueFormatted = "${fmtCZK(current.employerRetirementExemptionAnnual)}/yr",
-                liveValueFormatted = "${fmtCZK(live.employerRetirementExemptionAnnual)}/yr",
-                isDifferent = isEmployerDiff,
-                impactHint = "Tax-exempt annual employer contribution limit"
+                label = "Parental Benefit Cutoff Year",
+                currentValueFormatted = current.parentalAllowanceCutoffYear.toString(),
+                liveValueFormatted = live.parentalAllowanceCutoffYear.toString(),
+                isDifferent = current.parentalAllowanceCutoffYear != live.parentalAllowanceCutoffYear,
+                impactHint = "Birth year switching to post-cutoff parental allowance pot"
             )
         )
 
@@ -496,7 +457,7 @@ object CzechEconomicSyncService {
     private fun isValidCurrencyRate(code: String, rate: Double): Boolean {
         if (!rate.isFinite() || rate <= 0.0) return false
         return when (code.uppercase(Locale.ROOT)) {
-            "HUF" -> rate in 0.01..5.0
+            "HUF", "JPY" -> rate in 0.01..5.0
             else -> rate in 1.0..200.0
         }
     }

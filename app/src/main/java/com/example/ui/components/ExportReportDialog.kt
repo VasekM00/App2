@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.FullCalculationState
 import com.example.ui.components.charts.finiteOrZero
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -133,8 +134,8 @@ fun ExportReportDialog(
         appendLine("• Monthly Investments (DCA + Match): ${fmtCZK(snap.monthlyTotalInvesting)} (Savings rate ${String.format(java.util.Locale.ROOT, "%.1f%%", snap.savingsRatePct)})")
         appendLine()
         appendLine("CZECH TAX & PENSION REFORM")
-        appendLine("• DIP Annual Deduction Base: ${fmtCZK(state.taxReturnHelper.retirementDeductionBase)}")
-        appendLine("• DIP Annual Tax Saved: ${fmtCZK(state.taxReturnHelper.dipSaving)}")
+        appendLine("• DIP Annual Deduction Base: ${fmtExactCZK(state.taxReturnHelper.retirementDeductionBase)}")
+        appendLine("• DIP Annual Tax Saved: ${fmtExactCZK(state.taxReturnHelper.dipSaving)}")
         appendLine("• Pension Portfolio (DPS + DIP): ${fmtCZK(state.currentPensionPortfolio)}")
         appendLine("• DPS Annual Fee: ${String.format(java.util.Locale.ROOT, "%.2f", state.settings.dpsAnnualFeePct.finiteOrZero())}%/year (statutory cap ${String.format(java.util.Locale.ROOT, "%.2f", state.settings.dpsStatutoryFeeCapPct.finiteOrZero())}%)")
         appendLine()

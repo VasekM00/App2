@@ -18,8 +18,14 @@ internal object CsvStatementParser {
         """(?:^|\s)(?:pocatecni zustatek|konecny zustatek|ucetni zustatek|celkovy pocet|obraty celkem|celkem obraty|suma obratu|celkem za obdobi|soucet obratu|kreditni obrat|debetni obrat|obrat debet|obrat kredit)(?:\s|$|:)"""
     )
     private val SKIPPED_TX_STATES = setOf(
-        "REVERTED", "FAILED", "DECLINED", "PENDING", "CANCELLED", "CANCELED", "REJECTED", "EXPIRED"
+        "reverted", "failed", "declined", "pending", "cancelled", "canceled", "rejected", "expired",
+        "blocked", "reserved", "void", "voided",
+        "zamitnuto", "zamitnuta", "stornovano", "stornovana", "storno",
+        "cekajici", "ceka", "blokovano", "blokovana", "blokace",
+        "rezervace", "rezervovano", "nezauctovano", "nezauctovana",
+        "neprovedeno", "neprovedena", "zruseno", "zrusena", "odmitnuto", "odmitnuta"
     )
+    private val STATE_SPLIT_REGEX = Regex("""[\s_\-/.]+""")
 
     private data class HeaderRoles(
         val dateIdx: Int = -1,
@@ -183,7 +189,7 @@ internal object CsvStatementParser {
     ): StatementParseSummary {
         val compiledOverrides = CzechMerchantCatalog.compileOverrides(userOverrides)
         val headerBoundary = lines.indexOfFirst { line ->
-            val f = StatementTextDecoder.foldHeader(line)
+            val f = StatementTextDecoder.foldHeader(line.replace("#", ""))
             (f.contains("datum") || f.contains("date")) &&
                 (f.contains("castka") || f.contains("objem") || f.contains("amount") || f.contains("debet") || f.contains("completed"))
         }.let { if (it > 0) it else minOf(lines.size, 25) }
@@ -210,10 +216,10 @@ internal object CsvStatementParser {
             BankType.MBANK -> parseMbankCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
             else -> null
         }
-        if (legacy != null && legacy.transactions.isNotEmpty()) return attachOwnAccountKey(legacy)
+        if (legacy != null && (legacy.transactions.isNotEmpty() || legacy.parseWarning != null)) return attachOwnAccountKey(legacy)
 
         val universal = parseUniversalCsv(lines, bankType, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
-        if (universal.transactions.isNotEmpty()) return attachOwnAccountKey(universal)
+        if (universal.transactions.isNotEmpty() || universal.parseWarning != null) return attachOwnAccountKey(universal)
         return attachOwnAccountKey(
             legacy ?: parseGenericCsv(lines, knownFamilyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
         )
@@ -272,6 +278,7 @@ internal object CsvStatementParser {
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
+        val unknownCurrencies = linkedSetOf<String>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val tokens = StatementTextDecoder.splitLine(lines[i], delimiter)
@@ -281,6 +288,10 @@ internal object CsvStatementParser {
             val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
             val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
             val details = CzechValueParsers.parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            if (details.isUnknownCurrency) {
+                if (dateStr.isNotBlank() && details.originalCurrency.isNotBlank()) unknownCurrencies.add(details.originalCurrency)
+                continue
+            }
             val amount = details.amountInCzk
             val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
             val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
@@ -341,7 +352,11 @@ internal object CsvStatementParser {
             }
         }
         val closingBalance = CzechValueParsers.resolveClosingBalance(balanceWithDates, rawTransactions)
+        val parseWarning = if (unknownCurrencies.isNotEmpty()) {
+            "Skipped transaction(s) with unsupported currency: ${unknownCurrencies.joinToString(", ")}"
+        } else null
         return TransactionCategorizer.buildSummary(BankType.MONETA, rawTransactions, closingBalance)
+            .copy(parseWarning = parseWarning)
     }
 
     private fun parseCsobCsv(
@@ -412,6 +427,7 @@ internal object CsvStatementParser {
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
+        val unknownCurrencies = linkedSetOf<String>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val tokens = StatementTextDecoder.splitLine(lines[i], delimiter)
@@ -421,6 +437,10 @@ internal object CsvStatementParser {
             val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
             val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
             val details = CzechValueParsers.parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            if (details.isUnknownCurrency) {
+                if (dateStr.isNotBlank() && details.originalCurrency.isNotBlank()) unknownCurrencies.add(details.originalCurrency)
+                continue
+            }
             val amount = details.amountInCzk
             val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
             val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
@@ -479,7 +499,11 @@ internal object CsvStatementParser {
             }
         }
         val closingBalance = CzechValueParsers.resolveClosingBalance(balanceWithDates, rawTransactions)
+        val parseWarning = if (unknownCurrencies.isNotEmpty()) {
+            "Skipped transaction(s) with unsupported currency: ${unknownCurrencies.joinToString(", ")}"
+        } else null
         return TransactionCategorizer.buildSummary(BankType.CSOB, rawTransactions, closingBalance)
+            .copy(parseWarning = parseWarning)
     }
 
     private fun parseMbankCsv(
@@ -532,6 +556,7 @@ internal object CsvStatementParser {
 
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
+        val unknownCurrencies = linkedSetOf<String>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val tokens = StatementTextDecoder.splitLine(lines[i], delimiter)
@@ -540,6 +565,10 @@ internal object CsvStatementParser {
             val currencyToken = if (currencyIdx >= 0) tokens.getOrNull(currencyIdx)?.trim()?.uppercase(Locale.ROOT)?.takeIf { it.isNotBlank() } else null
             val detectedCurrency = currencyToken ?: FxRateService.detectCurrency(tokens.getOrNull(amountIdx) ?: "")
             val details = CzechValueParsers.parseCzechAmountDetailed(tokens.getOrNull(amountIdx) ?: "", explicitCurrency = detectedCurrency)
+            if (details.isUnknownCurrency) {
+                if (dateStr.isNotBlank() && details.originalCurrency.isNotBlank()) unknownCurrencies.add(details.originalCurrency)
+                continue
+            }
             val amount = details.amountInCzk
             val origCurr = if (details.originalCurrency != "CZK") details.originalCurrency else null
             val origAmt = if (details.originalCurrency != "CZK") details.originalAmount else null
@@ -598,7 +627,11 @@ internal object CsvStatementParser {
             }
         }
         val closingBalance = CzechValueParsers.resolveClosingBalance(balanceWithDates, rawTransactions)
+        val parseWarning = if (unknownCurrencies.isNotEmpty()) {
+            "Skipped transaction(s) with unsupported currency: ${unknownCurrencies.joinToString(", ")}"
+        } else null
         return TransactionCategorizer.buildSummary(BankType.MBANK, rawTransactions, closingBalance)
+            .copy(parseWarning = parseWarning)
     }
 
     private fun parseUniversalCsv(
@@ -614,7 +647,8 @@ internal object CsvStatementParser {
         var headerIdx = -1
         var roles = HeaderRoles()
         for (i in 0 until minOf(lines.size, 40)) {
-            val cells = StatementTextDecoder.splitLine(lines[i], delimiter).map { StatementTextDecoder.foldHeader(it) }
+            val cells = StatementTextDecoder.splitLine(lines[i], delimiter)
+                .map { StatementTextDecoder.foldHeader(it.trim().trimStart('#')) }
             if (cells.size < 2) continue
             val candidate = inferHeaderRoles(cells)
             val hasAmount = candidate.amountIdx >= 0 || candidate.debitIdx >= 0 || candidate.creditIdx >= 0
@@ -626,8 +660,19 @@ internal object CsvStatementParser {
         }
         if (headerIdx < 0) return TransactionCategorizer.emptySummary(bankType)
 
+        val amountColumnHasSignedNegatives = if (roles.amountIdx >= 0) {
+            ((headerIdx + 1) until minOf(lines.size, headerIdx + 200)).any { rowIdx ->
+                val cell = StatementTextDecoder.splitLine(lines[rowIdx], delimiter)
+                    .getOrNull(roles.amountIdx)?.trim() ?: ""
+                cell.startsWith("-") || cell.startsWith("\u2212") ||
+                    cell.startsWith("\u2013") || cell.startsWith("\u2014") ||
+                    cell.endsWith("-") || (cell.startsWith("(") && cell.endsWith(")"))
+            }
+        } else false
+
         val rawTransactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
+        val unknownCurrencies = linkedSetOf<String>()
 
         for (i in (headerIdx + 1) until lines.size) {
             val line = lines[i]
@@ -635,8 +680,13 @@ internal object CsvStatementParser {
             if (tokens.isEmpty()) continue
 
             if (roles.stateIdx >= 0) {
-                val txState = tokens.getOrNull(roles.stateIdx)?.trim()?.uppercase(Locale.ROOT) ?: ""
-                if (txState in SKIPPED_TX_STATES) continue
+                val txStateFolded = StatementTextDecoder.foldHeader(tokens.getOrNull(roles.stateIdx) ?: "")
+                if (txStateFolded.isNotEmpty()) {
+                    val stateTokens = STATE_SPLIT_REGEX.split(txStateFolded).filter { it.isNotBlank() }
+                    if (txStateFolded in SKIPPED_TX_STATES || stateTokens.any { it in SKIPPED_TX_STATES }) {
+                        continue
+                    }
+                }
             }
 
             val dateStr = extractDateToken(tokens.getOrNull(roles.dateIdx) ?: "")
@@ -663,6 +713,12 @@ internal object CsvStatementParser {
                 val creditDetails = if (roles.creditIdx >= 0) {
                     CzechValueParsers.parseCzechAmountDetailed(tokens.getOrNull(roles.creditIdx) ?: "", explicitCurrency = detectedCurrency)
                 } else null
+                if (debitDetails?.isUnknownCurrency == true || creditDetails?.isUnknownCurrency == true) {
+                    val unk = debitDetails?.takeIf { it.isUnknownCurrency }?.originalCurrency
+                        ?: creditDetails?.takeIf { it.isUnknownCurrency }?.originalCurrency
+                    if (!unk.isNullOrBlank()) unknownCurrencies.add(unk)
+                    continue
+                }
                 val debit = debitDetails?.amountInCzk?.takeIf { it.isFinite() }?.let { kotlin.math.abs(it) } ?: 0.0
                 val credit = creditDetails?.amountInCzk?.takeIf { it.isFinite() }?.let { kotlin.math.abs(it) } ?: 0.0
                 if (debit > 0.0 || credit > 0.0) {
@@ -677,6 +733,10 @@ internal object CsvStatementParser {
             }
             if (amount == 0.0 && roles.amountIdx >= 0) {
                 val details = CzechValueParsers.parseCzechAmountDetailed(rawAmountCell, explicitCurrency = detectedCurrency)
+                if (details.isUnknownCurrency) {
+                    if (details.originalCurrency.isNotBlank()) unknownCurrencies.add(details.originalCurrency)
+                    continue
+                }
                 amount = details.amountInCzk
                 if (details.originalCurrency != "CZK") {
                     origCurr = details.originalCurrency
@@ -684,24 +744,41 @@ internal object CsvStatementParser {
                     usedRate = details.exchangeRate
                 }
             }
+
+            val counterpartyName = tokens.getOrNull(roles.nameIdx)?.trim() ?: ""
+            val message = tokens.getOrNull(roles.messageIdx)?.trim() ?: ""
+            val vs = tokens.getOrNull(roles.vsIdx)?.trim() ?: ""
+            val context = StatementTextDecoder.foldHeader("$counterpartyName $message")
+            if (SUMMARY_FOOTER_REGEX.containsMatchIn(context)) continue
+
             if (amount.isFinite() && amount != 0.0 && roles.directionIdx >= 0) {
-                val direction = StatementTextDecoder.foldHeader(tokens.getOrNull(roles.directionIdx) ?: "")
+                val directionRaw = tokens.getOrNull(roles.directionIdx) ?: ""
+                val direction = StatementTextDecoder.foldHeader(directionRaw)
                 val explicitPositive = rawAmountCell.trimStart().startsWith("+")
-                val isRefundDir = direction.contains("vracen") || direction.contains("vratk") ||
-                    direction.contains("refund") || direction.contains("storn")
-                val isCardPayment = !isRefundDir && (direction.contains("karta") || direction.contains("kartou"))
+                val refundText = StatementTextDecoder.foldHeader("$directionRaw $counterpartyName $message")
+                val isRowRefund = refundText.contains("vracen") || refundText.contains("vratk") ||
+                    refundText.contains("refund") || refundText.contains("storn") ||
+                    refundText.contains("cashback") || refundText.contains("reklamac")
+                val isCardPayment = !isRowRefund && (direction.contains("karta") || direction.contains("kartou"))
+                val isCreditCardDirection = direction.contains("kreditni kart") ||
+                    direction.contains("credit card") ||
+                    direction.contains("kreditkou")
                 val isDebitSign = direction == "d" || direction == "dr" || direction.startsWith("d ") || direction.endsWith(" d")
                 val isCreditSign = direction == "k" || direction == "c" || direction == "kr" || direction == "cr" ||
                     direction.startsWith("k ") || direction.endsWith(" k") || direction.startsWith("c ") || direction.endsWith(" c")
-                val outflow = isDebitSign || (isCardPayment && !explicitPositive) || direction.contains("odchoz") ||
-                    direction.contains("debet") || direction.contains("debit") || direction.contains("vydaj") ||
-                    direction.contains("vydej") || direction.contains("odeps") || direction.contains("na vrub") ||
+                val isPureDebitDirection = isDebitSign || direction.contains("odchoz") ||
+                    (direction.contains("debet") && !direction.contains("kredit")) ||
+                    (direction.contains("debit") && !direction.contains("credit")) ||
+                    direction.contains("vydaj") || direction.contains("vydej") ||
+                    direction.contains("odeps") || direction.contains("na vrub") ||
                     DIR_OUT_WORD_REGEX.containsMatchIn(direction)
-                val inflow = isCreditSign || isRefundDir || direction.contains("prichoz") ||
-                    (!isCardPayment && (direction.contains("kredit") || direction.contains("credit"))) ||
+                val inflow = isCreditSign || isRowRefund || direction.contains("prichoz") ||
+                    (!isCardPayment && !isCreditCardDirection && (direction.contains("kredit") || direction.contains("credit"))) ||
                     direction.contains("prips") || direction.contains("prijem") || direction.contains("vklad") ||
                     DIR_IN_WORD_REGEX.containsMatchIn(direction)
-                if (outflow && !inflow && amount > 0) {
+                if (isPureDebitDirection && !inflow && !isRowRefund && !explicitPositive && amount > 0 &&
+                    (!amountColumnHasSignedNegatives || isPureDebitDirection)
+                ) {
                     amount = -amount
                     if (origAmount != null && origAmount > 0) origAmount = -origAmount
                 }
@@ -719,12 +796,6 @@ internal object CsvStatementParser {
             } else {
                 rawCpAcc
             }
-            val counterpartyName = tokens.getOrNull(roles.nameIdx)?.trim() ?: ""
-            val message = tokens.getOrNull(roles.messageIdx)?.trim() ?: ""
-            val vs = tokens.getOrNull(roles.vsIdx)?.trim() ?: ""
-
-            val context = StatementTextDecoder.foldHeader("$counterpartyName $message")
-            if (SUMMARY_FOOTER_REGEX.containsMatchIn(context)) continue
 
             if (roles.balanceIdx >= 0) {
                 val balCell = tokens.getOrNull(roles.balanceIdx) ?: ""
@@ -770,7 +841,11 @@ internal object CsvStatementParser {
         }
 
         val closingBalance = CzechValueParsers.resolveClosingBalance(balanceWithDates, rawTransactions)
+        val parseWarning = if (unknownCurrencies.isNotEmpty()) {
+            "Skipped transaction(s) with unsupported currency: ${unknownCurrencies.joinToString(", ")}"
+        } else null
         return TransactionCategorizer.buildSummary(bankType, rawTransactions, closingBalance)
+            .copy(parseWarning = parseWarning)
     }
 
     private fun parseGenericCsv(

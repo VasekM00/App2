@@ -338,11 +338,11 @@ fun DcaTrajectoryBarChart(
             val xLabelGap = with(density) { 6.dp.toPx() }
 
             val updateBarScrubber: (Float, Float) -> Unit = { touchX, width ->
-                val chartWidth = (width - paddingLeft - paddingRight).coerceAtLeast(1f) * zoomScale
+                val chartWidth = ((width - paddingLeft - paddingRight).coerceAtLeast(1f)) * zoomScale
                 val relativeX = touchX - paddingLeft - panOffsetX
-                val clickedIdx = if (data.size > 1) {
-                    val stepX = chartWidth / (data.size - 1).toFloat()
-                    if (stepX > 0f) round(relativeX / stepX).toInt().coerceIn(0, data.size - 1) else 0
+                val clickedIdx = if (data.isNotEmpty()) {
+                    val slotW = chartWidth / data.size.toFloat()
+                    if (slotW > 0f) ((relativeX / slotW) - 0.5f).roundToInt().coerceIn(0, data.size - 1) else 0
                 } else 0
                 selectedIndex = clickedIdx
             }
@@ -360,7 +360,8 @@ fun DcaTrajectoryBarChart(
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val downPos = down.position
-                                var moved = false
+                                var movedHorizontally = false
+                                var movedVertically = false
                                 var multiTouch = false
                                 var lastX = downPos.x
                                 while (true) {
@@ -380,13 +381,20 @@ fun DcaTrajectoryBarChart(
                                         pressed.forEach { it.consume() }
                                     } else if (!multiTouch) {
                                         val change = pressed.first()
-                                        val dx = change.position.x - lastX
-                                        val dy = change.position.y - downPos.y
-                                        if (!moved && kotlin.math.abs(change.position.x - downPos.x) > viewConfiguration.touchSlop) {
-                                            moved = true
+                                        if (change.isConsumed) {
+                                            movedVertically = true
                                         }
-                                        if (moved && kotlin.math.abs(change.position.x - downPos.x) >= kotlin.math.abs(dy)) {
+                                        val totalDx = kotlin.math.abs(change.position.x - downPos.x)
+                                        val totalDy = kotlin.math.abs(change.position.y - downPos.y)
+                                        if (!movedHorizontally && totalDy > viewConfiguration.touchSlop && totalDy > totalDx) {
+                                            movedVertically = true
+                                        }
+                                        if (!movedVertically && totalDx > viewConfiguration.touchSlop && totalDx >= totalDy) {
+                                            movedHorizontally = true
+                                        }
+                                        if (movedHorizontally) {
                                             change.consume()
+                                            val dx = change.position.x - lastX
                                             if (zoomScale > 1.01f) {
                                                 val plotW = (size.width - paddingLeft - paddingRight).coerceAtLeast(1f)
                                                 val maxPan = (plotW * (zoomScale - 1f)).coerceAtLeast(0f)
@@ -398,7 +406,7 @@ fun DcaTrajectoryBarChart(
                                         lastX = change.position.x
                                     }
                                 }
-                                if (!moved && !multiTouch) {
+                                if (!movedHorizontally && !movedVertically && !multiTouch) {
                                     updateBarScrubber(downPos.x, size.width.toFloat())
                                 }
                             }
@@ -436,12 +444,12 @@ fun DcaTrajectoryBarChart(
                         )
                     }
 
-                    // X-Axis
+                    // X-Axis (slot-centered geometry prevents clipping first and last bars in half)
                     val chartWidth = plotW * zoomScale
-                    val stepX = if (data.size > 1) chartWidth / (data.size - 1).toFloat() else 0f
-                    val barWidth = if (data.size > 1) (stepX * 0.55f).coerceIn(5f, 28f) else 24f.coerceAtMost(plotW * 0.5f)
-                    fun xForIndex(index: Int): Float = if (data.size > 1) {
-                        paddingLeft + panOffsetX + (index * stepX)
+                    val slotW = if (data.isNotEmpty()) chartWidth / data.size.toFloat() else chartWidth
+                    val barWidth = (slotW * 0.6f).coerceIn(5f, 28f)
+                    fun xForIndex(index: Int): Float = if (data.isNotEmpty()) {
+                        paddingLeft + panOffsetX + (index + 0.5f) * slotW
                     } else {
                         paddingLeft + panOffsetX + (chartWidth / 2f)
                     }
@@ -565,7 +573,7 @@ fun DcaTrajectoryBarChart(
                                 pt.totalPortfolio.finiteOrZero()
                             }
                         },
-                        xForFraction = { frac -> if (data.size > 1) paddingLeft + panOffsetX + (frac * stepX) else xForIndex(0) },
+                        xForFraction = { frac -> paddingLeft + panOffsetX + (frac + 0.5f) * slotW },
                         yPix = ::yPix,
                         plotLeft = paddingLeft,
                         plotRight = w - paddingRight,

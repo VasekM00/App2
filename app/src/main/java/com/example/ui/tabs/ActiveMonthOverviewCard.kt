@@ -64,8 +64,8 @@ import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -524,7 +524,7 @@ internal fun ActiveMonthOverviewCard(
                                 )
                             }
                             Text(
-                                text = fmtCZK(entry.totalNetWorthAtMonthEnd),
+                                text = fmtExactCZK(entry.totalNetWorthAtMonthEnd),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = BodyFontFamily,

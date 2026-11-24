@@ -67,6 +67,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 import kotlin.math.roundToInt
 
@@ -76,6 +77,9 @@ fun OverviewTab(
     state: FullCalculationState,
     ledgerEntries: List<LedgerEntryEntity> = emptyList(),
     onNavigateToIncome: (() -> Unit)? = null,
+    onNavigateToLiving: (() -> Unit)? = null,
+    onNavigateToInvesting: (() -> Unit)? = null,
+    onNavigateToCashFlowOverview: (() -> Unit)? = null,
     onNavigateToProjections: (() -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
@@ -120,11 +124,18 @@ fun OverviewTab(
         accentColor = BrandGold
     )
 
+    val reserveDeductionNote = if (snap.monthlyReserveContribution > 0.0) {
+        " − Reserve (${fmtCZK(snap.monthlyReserveContribution)})"
+    } else ""
     val unallocatedCashInfo = MetricInfo(
         title = "Monthly Unallocated Cash",
         category = "Residual Cash Flow",
-        formulaOrRule = "Unallocated = Take-Home (${fmtCZK(snap.monthlyTakeHomeInflows)}) − Living (${fmtCZK(snap.monthlyLivingCosts)}) − Own Investing (${fmtCZK(snap.monthlyOwnInvesting)})",
-        explanation = "Liquid surplus remaining each month after all living costs and automated ETF/DIP/DPS investments have been funded.",
+        formulaOrRule = "Unallocated = Take-Home (${fmtCZK(snap.monthlyTakeHomeInflows)}) − Living (${fmtCZK(snap.monthlyLivingCosts)}) − Own Investing (${fmtCZK(snap.monthlyOwnInvesting)})$reserveDeductionNote",
+        explanation = if (snap.monthlyReserveContribution > 0.0) {
+            "Liquid surplus remaining each month after all living costs, automated ETF/DIP/DPS investments, and scheduled emergency reserve contributions have been funded."
+        } else {
+            "Liquid surplus remaining each month after all living costs and automated ETF/DIP/DPS investments have been funded."
+        },
         practicalImplication = "This buffer absorbs irregular expenses, builds your emergency fund, or can be swept into extra taxable ETF purchases.",
         accentColor = BrandBlue
     )
@@ -184,7 +195,7 @@ fun OverviewTab(
                 testTagStr = "kpi_monthly_living",
                 info = livingCostInfo,
                 onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToIncome
+                onClick = onNavigateToLiving ?: onNavigateToIncome
             )
         }
 
@@ -209,7 +220,7 @@ fun OverviewTab(
                 testTagStr = "kpi_savings_rate",
                 info = savingsRateInfo,
                 onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToIncome
+                onClick = onNavigateToInvesting ?: onNavigateToProjections ?: onNavigateToIncome
             )
 
             KpiCard(
@@ -221,7 +232,7 @@ fun OverviewTab(
                 testTagStr = "kpi_unallocated_cash",
                 info = unallocatedCashInfo,
                 onShowInfo = { infoState.show(it) },
-                onClick = onNavigateToIncome
+                onClick = onNavigateToCashFlowOverview ?: onNavigateToIncome
             )
         }
 
@@ -248,11 +259,11 @@ fun OverviewTab(
             title = "Pre-60 Liquid Bridge",
             category = "Two-Bucket Liquidity Architecture",
             formulaOrRule = "Required Bridge at FIRE = Annual Living Cost × PV Factor ($fireBridgeYears years to Age 60)",
-            explanation = "In the Czech Republic, DIP and DPS tax-advantaged accounts cannot be accessed without penalty before age 60. Retiring early at age $fireAgeLabel requires ${fmtCZK(fireBridgeRequired)} in liquid taxable investments (Portu / brokerage) to fund the $fireBridgeYears years until age 60 (retiring today requires ${fmtCZK(state.liquidBridgeTo60RequiredToday)}).",
+            explanation = "In the Czech Republic, DIP and DPS tax-advantaged accounts cannot be accessed without penalty before age 60. Retiring early at age $fireAgeLabel requires ${fmtCZK(fireBridgeRequired)} in liquid taxable investments (brokerage ETFs) to fund the $fireBridgeYears years until age 60 (retiring today requires ${fmtCZK(state.liquidBridgeTo60RequiredToday)}).",
             statutoryReference = "§ 15a Act No. 586/1992 Coll. (ZDP) & Act No. 427/2011 Coll.",
             practicalImplication = when {
                 fireBridgeYears <= 0 -> "At your projected FIRE age, pension accounts are already unlocked (age 60+), so no taxable liquid bridge is required."
-                fireBridgeFunded -> "Your liquid Portu balance is projected to fully bridge early retirement for all $fireBridgeYears years to age 60 without tapping locked pension accounts."
+                fireBridgeFunded -> "Your liquid ETF balance is projected to fully bridge early retirement for all $fireBridgeYears years to age 60 without tapping locked pension accounts."
                 else -> "Focus contributions on liquid taxable brokerage to close the projected ${fmtCZK(fireBridgeDeficit)} pre-60 bridge gap."
             },
             accentColor = if (fireBridgeFunded) GoodGreen else BrandGold
@@ -294,9 +305,9 @@ fun OverviewTab(
         val taxRefundTotal = taxHelper.totalIncrementalValue
         val unembeddedChildRefund = maxOf(0.0, taxRefundTotal - taxHelper.spouseCredit - taxHelper.dipSaving)
         val taxReliefParts = buildList {
-            if (taxHelper.spouseCredit > 0.0) add("Partner Credit (${fmtCZK(taxHelper.spouseCredit)})")
-            if (unembeddedChildRefund > 1.0) add("Refundable Child Bonus (${fmtCZK(unembeddedChildRefund)})")
-            if (taxHelper.dipSaving > 0.0) add("DIP & DPS Tax Deduction (${fmtCZK(taxHelper.dipSaving)})")
+            if (taxHelper.spouseCredit > 0.0) add("Partner Credit (${fmtExactCZK(taxHelper.spouseCredit)})")
+            if (unembeddedChildRefund > 1.0) add("Refundable Child Bonus (${fmtExactCZK(unembeddedChildRefund)})")
+            if (taxHelper.dipSaving > 0.0) add("DIP & DPS Tax Deduction (${fmtExactCZK(taxHelper.dipSaving)})")
         }
         val taxFormulaText = if (taxReliefParts.isNotEmpty()) {
             "Spring Refund = ${taxReliefParts.joinToString(" + ")} (Total: ${fmtCZK(taxRefundTotal)}/year)"

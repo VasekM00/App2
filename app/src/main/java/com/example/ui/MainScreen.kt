@@ -525,6 +525,21 @@ fun MainScreen(
                                 ledgerEntries = ledgerEntries,
                                 onNavigateToIncome = {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    targetCashFlowSubTab = 1
+                                    selectedTab = 1
+                                },
+                                onNavigateToLiving = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    targetCashFlowSubTab = 2
+                                    selectedTab = 1
+                                },
+                                onNavigateToInvesting = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    targetProjectionsSubTab = 0
+                                    selectedTab = 2
+                                },
+                                onNavigateToCashFlowOverview = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     targetCashFlowSubTab = 0
                                     selectedTab = 1
                                 },

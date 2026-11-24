@@ -732,7 +732,7 @@ object CrossStatementReconciliationEngine {
             tx.isNetted && idx !in pairedWorkingIndices
         }
 
-        val totalNetted = matchedPairs.sumOf { if (it.amount.isFinite()) it.amount * 2.0 else 0.0 } +
+        val totalNetted = matchedPairs.sumOf { if (it.amount.isFinite()) it.amount else 0.0 } +
             singleSideTransfers.sumOf { if (it.amount.isFinite()) abs(it.amount) else 0.0 }
         val agg = StatementImportCoordinator.aggregateMonthTransactions(workingList)
         val totalInflows = agg.incVaclav + agg.incEleonora + agg.incOther

@@ -79,8 +79,8 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankTransactionType
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.MerchantAnalyticsEngine
 import java.time.LocalDate
 import java.time.ZoneId
@@ -112,7 +112,7 @@ fun MerchantLeaderboardCard(
 ) {
     val haptic = LocalHapticFeedback.current
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    var selectedTimeframeIndex by remember { mutableIntStateOf(0) } // 0 = 30 Days, 1 = 90 Days, 2 = Year to Date
+    var selectedTimeframeIndex by rememberSaveable { mutableIntStateOf(0) } // 0 = 30 Days, 1 = 90 Days, 2 = Year to Date
     val timeframes = listOf("30 Days", "90 Days", "YTD")
     var editingTarget by remember { mutableStateOf<MerchantEditTarget?>(null) }
 
@@ -554,7 +554,7 @@ private fun MerchantRowItem(
                 // Spend & Drift
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = fmtCZK(merchant.totalSpend),
+                        text = fmtExactCZK(merchant.totalSpend),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = BodyFontFamily,

@@ -570,7 +570,8 @@ fun NetWorthChart(
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val downPos = down.position
-                                var moved = false
+                                var movedHorizontally = false
+                                var movedVertically = false
                                 var multiTouch = false
                                 var lastX = downPos.x
                                 while (true) {
@@ -590,13 +591,20 @@ fun NetWorthChart(
                                         pressed.forEach { it.consume() }
                                     } else if (!multiTouch) {
                                         val change = pressed.first()
-                                        val dx = change.position.x - lastX
-                                        val dy = change.position.y - downPos.y
-                                        if (!moved && kotlin.math.abs(change.position.x - downPos.x) > viewConfiguration.touchSlop) {
-                                            moved = true
+                                        if (change.isConsumed) {
+                                            movedVertically = true
                                         }
-                                        if (moved && kotlin.math.abs(change.position.x - downPos.x) >= kotlin.math.abs(dy)) {
+                                        val totalDx = kotlin.math.abs(change.position.x - downPos.x)
+                                        val totalDy = kotlin.math.abs(change.position.y - downPos.y)
+                                        if (!movedHorizontally && totalDy > viewConfiguration.touchSlop && totalDy > totalDx) {
+                                            movedVertically = true
+                                        }
+                                        if (!movedVertically && totalDx > viewConfiguration.touchSlop && totalDx >= totalDy) {
+                                            movedHorizontally = true
+                                        }
+                                        if (movedHorizontally) {
                                             change.consume()
+                                            val dx = change.position.x - lastX
                                             if (zoomScale > 1.01f) {
                                                 val plotW = (size.width - paddingLeft - paddingRight).coerceAtLeast(1f)
                                                 val maxPan = (plotW * (zoomScale - 1f)).coerceAtLeast(0f)
@@ -608,7 +616,7 @@ fun NetWorthChart(
                                         lastX = change.position.x
                                     }
                                 }
-                                if (!moved && !multiTouch) {
+                                if (!movedHorizontally && !movedVertically && !multiTouch) {
                                     updateScrubber(downPos.x, size.width.toFloat())
                                 }
                             }

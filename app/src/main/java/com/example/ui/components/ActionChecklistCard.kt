@@ -65,8 +65,12 @@ fun ActionChecklistCard(
     val haptic = LocalHapticFeedback.current
     var filterMode by rememberSaveable { mutableStateOf("ALL") } // "ALL", "PENDING", "COMPLETED"
 
-    val totalItems = ActionMeta.items.size
-    val pendingCount = totalItems - completedCount
+    val items = androidx.compose.runtime.remember(state.effectiveSettings) {
+        ActionMeta.itemsFor(state.effectiveSettings)
+    }
+    val totalItems = items.size
+    val resolvedCompletedCount = items.count { actionStates["${currentYear}_${it.id}"] == true }
+    val pendingCount = (totalItems - resolvedCompletedCount).coerceAtLeast(0)
 
     val checklistInfo = MetricInfo(
         title = "Strategic Execution Checklist",
@@ -159,7 +163,7 @@ fun ActionChecklistCard(
                     border = BorderStroke(1.dp, GoodGreen.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = "$completedCount / $totalItems DONE",
+                        text = "$resolvedCompletedCount / $totalItems DONE",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = BodyFontFamily,
@@ -181,7 +185,7 @@ fun ActionChecklistCard(
                 listOf(
                     "ALL" to "All ($totalItems)",
                     "PENDING" to "Pending ($pendingCount)",
-                    "COMPLETED" to "Done ($completedCount)"
+                    "COMPLETED" to "Done ($resolvedCompletedCount)"
                 ).forEach { (mode, label) ->
                     val isSelected = filterMode == mode
                     Surface(
@@ -217,7 +221,7 @@ fun ActionChecklistCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val filteredItems = ActionMeta.items.filter { meta ->
+            val filteredItems = items.filter { meta ->
                 val isDone = actionStates["${currentYear}_${meta.id}"] == true
                 when (filterMode) {
                     "PENDING" -> !isDone

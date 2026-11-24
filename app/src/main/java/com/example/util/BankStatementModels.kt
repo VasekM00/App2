@@ -96,7 +96,11 @@ data class StatementParseSummary(
     val transactions: List<ParsedBankTransaction>,
     val isPdfSource: Boolean = false,
     val monthEndBalancesByBank: Map<String, Map<String, Double>> = emptyMap(),
-    val accountKey: String = ""
+    val accountKey: String = "",
+    val openingBalance: Double? = null,
+    val balanceCheckPassed: Boolean? = null,
+    val balanceDiscrepancy: Double? = null,
+    val parseWarning: String? = null
 ) : java.io.Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L

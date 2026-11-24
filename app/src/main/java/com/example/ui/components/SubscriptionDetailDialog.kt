@@ -48,6 +48,7 @@ import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 import com.example.util.RecurringSubscriptionItem
 import java.util.Locale
@@ -56,11 +57,14 @@ import java.util.Locale
 internal fun SubscriptionDetailDialog(
     item: RecurringSubscriptionItem,
     swrPct: Double,
+    safetyBufferPct: Double = 0.0,
     onDismissItem: () -> Unit,
     onClose: () -> Unit
 ) {
     val itemAnnualBurn = item.normalizedMonthlyAmount.finiteOrZero() * 12.0
-    val itemFireCapital = (itemAnnualBurn / (swrPct.finiteOrZero() / 100.0).coerceAtLeast(0.001)).finiteOrZero()
+    val safeBuffer = safetyBufferPct.finiteOrZero().coerceAtLeast(0.0)
+    val bufferMult = 1.0 + safeBuffer / 100.0
+    val itemFireCapital = ((itemAnnualBurn / (swrPct.finiteOrZero() / 100.0).coerceAtLeast(0.001)) * bufferMult).finiteOrZero()
     val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
 
     Dialog(
@@ -128,7 +132,7 @@ internal fun SubscriptionDetailDialog(
                                 style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                             Text(
-                                text = fmtCZK(item.normalizedMonthlyAmount),
+                                text = fmtExactCZK(item.normalizedMonthlyAmount),
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = BodyFontFamily,
@@ -147,7 +151,7 @@ internal fun SubscriptionDetailDialog(
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                             Text(
-                                text = fmtCZK(itemAnnualBurn),
+                                text = fmtExactCZK(itemAnnualBurn),
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = BodyFontFamily
@@ -173,8 +177,9 @@ internal fun SubscriptionDetailDialog(
                                     text = "Dedicated FIRE Capital:",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
                                 )
+                                val bufferNote = if (safeBuffer > 0.0) " (+${fmtPct(safeBuffer, 0)} buffer)" else ""
                                 Text(
-                                    text = "Invested net worth required at ${fmtPct(swrPct)} SWR",
+                                    text = "Invested net worth required at ${fmtPct(swrPct)} SWR$bufferNote",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.sp
@@ -221,7 +226,7 @@ internal fun SubscriptionDetailDialog(
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = BadRed)
                                 )
                                 Text(
-                                    text = "Billed amount rose by +${fmtCZK(item.priceCreepDelta)} (+${String.format(Locale.ROOT, "%.1f", item.priceCreepPct)}%) compared to previous billing (${item.previousMonthlyAmount?.let { fmtCZK(it) } ?: "unknown"}).",
+                                    text = "Billed amount rose by +${fmtExactCZK(item.priceCreepDelta)} (+${fmtPct(item.priceCreepPct, 1)}) compared to previous billing (${item.previousMonthlyAmount?.let { fmtExactCZK(it) } ?: "unknown"}).",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.5.sp

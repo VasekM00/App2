@@ -46,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,10 +73,17 @@ import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.CzechMerchantCatalog
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.MerchantLookupService
 import com.example.util.ParsedBankTransaction
 import kotlinx.coroutines.launch
+
+internal fun bankTransactionTypeSaver(
+    fallback: BankTransactionType = BankTransactionType.UNCATEGORIZED
+): Saver<BankTransactionType, String> = Saver(
+    save = { it.name },
+    restore = { name -> BankTransactionType.entries.firstOrNull { it.name == name } ?: fallback }
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -86,9 +95,14 @@ fun CategoryPickerModal(
     onToggleExclude: (() -> Unit)? = null,
     onBulkExcludeMerchant: (() -> Unit)? = null
 ) {
-    var selectedCategory by remember(tx) { mutableStateOf(tx.category) }
-    var rememberChoice by remember(tx) { mutableStateOf(true) }
-    var applyToAllMatching by remember(tx, matchingMerchantCount) { mutableStateOf(matchingMerchantCount > 1) }
+    val txSaveKey = "${tx.date}|${tx.amount}|${tx.counterpartyName}|${tx.message}"
+    var selectedCategory by rememberSaveable(txSaveKey, stateSaver = bankTransactionTypeSaver(tx.category)) {
+        mutableStateOf(tx.category)
+    }
+    var rememberChoice by rememberSaveable(txSaveKey) { mutableStateOf(true) }
+    var applyToAllMatching by rememberSaveable(txSaveKey, matchingMerchantCount) {
+        mutableStateOf(matchingMerchantCount > 1)
+    }
     val coroutineScope = rememberCoroutineScope()
 
     var isSearchingOnline by remember(tx) { mutableStateOf(false) }
@@ -229,7 +243,7 @@ fun CategoryPickerModal(
                         }
 
                         Text(
-                            text = (if (safeAmount > 0) "+" else "") + fmtCZK(safeAmount),
+                            text = (if (safeAmount > 0) "+" else "") + fmtExactCZK(safeAmount),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,

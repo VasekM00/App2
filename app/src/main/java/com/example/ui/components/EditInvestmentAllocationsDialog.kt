@@ -226,7 +226,7 @@ fun EditInvestmentAllocationsDialog(
                     }
                 }
 
-                // Section 1: Liquid Brokerage / Portu ETF
+                // Section 1: Liquid Brokerage / ETF
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
@@ -234,7 +234,7 @@ fun EditInvestmentAllocationsDialog(
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "1. Liquid ETF Portfolio (Portu / Brokerage)",
+                            text = "1. Liquid ETF Portfolio (Brokerage)",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = BrandTeal,
@@ -252,7 +252,7 @@ fun EditInvestmentAllocationsDialog(
                         OutlinedTextField(
                             value = portuVText,
                             onValueChange = { portuVText = it; errorText = null },
-                            label = { Text("${settings.primaryName} · Portu ETF Monthly") },
+                            label = { Text("${settings.primaryName.ifBlank { "Primary" }} · Liquid ETF Monthly") },
                             suffix = { Text("Kč") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                             singleLine = true,
@@ -263,7 +263,7 @@ fun EditInvestmentAllocationsDialog(
                             OutlinedTextField(
                                 value = portuEText,
                                 onValueChange = { portuEText = it; errorText = null },
-                                label = { Text("${settings.spouseName} · Portu ETF Monthly") },
+                                label = { Text("${settings.spouseName.ifBlank { "Partner" }} · Liquid ETF Monthly") },
                                 suffix = { Text("Kč") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                                 singleLine = true,
@@ -498,7 +498,7 @@ fun EditInvestmentAllocationsDialog(
                         OutlinedTextField(
                             value = liquidBalVText,
                             onValueChange = { liquidBalVText = it; errorText = null },
-                            label = { Text("${settings.primaryName} · Liquid ETF / Portu Balance") },
+                            label = { Text("${settings.primaryName.ifBlank { "Primary" }} · Liquid ETF Balance") },
                             suffix = { Text("Kč") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                             singleLine = true,
@@ -509,7 +509,7 @@ fun EditInvestmentAllocationsDialog(
                             OutlinedTextField(
                                 value = liquidBalEText,
                                 onValueChange = { liquidBalEText = it; errorText = null },
-                                label = { Text("${settings.spouseName} · Liquid ETF / Portu Balance") },
+                                label = { Text("${settings.spouseName.ifBlank { "Partner" }} · Liquid ETF Balance") },
                                 suffix = { Text("Kč") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                                 singleLine = true,
@@ -588,8 +588,10 @@ fun EditInvestmentAllocationsDialog(
                         return p
                     }
 
-                    val portuV = parseNonNeg(portuVText, "${settings.primaryName} Portu ETF Monthly") ?: return@Button
-                    val portuE = if (!isSingle) (parseNonNeg(portuEText, "${settings.spouseName} Portu ETF Monthly") ?: return@Button) else null
+                    val pLabel = settings.primaryName.ifBlank { "Primary" }
+                    val sLabel = settings.spouseName.ifBlank { "Partner" }
+                    val portuV = parseNonNeg(portuVText, "$pLabel Liquid ETF Monthly") ?: return@Button
+                    val portuE = if (!isSingle) (parseNonNeg(portuEText, "$sLabel Liquid ETF Monthly") ?: return@Button) else null
                     val dipV = parseNonNeg(dipVText, "${settings.primaryName} DIP Monthly") ?: return@Button
                     val dipE = if (!isSingle) (parseNonNeg(dipEText, "${settings.spouseName} DIP Monthly") ?: return@Button) else null
                     val dpsV = parseNonNeg(dpsVText, "${settings.primaryName} DPS Monthly") ?: return@Button

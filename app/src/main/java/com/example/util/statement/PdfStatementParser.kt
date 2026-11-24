@@ -16,7 +16,7 @@ internal object PdfStatementParser {
     private val MONETA_REPORT_YEAR_REGEX = Regex("""(?i)výpis\s+z\s+účtu\s+č\.\s*(\d{1,2})/(\d{4})""")
     private val MONETA_MONTH_YEAR_REGEX = Regex("""(?i)měsíc:\s*(\d{1,2})/(\d{4})""")
     private val MONETA_OPENING_BAL_REGEX = Regex("""(?i)(?:počáteční|pocatecni)\s*(?:účetní\s*)?zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
-    private val MONETA_CLOSING_BAL_REGEX = Regex("""(?i)(?:konečný|konecny|účetní|ucetni)\s*zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
+    private val MONETA_CLOSING_BAL_REGEX = Regex("""(?i)(?:konečný|konecny)\s*(?:účetní\s*)?zůstatek[^\d+-]*([+-]?\s*[\d\s\u00A0]+,\d{2})""")
 
     private val CSOB_PERIOD_REGEX = Regex("""(?i)obdob[ií]:\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})""")
     private val CSOB_REPORT_YEAR_REGEX = Regex("""(?i)rok/č\.\s*výpisu:\s*(\d{4})/(\d{1,2})""")
@@ -32,7 +32,7 @@ internal object PdfStatementParser {
     private val MBANK_REPORT_YEAR_REGEX = Regex("""(?i)v[yý]pis\s+[cč]\.?\s*\d+/(\d{4})""")
     private val MBANK_DATE_PATTERN = Regex("""^\s*(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?(?![\p{L}\d])""")
 
-    private val YEAR_202X_REGEX = Regex("""\b(202[0-9])\b""")
+    private val STATEMENT_YEAR_REGEX = Regex("""\b(20[1-9][0-9])\b""")
     private val TX_START_FULL_DATE_REGEX = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(.*)""")
     private val TX_START_SHORT_DATE_REGEX = Regex("""^\s*(\d{1,2})\.(\d{1,2})\.\s+(.*)""")
     private val DATE_BLOCKS_START_REGEX = Regex("""^\s*(\d{1,4})[./-]\s*(\d{1,2})(?:[./-]\s*(\d{2,4}))?(?![\p{L}\d])""")
@@ -43,6 +43,80 @@ internal object PdfStatementParser {
         val lines: List<String>
     )
 
+    private fun resolveShortDateYear(
+        txMonth: Int,
+        statementYear: Int,
+        statementMonth: Int,
+        periodStartYear: Int = 0,
+        periodStartMonth: Int = 0,
+        periodEndYear: Int = 0,
+        periodEndMonth: Int = 0
+    ): Int {
+        if (periodStartYear > 0 && periodEndYear > 0) {
+            return when {
+                periodStartYear == periodEndYear -> {
+                    if (periodStartMonth == 1 && periodEndMonth == 1 && txMonth == 12) periodEndYear - 1
+                    else if (periodStartMonth == 12 && periodEndMonth == 12 && txMonth == 1) periodEndYear + 1
+                    else periodEndYear
+                }
+                periodStartYear < periodEndYear -> {
+                    if (txMonth >= periodStartMonth) periodStartYear else periodEndYear
+                }
+                else -> periodEndYear
+            }
+        }
+        return if (statementYear > 0) {
+            if (statementMonth == 1 && txMonth == 12) statementYear - 1
+            else if (statementMonth == 12 && txMonth == 1) statementYear + 1
+            else statementYear
+        } else {
+            LocalDate.now().year
+        }
+    }
+
+    private fun attachBalanceCheck(
+        summary: StatementParseSummary,
+        openingBalance: Double?,
+        closingBalance: Double?
+    ): StatementParseSummary {
+        val validOpening = openingBalance?.takeIf { it.isFinite() }
+        val validClosing = closingBalance?.takeIf { it.isFinite() }
+        if (validOpening == null || validClosing == null || summary.transactions.isEmpty()) {
+            return summary.copy(openingBalance = validOpening)
+        }
+        val expectedClosing = validOpening + summary.transactions.sumOf { it.amount }
+        val diff = expectedClosing - validClosing
+        return if (kotlin.math.abs(diff) <= 0.05) {
+            summary.copy(
+                openingBalance = validOpening,
+                balanceCheckPassed = true,
+                balanceDiscrepancy = 0.0
+            )
+        } else {
+            val signedDiff = String.format(Locale.ROOT, "%+.2f", diff)
+            val warningMsg = "Balance checksum mismatch: opening + transactions differs from closing by $signedDiff CZK"
+            val combinedWarning = if (summary.parseWarning.isNullOrBlank()) warningMsg else "${summary.parseWarning} | $warningMsg"
+            summary.copy(
+                openingBalance = validOpening,
+                balanceCheckPassed = false,
+                balanceDiscrepancy = diff,
+                parseWarning = combinedWarning
+            )
+        }
+    }
+
+    private fun diagnosticWarningFor(extraction: PdfTextExtractor.PdfExtractionResult): String? {
+        return when {
+            extraction.diagnostic == PdfTextExtractor.PdfExtractionDiagnostic.ENCRYPTED_PDF || extraction.isEncrypted ->
+                "This PDF is password-protected or encrypted. Export as CSV, ABO/GPC, or an unencrypted PDF from your bank."
+            extraction.diagnostic == PdfTextExtractor.PdfExtractionDiagnostic.OBJECT_STREAM_OR_UNSUPPORTED_COMPRESSION || extraction.hasObjectStreams ->
+                "This PDF uses compressed object streams (/ObjStm) or unsupported compression. Export as CSV, ABO/GPC, or standard PDF."
+            extraction.diagnostic == PdfTextExtractor.PdfExtractionDiagnostic.SCANNED_OR_IMAGE_ONLY ->
+                "This PDF appears to contain scanned images without selectable text. Export as CSV, ABO/GPC, or text PDF."
+            else -> null
+        }
+    }
+
     fun parsePdfStatement(
         pdfBytes: ByteArray,
         knownFamilyAccounts: Set<String> = emptySet(),
@@ -50,9 +124,13 @@ internal object PdfStatementParser {
         householdNames: Collection<String> = emptyList(),
         knownParentalGiftAccounts: Set<String> = emptySet()
     ): StatementParseSummary {
-        val extractedText = PdfTextExtractor.extractText(pdfBytes)
+        val extraction = PdfTextExtractor.extractTextDetailed(pdfBytes)
+        val extractedText = extraction.text
         if (extractedText.isBlank()) {
-            return TransactionCategorizer.emptySummary(BankType.GENERIC).copy(isPdfSource = true)
+            return TransactionCategorizer.emptySummary(BankType.GENERIC).copy(
+                isPdfSource = true,
+                parseWarning = diagnosticWarningFor(extraction)
+            )
         }
 
         val lines = extractedText.lines().map { it.trim() }.filter { it.isNotBlank() }
@@ -69,9 +147,15 @@ internal object PdfStatementParser {
         val ownAccountKey = parsed.accountKey.ifBlank {
             CzechValueParsers.extractOwnStatementAccountKey(lines, bankCode = ownBankCode, limitLines = 35)
         }
+        val finalWarning = if (parsed.transactions.isEmpty() && parsed.parseWarning.isNullOrBlank()) {
+            diagnosticWarningFor(extraction)
+        } else {
+            parsed.parseWarning
+        }
         return parsed.copy(
             isPdfSource = true,
             accountKey = ownAccountKey,
+            parseWarning = finalWarning,
             transactions = if (ownAccountKey.isNotBlank()) {
                 parsed.transactions.map { if (it.accountKey.isBlank()) it.copy(accountKey = ownAccountKey) else it }
             } else {
@@ -109,11 +193,19 @@ internal object PdfStatementParser {
     ): StatementParseSummary {
         var statementYear = 0
         var statementMonth = 0
+        var periodStartYear = 0
+        var periodStartMonth = 0
+        var periodEndYear = 0
+        var periodEndMonth = 0
 
         val periodMatch = MONETA_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
-            statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
-            statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodStartMonth = periodMatch.groupValues[2].toIntOrNull() ?: 0
+            periodStartYear = periodMatch.groupValues[3].toIntOrNull() ?: 0
+            periodEndMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodEndYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
+            statementYear = periodEndYear
+            statementMonth = periodEndMonth
         }
         if (statementYear == 0) {
             val reportMatch = MONETA_REPORT_YEAR_REGEX.find(fullText)
@@ -130,17 +222,21 @@ internal object PdfStatementParser {
             }
         }
         if (statementYear == 0) {
-            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = STATEMENT_YEAR_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: LocalDate.now().year
         }
 
-        val ym = if (statementYear > 0 && statementMonth in 1..12) {
+        val isSingleMonthPeriod = (periodStartYear == 0 || periodEndYear == 0) ||
+            (periodStartYear == periodEndYear && periodStartMonth == periodEndMonth)
+        val ym = if (isSingleMonthPeriod && statementYear > 0 && statementMonth in 1..12) {
             String.format(Locale.ROOT, "%04d-%02d", statementYear, statementMonth)
         } else null
 
         val openMatch = MONETA_OPENING_BAL_REGEX.find(fullText)
-        if (openMatch != null) {
-            CzechValueParsers.parseCzechAmount(openMatch.groupValues[1])
+        val openingBalance = if (openMatch != null) {
+            CzechValueParsers.parseCzechAmount(openMatch.groupValues[1]).takeIf { it.isFinite() }
+        } else {
+            CzechValueParsers.extractOpeningBalance(fullText, lines)
         }
 
         var closingBalance = CzechValueParsers.extractClosingBalance(fullText, lines)
@@ -206,11 +302,15 @@ internal object PdfStatementParser {
                 currentBlock?.let { blocks.add(it) }
                 val d = matchShort.groupValues[1].toInt()
                 val m = matchShort.groupValues[2].toInt()
-                val y = if (statementYear > 0) {
-                    if (statementMonth == 1 && m == 12) statementYear - 1
-                    else if (statementMonth == 12 && m == 1) statementYear + 1
-                    else statementYear
-                } else LocalDate.now().year
+                val y = resolveShortDateYear(
+                    txMonth = m,
+                    statementYear = statementYear,
+                    statementMonth = statementMonth,
+                    periodStartYear = periodStartYear,
+                    periodStartMonth = periodStartMonth,
+                    periodEndYear = periodEndYear,
+                    periodEndMonth = periodEndMonth
+                )
                 currentBlock = MonetaBlock(d, m, y, matchShort.groupValues[3])
             } else {
                 currentBlock?.detailLines?.add(trimmed)
@@ -280,7 +380,11 @@ internal object PdfStatementParser {
         val finalTransactions = transactions.ifEmpty {
             extractTransactionsFromPdfBlocks(lines, familyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts)
         }
-        return TransactionCategorizer.buildSummary(BankType.MONETA, finalTransactions, closingBalance, forcedYearMonth = ym)
+        return attachBalanceCheck(
+            summary = TransactionCategorizer.buildSummary(BankType.MONETA, finalTransactions, closingBalance, forcedYearMonth = ym),
+            openingBalance = openingBalance,
+            closingBalance = closingBalance
+        )
     }
 
     private fun parseCsobPdf(
@@ -293,11 +397,19 @@ internal object PdfStatementParser {
     ): StatementParseSummary {
         var statementYear = 0
         var statementMonth = 0
+        var periodStartYear = 0
+        var periodStartMonth = 0
+        var periodEndYear = 0
+        var periodEndMonth = 0
 
         val periodMatch = CSOB_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
-            statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
-            statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodStartMonth = periodMatch.groupValues[2].toIntOrNull() ?: 0
+            periodStartYear = periodMatch.groupValues[3].toIntOrNull() ?: 0
+            periodEndMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodEndYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
+            statementYear = periodEndYear
+            statementMonth = periodEndMonth
         }
         if (statementYear == 0) {
             val reportMatch = CSOB_REPORT_YEAR_REGEX.find(fullText)
@@ -307,14 +419,17 @@ internal object PdfStatementParser {
             }
         }
         if (statementYear == 0) {
-            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = STATEMENT_YEAR_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: LocalDate.now().year
         }
 
-        val ym = if (statementYear > 0 && statementMonth in 1..12) {
+        val isSingleMonthPeriod = (periodStartYear == 0 || periodEndYear == 0) ||
+            (periodStartYear == periodEndYear && periodStartMonth == periodEndMonth)
+        val ym = if (isSingleMonthPeriod && statementYear > 0 && statementMonth in 1..12) {
             String.format(Locale.ROOT, "%04d-%02d", statementYear, statementMonth)
         } else null
 
+        val openingBalance = CzechValueParsers.extractOpeningBalance(fullText, lines)
         var closingBalance = CzechValueParsers.extractClosingBalance(fullText, lines)
 
         fun isCsobNoise(line: String): Boolean {
@@ -389,11 +504,15 @@ internal object PdfStatementParser {
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
 
         for (block in blocks) {
-            var txYear = block.explicitYear ?: statementYear
-            if (block.explicitYear == null) {
-                if (statementMonth == 1 && block.month == 12) txYear = statementYear - 1
-                else if (statementMonth == 12 && block.month == 1) txYear = statementYear + 1
-            }
+            val txYear = block.explicitYear ?: resolveShortDateYear(
+                txMonth = block.month,
+                statementYear = statementYear,
+                statementMonth = statementMonth,
+                periodStartYear = periodStartYear,
+                periodStartMonth = periodStartMonth,
+                periodEndYear = periodEndYear,
+                periodEndMonth = periodEndMonth
+            )
             val dateStr = CzechValueParsers.safeIsoDate(txYear, block.month, block.day) ?: continue
 
             val headerAmounts = CzechValueParsers.extractAllAmountsWithCurrency(block.headerLine)
@@ -560,7 +679,11 @@ internal object PdfStatementParser {
                 ?: balanceWithDates.lastOrNull()?.second
         }
 
-        return TransactionCategorizer.buildSummary(BankType.CSOB, finalTransactions, closingBalance, forcedYearMonth = ym)
+        return attachBalanceCheck(
+            summary = TransactionCategorizer.buildSummary(BankType.CSOB, finalTransactions, closingBalance, forcedYearMonth = ym),
+            openingBalance = openingBalance,
+            closingBalance = closingBalance
+        )
     }
 
     private fun parseMbankPdf(
@@ -573,11 +696,19 @@ internal object PdfStatementParser {
     ): StatementParseSummary {
         var statementYear = 0
         var statementMonth = 0
+        var periodStartYear = 0
+        var periodStartMonth = 0
+        var periodEndYear = 0
+        var periodEndMonth = 0
 
         val periodMatch = MBANK_PERIOD_REGEX.find(fullText)
         if (periodMatch != null) {
-            statementYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
-            statementMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodStartMonth = periodMatch.groupValues[2].toIntOrNull() ?: 0
+            periodStartYear = periodMatch.groupValues[3].toIntOrNull() ?: 0
+            periodEndMonth = periodMatch.groupValues[5].toIntOrNull() ?: 0
+            periodEndYear = periodMatch.groupValues[6].toIntOrNull() ?: 0
+            statementYear = periodEndYear
+            statementMonth = periodEndMonth
         }
         if (statementYear == 0) {
             val myMatch = MBANK_MONTH_YEAR_REGEX.find(fullText)
@@ -600,14 +731,17 @@ internal object PdfStatementParser {
             }
         }
         if (statementYear == 0) {
-            val yearInText = YEAR_202X_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
+            val yearInText = STATEMENT_YEAR_REGEX.find(fullText)?.groupValues?.get(1)?.toIntOrNull()
             statementYear = yearInText ?: LocalDate.now().year
         }
 
-        val ym = if (statementYear > 0 && statementMonth in 1..12) {
+        val isSingleMonthPeriod = (periodStartYear == 0 || periodEndYear == 0) ||
+            (periodStartYear == periodEndYear && periodStartMonth == periodEndMonth)
+        val ym = if (isSingleMonthPeriod && statementYear > 0 && statementMonth in 1..12) {
             String.format(Locale.ROOT, "%04d-%02d", statementYear, statementMonth)
         } else null
 
+        val openingBalance = CzechValueParsers.extractOpeningBalance(fullText, lines)
         var closingBalance = CzechValueParsers.extractClosingBalance(fullText, lines)
         val transactions = mutableListOf<ParsedBankTransaction>()
         val balanceWithDates = mutableListOf<Pair<String, Double>>()
@@ -643,12 +777,15 @@ internal object PdfStatementParser {
                 val y = when {
                     rawY != null && rawY in 1000..9999 -> rawY
                     rawY != null && rawY in 0..99 -> 2000 + rawY
-                    statementYear > 0 -> {
-                        if (statementMonth == 1 && m == 12) statementYear - 1
-                        else if (statementMonth == 12 && m == 1) statementYear + 1
-                        else statementYear
-                    }
-                    else -> statementYear
+                    else -> resolveShortDateYear(
+                        txMonth = m,
+                        statementYear = statementYear,
+                        statementMonth = statementMonth,
+                        periodStartYear = periodStartYear,
+                        periodStartMonth = periodStartMonth,
+                        periodEndYear = periodEndYear,
+                        periodEndMonth = periodEndMonth
+                    )
                 }
                 val isoDate = CzechValueParsers.safeIsoDate(y, m, d)
                 if (isoDate != null) {
@@ -738,7 +875,11 @@ internal object PdfStatementParser {
             closingBalance = CzechValueParsers.resolveClosingBalance(balanceWithDates, transactions)
         }
 
-        return TransactionCategorizer.buildSummary(BankType.MBANK, transactions, closingBalance, forcedYearMonth = ym)
+        return attachBalanceCheck(
+            summary = TransactionCategorizer.buildSummary(BankType.MBANK, transactions, closingBalance, forcedYearMonth = ym),
+            openingBalance = openingBalance,
+            closingBalance = closingBalance
+        )
     }
 
     private fun parseGenericPdf(
@@ -750,11 +891,16 @@ internal object PdfStatementParser {
         householdNames: Collection<String>,
         knownParentalGiftAccounts: Set<String>
     ): StatementParseSummary {
+        val openingBalance = CzechValueParsers.extractOpeningBalance(fullText, lines)
         val closingBalance = CzechValueParsers.extractClosingBalance(fullText, lines)
         val transactions = extractTransactionsFromPdfBlocks(
             lines, familyAccounts, compiledOverrides, householdNames, knownParentalGiftAccounts
         )
-        return TransactionCategorizer.buildSummary(bankType, transactions, closingBalance)
+        return attachBalanceCheck(
+            summary = TransactionCategorizer.buildSummary(bankType, transactions, closingBalance),
+            openingBalance = openingBalance,
+            closingBalance = closingBalance
+        )
     }
 
     private fun groupLinesIntoDateBlocks(lines: List<String>): List<DateBlock> {
@@ -763,7 +909,7 @@ internal object PdfStatementParser {
         val currentLines = mutableListOf<String>()
 
         val inferredYear = lines.asSequence().mapNotNull { line ->
-            YEAR_202X_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull()
+            STATEMENT_YEAR_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull()
         }.firstOrNull() ?: LocalDate.now().year
 
         val hasDateStartLines = lines.any { line ->

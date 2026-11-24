@@ -41,7 +41,7 @@ import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.roundToInt
 
 @Composable
@@ -135,7 +135,7 @@ fun YtdTaxShieldTrackerCard(
                             Spacer(modifier = Modifier.width(4.dp))
                         }
                         Text(
-                            text = if (status.isCeilingReached) "Maxed Out!" else "${status.ytdProgressPct.roundToInt()}%",
+                            text = if (status.isCeilingReached) "Maxed Out!" else "${status.ytdProgressPct.finiteOrZero().coerceIn(0.0, 999.0).roundToInt()}%",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -188,7 +188,7 @@ fun YtdTaxShieldTrackerCard(
                             softWrap = true
                         )
                         Text(
-                            text = fmtCZK(status.ytdTotalContributed),
+                            text = fmtExactCZK(status.ytdTotalContributed),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -197,7 +197,7 @@ fun YtdTaxShieldTrackerCard(
                             )
                         )
                         Text(
-                            text = "Annual cap: ${fmtCZK(status.statutoryCeilingAnnual)}",
+                            text = "Annual cap: ${fmtExactCZK(status.statutoryCeilingAnnual)}",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                                 fontFamily = BodyFontFamily,
@@ -217,7 +217,7 @@ fun YtdTaxShieldTrackerCard(
                             softWrap = true
                         )
                         Text(
-                            text = fmtCZK(status.taxRefundSecured15Pct.finiteOrZero()),
+                            text = fmtExactCZK(status.taxRefundSecured15Pct.finiteOrZero()),
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -226,7 +226,7 @@ fun YtdTaxShieldTrackerCard(
                             )
                         )
                         Text(
-                            text = "23% bracket: ${fmtCZK(status.taxRefundSecured23Pct.finiteOrZero())}",
+                            text = "23% bracket: ${fmtExactCZK(status.taxRefundSecured23Pct.finiteOrZero())}",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                                 fontFamily = BodyFontFamily,
@@ -258,7 +258,7 @@ fun YtdTaxShieldTrackerCard(
                                 )
                             )
                             Text(
-                                text = fmtCZK(status.ytdDipContributed),
+                                text = fmtExactCZK(status.ytdDipContributed),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = BodyFontFamily,
@@ -275,7 +275,7 @@ fun YtdTaxShieldTrackerCard(
                                 )
                             )
                             Text(
-                                text = fmtCZK(status.ytdDpsContributed),
+                                text = fmtExactCZK(status.ytdDpsContributed),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = BodyFontFamily,
@@ -306,7 +306,7 @@ fun YtdTaxShieldTrackerCard(
                 ) {
                     if (status.isCeilingReached) {
                         Text(
-                            text = "Maximum annual ${fmtCZK(status.statutoryCeilingAnnual.finiteOrZero())} tax shield fully utilized! Maximum tax refund secured.",
+                            text = "Maximum annual ${fmtExactCZK(status.statutoryCeilingAnnual.finiteOrZero())} tax shield fully utilized! Maximum tax refund secured.",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = GoodGreen,
@@ -316,7 +316,7 @@ fun YtdTaxShieldTrackerCard(
                     } else {
                         Column {
                             Text(
-                                text = "Remaining Headroom: ${fmtCZK(status.remainingHeadroomAnnual.finiteOrZero())}",
+                                text = "Remaining Headroom: ${fmtExactCZK(status.remainingHeadroomAnnual.finiteOrZero())}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = BodyFontFamily,
@@ -326,7 +326,7 @@ fun YtdTaxShieldTrackerCard(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Recommended pace: ${fmtCZK(status.recommendedMonthlyPace.finiteOrZero())}/month (${status.monthsRemainingInYear} months left until Dec 31)",
+                                text = "Recommended pace: ${fmtExactCZK(status.recommendedMonthlyPace.finiteOrZero())}/month (${status.monthsRemainingInYear} months left until Dec 31)",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 10.5.sp
@@ -401,7 +401,7 @@ fun YtdTaxShieldTrackerCard(
                                         text = when {
                                             isOpt -> "OPTIMIZED"
                                             isNa -> "N/A"
-                                            potentialSaving > 0.0 -> "+${fmtCZK(potentialSaving)}"
+                                            potentialSaving > 0.0 -> "+${fmtExactCZK(potentialSaving)}"
                                             else -> "REVIEW"
                                         },
                                         style = MaterialTheme.typography.labelSmall.copy(

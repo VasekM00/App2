@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +51,7 @@ import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.OnBrandTeal
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.parseUserAmountOrNull
 
 sealed class BillEditSource {
@@ -96,7 +97,7 @@ internal fun EditUpcomingBillDialog(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Monthly debit: ${fmtCZK(src.amount)} around day ${src.dayOfMonth}. of each month (merchant key: ${src.merchantKey}).",
+                            text = "Monthly debit: ${fmtExactCZK(src.amount)} around day ${src.dayOfMonth}. of each month (merchant key: ${src.merchantKey}).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -132,8 +133,8 @@ internal fun EditUpcomingBillDialog(
 
         is BillEditSource.BudgetField -> {
             if (settings == null || (onUpdateSettings == null && onReduceSettings == null)) return
-            var amountText by remember(bill.id) { mutableStateOf(src.currentAmount.toLong().toString()) }
-            var errorText by remember(bill.id) { mutableStateOf<String?>(null) }
+            var amountText by rememberSaveable(bill.id) { mutableStateOf(src.currentAmount.toLong().toString()) }
+            var errorText by rememberSaveable(bill.id) { mutableStateOf<String?>(null) }
 
             AlertDialog(
                 onDismissRequest = onDismiss,
@@ -324,10 +325,10 @@ internal fun CustomBillEditorDialog(
     onSave: (name: String, amount: Double, dayOfMonth: Int) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
-    var nameText by remember(initialName) { mutableStateOf(initialName) }
-    var amountText by remember(initialAmount) { mutableStateOf(if (initialAmount > 0.0) initialAmount.toLong().toString() else "") }
-    var selectedDay by remember(initialDayOfMonth) { mutableIntStateOf(initialDayOfMonth.coerceIn(1, 28)) }
-    var errorText by remember { mutableStateOf<String?>(null) }
+    var nameText by rememberSaveable(initialName) { mutableStateOf(initialName) }
+    var amountText by rememberSaveable(initialAmount) { mutableStateOf(if (initialAmount > 0.0) initialAmount.toLong().toString() else "") }
+    var selectedDay by rememberSaveable(initialDayOfMonth) { mutableIntStateOf(initialDayOfMonth.coerceIn(1, 28)) }
+    var errorText by rememberSaveable { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

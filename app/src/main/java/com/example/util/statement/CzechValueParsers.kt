@@ -10,15 +10,15 @@ internal object CzechValueParsers {
     val DIGITS_SPACE_ONLY_REGEX = Regex("""^\d+(\s+\d+)*$""")
 
     private val AMOUNT_REGEX = Regex(
-        """(?<![\p{L}\d])([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})*(?:,\d{2}|\.\d{2}(?![.\d]))|\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,3}(?:,\d{3})+\.\d{2}(?![.\d])|\d+(?:,\d{2}|\.\d{2}(?![.\d]))))\s*(CZK|Kč|Kc|EUR|€|USD|\$|GBP|£|PLN|zł|zl|CHF|HUF|Ft)?\s*([+\-\u2212\u2013\u2014])?(?![\p{L}\d])""",
+        """(?<![\p{L}\d])([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})*(?:,\d{2}|\.\d{2}(?![.\d]))|\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,3}(?:,\d{3})+\.\d{2}(?![.\d])|\d+(?:,\d{2}|\.\d{2}(?![.\d]))))\s*(CZK|Kč|Kc|EUR|€|CA\$|C\$|AU\$|A\$|USD|\$|GBP|£|PLN|zł|zl|CHF|HUF|Ft|JPY|¥|SEK|NOK|DKK|CAD|AUD)?\s*([+\-\u2212\u2013\u2014])?(?![\p{L}\d])""",
         RegexOption.IGNORE_CASE
     )
     private val WHOLE_CURRENCY_REGEX = Regex(
-        """(?<![\p{L}\d])([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})+|\d+))\s*(CZK|Kč|Kc|EUR|€|USD|\$|GBP|£|PLN|zł|zl|CHF|HUF|Ft)(?![\p{L}\d])""",
+        """(?<![\p{L}\d])([+\-\u2212\u2013\u2014]?\s*(?:\d{1,3}(?:[\s\u00A0\u202F]\d{3})+|\d+))\s*(CZK|Kč|Kc|EUR|€|CA\$|C\$|AU\$|A\$|USD|\$|GBP|£|PLN|zł|zl|CHF|HUF|Ft|JPY|¥|SEK|NOK|DKK|CAD|AUD)(?![\p{L}\d])""",
         RegexOption.IGNORE_CASE
     )
     private val CURRENCY_STRIP_REGEX = Regex(
-        """(?i)(?<![\p{L}])(?:czk|kč|kc|eur|usd|gbp|pln|chf|huf|zł|zl|ft)(?![\p{L}])"""
+        """(?i)(?<![\p{L}])(?:czk|kč|kc|eur|usd|gbp|pln|chf|huf|jpy|sek|nok|dkk|cad|aud|zł|zl|ft)(?![\p{L}])"""
     )
 
     private val ACC_SLASH_REGEX = Regex("""(?<!\d)(?:\d{1,6}-)?\d{1,10}/\d{4}(?!\d)""")
@@ -31,18 +31,41 @@ internal object CzechValueParsers {
     private val VS_EXTRACT_REGEX = Regex("""(?i)(?<![\p{L}\d])(?:vs|v\.s\.|var(?:iabiln[ií])?\s*symbol)[:\s]*(\d{1,10})(?![\p{L}\d])""")
 
     private val AMOUNT_STRIP_WS_REGEX = Regex("""[\p{Z}\s\u200B-\u200D\u00AD\uFEFF]""")
-    private val MULTI_COMMA_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(,\d{3})+$""")
-    private val MULTI_DOT_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(\.\d{3})+$""")
+    private val MULTI_COMMA_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(,\d{3}){2,}$""")
+    private val MULTI_DOT_THOUSANDS_REGEX = Regex("""^-?[1-9]\d{0,2}(\.\d{3}){2,}$""")
     private val ISO_TIME_SUFFIX_REGEX = Regex("""(?<=\d)T\d.*$""")
     private val TRAILING_TIME_REGEX = Regex("""\s+\d{1,2}:\d{2}(:\d{2})?.*$""")
+    private val SHORT_DATE_DECIMAL_REGEX = Regex("""^(\d{1,2})\.(\d{2})$""")
+    private val KREDIT_INFLOW_REGEX = Regex("""\bkredit(?!ni\s+kart|\s+kart)\b""")
+    private val CREDIT_INFLOW_REGEX = Regex("""\bcredit(?!\s+card)\b""")
+    private val STANDALONE_AMOUNT_TRAILING_ISO_REGEX = Regex("""^\s*[+\-\u2212\u2013\u2014(\s]*[\d\s\u00A0\u202F.,]+[)\s+\-\u2212\u2013\u2014]*\s+([A-Z]{3})\s*$""")
+    private val STANDALONE_AMOUNT_LEADING_ISO_REGEX = Regex("""^\s*([A-Z]{3})\s+[+\-\u2212\u2013\u2014(\s]*[\d\s\u00A0\u202F.,]+[)\s+\-\u2212\u2013\u2014]*\s*$""")
 
-    private val CLOSING_BALANCE_KEYWORDS = listOf(
+    private val EXPLICIT_CLOSING_BALANCE_KEYWORDS = listOf(
+        "konecny ucetni zustatek",
         "konecny zustatek",
-        "ucetni zustatek",
         "zustatek ke konci",
         "zustatek na konci",
         "konecny stav",
+        "closing balance"
+    )
+    private val FALLBACK_CLOSING_BALANCE_KEYWORDS = listOf(
+        "ucetni zustatek",
         "zustatek k"
+    )
+    private val OPENING_BALANCE_EXCLUDE_KEYWORDS = listOf(
+        "pocatecni",
+        "pocatek",
+        "opening",
+        "minuly zustatek",
+        "predchozi zustatek"
+    )
+    private val OPENING_BALANCE_KEYWORDS = listOf(
+        "pocatecni ucetni zustatek",
+        "pocatecni zustatek",
+        "pocatecni stav",
+        "zustatek na zacatku",
+        "opening balance"
     )
 
     fun safeIsoDate(year: Int, month: Int, day: Int): String? {
@@ -54,21 +77,29 @@ internal object CzechValueParsers {
         }
     }
 
+    private fun normalizeAccountBody(rawBody: String): String {
+        if (rawBody.isEmpty()) return ""
+        if (rawBody.all { it == '0' || it == '-' }) return ""
+        val parts = rawBody.split("-")
+            .map { it.trimStart('0').ifEmpty { "0" } }
+            .filter { it.isNotEmpty() }
+        if (parts.isEmpty()) return ""
+        return if (parts.size >= 2 && parts[0] == "0") {
+            parts.drop(1).joinToString("-")
+        } else {
+            parts.joinToString("-")
+        }
+    }
+
     fun canonicalAccountKey(rawAccount: String): String {
         val stripped = rawAccount.replace(" ", "").lowercase(Locale.ROOT).trim()
         if (stripped.isEmpty()) return ""
         val slashIdx = stripped.indexOf('/')
-        if (slashIdx == -1) return stripped.replace("-", "").trimStart('0')
+        if (slashIdx == -1) return normalizeAccountBody(stripped)
         val accPart = stripped.substring(0, slashIdx)
         val bankPart = stripped.substring(slashIdx + 1)
-        val parts = accPart.split("-")
-            .map { it.trimStart('0').ifEmpty { "0" } }
-            .filter { it.isNotEmpty() }
-        val normalizedAcc = if (parts.size >= 2 && parts[0] == "0") {
-            parts.drop(1).joinToString("")
-        } else {
-            parts.joinToString("")
-        }
+        val normalizedAcc = normalizeAccountBody(accPart)
+        if (normalizedAcc.isEmpty()) return ""
         return "$normalizedAcc/$bankPart"
     }
 
@@ -97,17 +128,65 @@ internal object CzechValueParsers {
     }
 
     fun extractClosingBalance(fullText: String, lines: List<String>): Double? {
+        // Pass 1: explicit closing keywords, excluding opening-balance lines
         for (line in lines) {
             val folded = StatementTextDecoder.foldHeader(line)
-            if (CLOSING_BALANCE_KEYWORDS.any { folded.contains(it) }) {
+            if (OPENING_BALANCE_EXCLUDE_KEYWORDS.any { folded.contains(it) }) continue
+            if (EXPLICIT_CLOSING_BALANCE_KEYWORDS.any { folded.contains(it) }) {
                 val amounts = extractAllAmountsWithCurrency(line)
                 val bal = amounts.lastOrNull { it.amountInCzk.isFinite() }?.amountInCzk
                 if (bal != null) return bal
             }
         }
 
+        // Pass 2: fallback keywords excluding opening-balance lines (take last matching line)
+        var fallbackLineBal: Double? = null
+        for (line in lines) {
+            val folded = StatementTextDecoder.foldHeader(line)
+            if (OPENING_BALANCE_EXCLUDE_KEYWORDS.any { folded.contains(it) }) continue
+            if (FALLBACK_CLOSING_BALANCE_KEYWORDS.any { folded.contains(it) }) {
+                val amounts = extractAllAmountsWithCurrency(line)
+                val bal = amounts.lastOrNull { it.amountInCzk.isFinite() }?.amountInCzk
+                if (bal != null) fallbackLineBal = bal
+            }
+        }
+        if (fallbackLineBal != null) return fallbackLineBal
+
+        // Pass 3: full-text fallback with 24-char prefix opening-balance guard
         val foldedFull = StatementTextDecoder.foldHeader(fullText)
-        for (kw in CLOSING_BALANCE_KEYWORDS) {
+        for (kw in EXPLICIT_CLOSING_BALANCE_KEYWORDS + FALLBACK_CLOSING_BALANCE_KEYWORDS) {
+            var searchFrom = 0
+            while (searchFrom < foldedFull.length) {
+                val idx = foldedFull.indexOf(kw, searchFrom)
+                if (idx == -1) break
+                val prefix = foldedFull.substring(maxOf(0, idx - 24), idx)
+                if (OPENING_BALANCE_EXCLUDE_KEYWORDS.any { prefix.contains(it) }) {
+                    searchFrom = idx + kw.length
+                    continue
+                }
+                val snippet = foldedFull.substring(idx, (idx + 120).coerceAtMost(foldedFull.length))
+                val amounts = extractAllAmountsWithCurrency(snippet)
+                val bal = amounts.firstOrNull { it.amountInCzk.isFinite() }?.amountInCzk
+                if (bal != null) return bal
+                searchFrom = idx + kw.length
+            }
+        }
+        return null
+    }
+
+    fun extractOpeningBalance(fullText: String, lines: List<String>): Double? {
+        for (line in lines) {
+            val folded = StatementTextDecoder.foldHeader(line)
+            val matchedKw = OPENING_BALANCE_KEYWORDS.firstOrNull { folded.contains(it) } ?: continue
+            val kwIdx = folded.indexOf(matchedKw)
+            val tail = folded.substring(kwIdx, (kwIdx + 120).coerceAtMost(folded.length))
+            val amounts = extractAllAmountsWithCurrency(tail)
+            val bal = amounts.firstOrNull { it.amountInCzk.isFinite() }?.amountInCzk
+            if (bal != null) return bal
+        }
+
+        val foldedFull = StatementTextDecoder.foldHeader(fullText)
+        for (kw in OPENING_BALANCE_KEYWORDS) {
             val idx = foldedFull.indexOf(kw)
             if (idx != -1) {
                 val snippet = foldedFull.substring(idx, (idx + 120).coerceAtMost(foldedFull.length))
@@ -120,18 +199,22 @@ internal object CzechValueParsers {
     }
 
     fun extractAllAmounts(text: String): List<Double> =
-        extractAllAmountsWithCurrency(text).map { it.amountInCzk }
+        extractAllAmountsWithCurrency(text).filter { it.amountInCzk.isFinite() }.map { it.amountInCzk }
 
     fun extractAllAmountsWithCurrency(text: String): List<FxRateService.CurrencyConversionDetails> {
         val amounts = mutableListOf<FxRateService.CurrencyConversionDetails>()
         val folded = StatementTextDecoder.foldHeader(text)
         val isRefund = folded.contains("vraceni") || folded.contains("vratka") ||
             folded.contains("storno") || folded.contains("refund")
-        val isExplicitInflow = folded.contains("prichozi") || folded.contains("kredit") ||
-            folded.contains("credit") || folded.contains("ve prospech") ||
+        val isCreditCard = folded.contains("kreditni kart") ||
+            folded.contains("credit card") ||
+            folded.contains("kreditkou")
+        val isExplicitInflow = folded.contains("prichozi") ||
+            (!isCreditCard && (KREDIT_INFLOW_REGEX.containsMatchIn(folded) || CREDIT_INFLOW_REGEX.containsMatchIn(folded))) ||
+            folded.contains("ve prospech") ||
             folded.contains("pripsano") || folded.contains("prijem")
         // Do NOT flip positive credits on incidental "nakup" or bare "vyber" words.
-        val hasExplicitDebitIndicator = folded.contains("odchozi") || folded.contains("debet") ||
+        val hasExplicitDebitIndicator = isCreditCard || folded.contains("odchozi") || folded.contains("debet") ||
             folded.contains("debit") || folded.contains("platba kartou") ||
             folded.contains("platba mobilem") || folded.contains("vyber z bankomatu") ||
             folded.contains("poplatek za") || folded.contains("poplatek") || folded.contains("vydej")
@@ -160,27 +243,49 @@ internal object CzechValueParsers {
             val start = m.range.first
             val prefixWindow = text.substring(maxOf(0, start - 5), start).trim().lowercase(Locale.ROOT)
             val prefixCurr = when {
+                prefixWindow.endsWith("ca$") || prefixWindow.endsWith("c$") -> "CAD"
+                prefixWindow.endsWith("au$") || prefixWindow.endsWith("a$") -> "AUD"
                 prefixWindow.endsWith("€") -> "EUR"
                 prefixWindow.endsWith("$") -> "USD"
                 prefixWindow.endsWith("£") -> "GBP"
+                prefixWindow.endsWith("¥") -> "JPY"
                 else -> null
             }
 
             val explicitCurr = when {
                 currencyToken.isNotBlank() -> FxRateService.normalizeCurrencyCode(currencyToken)
                 following.startsWith("eur") || following.startsWith("€") -> "EUR"
+                following.startsWith("ca$") || following.startsWith("c$") || following.startsWith("cad") -> "CAD"
+                following.startsWith("au$") || following.startsWith("a$") || following.startsWith("aud") -> "AUD"
                 following.startsWith("usd") || following.startsWith("$") -> "USD"
                 following.startsWith("gbp") || following.startsWith("£") -> "GBP"
                 following.startsWith("pln") || following.startsWith("zł") || following.startsWith("zl") -> "PLN"
                 following.startsWith("chf") -> "CHF"
                 following.startsWith("huf") || following.startsWith("ft") -> "HUF"
+                following.startsWith("jpy") || following.startsWith("¥") -> "JPY"
+                following.startsWith("sek") -> "SEK"
+                following.startsWith("nok") -> "NOK"
+                following.startsWith("dkk") -> "DKK"
                 following.startsWith("kč") || following.startsWith("kc") || following.startsWith("czk") -> "CZK"
                 prefixCurr != null -> prefixCurr
                 else -> null
             }
 
+            val trimmedRawNum = rawNum.trim()
+            val hasExplicitSign = trailingSign.isNotEmpty() || trimmedRawNum.startsWith("+") ||
+                trimmedRawNum.startsWith("-") || trimmedRawNum.startsWith("\u2212") ||
+                trimmedRawNum.startsWith("\u2013") || trimmedRawNum.startsWith("\u2014")
+            if (explicitCurr == null && !hasExplicitSign) {
+                val shortDateMatch = SHORT_DATE_DECIMAL_REGEX.matchEntire(trimmedRawNum)
+                if (shortDateMatch != null) {
+                    val dd = shortDateMatch.groupValues[1].toIntOrNull() ?: 0
+                    val mm = shortDateMatch.groupValues[2].toIntOrNull() ?: 0
+                    if (dd in 1..31 && mm in 1..12) continue
+                }
+            }
+
             var details = parseCzechAmountDetailed(rawNum, explicitCurrency = explicitCurr)
-            if (!details.amountInCzk.isFinite()) continue
+            if (details.isUnknownCurrency || !details.amountInCzk.isFinite()) continue
             var parsed = details.amountInCzk
             var orig = details.originalAmount
             if (trailingSign == "-" && parsed > 0) {
@@ -207,7 +312,7 @@ internal object CzechValueParsers {
                 val rawNum = m.groupValues[1]
                 val curr = FxRateService.normalizeCurrencyCode(m.groupValues[2])
                 var details = parseCzechAmountDetailed(rawNum, explicitCurrency = curr)
-                if (!details.amountInCzk.isFinite() || details.amountInCzk == 0.0) continue
+                if (details.isUnknownCurrency || !details.amountInCzk.isFinite() || details.amountInCzk == 0.0) continue
                 var parsed = details.amountInCzk
                 var orig = details.originalAmount
                 val rowExplicitInflow = isExplicitInflow || rawNum.contains("+")
@@ -305,13 +410,25 @@ internal object CzechValueParsers {
         if (clean.isBlank()) return FxRateService.CurrencyConversionDetails(0.0, "CZK", 0.0, 1.0)
 
         val detectedFromText = FxRateService.detectCurrency(clean)
-        val targetCurrency = explicitCurrency ?: detectedFromText ?: "CZK"
+        val standaloneIsoToken = if (explicitCurrency == null && detectedFromText == null) {
+            STANDALONE_AMOUNT_TRAILING_ISO_REGEX.matchEntire(clean)?.groupValues?.get(1)
+                ?: STANDALONE_AMOUNT_LEADING_ISO_REGEX.matchEntire(clean)?.groupValues?.get(1)
+        } else null
+        val targetCurrency = explicitCurrency ?: detectedFromText ?: standaloneIsoToken ?: "CZK"
         val normCurrency = FxRateService.normalizeCurrencyCode(targetCurrency)
 
+        if (standaloneIsoToken != null) {
+            clean = clean.replace(standaloneIsoToken, "")
+        }
         clean = CURRENCY_STRIP_REGEX.replace(clean, "")
+            .replace("CA$", "", ignoreCase = true)
+            .replace("AU$", "", ignoreCase = true)
+            .replace("C$", "", ignoreCase = true)
+            .replace("A$", "", ignoreCase = true)
             .replace("€", "")
             .replace("$", "")
             .replace("£", "")
+            .replace("¥", "")
             .trim()
 
         val isNegativeParentheses = clean.startsWith("(") && clean.endsWith(")")
@@ -355,14 +472,27 @@ internal object CzechValueParsers {
 
         val safeEurRate = if (eurRate.isFinite() && eurRate > 0.0) eurRate else 1.0
         val safeUsdRate = if (usdRate.isFinite() && usdRate > 0.0) usdRate else 1.0
-        val (rawConverted, rate) = when (normCurrency) {
-            "EUR" -> (signedResult * safeEurRate) to safeEurRate
-            "USD" -> (signedResult * safeUsdRate) to safeUsdRate
-            "CZK" -> signedResult to 1.0
+        val (rawConverted, rate, isUnknown) = when (normCurrency) {
+            "EUR" -> Triple(signedResult * safeEurRate, safeEurRate, false)
+            "USD" -> Triple(signedResult * safeUsdRate, safeUsdRate, false)
+            "CZK" -> Triple(signedResult, 1.0, false)
             else -> {
-                val otherRate = FxRateService.getRate(normCurrency).takeIf { it.isFinite() && it > 0.0 } ?: 1.0
-                (signedResult * otherRate) to otherRate
+                val otherRate = FxRateService.getRateOrNull(normCurrency)?.takeIf { it.isFinite() && it > 0.0 }
+                if (otherRate != null) {
+                    Triple(signedResult * otherRate, otherRate, false)
+                } else {
+                    Triple(Double.NaN, Double.NaN, true)
+                }
             }
+        }
+        if (isUnknown) {
+            return FxRateService.CurrencyConversionDetails(
+                originalAmount = signedResult,
+                originalCurrency = normCurrency,
+                amountInCzk = Double.NaN,
+                exchangeRate = Double.NaN,
+                isUnknownCurrency = true
+            )
         }
         val converted = if (rawConverted.isFinite()) rawConverted else 0.0
 

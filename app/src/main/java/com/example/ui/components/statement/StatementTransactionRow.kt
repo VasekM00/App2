@@ -37,7 +37,7 @@ import com.example.ui.theme.BadRed
 import com.example.ui.theme.GoodGreen
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.ParsedBankTransaction
 
 @Composable
@@ -175,7 +175,7 @@ fun StatementTransactionRowItem(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = (if (isPositive) "+" else "") + fmtCZK(safeAmount),
+                    text = (if (isPositive) "+" else "") + fmtExactCZK(safeAmount),
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = BodyFontFamily,

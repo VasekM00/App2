@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +65,7 @@ import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.UserInvestmentLot
 import com.example.util.parseUserAmountOrNull
 import java.time.LocalDate
@@ -85,12 +86,13 @@ fun EditInvestmentLotDialog(
     val now = LocalDate.now()
     val defaultDate = now.format(DateTimeFormatter.ofPattern("yyyy-MM", Locale.ROOT))
 
-    var instrumentText by remember(lot) { mutableStateOf(lot?.instrument ?: "Portu / VWCE All-World") }
-    var batchNameText by remember(lot) { mutableStateOf(lot?.batchName ?: "DCA Batch $defaultDate") }
-    var purchaseDateText by remember(lot) { mutableStateOf(lot?.purchaseDateStr ?: defaultDate) }
-    var acquisitionCostText by remember(lot) { mutableStateOf(lot?.acquisitionCostCzk?.toInt()?.toString() ?: "50000") }
-    var currentValueText by remember(lot) { mutableStateOf(lot?.currentValueCzk?.toInt()?.toString() ?: "55000") }
-    var notesText by remember(lot) { mutableStateOf(lot?.notes ?: "") }
+    val lotKey = lot?.id ?: "new"
+    var instrumentText by rememberSaveable(lotKey) { mutableStateOf(lot?.instrument ?: "VWCE All-World ETF") }
+    var batchNameText by rememberSaveable(lotKey) { mutableStateOf(lot?.batchName ?: "DCA Batch $defaultDate") }
+    var purchaseDateText by rememberSaveable(lotKey) { mutableStateOf(lot?.purchaseDateStr ?: defaultDate) }
+    var acquisitionCostText by rememberSaveable(lotKey) { mutableStateOf(lot?.acquisitionCostCzk?.toInt()?.toString() ?: "50000") }
+    var currentValueText by rememberSaveable(lotKey) { mutableStateOf(lot?.currentValueCzk?.toInt()?.toString() ?: "55000") }
+    var notesText by rememberSaveable(lotKey) { mutableStateOf(lot?.notes ?: "") }
 
     val parsedAcq = (acquisitionCostText.parseUserAmountOrNull() ?: 0.0).finiteOrZero().coerceAtLeast(0.0)
     val parsedCur = (currentValueText.parseUserAmountOrNull() ?: 0.0).finiteOrZero().coerceAtLeast(0.0)
@@ -113,7 +115,7 @@ fun EditInvestmentLotDialog(
     val monthsRemaining = previewLot.monthsRemaining()
     val progressRatio = (monthsHeld / 36f).coerceIn(0f, 1f)
 
-    val quickInstruments = listOf("Portu ETF", "VWCE All-World", "S&P 500", "MSCI World")
+    val quickInstruments = listOf("Brokerage ETF", "VWCE All-World", "S&P 500", "MSCI World")
     val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
 
     Dialog(
@@ -244,7 +246,7 @@ fun EditInvestmentLotDialog(
                                         modifier = Modifier.weight(1f).padding(end = 8.dp)
                                     )
                                     Text(
-                                        text = fmtCZK(templateLot.acquisitionCostCzk),
+                                        text = fmtExactCZK(templateLot.acquisitionCostCzk),
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontFamily = BodyFontFamily,
                                             fontWeight = FontWeight.Bold,
@@ -310,7 +312,7 @@ fun EditInvestmentLotDialog(
                         value = instrumentText,
                         onValueChange = { instrumentText = it },
                         label = { Text("Instrument / Ticker") },
-                        placeholder = { Text("e.g. VWCE, Portu, S&P 500") },
+                        placeholder = { Text("e.g. VWCE, S&P 500, FTSE All-World") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("lot_instrument_field")
                     )
@@ -521,7 +523,7 @@ fun EditInvestmentLotDialog(
                                     )
                                 )
                                 Text(
-                                    text = "${if (unrealizedGain >= 0) "+" else ""}${fmtCZK(unrealizedGain)} (${String.format(Locale.US, "%.1f", gainPct)}%)",
+                                    text = "${if (unrealizedGain >= 0) "+" else ""}${fmtExactCZK(unrealizedGain)} (${String.format(Locale.US, "%.1f", gainPct)}%)",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,

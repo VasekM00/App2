@@ -37,8 +37,8 @@ import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -179,7 +179,7 @@ fun FundsAllocatorCard(
             WaterfallStepRow(
                 stepNumber = "2",
                 title = "Employer Pension Exemption",
-                currentAlloc = "${fmtCZK(totalEmpMonthly)} / month",
+                currentAlloc = "${fmtExactCZK(totalEmpMonthly)} / month",
                 statusText = if (totalEmpMonthly > 0) "ACTIVE MATCH" else "NOT CLAIMED",
                 statusColor = if (totalEmpMonthly > 0) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                 recommendation = "Capture 100% employer match up to 50,000 Kč annually per person. 100% tax and levy exempt.",
@@ -193,7 +193,7 @@ fun FundsAllocatorCard(
             WaterfallStepRow(
                 stepNumber = "3",
                 title = "State Pension Subsidy (DPS)",
-                currentAlloc = "${fmtCZK(vDps + eDps)} / month",
+                currentAlloc = "${fmtExactCZK(vDps + eDps)} / month",
                 statusText = if (isDpsMaxed) "MAX SUBSIDY" else "OPTIMIZE TO 1,700",
                 statusColor = if (isDpsMaxed) GoodGreen else BrandGold,
                 recommendation = "Deposit 1,700 Kč monthly for the max 20% state match (340 Kč). Above 1,700 Kč, route savings to DIP for lower ETF fees.",
@@ -207,7 +207,7 @@ fun FundsAllocatorCard(
             WaterfallStepRow(
                 stepNumber = "4",
                 title = "Retirement Tax Shield (DIP)",
-                currentAlloc = "${fmtCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
+                currentAlloc = "${fmtExactCZK(vRetirementDeductionMonthly + (if (eHasIncome) eRetirementDeductionMonthly else 0.0))} / month",
                 statusText = if (isDipMaxed) "MAX SHIELD" else "SAVING +${fmtCompact(state.taxReturnHelper.dipSaving.finiteOrZero())}",
                 statusColor = if (isDipMaxed) GoodGreen else BrandTeal,
                 recommendation = "Deduct up to 48,000 Kč annually per earner into global ETFs. Captures +7.2k to 11k Kč tax savings with lower fees than DPS above 1,700 Kč.",
@@ -220,8 +220,8 @@ fun FundsAllocatorCard(
             // Step 5: Liquid Brokerage / Global ETFs
             WaterfallStepRow(
                 stepNumber = "5",
-                title = "Liquid Index ETFs (Portu / XTB)",
-                currentAlloc = "${fmtCZK(totalBrokerageMonthly)} / month",
+                title = "Liquid Index ETFs (Brokerage)",
+                currentAlloc = "${fmtExactCZK(totalBrokerageMonthly)} / month",
                 statusText = "TIME-TEST EXEMPT",
                 statusColor = BrandTeal,
                 recommendation = "Route all remaining surplus to diversified index ETFs. 100% tax-free after 3 years; fully accessible before age 60 for early retirement.",
@@ -419,7 +419,7 @@ fun DipOptimizationMatrixCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = fmtCZK(sc.monthly),
+                                    text = fmtExactCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,
@@ -446,7 +446,7 @@ fun DipOptimizationMatrixCard(
                             ) {
                                 val monthlySaved = (sc.annualTaxSaved / 12.0).finiteOrZero()
                                 Text(
-                                    text = "+${fmtCZK(monthlySaved)}",
+                                    text = "+${fmtExactCZK(monthlySaved)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,
@@ -564,7 +564,7 @@ fun DpsOptimizationMatrixCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = fmtCZK(sc.monthly),
+                                    text = fmtExactCZK(sc.monthly),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,
@@ -591,7 +591,7 @@ fun DpsOptimizationMatrixCard(
                             ) {
                                 val monthlyBenefit = (sc.totalAnnualBenefit / 12.0).finiteOrZero()
                                 Text(
-                                    text = "+${fmtCZK(monthlyBenefit)}",
+                                    text = "+${fmtExactCZK(monthlyBenefit)}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = GoodGreen,
                                         fontWeight = FontWeight.Bold,

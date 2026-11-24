@@ -67,8 +67,8 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.WarnAmber
 import com.example.ui.theme.brandSolidContentColor
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.InvestmentLotManager
 import com.example.util.UserInvestmentLot
 import kotlinx.coroutines.Dispatchers
@@ -136,7 +136,7 @@ fun CapitalGainsTimeTestCard(
     val accentGreen = GoodGreen
     val timeTestInfo = remember(accentGreen, optimalHarvestRecommendation) {
         val dynamicHarvestNote = optimalHarvestRecommendation?.let {
-            " Next ${fmtCZK(it.targetCashCzk)} liquidation can be raised with ${fmtCZK(it.taxLiabilityCzk)} tax liability across ${it.saleOrders.size} prioritized lots."
+            " Next ${fmtExactCZK(it.targetCashCzk)} liquidation can be raised with ${fmtExactCZK(it.taxLiabilityCzk)} tax liability across ${it.saleOrders.size} prioritized lots."
         } ?: ""
         MetricInfo(
             title = "3-Year Capital Gains Time Test",
@@ -366,7 +366,7 @@ fun CapitalGainsTimeTestCard(
                             )
                         )
                         Text(
-                            text = "${fmtCZK(portfolioSummary.annualExemptionLimitRemainingCzk)} headroom",
+                            text = "${fmtExactCZK(portfolioSummary.annualExemptionLimitRemainingCzk)} headroom",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = GoodGreen,
@@ -404,7 +404,7 @@ fun CapitalGainsTimeTestCard(
                                 )
                                 Text(
                                     text = if (optimalHarvestRecommendation.taxLiabilityCzk <= 0.0) "0 Kč Tax Liability"
-                                           else "Est. Tax: ${fmtCZK(optimalHarvestRecommendation.taxLiabilityCzk)}",
+                                           else "Est. Tax: ${fmtExactCZK(optimalHarvestRecommendation.taxLiabilityCzk)}",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = if (optimalHarvestRecommendation.taxLiabilityCzk <= 0.0) GoodGreen else WarnAmber,
@@ -630,7 +630,7 @@ private fun UserInvestmentLotRow(
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = fmtCZK(lot.currentValueCzk),
+                        text = fmtExactCZK(lot.currentValueCzk),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = BodyFontFamily,
@@ -638,7 +638,7 @@ private fun UserInvestmentLotRow(
                         )
                     )
                     Text(
-                        text = "${if (gain >= 0) "+" else ""}${fmtCZK(gain)} (${String.format(java.util.Locale.US, "%.1f", lot.unrealizedGainPct)}%)",
+                        text = "${if (gain >= 0) "+" else ""}${fmtExactCZK(gain)} (${String.format(java.util.Locale.US, "%.1f", lot.unrealizedGainPct)}%)",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = BodyFontFamily,

@@ -124,6 +124,7 @@ fun LiveSyncDialog(
             } else if (liveData != null) {
                 val differences = remember(currentSettings, liveData) {
                     CzechEconomicSyncService.computeDifferences(currentSettings, liveData)
+                        .sortedByDescending { it.isDifferent }
                 }
                 val diffCount = remember(differences) { differences.count { it.isDifferent } }
 

@@ -73,8 +73,8 @@ import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
 import com.example.ui.theme.brandSolidContentColor
 import com.example.util.BankTransactionType
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.SubscriptionAuditor
 import java.time.LocalDate
 
@@ -106,9 +106,9 @@ fun UpcomingBillsCalendarCard(
 ) {
     val haptic = LocalHapticFeedback.current
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    var selectedDayFilter by remember { mutableStateOf<Int?>(null) }
-    var editingBill by remember { mutableStateOf<UpcomingBill?>(null) }
-    var showAddBillDialog by remember { mutableStateOf(false) }
+    var selectedDayFilter by rememberSaveable { mutableStateOf<Int?>(null) }
+    var editingBillId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showAddBillDialog by rememberSaveable { mutableStateOf(false) }
 
     // Derive authentic recurring obligations strictly from:
     // 1. Actually audited bank subscriptions/debits (if transactions exist)
@@ -183,8 +183,8 @@ fun UpcomingBillsCalendarCard(
                     UpcomingBill(
                         id = "sett_portu_v",
                         dayOfMonth = 10,
-                        title = "Portu ETF Investment (${settings.primaryName})",
-                        provider = "WOOD & Company",
+                        title = "Liquid ETF Investment (${settings.primaryName.ifBlank { "Primary" }})",
+                        provider = "Brokerage ETF",
                         amount = settings.portuDcaMonthly,
                         category = BankTransactionType.INVESTMENT_PORTU,
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
@@ -200,8 +200,8 @@ fun UpcomingBillsCalendarCard(
                     UpcomingBill(
                         id = "sett_portu_e",
                         dayOfMonth = 10,
-                        title = "Portu ETF Investment (${settings.spouseName})",
-                        provider = "WOOD & Company",
+                        title = "Liquid ETF Investment (${settings.spouseName.ifBlank { "Partner" }})",
+                        provider = "Brokerage ETF",
                         amount = settings.ePortuDcaMonthly,
                         category = BankTransactionType.INVESTMENT_PORTU,
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
@@ -318,7 +318,7 @@ fun UpcomingBillsCalendarCard(
         title = "Upcoming Bills & Cash Calendar",
         category = "Cash Flow Management",
         formulaOrRule = "30-Day Obligations = Living Rent + Custom Bills + Automated DCA + Bank Subscriptions",
-        explanation = "Built directly from your Budget Settings (Rent on 1st, Portu ETF on 10th, DIP on 15th, DPS on 20th, Custom Bills on their scheduled day) plus recurring subscriptions detected in imported bank statements. Tap any row to edit its amount or add a recurring bill.",
+        explanation = "Built directly from your Budget Settings (Rent on 1st, Liquid ETF on 10th, DIP on 15th, DPS on 20th, Custom Bills on their scheduled day) plus recurring subscriptions detected in imported bank statements. Tap any row to edit its amount or add a recurring bill.",
         practicalImplication = "Scheduling automated DCA right after salary receipt guarantees pay-yourself-first wealth compounding.",
         accentColor = BrandTeal
     )
@@ -665,7 +665,7 @@ fun UpcomingBillsCalendarCard(
                                 UpcomingBillRow(
                                     bill = bill,
                                     canEdit = canEditRow,
-                                    onEditClick = if (canEditRow) { { editingBill = bill } } else null
+                                    onEditClick = if (canEditRow) { { editingBillId = bill.id } } else null
                                 )
                             }
                         }
@@ -693,7 +693,7 @@ fun UpcomingBillsCalendarCard(
                                 UpcomingBillRow(
                                     bill = bill,
                                     canEdit = canEditRow,
-                                    onEditClick = if (canEditRow) { { editingBill = bill } } else null
+                                    onEditClick = if (canEditRow) { { editingBillId = bill.id } } else null
                                 )
                             }
                         }
@@ -704,11 +704,12 @@ fun UpcomingBillsCalendarCard(
         }
     }
 
+    val editingBill = editingBillId?.let { id -> bills.firstOrNull { it.id == id } }
     editingBill?.let { activeBill ->
         EditUpcomingBillDialog(
             bill = activeBill,
             settings = settings,
-            onDismiss = { editingBill = null },
+            onDismiss = { editingBillId = null },
             onUpdateSettings = onUpdateSettings,
             onDismissSubscription = onDismissSubscription,
             onReduceSettings = onReduceSettings
@@ -826,7 +827,7 @@ private fun UpcomingBillRow(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = fmtCZK(bill.amount),
+                    text = fmtExactCZK(bill.amount),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = BodyFontFamily,

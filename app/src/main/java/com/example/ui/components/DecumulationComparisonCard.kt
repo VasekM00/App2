@@ -34,9 +34,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +54,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.DecumulationComparisonResult
+import com.example.domain.DecumulationConfig
+import com.example.domain.DecumulationStrategies
+import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.BrandBlue
@@ -116,8 +126,8 @@ fun DecumulationComparisonCard(
     onShowInfo: ((MetricInfo) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
-    var selectedIndex by remember { mutableIntStateOf(1) } // Default to Guyton-Klinger Guardrails
-    val strategy = DecumulationStrategy.entries[selectedIndex]
+    var selectedIndex by rememberSaveable { mutableIntStateOf(1) } // Default to Guyton-Klinger Guardrails
+    val strategy = DecumulationStrategy.entries[selectedIndex.coerceIn(0, DecumulationStrategy.entries.lastIndex)]
     val activeAccent = strategy.accentColor()
 
     // Use canonical investable portfolio or FIRE target, whichever is higher
@@ -132,7 +142,9 @@ fun DecumulationComparisonCard(
 
     val baseSwr = s.safeWithdrawalRatePct.finiteOrZero().coerceIn(0.5, 20.0)
     val horizonYears = s.retirementHorizonYears.coerceIn(5, 60)
-    val decumulationRes = state.decumulationComparison ?: remember(
+    var asyncComparison by remember { mutableStateOf<DecumulationComparisonResult?>(null) }
+    LaunchedEffect(
+        state.decumulationComparison,
         portfolioBase, baseSwr, horizonYears, s.cpiInflationPct, s.portfolioNominalReturnPct,
         s.dividendYieldPct, s.dividendTaxRatePct,
         s.monteCarloVolatilityPct, s.guardrailsUpperThresholdPct, s.guardrailsLowerThresholdPct,
@@ -140,44 +152,56 @@ fun DecumulationComparisonCard(
         s.vStatePensionMonthly, s.vStatePensionAge, s.eStatePensionMonthly, s.eStatePensionAge,
         s.isSingleHousehold, s.primaryAge, snap.activeFireAge, state.pensionOptimization.partnerAge
     ) {
-        val netReturnPct = com.example.domain.FinancialEngine.netTaxableNominalReturnPct(s).finiteOrZero()
-        val fireAge = snap.activeFireAge ?: s.primaryAge
-        val partnerAgeAtFire = state.pensionOptimization.partnerAge + maxOf(0, fireAge - s.primaryAge)
-        val streams = buildList {
-            val vPen = s.vStatePensionMonthly.coerceAtLeast(0.0) * 12.0
-            if (vPen > 0.0) add(maxOf(0, s.vStatePensionAge - fireAge) to vPen)
-            if (!s.isSingleHousehold) {
-                val ePen = s.eStatePensionMonthly.coerceAtLeast(0.0) * 12.0
-                if (ePen > 0.0) add(maxOf(0, s.eStatePensionAge - partnerAgeAtFire) to ePen)
-            }
+        val provided = state.decumulationComparison
+        if (provided != null) {
+            asyncComparison = provided
+            return@LaunchedEffect
         }
-        com.example.domain.DecumulationStrategies.compareStrategies(
-            com.example.domain.DecumulationConfig(
-                initialPortfolio = portfolioBase,
-                initialAnnualWithdrawal = portfolioBase * (baseSwr / 100.0),
-                horizonYears = horizonYears,
-                annualInflationPct = s.cpiInflationPct.finiteOrZero(),
-                expectedAnnualReturnPct = netReturnPct,
-                returnVolatilityPct = s.monteCarloVolatilityPct.finiteOrZero().coerceAtLeast(1.0),
-                simulationsCount = s.monteCarloN.coerceIn(50, 2000),
-                randomSeed = s.monteCarloSeed,
-                gkUpperThresholdPct = s.guardrailsUpperThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
-                gkLowerThresholdPct = s.guardrailsLowerThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
-                gkCutPct = s.guardrailsCutPct.finiteOrZero().coerceIn(1.0, 50.0),
-                gkBoostPct = s.guardrailsBoostPct.finiteOrZero().coerceIn(1.0, 50.0),
-                gkFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
-                gkInitialWithdrawalMultiplier = DecumulationStrategy.GUYTON_KLINGER.swrMultiplier,
-                vpdRatePct = (baseSwr * 1.075).coerceIn(0.5, 20.0),
-                vpdFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
-                pensionStreams = streams
+        delay(80)
+        val result = withContext(Dispatchers.Default) {
+            val netReturnPct = FinancialEngine.netTaxableNominalReturnPct(s).finiteOrZero()
+            val fireAge = snap.activeFireAge ?: s.primaryAge
+            val partnerAgeAtFire = state.pensionOptimization.partnerAge + maxOf(0, fireAge - s.primaryAge)
+            val streams = buildList {
+                val vPen = s.vStatePensionMonthly.coerceAtLeast(0.0) * 12.0
+                if (vPen > 0.0) add(maxOf(0, s.vStatePensionAge - fireAge) to vPen)
+                if (!s.isSingleHousehold) {
+                    val ePen = s.eStatePensionMonthly.coerceAtLeast(0.0) * 12.0
+                    if (ePen > 0.0) add(maxOf(0, s.eStatePensionAge - partnerAgeAtFire) to ePen)
+                }
+            }
+            DecumulationStrategies.compareStrategies(
+                DecumulationConfig(
+                    initialPortfolio = portfolioBase,
+                    initialAnnualWithdrawal = portfolioBase * (baseSwr / 100.0),
+                    horizonYears = horizonYears,
+                    annualInflationPct = s.cpiInflationPct.finiteOrZero(),
+                    expectedAnnualReturnPct = netReturnPct,
+                    returnVolatilityPct = s.monteCarloVolatilityPct.finiteOrZero().coerceAtLeast(1.0),
+                    simulationsCount = s.monteCarloN.coerceIn(50, 2000),
+                    randomSeed = s.monteCarloSeed,
+                    gkUpperThresholdPct = s.guardrailsUpperThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
+                    gkLowerThresholdPct = s.guardrailsLowerThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
+                    gkCutPct = s.guardrailsCutPct.finiteOrZero().coerceIn(1.0, 50.0),
+                    gkBoostPct = s.guardrailsBoostPct.finiteOrZero().coerceIn(1.0, 50.0),
+                    gkFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
+                    gkInitialWithdrawalMultiplier = DecumulationStrategy.GUYTON_KLINGER.swrMultiplier,
+                    vpdRatePct = (baseSwr * 1.075).coerceIn(0.5, 20.0),
+                    vpdFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
+                    pensionStreams = streams
+                )
             )
-        )
+        }
+        asyncComparison = result
     }
+    val decumulationRes = state.decumulationComparison ?: asyncComparison
 
-    val dynamicSurvivalRate = when (strategy) {
-        DecumulationStrategy.BENGEN_4PCT -> decumulationRes.bengenMetrics.survivalRatePct
-        DecumulationStrategy.GUYTON_KLINGER -> decumulationRes.guytonKlingerMetrics.survivalRatePct
-        DecumulationStrategy.VARIABLE_PERCENTAGE -> decumulationRes.variablePercentageMetrics.survivalRatePct
+    val dynamicSurvivalRate: Double? = decumulationRes?.let { res ->
+        when (strategy) {
+            DecumulationStrategy.BENGEN_4PCT -> res.bengenMetrics.survivalRatePct
+            DecumulationStrategy.GUYTON_KLINGER -> res.guytonKlingerMetrics.survivalRatePct
+            DecumulationStrategy.VARIABLE_PERCENTAGE -> res.variablePercentageMetrics.survivalRatePct
+        }
     }
     val dynamicSwrPct = strategy.effectiveSwrPct(baseSwr)
     val bengenMonthly = (portfolioBase * (DecumulationStrategy.BENGEN_4PCT.effectiveSwrPct(baseSwr) / 100.0) / 12.0).finiteOrZero()
@@ -185,7 +209,7 @@ fun DecumulationComparisonCard(
 
     val annualSafeSpend = (portfolioBase * (dynamicSwrPct / 100.0)).finiteOrZero()
     val monthlySafeSpend = (annualSafeSpend / 12.0).finiteOrZero()
-    val survivalFraction = (dynamicSurvivalRate / 100.0).toFloat().finiteOrZero().coerceIn(0f, 1f)
+    val survivalFraction = dynamicSurvivalRate?.let { (it / 100.0).toFloat().finiteOrZero().coerceIn(0f, 1f) } ?: 0f
 
     val animSurvival by animateFloatAsState(
         targetValue = survivalFraction,
@@ -198,17 +222,20 @@ fun DecumulationComparisonCard(
         val guardrailsDetail = when (strategy) {
             DecumulationStrategy.BENGEN_4PCT -> strategy.bearMarketRule
             DecumulationStrategy.GUYTON_KLINGER ->
-                "Capital Preservation (+${s.guardrailsUpperThresholdPct.roundToInt()}% trigger -> -${s.guardrailsCutPct.roundToInt()}% spend) & Prosperity (-${s.guardrailsLowerThresholdPct.roundToInt()}% trigger -> +${s.guardrailsBoostPct.roundToInt()}% spend)."
+                "Capital Preservation (+${s.guardrailsUpperThresholdPct.finiteOrZero().roundToInt()}% trigger -> -${s.guardrailsCutPct.finiteOrZero().roundToInt()}% spend) & Prosperity (-${s.guardrailsLowerThresholdPct.finiteOrZero().roundToInt()}% trigger -> +${s.guardrailsBoostPct.finiteOrZero().roundToInt()}% spend)."
             DecumulationStrategy.VARIABLE_PERCENTAGE ->
-                "Dynamic variable withdrawal with ${s.guardrailsFloorPct.roundToInt()}% essential spending floor."
+                "Dynamic variable withdrawal with ${s.guardrailsFloorPct.finiteOrZero().roundToInt()}% essential spending floor."
         }
+        val gkSurvivalText = decumulationRes?.let {
+            "${fmtPct(it.guytonKlingerMetrics.survivalRatePct, 1)} simulated survival"
+        } ?: "simulated survival calculation pending"
         MetricInfo(
             title = "Decumulation · ${strategy.title}",
             category = "Post-FIRE Capital Drawdown",
             formulaOrRule = "Safe Monthly Spend = (Portfolio * SWR%) / 12 with Adaptive Guardrails ($horizonYears-year simulation)",
             explanation = "${strategy.description} Rules: $guardrailsDetail Prosperity Rule: ${strategy.bullMarketRule} Czech Tax Drag: ${strategy.taxEfficiency}",
             statutoryReference = "§ 4(1)(u) of Act No. 586/1992 Coll. (ITA, 3-Year Time Test)",
-            practicalImplication = "Adopting Guyton-Klinger rules provides an extra ${fmtCZK((gkMonthly - bengenMonthly).coerceAtLeast(0.0))}/month vs baseline SWR with ${fmtPct(decumulationRes.guytonKlingerMetrics.survivalRatePct, 1)} simulated survival.",
+            practicalImplication = "Adopting Guyton-Klinger rules provides an extra ${fmtCZK((gkMonthly - bengenMonthly).coerceAtLeast(0.0))}/month vs baseline SWR with $gkSurvivalText.",
             accentColor = accentGreen
         )
     }
@@ -307,7 +334,9 @@ fun DecumulationComparisonCard(
                                 )
                         ) {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = 48.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(
@@ -360,7 +389,7 @@ fun DecumulationComparisonCard(
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -414,7 +443,7 @@ fun DecumulationComparisonCard(
                     ) {
                         Column(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -433,7 +462,7 @@ fun DecumulationComparisonCard(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = fmtPct(dynamicSurvivalRate, 1),
+                                text = dynamicSurvivalRate?.let { fmtPct(it, 1) } ?: "Simulating…",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     fontFamily = BodyFontFamily,
@@ -476,7 +505,11 @@ fun DecumulationComparisonCard(
                             )
                         )
                         Text(
-                            text = "${(animSurvival * 100f).roundToInt()}% Simulated Success",
+                            text = if (dynamicSurvivalRate != null) {
+                                "${(animSurvival.finiteOrZero() * 100f).roundToInt()}% Simulated Success"
+                            } else {
+                                "Calculating…"
+                            },
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,

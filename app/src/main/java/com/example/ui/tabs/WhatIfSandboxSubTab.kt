@@ -42,6 +42,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +58,7 @@ import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
+import com.example.domain.PresetProfiles
 import com.example.ui.components.CardHeaderPill
 import com.example.ui.components.DecumulationComparisonCard
 import com.example.ui.components.MetricInfo
@@ -67,16 +70,21 @@ import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
+import com.example.util.BackupManager
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtPct
-import com.example.domain.PresetProfiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+private fun settingsEntitySaver(fallback: SettingsEntity): Saver<SettingsEntity, String> = Saver(
+    save = { BackupManager.serializeSettingsToJson(it) },
+    restore = { BackupManager.deserializeSettingsFromJson(it, fallback) ?: fallback }
+)
 
 @Composable
 internal fun WhatIfSandboxSubTab(
@@ -88,11 +96,15 @@ internal fun WhatIfSandboxSubTab(
 ) {
     val scrollState = rememberScrollState()
 
-    var sandbox by remember(state.effectiveSettings) { mutableStateOf(state.effectiveSettings) }
-    var activePresetId by remember(state.effectiveSettings) { mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id) }
+    var sandbox by rememberSaveable(state.settings, stateSaver = settingsEntitySaver(state.settings)) {
+        mutableStateOf(state.settings)
+    }
+    var activePresetId by rememberSaveable(state.settings) {
+        mutableStateOf<String?>(PresetProfiles.PLAN_BASELINE.id)
+    }
     var sandboxState by remember(state) { mutableStateOf(state) }
     LaunchedEffect(sandbox, state, ledgerEntries, actionStates) {
-        if (sandbox == state.effectiveSettings) {
+        if (sandbox == state.settings) {
             sandboxState = state
             return@LaunchedEffect
         }
@@ -101,7 +113,7 @@ internal fun WhatIfSandboxSubTab(
             FinancialEngine.calculate(sandbox, ledgerEntries = ledgerEntries, actionStates = actionStates, runMonteCarlo = false)
         }
     }
-    val isDirty = sandbox != state.effectiveSettings
+    val isDirty = sandbox != state.settings
 
     val sandboxInfo = MetricInfo(
         title = "What-If Sandbox",
@@ -310,7 +322,7 @@ internal fun WhatIfSandboxSubTab(
         }
 
         // 4. Collapsible Live Impact Comparison (delta already visible in live bar above sliders)
-        var showFullImpactComparison by remember { mutableStateOf(false) }
+        var showFullImpactComparison by rememberSaveable { mutableStateOf(false) }
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),

@@ -37,7 +37,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCompact
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.StatementParseSummary
 
 @Composable
@@ -93,7 +93,7 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = fmtCZK(safeInflows),
+                            text = fmtExactCZK(safeInflows),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -126,7 +126,7 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = fmtCZK(safeExpenses),
+                            text = fmtExactCZK(safeExpenses),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -165,7 +165,7 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = (if (netFlow >= 0) "+" else "") + fmtCZK(netFlow),
+                            text = (if (netFlow >= 0) "+" else "") + fmtExactCZK(netFlow),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -198,7 +198,7 @@ fun StatementSummaryBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = safeEndBalance?.let { fmtCZK(it) } ?: "--",
+                            text = safeEndBalance?.let { fmtExactCZK(it) } ?: "--",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,

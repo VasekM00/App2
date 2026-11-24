@@ -59,7 +59,22 @@ import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.LocalIsDarkTheme
 import com.example.util.Formatters.fmtCompact
 import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.round
+
+internal fun deflateStressValue(
+    nominal: Double,
+    cpiInflationPct: Double,
+    year: Int,
+    baseYear: Int
+): Double {
+    val safeNominal = nominal.finiteOrZero().coerceAtLeast(0.0)
+    val safeCpi = cpiInflationPct.finiteOrZero().coerceAtLeast(-99.0)
+    val elapsedYears = max(0, year - baseYear)
+    if (elapsedYears == 0) return safeNominal
+    val deflator = (1.0 + safeCpi / 100.0).pow(elapsedYears.toDouble())
+    return if (deflator.isFinite() && deflator > 0.0) (safeNominal / deflator).finiteOrZero() else safeNominal
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -87,8 +102,27 @@ fun StressComparisonChart(
         cViolet  // Inflation Shock
     )
 
-    val refTraj = remember(scenarios) {
-        scenarios.maxByOrNull { it.trajectory.size }?.trajectory ?: emptyList()
+    val refScenario = remember(scenarios) {
+        scenarios.firstOrNull { it.id == "baseline" } ?: scenarios.maxByOrNull { it.trajectory.size }
+    }
+    val refTraj = remember(refScenario) {
+        refScenario?.trajectory ?: emptyList()
+    }
+    val baseYear = remember(refTraj, scenarios) {
+        refTraj.firstOrNull()?.year ?: scenarios.firstOrNull()?.trajectory?.firstOrNull()?.year ?: 2026
+    }
+    val deflatedScenarios = remember(scenarios, baseYear) {
+        scenarios.map { sc ->
+            sc.trajectory.map { pt ->
+                deflateStressValue(pt.totalPortfolio, sc.cpiInflationPct, pt.year, baseYear)
+            }
+        }
+    }
+    val refDeflatedPairs = remember(refTraj, refScenario, baseYear) {
+        val refCpi = refScenario?.cpiInflationPct ?: 0.0
+        refTraj.map { pt ->
+            pt to deflateStressValue(pt.totalPortfolio, refCpi, pt.year, baseYear)
+        }
     }
     val maxTrajSize = scenarios.maxOfOrNull { it.trajectory.size } ?: refTraj.size
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
@@ -99,7 +133,7 @@ fun StressComparisonChart(
             .fillMaxWidth()
             .testTag("stress_comparison_chart_card")
             .semantics {
-                contentDescription = "Stress scenario comparison chart showing portfolio trajectories under baseline, bull, stagflation, crash and high inflation regimes."
+                contentDescription = "Stress scenario comparison chart showing real inflation-adjusted portfolio trajectories under baseline, bull, stagflation, crash and high inflation regimes."
             },
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -123,7 +157,7 @@ fun StressComparisonChart(
             )
             val horizonLabel = if (maxTrajSize > 0) "over $maxTrajSize years" else "across horizon"
             Text(
-                text = "Comparing portfolio growth across economic regimes $horizonLabel",
+                text = "Today's real Kč (adjusted for each scenario's CPI) $horizonLabel",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
@@ -153,9 +187,8 @@ fun StressComparisonChart(
             Spacer(modifier = Modifier.height(12.dp))
 
             val ySteps = 4
-            val maxVal = remember(scenarios) {
-                val rawMax = scenarios.flatMap { it.trajectory }
-                    .maxOfOrNull { it.totalPortfolio.finiteOrZero().coerceAtLeast(0.0) } ?: 0.0
+            val maxVal = remember(deflatedScenarios) {
+                val rawMax = deflatedScenarios.flatten().maxOrNull() ?: 0.0
                 computeNiceAxisMax((rawMax * 1.1).coerceAtLeast(100000.0), steps = ySteps)
             }
             val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -310,13 +343,13 @@ fun StressComparisonChart(
 
                     for (sIdx in scenarios.indices) {
                         val scenario = scenarios[sIdx]
+                        val deflatedSeries = deflatedScenarios.getOrElse(sIdx) { emptyList() }
                         val color = scenarioColors[sIdx % scenarioColors.size]
-                        if (scenario.trajectory.size > 1) {
+                        if (deflatedSeries.size > 1) {
                             scenarioPath.reset()
-                            for (i in scenario.trajectory.indices) {
-                                val pt = scenario.trajectory[i]
+                            for (i in deflatedSeries.indices) {
                                 val x = xForIndex(i)
-                                val y = yPix(pt.totalPortfolio)
+                                val y = yPix(deflatedSeries[i])
                                 if (i == 0) scenarioPath.moveTo(x, y) else scenarioPath.lineTo(x, y)
                             }
                             val lineStroke = when (scenario.id) {
@@ -329,21 +362,21 @@ fun StressComparisonChart(
                                 color = color,
                                 style = lineStroke
                             )
-                        } else if (scenario.trajectory.size == 1) {
+                        } else if (deflatedSeries.size == 1) {
                             drawCircle(
                                 color = color,
                                 radius = if (scenario.id == "baseline") 7f else 5f,
-                                center = Offset(xForIndex(0), yPix(scenario.trajectory[0].totalPortfolio))
+                                center = Offset(xForIndex(0), yPix(deflatedSeries[0]))
                             )
                         }
                     }
 
-                    // Draw Current Position (Now) Indicator Dot along baseline trajectory
+                    // Draw Current Position (Now) Indicator Dot along baseline totalPortfolio trajectory
                     drawNowMarkerOnSeries(
-                        items = refTraj,
-                        yearOf = { it.year },
-                        valueOf = { it.portfolio },
-                        xForFraction = { frac -> if (refTraj.size > 1) paddingLeft + frac * stepX else xForIndex(0) },
+                        items = refDeflatedPairs,
+                        yearOf = { it.first.year },
+                        valueOf = { it.second },
+                        xForFraction = { frac -> if (refDeflatedPairs.size > 1) paddingLeft + frac * stepX else xForIndex(0) },
                         yPix = ::yPix,
                         plotLeft = paddingLeft,
                         plotRight = w - paddingRight,
@@ -364,9 +397,9 @@ fun StressComparisonChart(
                             strokeWidth = 2f,
                             pathEffect = selDashEffect
                         )
-                        scenarios.forEachIndexed { sIdx, sc ->
-                            sc.trajectory.getOrNull(idx)?.let { pt ->
-                                val sy = yPix(pt.portfolio)
+                        scenarios.indices.forEach { sIdx ->
+                            deflatedScenarios.getOrNull(sIdx)?.getOrNull(idx)?.let { realVal ->
+                                val sy = yPix(realVal)
                                 val color = scenarioColors[sIdx % scenarioColors.size]
                                 drawCircle(color = color, radius = 6f, center = Offset(sx, sy))
                                 drawCircle(color = cCardSurface, radius = 2.5f, center = Offset(sx, sy))
@@ -403,7 +436,7 @@ fun StressComparisonChart(
                             )
                             scenarios.forEachIndexed { sIdx, sc ->
                                 val color = scenarioColors[sIdx % scenarioColors.size]
-                                val ptVal = (sc.trajectory.getOrNull(inspectIdx)?.totalPortfolio ?: 0.0).finiteOrZero()
+                                val ptVal = (deflatedScenarios.getOrNull(sIdx)?.getOrNull(inspectIdx) ?: 0.0).finiteOrZero()
                                 ChartMetricPill(
                                     label = sc.name,
                                     value = fmtCompact(ptVal),

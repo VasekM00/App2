@@ -64,7 +64,11 @@ data class HouseholdProfile(
         fun fromSettings(settings: SettingsEntity): HouseholdProfile {
             val primary = HouseholdMember(
                 id = "primary",
-                name = if (settings.primaryName.isNotBlank() && settings.primaryName != "Václav") settings.primaryName else "Vaclav",
+                name = when {
+                    settings.primaryName.isBlank() -> "Primary"
+                    settings.primaryName == "Václav" -> "Vaclav"
+                    else -> settings.primaryName
+                },
                 role = HouseholdRole.PRIMARY_EARNER,
                 birthYear = settings.baseYear - settings.primaryAge,
                 currentMonthlyGrossSalary = settings.vSalary,
@@ -82,7 +86,7 @@ data class HouseholdProfile(
             val spouse = if (!settings.isSingleHousehold) {
                 HouseholdMember(
                     id = "spouse",
-                    name = settings.spouseName.ifBlank { "Eleonora" },
+                    name = settings.spouseName.ifBlank { "Partner" },
                     role = HouseholdRole.SPOUSE_EARNER,
                     birthYear = FinancialEngine.partnerBirthYear(settings),
                     currentMonthlyGrossSalary = settings.eStartingSalary,
@@ -216,7 +220,7 @@ data class HouseholdProfile(
                 events.add(
                     LifeTimelineEvent(
                         id = "event_v_state_pension",
-                        name = "${settings.primaryName.ifBlank { "Vaclav" }} State Pension",
+                        name = "${settings.primaryName.ifBlank { "Primary" }} State Pension",
                         targetYear = settings.baseYear + vPensionYears,
                         type = TimelineEventType.PRIMARY_RETIREMENT,
                         monthlyCashFlowImpact = settings.vStatePensionMonthly
@@ -231,7 +235,7 @@ data class HouseholdProfile(
                     events.add(
                         LifeTimelineEvent(
                             id = "event_e_state_pension",
-                            name = "${settings.spouseName.ifBlank { "Eleonora" }} State Pension",
+                            name = "${settings.spouseName.ifBlank { "Partner" }} State Pension",
                             targetYear = settings.baseYear + ePensionYears,
                             type = TimelineEventType.SPOUSE_RETIREMENT,
                             monthlyCashFlowImpact = settings.eStatePensionMonthly

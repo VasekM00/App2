@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,19 +71,19 @@ fun StatementImportReviewDialog(
     onToggleTransactionExcluded: ((Int) -> Unit)? = null,
     onBulkExcludeMerchant: ((String) -> Unit)? = null
 ) {
-    var editingTxIndex by remember { mutableStateOf<Int?>(null) }
+    var editingTxIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val bankColor = bankBadgeColor(summary.detectedBank.name)
 
     val distinctMonths = remember(summary.transactions) {
         summary.transactions.map { it.date.take(7) }.filter { it.matches(YEAR_MONTH_REGEX) }.distinct().sorted()
     }
-    var selectedMonthFilter by remember { mutableStateOf<String?>(null) }
+    var selectedMonthFilter by rememberSaveable { mutableStateOf<String?>(null) }
 
     val activeTransactionsCount = summary.transactions.count { !it.isExcluded }
     val excludedTransactionsCount = summary.transactions.count { it.isExcluded }
 
-    var selectedFilterIndex by remember { mutableIntStateOf(0) }
+    var selectedFilterIndex by rememberSaveable { mutableIntStateOf(0) }
     val filterLabels = remember(summary.transactions, selectedMonthFilter) {
         val monthBase = if (selectedMonthFilter != null) {
             summary.transactions.filter { it.date.startsWith(selectedMonthFilter!!) }
@@ -119,7 +120,7 @@ fun StatementImportReviewDialog(
         }
     }
     val activeFilterIndex = if (selectedFilterIndex in filterLabels.indices) selectedFilterIndex else 0
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     val indexedTransactions = remember(summary.transactions) {
         summary.transactions.mapIndexed { idx, tx -> idx to tx }

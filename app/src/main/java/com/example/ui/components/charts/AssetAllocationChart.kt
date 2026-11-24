@@ -56,9 +56,9 @@ import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
-import com.example.ui.theme.SurfaceDark
+import com.example.ui.theme.LocalIsDarkTheme
 import com.example.util.Formatters.fmtCompact
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -98,7 +98,7 @@ fun DcaAllocationBreakdownBar(
     // Emergency cash monthly allocation toward building target buffer
     val cashMonthly = FinancialEngine.monthlyEmergencyReserveContribution(settings).finiteOrZero()
 
-    val isDark = MaterialTheme.colorScheme.surface == SurfaceDark
+    val isDark = LocalIsDarkTheme.current
     val cPortuV = BrandTeal
     val cPortuE = if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E)
     val cDipV = GoodGreen
@@ -136,13 +136,16 @@ fun DcaAllocationBreakdownBar(
         label = "animCash"
     )
 
-    val streams = remember(settings, isSingle, portuV, portuE, dipV, dipE, dpsV, dpsE, empV, empE, cashMonthly) {
+    val streams = remember(
+        settings, isSingle, portuV, portuE, dipV, dipE, dpsV, dpsE, empV, empE, cashMonthly,
+        isDark, cPortuV, cPortuE, cDipV, cDipE, cDpsV, cDpsE, cEmpV, cEmpE, cCash
+    ) {
         buildList {
             if (portuV > 0.0) {
-                add(DcaStreamItem(label = "Portu ETF - ${settings.primaryName}", amount = portuV, color = cPortuV, layerType = WealthLayerType.LIQUID))
+                add(DcaStreamItem(label = "Liquid ETF - ${settings.primaryName.ifBlank { "Primary" }}", amount = portuV, color = cPortuV, layerType = WealthLayerType.LIQUID))
             }
             if (portuE > 0.0) {
-                add(DcaStreamItem(label = "Portu ETF - ${settings.spouseName}", amount = portuE, color = cPortuE, layerType = WealthLayerType.LIQUID))
+                add(DcaStreamItem(label = "Liquid ETF - ${settings.spouseName.ifBlank { "Partner" }}", amount = portuE, color = cPortuE, layerType = WealthLayerType.LIQUID))
             }
             if (dipV > 0.0) {
                 add(DcaStreamItem(label = "DIP - ${settings.primaryName}", amount = dipV, color = cDipV, layerType = WealthLayerType.DIP))
@@ -205,7 +208,7 @@ fun DcaAllocationBreakdownBar(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             WealthLayerFilterChip(
-                label = "Portu ETF",
+                label = "Liquid ETF",
                 color = BrandTeal,
                 isChecked = showLiquid,
                 onToggle = {
@@ -370,7 +373,7 @@ private fun DcaPillBox(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "${fmtCZK(amount)} ($pct%)",
+                text = "${fmtExactCZK(amount)} ($pct%)",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,

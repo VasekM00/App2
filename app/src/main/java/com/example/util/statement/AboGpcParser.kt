@@ -4,6 +4,7 @@ import com.example.util.BankTransactionType
 import com.example.util.BankType
 import com.example.util.CrossStatementReconciliationEngine
 import com.example.util.CzechMerchantCatalog
+import com.example.util.FxRateService
 import com.example.util.ParsedBankTransaction
 import com.example.util.StatementParseSummary
 import java.util.Locale
@@ -29,6 +30,26 @@ internal object AboGpcParser {
         return CzechValueParsers.safeIsoDate(fullYear, m, d)
     }
 
+    private fun mapIso4217NumericCurrency(code: String): String {
+        val trimmed = code.trim()
+        return when (trimmed) {
+            "", "0000", "0203" -> "CZK"
+            "0978" -> "EUR"
+            "0840" -> "USD"
+            "0826" -> "GBP"
+            "0985" -> "PLN"
+            "0756" -> "CHF"
+            "0348" -> "HUF"
+            "0392" -> "JPY"
+            "0752" -> "SEK"
+            "0578" -> "NOK"
+            "0208" -> "DKK"
+            "0124" -> "CAD"
+            "0036" -> "AUD"
+            else -> if (trimmed.length == 4 && trimmed.all(Char::isDigit)) "ISO_$trimmed" else trimmed.uppercase(Locale.ROOT)
+        }
+    }
+
     fun parseAboGpc(
         lines: List<String>,
         familyAccounts: Set<String> = emptySet(),
@@ -41,6 +62,7 @@ internal object AboGpcParser {
         var headerExplicitAcc = ""
         var statementYm: String? = null
         var closingBalance: Double? = null
+        val unknownCurrencies = linkedSetOf<String>()
         val compiledOverrides = CzechMerchantCatalog.compileOverrides(userOverrides)
 
         val transactions = mutableListOf<ParsedBankTransaction>()
@@ -62,16 +84,19 @@ internal object AboGpcParser {
                     if (headerExplicitAcc.isEmpty()) {
                         headerExplicitAcc = CzechValueParsers.extractAccount(line).let { CzechValueParsers.canonicalAccountKey(it) }
                     }
-                    if (line.length >= 81) {
-                        val closeAmtStr = line.substring(66, minOf(line.length, 80)).trim()
-                        val closeSign = line.getOrNull(80) ?: '+'
-                        val closeAmt = (closeAmtStr.toLongOrNull() ?: 0L) / 100.0
-                        closingBalance = if (closeSign == '-') -closeAmt else closeAmt
+                    // ČBA ABO/GPC 074 standard: closing balance [60, 74), sign at [74]
+                    if (line.length >= 75) {
+                        val closeAmtRaw = line.substring(60, 74).trim().toLongOrNull()
+                        if (closeAmtRaw != null) {
+                            val closeAmt = closeAmtRaw / 100.0
+                            val closeSign = line[74]
+                            closingBalance = if (closeSign == '-') -closeAmt else closeAmt
+                        }
                     }
-                    if (line.length >= 118) {
-                        val stDateStr = line.substring(112, minOf(line.length, 118)).trim()
+                    // ČBA ABO/GPC 074 standard: statement date [108, 114)
+                    if (line.length >= 114) {
+                        val stDateStr = line.substring(108, 114).trim()
                         val fullDate = parseAboDate(stDateStr)
-                            ?: (if (line.length >= 120) parseAboDate(line.substring(114, 120)) else null)
                         if (fullDate != null) {
                             statementYm = fullDate.substring(0, 7)
                         }
@@ -112,14 +137,39 @@ internal object AboGpcParser {
                         val rawAmt = (rawAmtStr.toLongOrNull() ?: 0L) / 100.0
                         val code = line.getOrNull(60) ?: '1'
                         val isDebit = (code == '1' || code == '5')
-                        val txAmount = if (isDebit) -rawAmt else rawAmt
+                        val signedNativeAmt = if (isDebit) -rawAmt else rawAmt
+
+                        val rawCurrencyCode = if (line.length >= 122) {
+                            line.substring(118, 122)
+                        } else {
+                            ""
+                        }
+                        val currency = mapIso4217NumericCurrency(rawCurrencyCode)
+                        var txAmount = signedNativeAmt
+                        var origCurr: String? = null
+                        var origAmt: Double? = null
+                        var usedRate: Double? = null
+                        if (currency != "CZK") {
+                            val rate = FxRateService.getRateOrNull(currency)
+                            if (rate == null || !rate.isFinite() || rate <= 0.0) {
+                                unknownCurrencies.add(currency)
+                                continue
+                            }
+                            txAmount = signedNativeAmt * rate
+                            origCurr = currency
+                            origAmt = signedNativeAmt
+                            usedRate = rate
+                        }
 
                         val vs = if (line.length >= 71) {
                             line.substring(61, minOf(71, line.length)).trim().trimStart('0')
                         } else ""
 
-                        val bankCode = if (line.length >= 75) {
-                            line.substring(71, minOf(75, line.length)).trim()
+                        // ČBA ABO/GPC 075 standard: counterparty bank code at [73, 77)
+                        val bankCode = if (line.length >= 77) {
+                            line.substring(73, 77).trim().takeIf {
+                                it.length == 4 && it.all(Char::isDigit) && it != "0000"
+                            } ?: ""
                         } else ""
 
                         val counterpartyAcc = when {
@@ -128,17 +178,16 @@ internal object AboGpcParser {
                             else -> ""
                         }
 
-                        val rawNote = if (line.length >= 115) {
-                            line.substring(89, minOf(115, line.length)).trim()
-                        } else if (line.length > 89) {
-                            line.substring(89).trim()
+                        // ČBA ABO/GPC 075 standard: counterparty note at [97, 117)
+                        val rawNote = if (line.length >= 117) {
+                            line.substring(97, 117).trim()
+                        } else if (line.length > 97) {
+                            line.substring(97).trim()
                         } else ""
 
-                        // Support standard ČBA 128-byte offsets plus legacy offset fallbacks
+                        // ČBA ABO/GPC 075 standard: posting date at [122, 128), fallback to value date [91, 97)
                         val postingDate = when {
                             line.length >= 128 && parseAboDate(line.substring(122, 128)) != null -> parseAboDate(line.substring(122, 128))
-                            line.length >= 127 && parseAboDate(line.substring(121, 127)) != null -> parseAboDate(line.substring(121, 127))
-                            line.length >= 121 && parseAboDate(line.substring(115, 121)) != null -> parseAboDate(line.substring(115, 121))
                             line.length >= 97 && parseAboDate(line.substring(91, 97)) != null -> parseAboDate(line.substring(91, 97))
                             else -> null
                         }
@@ -181,7 +230,10 @@ internal object AboGpcParser {
                             variableSymbol = vs,
                             category = cat,
                             isNetted = isNetted,
-                            nettingReason = nettingReason
+                            nettingReason = nettingReason,
+                            originalCurrency = origCurr,
+                            originalAmount = origAmt,
+                            exchangeRate = usedRate
                         )
                     }
                 }
@@ -220,11 +272,14 @@ internal object AboGpcParser {
         }
         pendingTransaction?.let { transactions.add(it) }
 
-        if (detectedBank == BankType.GENERIC && transactions.isNotEmpty()) {
-            val detectedFromTxs = transactions.mapNotNull { tx ->
-                BankDetector.bankFromAccountCode(tx.counterpartyAccount.split("/").getOrNull(1))
-            }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
-            if (detectedFromTxs != null) detectedBank = detectedFromTxs
+        val sharedNonCzkCurr = if (transactions.isNotEmpty() && transactions.all { it.originalCurrency != null }) {
+            transactions.mapNotNull { it.originalCurrency }.distinct().singleOrNull()
+        } else null
+        if (closingBalance != null && sharedNonCzkCurr != null) {
+            val sharedRate = FxRateService.getRateOrNull(sharedNonCzkCurr)
+            if (sharedRate != null && sharedRate.isFinite() && sharedRate > 0.0) {
+                closingBalance = closingBalance!! * sharedRate
+            }
         }
 
         val resolvedOwnKey = when {
@@ -241,12 +296,18 @@ internal object AboGpcParser {
             transactions
         }
 
+        val parseWarning = if (unknownCurrencies.isNotEmpty()) {
+            "Skipped ABO/GPC transaction(s) with unsupported currency: ${unknownCurrencies.joinToString(", ")}"
+        } else {
+            null
+        }
+
         return TransactionCategorizer.buildSummary(
             bankType = detectedBank,
             transactions = taggedTxs,
             monthEndBalance = closingBalance,
             forcedYearMonth = statementYm,
             accountKey = resolvedOwnKey
-        )
+        ).copy(parseWarning = parseWarning)
     }
 }

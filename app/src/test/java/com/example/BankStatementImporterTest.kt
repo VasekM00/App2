@@ -399,7 +399,7 @@ class BankStatementImporterTest {
     fun testStandingOrderRentCategorization() {
         val statementCsv = """
             Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
-            20.07.2026;123456/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Platba
+            20.07.2026;123456/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Nájem bytu
         """.trimIndent()
 
         val summary = BankStatementImporter.parseStatement(statementCsv.byteInputStream(Charsets.UTF_8))
@@ -417,7 +417,7 @@ class BankStatementImporterTest {
         val multiMonthCsv = """
             Datum zaúčtování;Číslo protiúčtu;Název protiúčtu;Částka;Měna;Zpráva pro příjemce
             10.07.2026;123456/0800;Albert Česká republika s.r.o.;-1 200,00;CZK;Potraviny
-            20.07.2026;987654/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Platba
+            20.07.2026;987654/0300;Trvalý příkaz k úhradě Příkazce: Martinů Václav;-18 950,00;CZK;Nájem bytu
             02.08.2026;555666/0800;Billa s.r.o.;-800,00;CZK;Nákup
             05.08.2026;777888/2010;Rohlik.cz;-1 500,00;CZK;Online potraviny
         """.trimIndent()
@@ -494,41 +494,50 @@ class BankStatementImporterTest {
     @Test
     fun testAboGpcStatementImport() {
         val header = "074" +
-                "1234567890123456" + // 16 chars client acc
-                "MARTINU VACLAV            " + // 26 chars name
-                "010726" + // 6 chars old date
-                "00000001154000" + "+" + // 14 chars old bal + sign
-                "00000008500000" + "+" + // 14 chars new bal + sign
-                "00000000154000" + // 14 chars debit turnover
-                "00000007500000" + // 14 chars credit turnover
-                "001" + // 3 chars st num
-                "150726" // 6 chars st date
+                "1234567890123456" + // 16 chars client acc [3..19)
+                "MARTINU VACLAV      " + // 20 chars name [19..39)
+                "010726" + // 6 chars old date [39..45)
+                "00000001154000" + "+" + // 14 chars old bal + sign [45..60)
+                "00000008500000" + "+" + // 14 chars new bal + sign [60..75)
+                "00000000154000" + "0" + // 14 chars debit turnover + sign [75..90)
+                "00000007500000" + "0" + // 14 chars credit turnover + sign [90..105)
+                "001" + // 3 chars st num [105..108)
+                "150726" + // 6 chars st date [108..114)
+                "              " // 14 chars padding [114..128)
 
         val txDebit = "075" +
-                "1234567890123456" +
-                "0000001234567890" + // 16 chars cp acc
-                "1234567890123" + // 13 chars doc
-                "000000154000" + // 12 chars amt: 1,540.00 CZK
-                "1" + // code 1 = debit
-                "0000000000" + // 10 chars vs
-                "0800" + // 4 chars bank
-                "0000" + // 4 chars ks
-                "0000000000" + // 10 chars ss
-                "Billa nakup potravin      " + // 26 chars note
-                "120726" // 6 chars date: 2026-07-12
+                "1234567890123456" + // [3..19)
+                "0000001234567890" + // [19..35) 16 chars cp acc
+                "1234567890123" + // [35..48) 13 chars doc
+                "000000154000" + // [48..60) 12 chars amt: 1,540.00 CZK
+                "1" + // [60] code 1 = debit
+                "0000000000" + // [61..71) 10 chars vs
+                "00" + // [71..73) 2 chars KS prefix
+                "0800" + // [73..77) 4 chars bank code
+                "0000" + // [77..81) 4 chars KS suffix
+                "0000000000" + // [81..91) 10 chars ss
+                "120726" + // [91..97) 6 chars valuta date
+                "Billa nakup potravin" + // [97..117) 20 chars note
+                "0" + // [117]
+                "0203" + // [118..122) ISO CZK
+                "120726" // [122..128) posting date: 2026-07-12
 
         val txCredit = "075" +
-                "1234567890123456" +
-                "0000009876543210" +
-                "1234567890124" +
-                "000007500000" + // 12 chars amt: 75,000.00 CZK
-                "2" + // code 2 = credit
-                "0000012345" +
-                "0100" +
-                "0000" +
-                "0000000000" +
-                "Zamestnavatel a.s.        " +
-                "150726" // 6 chars date: 2026-07-15
+                "1234567890123456" + // [3..19)
+                "0000009876543210" + // [19..35)
+                "1234567890124" + // [35..48)
+                "000007500000" + // [48..60) 12 chars amt: 75,000.00 CZK
+                "2" + // [60] code 2 = credit
+                "0000012345" + // [61..71)
+                "00" + // [71..73)
+                "0100" + // [73..77)
+                "0000" + // [77..81)
+                "0000000000" + // [81..91)
+                "150726" + // [91..97)
+                "Zamestnavatel a.s.  " + // [97..117) 20 chars note
+                "0" + // [117]
+                "0203" + // [118..122)
+                "150726" // [122..128) posting date: 2026-07-15
         val txCreditMemo = "076 Mzda za 06/2026"
 
         val gpcContent = listOf(header, txDebit, txCredit, txCreditMemo).joinToString("\r\n")

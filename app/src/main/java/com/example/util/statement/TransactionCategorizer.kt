@@ -41,14 +41,24 @@ internal object TransactionCategorizer {
         val isExplicitRefund = folded.contains("vraceni") || folded.contains("vratka") ||
             folded.contains("storno") || folded.contains("refund")
 
-        // 1. Incoming parental/family gift accounts take precedence over self-transfer netting.
+        // 1. Explicit user merchant overrides apply first across both inflows and outflows.
+        val resolvedOverrides = compiledOverrides ?: CzechMerchantCatalog.compileOverrides(userOverrides)
+        val overrideMatch = CzechMerchantCatalog.matchUserOverrideOnly(
+            "$counterpartyName $counterpartyAcc $message $rawContext",
+            resolvedOverrides
+        )
+        if (overrideMatch != null) {
+            return overrideMatch
+        }
+
+        // 2. Incoming parental/family gift accounts take precedence over self-transfer netting.
         if (amount > 0 && !isExplicitRefund &&
             CzechValueParsers.isKnownAccountMatch(counterpartyAcc, knownParentalGiftAccounts)
         ) {
             return BankTransactionType.FAMILY_GIFT
         }
 
-        // 2. Self or family internal transfers (canonical account match, NOT raw substring).
+        // 3. Self or family internal transfers (canonical account match, NOT raw substring).
         if (CrossStatementReconciliationEngine.isSelfOrFamilyTransfer(
                 counterpartyName = counterpartyName,
                 counterpartyAccount = counterpartyAcc,
@@ -65,21 +75,30 @@ internal object TransactionCategorizer {
             return BankTransactionType.INTERNAL_TRANSFER
         }
 
-        // 3. Explicit user merchant overrides apply across both inflows and outflows.
-        val resolvedOverrides = compiledOverrides ?: CzechMerchantCatalog.compileOverrides(userOverrides)
-        val overrideMatch = CzechMerchantCatalog.matchUserOverrideOnly(
-            "$counterpartyName $counterpartyAcc $message $rawContext",
-            resolvedOverrides
-        )
-        if (overrideMatch != null) {
-            return overrideMatch
-        }
-
         // 4. Inflows (amount > 0): income unless explicitly marked as a refund/storno.
         if (amount > 0 && !isExplicitRefund) {
-            val spouseNameNorm = householdNames.drop(1).firstOrNull()
+            val primaryTokens = householdNames.firstOrNull()
                 ?.let { CzechMerchantCatalog.normalizeSimple(it) }
-                ?.takeIf { it.length >= 3 }
+                ?.split(" ")
+                ?.filter { it.length >= 3 }
+                .orEmpty()
+            val spouseTokens = householdNames.drop(1).firstOrNull()
+                ?.let { CzechMerchantCatalog.normalizeSimple(it) }
+                ?.split(" ")
+                ?.filter { it.length >= 3 }
+                .orEmpty()
+            val distinctiveSpouseTokens = spouseTokens.filter { it !in primaryTokens }
+            val distinctivePrimaryTokens = primaryTokens.filter { it !in spouseTokens }
+            val matchesFullSpouse = spouseTokens.size >= 2 && spouseTokens.all { tok ->
+                Regex("""\b${Regex.escape(tok)}\b""").containsMatchIn(folded)
+            }
+            val matchesDistinctiveSpouse = distinctiveSpouseTokens.any { tok ->
+                Regex("""\b${Regex.escape(tok)}\b""").containsMatchIn(folded)
+            }
+            val matchesDistinctivePrimary = distinctivePrimaryTokens.any { tok ->
+                Regex("""\b${Regex.escape(tok)}\b""").containsMatchIn(folded)
+            }
+            val matchesSpouseSalary = matchesFullSpouse || (matchesDistinctiveSpouse && !matchesDistinctivePrimary)
             return when {
                 folded.contains("rodicovsk") || folded.contains("urad prace") ||
                     SALARY_RODP_REGEX.containsMatchIn(folded) ->
@@ -91,9 +110,7 @@ internal object TransactionCategorizer {
                     knownParentalGiftAccounts = knownParentalGiftAccounts
                 ) ->
                     BankTransactionType.FAMILY_GIFT
-                spouseNameNorm != null && spouseNameNorm.split(" ").any { tok ->
-                    tok.length >= 3 && Regex("""\b${Regex.escape(tok)}\b""").containsMatchIn(folded)
-                } ->
+                matchesSpouseSalary ->
                     BankTransactionType.SALARY_ELEONORA
                 folded.contains("zamestnavatel") || folded.contains("mzda") ||
                     SALARY_PLAT_REGEX.containsMatchIn(folded) || folded.contains("vyplata") ||
@@ -113,7 +130,7 @@ internal object TransactionCategorizer {
             return catalogMatch
         }
 
-        // 6. Rent & Housing Priority Check (matched on ASCII-folded text so \b handles diacritics cleanly)
+        // 6. Rent & Housing Priority Check (requires explicit housing keywords; never guess from standing-order amount)
         if (amount < 0) {
             val isExcludedFromHousing = folded.contains("nabytek") ||
                 folded.contains("ubytovan") || folded.contains("hotel") || folded.contains("ikea") ||
@@ -129,10 +146,7 @@ internal object TransactionCategorizer {
                     folded.contains("bydleni") || HOUSING_BYT_REGEX.containsMatchIn(folded) ||
                     folded.contains("pronajem") || folded.contains("pronajimatel") ||
                     folded.contains("najemce") || folded.contains("podnajem") ||
-                    folded.contains("sipo") ||
-                    (kotlin.math.abs(amount) in 15000.0..25000.0 && (
-                        folded.contains("trvaly") || folded.contains("prikaz")
-                    ))
+                    folded.contains("sipo")
             )
             if (hasHousingKeyword) {
                 return BankTransactionType.HOUSING_RENT
@@ -158,10 +172,14 @@ internal object TransactionCategorizer {
         }
 
         val isDpsAcc = cleanAcc.contains("5005004433") || folded.contains("5005004433")
-        if (isDpsAcc || folded.contains("penzij") || INV_DPS_WORD_REGEX.containsMatchIn(folded) ||
-            folded.contains("conseq") || folded.contains("generali") ||
-            folded.contains("allianz") || folded.contains("nn penzij") ||
-            folded.contains("nn penze")
+        val hasPensionContext = folded.contains("penzij") || folded.contains("penze") || INV_DPS_WORD_REGEX.containsMatchIn(folded)
+        val isInsuranceOnly = folded.contains("pojist") && !hasPensionContext
+        if (!isInsuranceOnly && (
+                isDpsAcc ||
+                hasPensionContext ||
+                ((folded.contains("conseq") || folded.contains("generali") ||
+                    folded.contains("allianz") || folded.contains("nn ")) && hasPensionContext)
+            )
         ) {
             return BankTransactionType.INVESTMENT_DPS
         }
@@ -204,7 +222,11 @@ internal object TransactionCategorizer {
             accountKey = summary.accountKey
         ).copy(
             isPdfSource = summary.isPdfSource,
-            monthEndBalancesByBank = summary.monthEndBalancesByBank
+            monthEndBalancesByBank = summary.monthEndBalancesByBank,
+            openingBalance = summary.openingBalance,
+            balanceCheckPassed = summary.balanceCheckPassed,
+            balanceDiscrepancy = summary.balanceDiscrepancy,
+            parseWarning = summary.parseWarning
         )
     }
 
@@ -403,6 +425,7 @@ internal object TransactionCategorizer {
                 .maxWithOrNull(compareBy<StatementParseSummary> { if (StatementTextDecoder.YEAR_MONTH_REGEX.matches(it.yearMonth)) it.yearMonth else "" })
                 ?.monthEndBalance
 
+        val warnings = summaries.mapNotNull { it.parseWarning?.takeIf(String::isNotBlank) }.distinct()
         return buildSummary(
             bankType = bankType,
             transactions = sortedTxs,
@@ -410,7 +433,8 @@ internal object TransactionCategorizer {
             forcedYearMonth = latestYm
         ).copy(
             isPdfSource = summaries.any { it.isPdfSource },
-            monthEndBalancesByBank = balancesByMonthAndBank.mapValues { it.value.toMap() }
+            monthEndBalancesByBank = balancesByMonthAndBank.mapValues { it.value.toMap() },
+            parseWarning = warnings.joinToString(" | ").ifBlank { null }
         )
     }
 

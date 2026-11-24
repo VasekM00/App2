@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +58,7 @@ import com.example.ui.theme.BadRed
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.BankTransactionType
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import java.util.Locale
 
 @Composable
@@ -70,11 +71,12 @@ fun MonthlyTransactionsCard(
 ) {
     if (transactions.isEmpty()) return
 
-    var isExpanded by remember { mutableStateOf(true) }
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    var showAllTransactions by remember(yearMonth) { mutableStateOf(false) }
-    var editingTx by remember { mutableStateOf<ImportedBankTransactionEntity?>(null) }
+    var isExpanded by rememberSaveable { mutableStateOf(true) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var selectedFilterIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showAllTransactions by rememberSaveable(yearMonth) { mutableStateOf(false) }
+    var editingTxId by rememberSaveable(yearMonth) { mutableStateOf<Long?>(null) }
+    val editingTx = editingTxId?.let { id -> transactions.firstOrNull { it.id == id } }
 
     val filterLabels = remember(transactions) {
         val inflowsCount = transactions.count { it.amount > 0 && !it.isNetted }
@@ -312,7 +314,7 @@ fun MonthlyTransactionsCard(
                         visibleTransactions.forEach { tx ->
                             TransactionRowItem(
                                 tx = tx,
-                                onClick = { editingTx = tx }
+                                onClick = { editingTxId = tx.id }
                             )
                         }
                         if (filteredTransactions.size > 30) {
@@ -372,7 +374,7 @@ fun MonthlyTransactionsCard(
                             )
                             val netColor = if (totalNetFiltered >= 0) GoodGreen else BadRed
                             Text(
-                                text = (if (totalNetFiltered >= 0) "+" else "") + fmtCZK(totalNetFiltered),
+                                text = (if (totalNetFiltered >= 0) "+" else "") + fmtExactCZK(totalNetFiltered),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
@@ -404,7 +406,7 @@ fun MonthlyTransactionsCard(
             onToggleExcluded = {
                 onToggleExcluded?.invoke(tx.id)
             },
-            onDismiss = { editingTx = null }
+            onDismiss = { editingTxId = null }
         )
     }
 }
@@ -564,7 +566,7 @@ private fun TransactionRowItem(
 
             // Right block: Amount
             Text(
-                text = (if (isCredit) "+" else "") + fmtCZK(safeAmount),
+                text = (if (isCredit) "+" else "") + fmtExactCZK(safeAmount),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = BodyFontFamily,

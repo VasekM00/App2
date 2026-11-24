@@ -45,6 +45,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.Formatters.fmtPct
 
 fun LazyListScope.settingsFireSubTab(
@@ -467,7 +468,7 @@ fun LazyListScope.settingsFireSubTab(
     item {
         SettingsGroupCard(
             title = "Czech Tax Relief",
-            subtitle = "Tax ${fmtPct(s.taxRatePct)}/${fmtPct(s.taxRateSecondPct)} · DIP +${fmtCZK(state.taxReturnHelper.dipSaving)} yearly",
+            subtitle = "Tax ${fmtPct(s.taxRatePct)}/${fmtPct(s.taxRateSecondPct)} · DIP +${fmtExactCZK(state.taxReturnHelper.dipSaving)} yearly",
             initiallyExpanded = false,
             badgeText = "ADVANCED",
             badgeColor = BrandGold,
@@ -506,12 +507,12 @@ fun LazyListScope.settingsFireSubTab(
                     if (!s.isSingleHousehold) {
                         TaxSummaryRow(
                             label = "$sName Income",
-                            status = fmtCZK(state.taxReturnHelper.spouseOwnIncome),
+                            status = fmtExactCZK(state.taxReturnHelper.spouseOwnIncome),
                             isGood = state.taxReturnHelper.spouseOwnIncome <= s.spouseIncomeLimitAnnual
                         )
                         TaxSummaryRow(
                             label = "$sName Tax Credit Eligible",
-                            status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtCZK(state.taxReturnHelper.spouseCredit)})" else "No",
+                            status = if (state.taxReturnHelper.spouseEligible) "Yes (+${fmtExactCZK(state.taxReturnHelper.spouseCredit)})" else "No",
                             isGood = state.taxReturnHelper.spouseEligible
                         )
                     }
@@ -524,7 +525,7 @@ fun LazyListScope.settingsFireSubTab(
                         status = when {
                             !s.child1Enabled -> "Disabled"
                             c1Age < 0 -> "Planned (${s.child1BirthYear})"
-                            c1ActiveNow -> "+${fmtCZK(s.child1TaxBonusAnnual)} (${fmtCZK(s.child1TaxBonusAnnual / 12)} monthly)"
+                            c1ActiveNow -> "+${fmtExactCZK(s.child1TaxBonusAnnual)} (${fmtExactCZK(s.child1TaxBonusAnnual / 12)} monthly)"
                             else -> "Aged out"
                         },
                         isGood = c1ActiveNow
@@ -536,7 +537,7 @@ fun LazyListScope.settingsFireSubTab(
                             c2Age < 0 -> "Planned (${s.child2BirthYear})"
                             c2ActiveNow -> {
                                 val child2EffectiveBonus = if (c1ActiveNow) s.child2TaxBonusAnnual else s.child1TaxBonusAnnual
-                                "+${fmtCZK(child2EffectiveBonus)} (${fmtCZK(child2EffectiveBonus / 12)} monthly)"
+                                "+${fmtExactCZK(child2EffectiveBonus)} (${fmtExactCZK(child2EffectiveBonus / 12)} monthly)"
                             }
                             else -> "Aged out"
                         },
@@ -544,12 +545,12 @@ fun LazyListScope.settingsFireSubTab(
                     )
                     TaxSummaryRow(
                         label = "Total Child Tax Bonus",
-                        status = "+${fmtCZK(state.taxReturnHelper.childBonus)}",
+                        status = "+${fmtExactCZK(state.taxReturnHelper.childBonus)}",
                         isGood = true
                     )
                     TaxSummaryRow(
                         label = "DIP & DPS Annual Tax Saving",
-                        status = "+${fmtCZK(state.taxReturnHelper.dipSaving)}",
+                        status = "+${fmtExactCZK(state.taxReturnHelper.dipSaving)}",
                         isGood = true
                     )
                 }

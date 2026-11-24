@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +70,7 @@ import com.example.ui.theme.OnBrandTeal
 import com.example.util.BankStatementImporter
 import com.example.util.BankTransactionType
 import com.example.util.CzechMerchantCatalog
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import com.example.util.MerchantLookupService
 import kotlinx.coroutines.launch
 
@@ -90,9 +91,11 @@ fun EditImportedTransactionDialog(
         }
     }
 
-    var selectedCategory by remember(tx.id, tx.category) { mutableStateOf(initialCat) }
-    var rememberMerchant by remember(tx.id) { mutableStateOf(true) }
-    var applyToAllMatching by remember(tx.id, matchingCountInMonth) { mutableStateOf(matchingCountInMonth > 1) }
+    var selectedCategory by rememberSaveable(tx.id, tx.category, stateSaver = bankTransactionTypeSaver(initialCat)) {
+        mutableStateOf(initialCat)
+    }
+    var rememberMerchant by rememberSaveable(tx.id) { mutableStateOf(true) }
+    var applyToAllMatching by rememberSaveable(tx.id, matchingCountInMonth) { mutableStateOf(matchingCountInMonth > 1) }
     val coroutineScope = rememberCoroutineScope()
     var isSearchingOnline by remember(tx.id) { mutableStateOf(false) }
     var onlineLookupResult by remember(tx.id) { mutableStateOf<MerchantLookupService.LookupResult?>(null) }
@@ -208,7 +211,7 @@ fun EditImportedTransactionDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = (if (isCredit) "+" else "") + fmtCZK(safeAmount),
+                                    text = (if (isCredit) "+" else "") + fmtExactCZK(safeAmount),
                                     style = MaterialTheme.typography.titleSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,

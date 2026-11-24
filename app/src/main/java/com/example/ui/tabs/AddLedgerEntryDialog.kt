@@ -57,9 +57,9 @@ import com.example.ui.theme.BrandGold
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
-import com.example.util.Formatters.fmtCZK
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtEditableAmount
+import com.example.util.Formatters.fmtExactCZK
 import java.util.Locale
 
 fun nextYearMonth(ym: String): String {
@@ -371,7 +371,7 @@ internal fun AddLedgerEntryDialog(
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             ColorPill(
-                                text = "+ " + fmtCZK(totalInflows),
+                                text = "+ " + fmtExactCZK(totalInflows),
                                 color = GoodGreen,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -440,7 +440,7 @@ internal fun AddLedgerEntryDialog(
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             ColorPill(
-                                text = "- " + fmtCZK(totalExpenses),
+                                text = "- " + fmtExactCZK(totalExpenses),
                                 color = BadRed,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -510,7 +510,7 @@ internal fun AddLedgerEntryDialog(
                                 )
                             }
                             Text(
-                                text = (if (netFlow >= 0) "+ " else "") + fmtCZK(netFlow),
+                                text = (if (netFlow >= 0) "+ " else "") + fmtExactCZK(netFlow),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = BodyFontFamily,
@@ -574,7 +574,7 @@ internal fun AddLedgerEntryDialog(
                             )
                             if (vTotalNetWorth > 0) {
                                 ColorPill(
-                                    text = fmtCZK(vTotalNetWorth),
+                                    text = fmtExactCZK(vTotalNetWorth),
                                     color = BrandGold,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -680,7 +680,7 @@ internal fun AddLedgerEntryDialog(
                     val parsedIncU = parseRequired(incU, "Other inflows") ?: return@Button
                     val parsedExpR = parseRequired(expR, "Rent / Housing") ?: return@Button
                     val parsedExpL = parseRequired(expL, "Variable living") ?: return@Button
-                    val (okPortu, parsedBalPortu) = parseOptional(balPortu, "Portu balance")
+                    val (okPortu, parsedBalPortu) = parseOptional(balPortu, "Liquid ETF balance")
                     if (!okPortu) return@Button
                     val (okPension, parsedBalPension) = parseOptional(balPension, "Pension balance")
                     if (!okPension) return@Button

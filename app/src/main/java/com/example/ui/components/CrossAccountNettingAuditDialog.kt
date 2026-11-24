@@ -47,7 +47,7 @@ import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
 import com.example.util.CrossStatementAuditReport
-import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 
 @Composable
 fun CrossAccountNettingAuditDialog(
@@ -173,7 +173,7 @@ fun CrossAccountNettingAuditDialog(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = fmtCZK(auditReport.totalNettedAmount.finiteOrZero()),
+                            text = fmtExactCZK(auditReport.totalNettedAmount.finiteOrZero()),
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = BodyFontFamily,
@@ -217,7 +217,7 @@ fun CrossAccountNettingAuditDialog(
                                         .padding(end = 8.dp)
                                 )
                                 Text(
-                                    text = fmtCZK((auditReport.combinedEmergencyReserve ?: 0.0).finiteOrZero()),
+                                    text = fmtExactCZK((auditReport.combinedEmergencyReserve ?: 0.0).finiteOrZero()),
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,
@@ -249,7 +249,7 @@ fun CrossAccountNettingAuditDialog(
                                             .padding(end = 8.dp)
                                     )
                                     Text(
-                                        text = fmtCZK(bal.finiteOrZero()),
+                                        text = fmtExactCZK(bal.finiteOrZero()),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 11.5.sp,
                                             fontFamily = BodyFontFamily,
@@ -369,7 +369,7 @@ fun CrossAccountNettingAuditDialog(
                                             )
                                         }
                                         Text(
-                                            text = fmtCZK(pair.amount.finiteOrZero()),
+                                            text = fmtExactCZK(pair.amount.finiteOrZero()),
                                             style = MaterialTheme.typography.labelLarge.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = BodyFontFamily,
@@ -443,7 +443,7 @@ fun CrossAccountNettingAuditDialog(
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = fmtCZK(kotlin.math.abs(tx.amount.finiteOrZero())),
+                                        text = fmtExactCZK(kotlin.math.abs(tx.amount.finiteOrZero())),
                                         style = MaterialTheme.typography.labelLarge.copy(
                                             fontWeight = FontWeight.Bold,
                                             fontFamily = BodyFontFamily,

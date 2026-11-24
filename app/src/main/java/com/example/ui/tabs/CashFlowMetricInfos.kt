@@ -6,6 +6,7 @@ import com.example.data.SettingsEntity
 import com.example.domain.FinancialEngine
 import com.example.ui.components.MetricInfo
 import com.example.util.Formatters.fmtCZK
+import com.example.util.Formatters.fmtExactCZK
 import kotlin.math.roundToInt
 
 private val GoodGreen = Color(0xFF16A34A)
@@ -149,52 +150,52 @@ internal object CashFlowMetricInfos {
     fun ledgerIncomes(entry: LedgerEntryEntity, baselineInc: Double) = MetricInfo(
         title = "Monthly Inflows · ${entry.yearMonth}",
         category = "Actual Bank Record",
-        formulaOrRule = "Primary (${fmtCZK(entry.incVaclav)}) + Partner (${fmtCZK(entry.incEleonora)}) + Other (${fmtCZK(entry.incUnforeseen)})",
+        formulaOrRule = "Primary (${fmtExactCZK(entry.incVaclav)}) + Partner (${fmtExactCZK(entry.incEleonora)}) + Other (${fmtExactCZK(entry.incUnforeseen)})",
         explanation = "Total liquid cash deposited into your household accounts during ${entry.yearMonth}. Inflows reflect net take-home pay after Czech income taxes (15%/23%), social security (7.1%), and health insurance (4.5%).",
         practicalImplication = if (entry.incVaclav + entry.incEleonora + entry.incUnforeseen >= baselineInc)
-            "Inflows exceeded your standard monthly budget baseline (${fmtCZK(baselineInc)}) by ${fmtCZK((entry.incVaclav + entry.incEleonora + entry.incUnforeseen) - baselineInc)}."
+            "Inflows exceeded your standard monthly budget baseline (${fmtExactCZK(baselineInc)}) by ${fmtExactCZK((entry.incVaclav + entry.incEleonora + entry.incUnforeseen) - baselineInc)}."
         else
-            "Inflows were ${fmtCZK(baselineInc - (entry.incVaclav + entry.incEleonora + entry.incUnforeseen))} below your baseline budget (${fmtCZK(baselineInc)}).",
+            "Inflows were ${fmtExactCZK(baselineInc - (entry.incVaclav + entry.incEleonora + entry.incUnforeseen))} below your baseline budget (${fmtExactCZK(baselineInc)}).",
         accentColor = GoodGreen
     )
 
     fun ledgerExpenses(entry: LedgerEntryEntity, baselineExp: Double) = MetricInfo(
         title = "Monthly Living Expenses · ${entry.yearMonth}",
         category = "Actual Bank Record",
-        formulaOrRule = "Rent (${fmtCZK(entry.expRent)}) + Groceries (${fmtCZK(entry.expGroceries)}) + Other Living (${fmtCZK(entry.expOther)})",
+        formulaOrRule = "Rent (${fmtExactCZK(entry.expRent)}) + Groceries (${fmtExactCZK(entry.expGroceries)}) + Other Living (${fmtExactCZK(entry.expOther)})",
         explanation = "Combined operational burn rate logged for ${entry.yearMonth}. Groceries and day-to-day spending are tracked separately from housing rent to highlight discretionary lifestyle inflation.",
         practicalImplication = if (entry.expRent + entry.expGroceries + entry.expOther <= baselineExp)
-            "Total spending remained ${fmtCZK(baselineExp - (entry.expRent + entry.expGroceries + entry.expOther))} below your baseline plan (${fmtCZK(baselineExp)}), creating extra investment capacity."
+            "Total spending remained ${fmtExactCZK(baselineExp - (entry.expRent + entry.expGroceries + entry.expOther))} below your baseline plan (${fmtExactCZK(baselineExp)}), creating extra investment capacity."
         else
-            "Spending exceeded your baseline living plan (${fmtCZK(baselineExp)}) by ${fmtCZK((entry.expRent + entry.expGroceries + entry.expOther) - baselineExp)}.",
+            "Spending exceeded your baseline living plan (${fmtExactCZK(baselineExp)}) by ${fmtExactCZK((entry.expRent + entry.expGroceries + entry.expOther) - baselineExp)}.",
         accentColor = BadRed
     )
 
     fun ledgerNetFlow(entry: LedgerEntryEntity, totalInc: Double, totalExp: Double, netFlow: Double, savingsRate: Double) = MetricInfo(
         title = "Net Cash Flow · ${entry.yearMonth}",
         category = "Actual Capital Generation",
-        formulaOrRule = "Total Inflows (${fmtCZK(totalInc)}) - Living Expenses (${fmtCZK(totalExp)}) = ${fmtCZK(netFlow)}",
+        formulaOrRule = "Total Inflows (${fmtExactCZK(totalInc)}) - Living Expenses (${fmtExactCZK(totalExp)}) = ${fmtExactCZK(netFlow)}",
         explanation = "Net uncommitted liquidity produced by the household in ${entry.yearMonth}. Your savings rate for this month was ${savingsRate.roundToInt()}%.",
-        practicalImplication = "This cash surplus funds your automated ETF DCA allocations (Portu, DIP, DPS) and expands your liquid emergency reserve.",
+        practicalImplication = "This cash surplus funds your automated ETF DCA allocations (Liquid ETF, DIP, DPS) and expands your liquid emergency reserve.",
         accentColor = BrandTeal
     )
 
     fun ledgerBudgetVariance(diff: Double, baselineSurplus: Double, actualNet: Double) = MetricInfo(
         title = "vs Baseline Budget Performance",
         category = "Monthly Variance Analysis",
-        formulaOrRule = "Actual Net (${fmtCZK(actualNet)}) - Baseline Plan Net (${fmtCZK(baselineSurplus)}) = ${if (diff >= 0) "+" else ""}${fmtCZK(diff)}",
+        formulaOrRule = "Actual Net (${fmtExactCZK(actualNet)}) - Baseline Plan Net (${fmtExactCZK(baselineSurplus)}) = ${if (diff >= 0) "+" else ""}${fmtExactCZK(diff)}",
         explanation = "Measures how much more (or less) uncommitted capital your household generated this month compared to your planned baseline financial budget.",
         practicalImplication = if (diff >= 0)
-            "Positive budget outperformance. You generated ${fmtCZK(diff)} more capital than planned, accelerating your FIRE timeline."
+            "Positive budget outperformance. You generated ${fmtExactCZK(diff)} more capital than planned, accelerating your FIRE timeline."
         else
-            "Negative variance of ${fmtCZK(-diff)}. Review discretionary lifestyle spending or unexpected expenses to re-align with budget.",
+            "Negative variance of ${fmtExactCZK(-diff)}. Review discretionary lifestyle spending or unexpected expenses to re-align with budget.",
         accentColor = if (diff >= 0) GoodGreen else BadRed
     )
 
     fun ledgerMonthEndWealth(entry: LedgerEntryEntity) = MetricInfo(
         title = "Month-End Wealth Snapshot · ${entry.yearMonth}",
         category = "Net Worth Point-in-Time",
-        formulaOrRule = "Reserve (${fmtCZK(entry.emergencyReserveAtMonthEnd)}) + Portu (${fmtCZK(entry.portfolioBalanceAtMonthEnd)}) + Pension (${fmtCZK(entry.pensionBalanceAtMonthEnd)})",
+        formulaOrRule = "Reserve (${fmtExactCZK(entry.emergencyReserveAtMonthEnd)}) + Liquid ETF (${fmtExactCZK(entry.portfolioBalanceAtMonthEnd)}) + Pension (${fmtExactCZK(entry.pensionBalanceAtMonthEnd)})",
         explanation = "Your point-in-time closing balance of liquid safety reserves and tracked investment portfolios as of the end of ${entry.yearMonth}.",
         practicalImplication = "Tracking your month-end cash reserve ensures your emergency runway (6+ months) remains protected as market values fluctuate.",
         accentColor = BrandGold
@@ -218,9 +219,9 @@ internal object CashFlowMetricInfos {
             category = "Monthly Capital Deployment",
             formulaOrRule = "DCA Investments (${fmtCZK(dcaBase)}) + $reserveRule",
             explanation = if (isManual) {
-                "Shows your recurring monthly investment streams (Portu ETF, DIP, DPS, Employer Match) plus your manually configured monthly emergency reserve contribution (${fmtCZK(reserveContrib)}/month)."
+                "Shows your recurring monthly investment streams (Liquid ETF, DIP, DPS, Employer Match) plus your manually configured monthly emergency reserve contribution (${fmtCZK(reserveContrib)}/month)."
             } else {
-                "Shows your recurring monthly investment streams (Portu ETF, DIP, DPS, Employer Match) plus an automatic 24-month emergency reserve catch-up whenever your current reserve (${fmtCZK(reserveCurrent)}) is below your ${settings.emergencyReserveMode} target (${fmtCZK(reserveTarget)})."
+                "Shows your recurring monthly investment streams (Liquid ETF, DIP, DPS, Employer Match) plus an automatic 24-month emergency reserve catch-up whenever your current reserve (${fmtCZK(reserveCurrent)}) is below your ${settings.emergencyReserveMode} target (${fmtCZK(reserveTarget)})."
             },
             practicalImplication = "Tap Edit on the Savings & Investment Allocations card to switch Emergency Reserve Contribution between Auto (24-month target catch-up) and an explicit Manual monthly amount (including 0 Kč).",
             accentColor = BrandTeal

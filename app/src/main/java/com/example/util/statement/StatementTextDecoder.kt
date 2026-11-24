@@ -142,6 +142,7 @@ internal object StatementTextDecoder {
         val lines = mutableListOf<String>()
         val sb = StringBuilder()
         var inQuotes = false
+        var atFieldStart = true
         var linesInQuote = 0
         var i = 0
         val len = content.length
@@ -152,9 +153,17 @@ internal object StatementTextDecoder {
                     sb.append("\"\"")
                     i++
                 }
-                c == '"' -> {
-                    inQuotes = !inQuotes
-                    if (!inQuotes) linesInQuote = 0
+                c == '"' && inQuotes -> {
+                    inQuotes = false
+                    linesInQuote = 0
+                    atFieldStart = false
+                    sb.append(c)
+                }
+                c == '"' && !inQuotes -> {
+                    if (atFieldStart) {
+                        inQuotes = true
+                        atFieldStart = false
+                    }
                     sb.append(c)
                 }
                 (c == '\r' || c == '\n') && !inQuotes -> {
@@ -170,6 +179,7 @@ internal object StatementTextDecoder {
                         }
                     }
                     sb.setLength(0)
+                    atFieldStart = true
                 }
                 c == '\n' && inQuotes -> {
                     linesInQuote++
@@ -178,19 +188,33 @@ internal object StatementTextDecoder {
                         linesInQuote = 0
                         val line = sb.toString().trim()
                         if (line.isNotBlank()) {
-                            lines.add(line)
+                            if (lines.size < MAX_CSV_LINES) {
+                                lines.add(line)
+                            } else {
+                                return lines
+                            }
                         }
                         sb.setLength(0)
+                        atFieldStart = true
                     } else {
                         sb.append(c)
                     }
                 }
-                else -> sb.append(c)
+                else -> {
+                    if (!inQuotes) {
+                        if (c == ';' || c == ',' || c == '\t' || c == '|') {
+                            atFieldStart = true
+                        } else if (c != ' ') {
+                            atFieldStart = false
+                        }
+                    }
+                    sb.append(c)
+                }
             }
             i++
         }
         val remaining = sb.toString().trim()
-        if (remaining.isNotBlank()) {
+        if (remaining.isNotBlank() && lines.size < MAX_CSV_LINES) {
             lines.add(remaining)
         }
         return lines
@@ -208,7 +232,16 @@ internal object StatementTextDecoder {
                     sb.append('"')
                     i++
                 }
-                c == '"' -> inQuotes = !inQuotes
+                c == '"' && inQuotes -> inQuotes = false
+                c == '"' && !inQuotes -> {
+                    if (sb.isBlank()) {
+                        sb.setLength(0)
+                        inQuotes = true
+                    } else {
+                        // Literal mid-field quote (e.g. Monitor 27")
+                        sb.append('"')
+                    }
+                }
                 c == delimiter && !inQuotes -> {
                     tokens.add(sb.toString().trim())
                     sb.setLength(0)
@@ -222,37 +255,118 @@ internal object StatementTextDecoder {
     }
 
     fun detectCsvDelimiter(lines: List<String>): Char {
-        val sample = lines.take(30).filter { it.isNotBlank() }
-        if (sample.isEmpty()) return ';'
+        val nonBlank = lines.asSequence().filter { it.isNotBlank() }.take(40).toList()
+        if (nonBlank.isEmpty()) return ';'
+
+        val headerIdx = nonBlank.indexOfFirst { line ->
+            val f = foldHeader(line.trimStart('#'))
+            (f.contains("datum") || f.contains("date")) &&
+                (f.contains("castka") || f.contains("objem") || f.contains("amount") ||
+                    f.contains("debet") || f.contains("completed"))
+        }
+        val tableSample = if (headerIdx >= 0) {
+            nonBlank.drop(headerIdx).take(30)
+        } else {
+            nonBlank.take(30)
+        }
+        if (tableSample.isEmpty()) return ';'
 
         fun countUnquoted(line: String, delim: Char): Int {
             var count = 0
             var inQuotes = false
+            var atFieldStart = true
             var i = 0
             while (i < line.length) {
                 val c = line[i]
                 if (c == '"') {
                     if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
                         i++
-                    } else {
-                        inQuotes = !inQuotes
+                    } else if (inQuotes) {
+                        inQuotes = false
+                        atFieldStart = false
+                    } else if (atFieldStart) {
+                        inQuotes = true
+                        atFieldStart = false
                     }
-                } else if (c == delim && !inQuotes) {
-                    count++
+                } else if (!inQuotes) {
+                    if (c == delim) {
+                        count++
+                    }
+                    if (c == ';' || c == ',' || c == '\t' || c == '|') {
+                        atFieldStart = true
+                    } else if (c != ' ') {
+                        atFieldStart = false
+                    }
                 }
                 i++
             }
             return count
         }
 
+        fun countUnquotedCzechDecimalCommas(line: String): Int {
+            var hits = 0
+            var inQuotes = false
+            var atFieldStart = true
+            var i = 0
+            while (i < line.length) {
+                val c = line[i]
+                if (c == '"') {
+                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                        i++
+                    } else if (inQuotes) {
+                        inQuotes = false
+                        atFieldStart = false
+                    } else if (atFieldStart) {
+                        inQuotes = true
+                        atFieldStart = false
+                    }
+                } else if (!inQuotes) {
+                    if (c == ',' && i > 0 && line[i - 1].isDigit() &&
+                        i + 2 < line.length && line[i + 1].isDigit() && line[i + 2].isDigit() &&
+                        (i + 3 >= line.length || line[i + 3] == ';' || line[i + 3] == '\t' ||
+                            line[i + 3] == '|' || line[i + 3].isWhitespace())
+                    ) {
+                        hits++
+                    }
+                    if (c == ';' || c == ',' || c == '\t' || c == '|') {
+                        atFieldStart = true
+                    } else if (c != ' ') {
+                        atFieldStart = false
+                    }
+                }
+                i++
+            }
+            return hits
+        }
+
+        val semicolonCounts = tableSample.map { countUnquoted(it, ';') }
+        val semicolonHighCoverage = semicolonCounts.count { it >= 2 } * 2 >= tableSample.size
+
         var bestDelim = ';'
         var bestScore = -1.0
         for (delim in charArrayOf(';', ',', '\t', '|')) {
-            val counts = sample.map { countUnquoted(it, delim) }.filter { it > 0 }
-            if (counts.isEmpty()) continue
-            val mode = counts.groupingBy { it }.eachCount().maxByOrNull { it.value } ?: continue
-            val consistency = mode.value.toDouble() / counts.size
-            val score = consistency * 1000.0 + mode.key
+            val counts = if (delim == ';') semicolonCounts else tableSample.map { countUnquoted(it, delim) }
+            val positiveCounts = counts.filter { it > 0 }
+            if (positiveCounts.isEmpty()) continue
+            val mode = positiveCounts.groupingBy { it }.eachCount().maxByOrNull { it.value } ?: continue
+            val coverage = mode.value.toDouble() / tableSample.size
+            var score = coverage * 1000.0 + minOf(mode.key, 20) * 15.0
+            if (countUnquoted(tableSample.first(), delim) == mode.key && mode.key >= 1) {
+                score += 150.0
+            }
+            if (delim == ',' && semicolonHighCoverage) {
+                var modalTotalCommas = 0
+                var modalDecimalCommas = 0
+                for (idx in tableSample.indices) {
+                    if (counts[idx] == mode.key) {
+                        modalTotalCommas += counts[idx]
+                        modalDecimalCommas += countUnquotedCzechDecimalCommas(tableSample[idx])
+                    }
+                }
+                if (modalTotalCommas > 0 && modalDecimalCommas * 2 >= modalTotalCommas) {
+                    score -= 250.0
+                }
+            }
             if (score > bestScore) {
                 bestScore = score
                 bestDelim = delim
