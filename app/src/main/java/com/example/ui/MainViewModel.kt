@@ -262,7 +262,8 @@ class MainViewModel internal constructor(
         clearSensitivityOverrides = { setSensitivityOverrides(null, null, null) },
         cancelStatementJobs = statementImportController::cancelPendingJobs,
         importMutex = importMutex,
-        emitSnackbar = ::emitSnackbar
+        emitSnackbar = ::emitSnackbar,
+        invalidateStochasticCache = { lastStochasticSnapshot.set(null) }
     )
 
     init {
@@ -301,7 +302,20 @@ class MainViewModel internal constructor(
         val overrides: CalcOverrides
     )
 
+    private data class StochasticInputKey(
+        val normalizedSettings: SettingsEntity,
+        val retOverride: Double?,
+        val cpiOverride: Double?,
+        val swrOverride: Double?,
+        val partnerBirthYear: Int?,
+        val activeLedgerYearMonth: String?,
+        val activeLedgerPortfolioEnd: Double?,
+        val activeLedgerPensionEnd: Double?,
+        val activeLedgerReserveEnd: Double?
+    )
+
     private data class StochasticSnapshot(
+        val key: StochasticInputKey,
         val monteCarlo: MonteCarloResult,
         val historicalMonteCarlo: MonteCarloResult,
         val retirementSurvival: RetirementSurvivalResult,
@@ -311,6 +325,7 @@ class MainViewModel internal constructor(
     )
 
     private val lastStochasticSnapshot = AtomicReference<StochasticSnapshot?>(null)
+    internal val stochasticRecomputeCount = AtomicInteger(0)
 
     @OptIn(FlowPreview::class)
     private val sensitivityOverrides = combine(sensitivityReturnOverride, sensitivityCpiOverride, sensitivitySwrOverride) { r, c, s ->
@@ -331,6 +346,20 @@ class MainViewModel internal constructor(
     }
         .flatMapLatest { input ->
             flow {
+                val activeEntry = input.ledger.maxByOrNull { it.yearMonth }
+                val ledgerMatchesYear = activeEntry != null &&
+                    (activeEntry.yearMonth.isBlank() || activeEntry.yearMonth.startsWith("${input.settings.baseYear}-"))
+                val stochasticKey = StochasticInputKey(
+                    normalizedSettings = com.example.domain.MonteCarloEngine.mcCacheNormalizedSettings(input.settings),
+                    retOverride = input.overrides.sensitivity.retOver,
+                    cpiOverride = input.overrides.sensitivity.cpiOver,
+                    swrOverride = input.overrides.sensitivity.swrOver,
+                    partnerBirthYear = input.overrides.partnerBirthYear,
+                    activeLedgerYearMonth = if (ledgerMatchesYear) activeEntry?.yearMonth else null,
+                    activeLedgerPortfolioEnd = if (ledgerMatchesYear) activeEntry?.portfolioBalanceAtMonthEnd else null,
+                    activeLedgerPensionEnd = if (ledgerMatchesYear) activeEntry?.pensionBalanceAtMonthEnd else null,
+                    activeLedgerReserveEnd = if (ledgerMatchesYear) activeEntry?.emergencyReserveAtMonthEnd else null
+                )
                 val fastState = computeCalculationStateInternal(
                     input.settings, input.actions, input.ledger, input.importedTxs,
                     input.overrides.sensitivity.retOver, input.overrides.sensitivity.cpiOver, input.overrides.sensitivity.swrOver,
@@ -338,6 +367,19 @@ class MainViewModel internal constructor(
                     partnerBirthYearOverride = input.overrides.partnerBirthYear
                 )
                 val prev = lastStochasticSnapshot.get()
+                if (prev != null && prev.key == stochasticKey) {
+                    emit(
+                        fastState.copy(
+                            monteCarlo = prev.monteCarlo,
+                            historicalMonteCarlo = prev.historicalMonteCarlo,
+                            retirementSurvival = prev.retirementSurvival,
+                            historicalRetirementSurvival = prev.historicalRetirementSurvival,
+                            stressScenarios = prev.stressScenarios,
+                            decumulationComparison = prev.decumulationComparison
+                        )
+                    )
+                    return@flow
+                }
                 val immediateState = if (prev != null) {
                     fastState.copy(
                         monteCarlo = prev.monteCarlo,
@@ -353,6 +395,7 @@ class MainViewModel internal constructor(
                 emit(immediateState)
 
                 delay(120L)
+                stochasticRecomputeCount.incrementAndGet()
                 val fullState = computeCalculationStateInternal(
                     input.settings, input.actions, input.ledger, input.importedTxs,
                     input.overrides.sensitivity.retOver, input.overrides.sensitivity.cpiOver, input.overrides.sensitivity.swrOver,
@@ -361,6 +404,7 @@ class MainViewModel internal constructor(
                 )
                 lastStochasticSnapshot.set(
                     StochasticSnapshot(
+                        key = stochasticKey,
                         monteCarlo = fullState.monteCarlo,
                         historicalMonteCarlo = fullState.historicalMonteCarlo,
                         retirementSurvival = fullState.retirementSurvival,

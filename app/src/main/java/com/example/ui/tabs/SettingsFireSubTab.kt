@@ -401,6 +401,20 @@ fun LazyListScope.settingsFireSubTab(
             val dpsFeeCapLabel = String.format(java.util.Locale.ROOT, "%.2f", dpsFeeCap).trimEnd('0').trimEnd('.')
             NumberSettingField(label = "DPS Annual Management Fee (%, cap $dpsFeeCapLabel%)", value = s.dpsAnnualFeePct, minValue = 0.0, maxValue = maxOf(dpsFeeCap, 100.0), onValueChange = { v -> patchSettings { it.copy(dpsAnnualFeePct = v) } })
             NumberSettingField(label = "Manual FIRE Target Override (0 = auto)", value = s.fireTargetOverride, onValueChange = { v -> patchSettings { it.copy(fireTargetOverride = v) } })
+            NumberSettingField(
+                label = "Target Full-Retirement Age (0 = stop at FIRE)",
+                value = s.targetRetirementAge.toDouble(),
+                minValue = 0.0,
+                maxValue = 85.0,
+                onValueChange = { v ->
+                    val raw = v.toInt()
+                    val normalized = if (raw <= 0) 0 else raw.coerceIn(30, 85)
+                    patchSettings { it.copy(targetRetirementAge = normalized) }
+                },
+                quickStep = 1.0,
+                fieldKey = "target_ret_age",
+                testTagStr = "target_retirement_age_input"
+            )
             NumberSettingField(label = "Lifestyle Cost at FIRE (Kč monthly)", value = s.lifestyleCostAtFireMonthly, onValueChange = { v -> patchSettings { it.copy(lifestyleCostAtFireMonthly = v) } })
             if (s.lifestyleCostAtFireMonthly <= 0.0) {
                 Text(

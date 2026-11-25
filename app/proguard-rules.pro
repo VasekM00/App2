@@ -28,10 +28,10 @@
     @androidx.room.Relation *;
     @androidx.room.TypeConverter *;
 }
--keepclassmembers class com.example.data.** { *; }
--keepclassmembers class com.example.domain.** { *; }
--keep class com.example.data.** { *; }
--keep class com.example.domain.** { *; }
+-keepclassmembers class * extends androidx.lifecycle.ViewModel {
+    <init>(...);
+}
+-keep class com.example.data.SettingsEntity { *; }
 
 # Manifest-declared FileProvider, ViewModel constructors, and Serializable / Enum banking models
 -keep class androidx.core.content.FileProvider { *; }
@@ -41,6 +41,7 @@
 }
 -keep class com.example.util.ParsedBankTransaction { *; }
 -keep class com.example.util.StatementParseSummary { *; }
+-keep class com.example.util.UserInvestmentLot { *; }
 -keep class com.example.util.BankType { *; }
 -keep class com.example.util.BankTransactionType { *; }
 -keepclassmembers class * extends java.lang.Enum {

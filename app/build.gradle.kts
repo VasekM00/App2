@@ -12,7 +12,7 @@ android {
   defaultConfig {
     applicationId = "com.aistudio.martinufinancials.fire2"
     minSdk = 24
-    targetSdk = 36
+    targetSdk = 35
     versionCode = 60
     versionName = "6.0"
 

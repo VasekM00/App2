@@ -55,7 +55,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.DecumulationComparisonResult
-import com.example.domain.DecumulationConfig
 import com.example.domain.DecumulationStrategies
 import com.example.domain.FinancialEngine
 import com.example.domain.FullCalculationState
@@ -150,7 +149,10 @@ fun DecumulationComparisonCard(
         s.monteCarloVolatilityPct, s.guardrailsUpperThresholdPct, s.guardrailsLowerThresholdPct,
         s.guardrailsCutPct, s.guardrailsBoostPct, s.guardrailsFloorPct, s.monteCarloN, s.monteCarloSeed,
         s.vStatePensionMonthly, s.vStatePensionAge, s.eStatePensionMonthly, s.eStatePensionAge,
-        s.isSingleHousehold, s.primaryAge, snap.activeFireAge, state.pensionOptimization.partnerAge
+        s.isSingleHousehold, s.primaryAge, s.baseYear, snap.activeFireAge, snap.activeFireYear,
+        state.pensionOptimization.partnerAge, s.lumpSumInclude, s.lumpSumYear, s.lumpSumAmount,
+        s.customLumpSumsJson, s.baristaTransitionEnabled, s.baristaStartYear, s.baristaMonthlyIncome,
+        s.baristaContinuePostFire, s.baristaStartAtFire, s.baristaEndAge
     ) {
         val provided = state.decumulationComparison
         if (provided != null) {
@@ -159,36 +161,17 @@ fun DecumulationComparisonCard(
         }
         delay(80)
         val result = withContext(Dispatchers.Default) {
-            val netReturnPct = FinancialEngine.netTaxableNominalReturnPct(s).finiteOrZero()
             val fireAge = snap.activeFireAge ?: s.primaryAge
+            val fireYear = snap.activeFireYear ?: s.baseYear
             val partnerAgeAtFire = state.pensionOptimization.partnerAge + maxOf(0, fireAge - s.primaryAge)
-            val streams = buildList {
-                val vPen = s.vStatePensionMonthly.coerceAtLeast(0.0) * 12.0
-                if (vPen > 0.0) add(maxOf(0, s.vStatePensionAge - fireAge) to vPen)
-                if (!s.isSingleHousehold) {
-                    val ePen = s.eStatePensionMonthly.coerceAtLeast(0.0) * 12.0
-                    if (ePen > 0.0) add(maxOf(0, s.eStatePensionAge - partnerAgeAtFire) to ePen)
-                }
-            }
             DecumulationStrategies.compareStrategies(
-                DecumulationConfig(
+                FinancialEngine.buildDecumulationConfig(
+                    settings = s,
                     initialPortfolio = portfolioBase,
-                    initialAnnualWithdrawal = portfolioBase * (baseSwr / 100.0),
-                    horizonYears = horizonYears,
-                    annualInflationPct = s.cpiInflationPct.finiteOrZero(),
-                    expectedAnnualReturnPct = netReturnPct,
-                    returnVolatilityPct = s.monteCarloVolatilityPct.finiteOrZero().coerceAtLeast(1.0),
-                    simulationsCount = s.monteCarloN.coerceIn(50, 2000),
-                    randomSeed = s.monteCarloSeed,
-                    gkUpperThresholdPct = s.guardrailsUpperThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
-                    gkLowerThresholdPct = s.guardrailsLowerThresholdPct.finiteOrZero().coerceIn(5.0, 100.0),
-                    gkCutPct = s.guardrailsCutPct.finiteOrZero().coerceIn(1.0, 50.0),
-                    gkBoostPct = s.guardrailsBoostPct.finiteOrZero().coerceIn(1.0, 50.0),
-                    gkFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
-                    gkInitialWithdrawalMultiplier = DecumulationStrategy.GUYTON_KLINGER.swrMultiplier,
-                    vpdRatePct = (baseSwr * 1.075).coerceIn(0.5, 20.0),
-                    vpdFloorPctOfInitial = s.guardrailsFloorPct.finiteOrZero().coerceIn(10.0, 100.0),
-                    pensionStreams = streams
+                    fireAge = fireAge,
+                    fireYear = fireYear,
+                    partnerAgeAtFire = partnerAgeAtFire,
+                    gkInitialWithdrawalMultiplier = DecumulationStrategy.GUYTON_KLINGER.swrMultiplier
                 )
             )
         }

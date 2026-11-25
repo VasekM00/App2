@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -72,16 +73,21 @@ import com.example.domain.parseCustomExpenses
 import com.example.domain.parseDeletedCategories
 import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.BrandCyan
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
+import com.example.ui.theme.LocalIsDarkTheme
 import com.example.ui.theme.OnBrandTeal
+import com.example.ui.theme.WarnAmber
+import com.example.ui.theme.WarnAmberDark
+import com.example.ui.theme.WarnAmberLight
 import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtExactCZK
 import com.example.util.MerchantAnalyticsEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -134,21 +140,38 @@ fun MerchantLeaderboardCard(
     val monthlyLivingCost = settings?.let { FinancialEngine.totalLivingCostMonthly(it) } ?: 36_754.0
     val periodLivingCost = (monthlyLivingCost * periodMonths).coerceAtLeast(1.0)
 
-    val statementItems = remember(transactions, selectedTimeframeIndex, periodLivingCost) {
-        MerchantAnalyticsEngine.computeMerchantLeaderboardWithDrift(
-            transactions = transactions,
-            timeframe = activeTimeframe,
-            limit = 5,
-            totalBudget = periodLivingCost
-        )
+    val isDark = LocalIsDarkTheme.current
+    val statementItems by produceState(
+        initialValue = remember(transactions, selectedTimeframeIndex, periodLivingCost) {
+            if (transactions.size <= 50) {
+                MerchantAnalyticsEngine.computeMerchantLeaderboardWithDrift(
+                    transactions = transactions,
+                    timeframe = activeTimeframe,
+                    limit = 5,
+                    totalBudget = periodLivingCost
+                )
+            } else emptyList()
+        },
+        transactions, selectedTimeframeIndex, periodLivingCost
+    ) {
+        if (transactions.size > 50) {
+            value = withContext(Dispatchers.Default) {
+                MerchantAnalyticsEngine.computeMerchantLeaderboardWithDrift(
+                    transactions = transactions,
+                    timeframe = activeTimeframe,
+                    limit = 5,
+                    totalBudget = periodLivingCost
+                )
+            }
+        }
     }
     val hasStatementData = statementItems.isNotEmpty()
 
-    val topMerchants = remember(statementItems, settings, selectedTimeframeIndex, periodMonths, periodLivingCost) {
+    val topMerchants = remember(statementItems, settings, selectedTimeframeIndex, periodMonths, periodLivingCost, isDark) {
         if (statementItems.isNotEmpty()) {
             statementItems.map { item ->
                 val catDisplay = formatCategoryLabel(item.category)
-                val (icon, color) = resolveMerchantIconAndColor(item.category.name)
+                val (icon, color) = resolveMerchantIconAndColor(item.category.name, isDark)
                 val driftOverride = when {
                     item.driftPct != null -> null
                     item.hasPriorPeriodData -> "New"
@@ -196,7 +219,7 @@ fun MerchantLeaderboardCard(
 
             rawCategories.mapIndexed { idx, spec ->
                 val periodSpend = spec.monthly * periodMonths
-                val (icon, color) = resolveMerchantIconAndColor(spec.cat)
+                val (icon, color) = resolveMerchantIconAndColor(spec.cat, isDark)
                 val periodSubtitle = when (selectedTimeframeIndex) {
                     1 -> "Budget baseline · 3 months"
                     2 -> "Budget baseline · $ytdMonths months YTD"
@@ -573,7 +596,7 @@ private fun MerchantRowItem(
                         val isPositive = driftVal != null && driftVal > 0.5
                         val isNegative = driftVal != null && driftVal < -0.5
                         val driftColor = when {
-                            isPositive -> AmberWarning
+                            isPositive -> WarnAmber
                             isNegative -> GoodGreen
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
@@ -641,18 +664,18 @@ private fun MerchantRowItem(
     }
 }
 
-private fun resolveMerchantIconAndColor(categoryStr: String): Pair<ImageVector, Color> {
+private fun resolveMerchantIconAndColor(categoryStr: String, isDark: Boolean = false): Pair<ImageVector, Color> {
     return when {
         categoryStr.contains("RENT", ignoreCase = true) || categoryStr.contains("HOUSING", ignoreCase = true) ->
             Icons.Default.Home to BrandSky
         categoryStr.contains("GROCERIES", ignoreCase = true) ->
-            Icons.Default.ShoppingCart to Color(0xFF059669)
+            Icons.Default.ShoppingCart to if (isDark) Color(0xFF34D399) else Color(0xFF047857)
         categoryStr.contains("DINING", ignoreCase = true) || categoryStr.contains("RESTAURANT", ignoreCase = true) ->
-            Icons.Default.Coffee to AmberWarning
+            Icons.Default.Coffee to if (isDark) WarnAmberDark else WarnAmberLight
         categoryStr.contains("HEALTH", ignoreCase = true) || categoryStr.contains("PHARMACY", ignoreCase = true) ->
-            Icons.Default.LocalPharmacy to Color(0xFF0D9488)
+            Icons.Default.LocalPharmacy to if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E)
         categoryStr.contains("TRANSPORT", ignoreCase = true) ->
-            Icons.Default.DirectionsBus to Color(0xFF2563EB)
+            Icons.Default.DirectionsBus to if (isDark) Color(0xFF38BDF8) else Color(0xFF2563EB)
         else ->
             Icons.Default.Storefront to BrandCyan
     }

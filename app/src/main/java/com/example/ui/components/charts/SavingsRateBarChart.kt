@@ -640,7 +640,7 @@ fun DcaTrajectoryBarChart(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 ColorPill(
                                     text = pt.status,
-                                    color = if (pt.status == "FIRE OK" || pt.status == "FIRE READY") GoodGreen else BrandTeal,
+                                    color = if (pt.status.startsWith("FIRE")) GoodGreen else BrandTeal,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     horizontalPadding = 6.dp,

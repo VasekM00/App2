@@ -441,8 +441,9 @@ private fun TransactionRowItem(
 
     val bankColor = com.example.ui.tabs.bankBadgeColor(tx.bankName)
 
+    val isDark = com.example.ui.theme.LocalIsDarkTheme.current
     val categoryColor = runCatching {
-        getCategoryColorValue(BankTransactionType.valueOf(tx.category))
+        getCategoryColorValue(BankTransactionType.valueOf(tx.category), isDark = isDark)
     }.getOrElse { MaterialTheme.colorScheme.primary }
 
     Surface(

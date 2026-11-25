@@ -37,6 +37,7 @@ import com.example.util.RecurringSubscriptionItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -79,8 +80,21 @@ fun SubscriptionAuditorCard(
     var showDismissedSection by rememberSaveable { mutableStateOf(false) }
     var selectedMerchantKeyForDetail by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val audit = remember(transactions, swrPct, safetyBufferPct, dismissedMerchantKeys) {
-        SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys, safetyBufferPct)
+    val audit by produceState(
+        initialValue = remember(transactions, swrPct, safetyBufferPct, dismissedMerchantKeys) {
+            if (transactions.size <= 50) {
+                SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys, safetyBufferPct)
+            } else {
+                com.example.util.SubscriptionAuditSummary(emptyList(), 0.0, 0.0, 0.0, 0)
+            }
+        },
+        transactions, swrPct, safetyBufferPct, dismissedMerchantKeys
+    ) {
+        if (transactions.size > 50) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                SubscriptionAuditor.auditSubscriptions(transactions, swrPct, dismissedMerchantKeys, safetyBufferPct)
+            }
+        }
     }
     val selectedItemForDetail = selectedMerchantKeyForDetail?.let { key ->
         audit.items.firstOrNull { it.merchantKey == key }

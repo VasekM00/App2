@@ -69,7 +69,8 @@ class RoomFullMigrationChainTest {
         AppDatabase.MIGRATION_35_36,
         AppDatabase.MIGRATION_36_37,
         AppDatabase.MIGRATION_37_38,
-        AppDatabase.MIGRATION_38_39
+        AppDatabase.MIGRATION_38_39,
+        AppDatabase.MIGRATION_39_40
     )
 
     private fun buildVersionedSqliteDb(
@@ -175,7 +176,13 @@ class RoomFullMigrationChainTest {
         sqlite.execSQL(
             "INSERT INTO action_states (actionKey, year, actionId, isDone) VALUES ('2026_act_1', 2026, 'act_1', 1)"
         )
-        if (version >= 23) {
+        if (version >= 39) {
+            sqlite.execSQL(
+                "INSERT INTO imported_bank_transactions (id, yearMonth, bankName, date, amount, " +
+                    "counterpartyAccount, counterpartyName, message, variableSymbol, category, isNetted, nettingReason, matchedTxId, accountKey, originalCurrency, originalAmount, fxRateToCzk) " +
+                    "VALUES (1, '2026-01', 'CSOB', '2026-01-15', -1250.5, '123/0300', 'Rohlik', 'Order', '111', 'FOOD', 0, '', NULL, '', 'CZK', 0.0, 1.0)"
+            )
+        } else if (version >= 23) {
             sqlite.execSQL(
                 "INSERT INTO imported_bank_transactions (id, yearMonth, bankName, date, amount, " +
                     "counterpartyAccount, counterpartyName, message, variableSymbol, category, isNetted, nettingReason, matchedTxId) " +
@@ -185,12 +192,12 @@ class RoomFullMigrationChainTest {
     }
 
     @Test
-    fun v16ToV38_migrateCleanlyToV39() {
+    fun v16ToV39_migrateCleanlyToV40() {
         val context = ApplicationProvider.getApplicationContext<Application>()
-        val expectedV39Schema = loadSchemaJson(39)
-        val expectedEntities = expectedV39Schema.getJSONArray("entities")
+        val expectedV40Schema = loadSchemaJson(40)
+        val expectedEntities = expectedV40Schema.getJSONArray("entities")
 
-        for (startVersion in 16..38) {
+        for (startVersion in 16..39) {
             val dbName = "v$startVersion.db"
             val dbFile = context.getDatabasePath(dbName)
             dbFile.parentFile?.mkdirs()
@@ -208,9 +215,9 @@ class RoomFullMigrationChainTest {
 
                 try {
                     val supportDb = roomDb.openHelper.writableDatabase
-                    assertEquals("DB must reach v39 from v$startVersion", 39, supportDb.version)
+                    assertEquals("DB must reach v40 from v$startVersion", 40, supportDb.version)
 
-                    // Verify every table columns & indices match 39.json
+                    // Verify every table columns & indices match 40.json
                     for (i in 0 until expectedEntities.length()) {
                         val entity = expectedEntities.getJSONObject(i)
                         val tableName = entity.getString("tableName")
@@ -373,16 +380,21 @@ class RoomFullMigrationChainTest {
                         AppDatabase.MIGRATION_35_36,
                         AppDatabase.MIGRATION_36_37,
                         AppDatabase.MIGRATION_37_38,
-                        AppDatabase.MIGRATION_38_39
+                        AppDatabase.MIGRATION_38_39,
+                        AppDatabase.MIGRATION_39_40
                     )
                     .allowMainThreadQueries()
                     .build()
                 try {
                     val supportDb = roomDb.openHelper.writableDatabase
-                    assertEquals(39, supportDb.version)
-                    supportDb.query("SELECT primaryName FROM app_settings WHERE id = 1").use { c ->
+                    assertEquals(40, supportDb.version)
+                    supportDb.query("SELECT primaryName, baristaContinuePostFire, baristaStartAtFire, baristaEndAge, targetRetirementAge FROM app_settings WHERE id = 1").use { c ->
                         assertTrue(c.moveToFirst())
                         assertEquals("UserV$startVersion", c.getString(0))
+                        assertEquals(1, c.getInt(1))
+                        assertEquals(0, c.getInt(2))
+                        assertEquals(0, c.getInt(3))
+                        assertEquals(0, c.getInt(4))
                     }
                 } finally {
                     roomDb.close()
@@ -409,7 +421,7 @@ class RoomFullMigrationChainTest {
                 .build()
             try {
                 val supportDb = recoveredDb.openHelper.writableDatabase
-                assertEquals(39, supportDb.version)
+                assertEquals(40, supportDb.version)
             } finally {
                 recoveredDb.close()
             }

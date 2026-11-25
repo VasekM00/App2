@@ -215,6 +215,10 @@ object BackupManager {
         json.put("baristaStartYear", s.baristaStartYear)
         json.put("baristaMonthlyIncome", safeFinite(s.baristaMonthlyIncome))
         json.put("baristaSavingsMonthly", safeFinite(s.baristaSavingsMonthly))
+        json.put("baristaContinuePostFire", s.baristaContinuePostFire)
+        json.put("baristaStartAtFire", s.baristaStartAtFire)
+        json.put("baristaEndAge", s.baristaEndAge)
+        json.put("targetRetirementAge", s.targetRetirementAge)
         json.put("merchantRulesJson", s.merchantRulesJson)
         json.put("emergencyReserveMode", s.emergencyReserveMode)
         json.put(
@@ -423,6 +427,10 @@ object BackupManager {
                 baristaStartYear = json.optSafeInt("baristaStartYear", fallback.baristaStartYear),
                 baristaMonthlyIncome = json.optFiniteDouble("baristaMonthlyIncome", fallback.baristaMonthlyIncome),
                 baristaSavingsMonthly = json.optFiniteDouble("baristaSavingsMonthly", fallback.baristaSavingsMonthly),
+                baristaContinuePostFire = json.optSafeBoolean("baristaContinuePostFire", fallback.baristaContinuePostFire),
+                baristaStartAtFire = json.optSafeBoolean("baristaStartAtFire", fallback.baristaStartAtFire),
+                baristaEndAge = json.optSafeInt("baristaEndAge", fallback.baristaEndAge),
+                targetRetirementAge = json.optSafeInt("targetRetirementAge", fallback.targetRetirementAge),
                 merchantRulesJson = json.optStringNonNull("merchantRulesJson", fallback.merchantRulesJson),
                 emergencyReserveMode = json.optStringNonNull("emergencyReserveMode", fallback.emergencyReserveMode),
                 emergencyReserveMonthlyOverride = json.optFiniteDouble("emergencyReserveMonthlyOverride", fallback.emergencyReserveMonthlyOverride),
@@ -574,6 +582,10 @@ object BackupManager {
             baristaStartYear = year(s.baristaStartYear, f.baristaStartYear),
             baristaMonthlyIncome = money(s.baristaMonthlyIncome, f.baristaMonthlyIncome),
             baristaSavingsMonthly = money(s.baristaSavingsMonthly, f.baristaSavingsMonthly),
+            baristaContinuePostFire = s.baristaContinuePostFire,
+            baristaStartAtFire = s.baristaStartAtFire,
+            baristaEndAge = if (s.baristaEndAge <= 0) 0 else s.baristaEndAge.coerceIn(30, 85),
+            targetRetirementAge = if (s.targetRetirementAge <= 0) 0 else s.targetRetirementAge.coerceIn(30, 85),
             customExpensesJson = cleanArrayJson(s.customExpensesJson, f.customExpensesJson),
             customGoalsJson = cleanArrayJson(s.customGoalsJson, f.customGoalsJson),
             customLumpSumsJson = cleanArrayJson(s.customLumpSumsJson, f.customLumpSumsJson),

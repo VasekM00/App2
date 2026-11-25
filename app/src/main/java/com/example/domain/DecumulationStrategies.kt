@@ -219,7 +219,9 @@ object DecumulationStrategies {
         vpdRatePct: Double = 4.5,
         vpdFloorPctOfInitial: Double = 70.0,
         vpdCeilingPctOfInitial: Double = 130.0,
-        pensionStreams: List<Pair<Int, Double>> = emptyList()
+        pensionStreams: List<Pair<Int, Double>> = emptyList(),
+        scheduledLumpSums: List<Pair<Int, Double>> = emptyList(),
+        baristaStreams: List<Pair<Int, Double>> = emptyList()
     ): List<SinglePathYearResult> {
         val horizon = annualReturns.size
         if (horizon == 0) return emptyList()
@@ -262,13 +264,31 @@ object DecumulationStrategies {
             val pensionNominal = pensionStreams.sumOf { (startYearIdx, realAnnual) ->
                 if (y >= startYearIdx) realAnnual.finiteNonNegative() * inflationFactor else 0.0
             }
-            val portfolioNeed = max(0.0, step.withdrawalNominal - pensionNominal)
-            val cantPayFull = balance + 0.001 < portfolioNeed
-            val actualPortfolioDraw = min(balance, portfolioNeed)
-            val totalSpendingCovered = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal)
+            val baristaNominal = baristaStreams.sumOf { (yearIdx, realAnnual) ->
+                if (yearIdx == y) realAnnual.finiteNonNegative() * inflationFactor else 0.0
+            }
+            val lumpNominal = scheduledLumpSums.sumOf { (yearIdx, realAmount) ->
+                if (yearIdx == y) realAmount.finiteNonNegative() * inflationFactor else 0.0
+            }
+            val signedNeed = step.withdrawalNominal - pensionNominal - baristaNominal - lumpNominal
             previousWithdrawalNominal = step.withdrawalNominal
-            val postWithdrawalBal = balance - actualPortfolioDraw
-            val endingBal = max(0.0, postWithdrawalBal * (1.0 + ret)).finiteNonNegative()
+
+            val cantPayFull: Boolean
+            val totalSpendingCovered: Double
+            val endingBal: Double
+            if (signedNeed <= 0.0) {
+                cantPayFull = false
+                totalSpendingCovered = step.withdrawalNominal
+                val surplus = -signedNeed
+                endingBal = max(0.0, balance * (1.0 + ret) + surplus * (1.0 + ret * 0.5)).finiteNonNegative()
+            } else {
+                val portfolioNeed = signedNeed
+                cantPayFull = balance + 0.001 < portfolioNeed
+                val actualPortfolioDraw = min(balance, portfolioNeed)
+                totalSpendingCovered = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal + baristaNominal + lumpNominal)
+                val postWithdrawalBal = balance - actualPortfolioDraw
+                endingBal = max(0.0, postWithdrawalBal * (1.0 + ret)).finiteNonNegative()
+            }
 
             results.add(
                 SinglePathYearResult(
@@ -350,15 +370,31 @@ object DecumulationStrategies {
                 val pensionNominal = config.pensionStreams.sumOf { (startYearIdx, realAnnual) ->
                     if (y >= startYearIdx) realAnnual.finiteNonNegative() * inflationFactor else 0.0
                 }
-                val portfolioNeed = max(0.0, step.withdrawalNominal - pensionNominal)
+                val baristaNominal = config.baristaStreams.sumOf { (yearIdx, realAnnual) ->
+                    if (yearIdx == y) realAnnual.finiteNonNegative() * inflationFactor else 0.0
+                }
+                val lumpNominal = config.scheduledLumpSums.sumOf { (yearIdx, realAmount) ->
+                    if (yearIdx == y) realAmount.finiteNonNegative() * inflationFactor else 0.0
+                }
+                val signedNeed = step.withdrawalNominal - pensionNominal - baristaNominal - lumpNominal
+                previousWithdrawalNominal = step.withdrawalNominal
 
-                if (balance + 0.001 < portfolioNeed && depletedYear == null) {
-                    depletedYear = year
+                val totalCoveredNominal: Double
+                if (signedNeed <= 0.0) {
+                    totalCoveredNominal = step.withdrawalNominal
+                    val surplus = -signedNeed
+                    balance = max(0.0, balance * (1.0 + ret) + surplus * (1.0 + ret * 0.5))
+                } else {
+                    val portfolioNeed = signedNeed
+                    if (balance + 0.001 < portfolioNeed && depletedYear == null) {
+                        depletedYear = year
+                    }
+                    val actualPortfolioDraw = min(balance, portfolioNeed)
+                    totalCoveredNominal = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal + baristaNominal + lumpNominal)
+                    val postWithdrawalBal = balance - actualPortfolioDraw
+                    balance = max(0.0, postWithdrawalBal * (1.0 + ret))
                 }
 
-                val actualPortfolioDraw = min(balance, portfolioNeed)
-                val totalCoveredNominal = actualPortfolioDraw + min(step.withdrawalNominal, pensionNominal)
-                previousWithdrawalNominal = step.withdrawalNominal
                 val realWithdrawal = totalCoveredNominal / inflationFactor
                 allRealWithdrawals.add(realWithdrawal)
 
@@ -367,9 +403,6 @@ object DecumulationStrategies {
                     if (dropPct > pathMaxDrop) pathMaxDrop = dropPct
                 }
                 prevRealWithdrawal = realWithdrawal
-
-                val postWithdrawalBal = balance - actualPortfolioDraw
-                balance = max(0.0, postWithdrawalBal * (1.0 + ret))
                 previousReturn = ret
             }
 
@@ -490,7 +523,9 @@ data class DecumulationConfig(
     val vpdRatePct: Double = 4.5,
     val vpdFloorPctOfInitial: Double = 70.0,
     val vpdCeilingPctOfInitial: Double = 130.0,
-    val pensionStreams: List<Pair<Int, Double>> = emptyList()
+    val pensionStreams: List<Pair<Int, Double>> = emptyList(),
+    val scheduledLumpSums: List<Pair<Int, Double>> = emptyList(),
+    val baristaStreams: List<Pair<Int, Double>> = emptyList()
 )
 
 /**

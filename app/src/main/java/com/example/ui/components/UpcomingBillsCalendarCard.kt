@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,16 +67,18 @@ import com.example.domain.parseCustomExpenses
 import com.example.domain.parseDeletedCategories
 import com.example.domain.serializeCustomExpenses
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
+import com.example.ui.theme.WarnAmber
 import com.example.ui.theme.brandSolidContentColor
 import com.example.util.BankTransactionType
 import com.example.util.Formatters.fmtCompact
 import com.example.util.Formatters.fmtExactCZK
 import com.example.util.SubscriptionAuditor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
 data class UpcomingBill(
@@ -111,20 +114,34 @@ fun UpcomingBillsCalendarCard(
     var showAddBillDialog by rememberSaveable { mutableStateOf(false) }
 
     // Derive authentic recurring obligations strictly from:
-    // 1. Actually audited bank subscriptions/debits (if transactions exist)
+    // 1. Actually audited bank subscriptions/debits (if transactions exist; offloaded for large imports)
     // 2. Explicit user settings (Rent, DCA Portu, DIP, DPS) and custom expenses
-    val bills = remember(transactions, settings, dismissedSubscriptionMerchants) {
+    val auditedSubs by produceState(
+        initialValue = remember(transactions, dismissedSubscriptionMerchants) {
+            if (transactions.isNotEmpty() && transactions.size <= 50) {
+                SubscriptionAuditor.auditSubscriptions(
+                    transactions = transactions,
+                    dismissedMerchantKeys = dismissedSubscriptionMerchants
+                ).items
+            } else {
+                emptyList()
+            }
+        },
+        transactions, dismissedSubscriptionMerchants
+    ) {
+        if (transactions.size > 50) {
+            value = withContext(Dispatchers.Default) {
+                SubscriptionAuditor.auditSubscriptions(
+                    transactions = transactions,
+                    dismissedMerchantKeys = dismissedSubscriptionMerchants
+                ).items
+            }
+        }
+    }
+    val bills = remember(auditedSubs, settings) {
         val list = mutableListOf<UpcomingBill>()
 
-        // 1. Detect recurring subscriptions from real bank statements
-        val auditedSubs = if (transactions.isNotEmpty()) {
-            SubscriptionAuditor.auditSubscriptions(
-                transactions = transactions,
-                dismissedMerchantKeys = dismissedSubscriptionMerchants
-            ).items
-        } else {
-            emptyList()
-        }
+        // 1. Recurring subscriptions from real bank statements
 
         auditedSubs.forEachIndexed { idx, sub ->
             val day = try {
@@ -515,7 +532,7 @@ fun UpcomingBillsCalendarCard(
                         title = "Fixed Bills",
                         value = fmtCompact(livingBills),
                         subtitle = "Rent & utilities",
-                        accentColor = AmberWarning,
+                        accentColor = WarnAmber,
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                     BillStatBox(

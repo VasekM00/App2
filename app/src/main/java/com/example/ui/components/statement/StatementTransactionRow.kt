@@ -51,7 +51,7 @@ fun StatementTransactionRowItem(
     val isPositive = safeAmount > 0
     val amountColor = if (isPositive) GoodGreen else BadRed
 
-    val categoryColor = getCategoryColorValue(tx.category)
+    val categoryColor = getCategoryColorValue(tx.category, isDark = com.example.ui.theme.LocalIsDarkTheme.current)
     val categoryLabel = getCategoryDisplayName(tx.category)
 
     Surface(

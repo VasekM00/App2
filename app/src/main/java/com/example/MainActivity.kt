@@ -154,7 +154,7 @@ class MainActivity : FragmentActivity() {
                         isPromptActive = true
                         authErrorMessage = null
                         val builder = BiometricPrompt.PromptInfo.Builder()
-                            .setTitle("Unlock Martinu Financials")
+                            .setTitle("Unlock Personal Finance Tracker")
                             .setSubtitle("Authenticate to access your household data")
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             // Class-3 (strong) biometrics or device credential only: a finance app

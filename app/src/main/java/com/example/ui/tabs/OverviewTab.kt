@@ -83,19 +83,17 @@ fun OverviewTab(
     onNavigateToProjections: (() -> Unit)? = null,
     onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
-    onOpenSettings: (() -> Unit)? = null,
+    @Suppress("UNUSED_PARAMETER") onOpenSettings: (() -> Unit)? = null,
     onNavigateToNetWorth: (() -> Unit)? = null,
     onNavigateToEmergencyReserve: (() -> Unit)? = null,
     onNavigateToSavingsRate: (() -> Unit)? = null,
-    onNavigateToSandbox: (() -> Unit)? = null,
+    @Suppress("UNUSED_PARAMETER") onNavigateToSandbox: (() -> Unit)? = null,
     onOpenQuickGuide: (() -> Unit)? = null,
     scrollToEmergencyReserveTrigger: Int = 0,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
     val infoState = rememberMetricInfoState()
-    @Suppress("UNUSED_VARIABLE")
-    val unusedParams = Triple(ledgerEntries.size, onOpenSettings, onNavigateToSandbox)
     val emergencyReserveRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(scrollToEmergencyReserveTrigger) {
         if (scrollToEmergencyReserveTrigger > 0) {
@@ -280,19 +278,28 @@ fun OverviewTab(
             accentColor = if (coastMilestone.isAchieved) GoodGreen else BrandGold
         )
 
-        val survivalRes = state.historicalRetirementSurvival
-        val survivalRate = survivalRes.successRatePct
-        val survivalSubLabel = if (survivalRes.isLowConfidenceSample) {
-            "Low sample (n=${survivalRes.fireReachedCount})"
+        val useHistorical = state.settings.useHistoricalBootstrap
+        val survivalRes = if (useHistorical) {
+            state.historicalRetirementSurvival
         } else {
-            "Historical crash test"
+            state.retirementSurvival
+        }
+        val survivalRate = survivalRes.successRatePct
+        val survivalSubLabel = when {
+            survivalRes.isLowConfidenceSample -> "Low sample (n=${survivalRes.fireReachedCount})"
+            useHistorical -> "Historical crash test"
+            else -> "Monte Carlo stress test"
         }
         val survivalInfo = MetricInfo(
-            title = "Historical Survival Probability",
+            title = if (useHistorical) "Historical Survival Probability" else "Monte Carlo Survival Probability",
             category = "Actuarial Longevity & Sequence Risk",
             formulaOrRule = "Survival Rate = Non-depleted Paths / Total Simulated Paths Reaching FIRE (${survivalRes.fireReachedCount}/${survivalRes.sampleSize})",
-            explanation = "Tests your decumulation strategy through 56 years (1970–2025) of global equity market cycles and historical inflation shocks (including 1970s stagflation, 2000 dot-com bust, and 2008 global financial crisis) with sequence-of-returns risk.",
-            statutoryReference = "Historical Block-Bootstrap Simulation (1970–2025)",
+            explanation = if (useHistorical) {
+                "Tests your decumulation strategy through 56 years (1970–2025) of global equity market cycles and historical inflation shocks (including 1970s stagflation, 2000 dot-com bust, and 2008 global financial crisis) with sequence-of-returns risk."
+            } else {
+                "Simulates ${survivalRes.sampleSize} stochastic forward paths with log-normal return dispersion calibrated to your expected return and portfolio volatility across your full retirement horizon."
+            },
+            statutoryReference = if (useHistorical) "Historical Block-Bootstrap Simulation (1970–2025)" else "Log-Normal Stochastic Decumulation Simulation",
             practicalImplication = if (survivalRes.isLowConfidenceSample) {
                 "Only ${survivalRes.fireReachedCount} of ${survivalRes.sampleSize} simulated historical paths reached FIRE within the horizon, so treat this survival score as low-confidence."
             } else {

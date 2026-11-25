@@ -52,8 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -390,12 +388,7 @@ fun CategoryPickerModal(
                     ) {
                         availableCategories.forEach { (catType, label) ->
                             val isSelected = selectedCategory == catType
-                            val rawCatColor = getCategoryColorValue(catType)
-                            val catColor = if (isDark && rawCatColor.luminance() < 0.22f) {
-                                lerp(rawCatColor, Color.White, 0.45f)
-                            } else {
-                                rawCatColor
-                            }
+                            val catColor = getCategoryColorValue(catType, isDark = isDark)
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -607,29 +600,56 @@ fun CategoryPickerModal(
     }
 }
 
-fun getCategoryColorValue(type: BankTransactionType): Color = when (type) {
-    BankTransactionType.SALARY_VACLAV,
-    BankTransactionType.SALARY_ELEONORA,
-    BankTransactionType.PARENTAL_BENEFIT,
-    BankTransactionType.FAMILY_GIFT,
-    BankTransactionType.OTHER_INFLOW -> Color(0xFF16A34A)
-    BankTransactionType.HOUSING_RENT -> Color(0xFFEA580C)
-    BankTransactionType.GROCERIES -> Color(0xFFDC2626)
-    BankTransactionType.DINING_RESTAURANT -> Color(0xFFD97706)
-    BankTransactionType.TRANSPORTATION -> Color(0xFF0284C7)
-    BankTransactionType.SHOPPING_GOODS -> Color(0xFF6366F1)
-    BankTransactionType.HEALTH_DRUGSTORE -> Color(0xFFE11D48)
-    BankTransactionType.SUBSCRIPTIONS_MEDIA -> Color(0xFF0D9488)
-    BankTransactionType.SERVICES_UTILITIES -> Color(0xFF64748B)
-    BankTransactionType.ATM_CASH -> Color(0xFF78716C)
-    BankTransactionType.CHARITY_DONATION -> Color(0xFFEC4899)
-    BankTransactionType.INVESTMENT_PORTU -> Color(0xFFD97706)
-    BankTransactionType.INVESTMENT_DIP,
-    BankTransactionType.INVESTMENT_DPS -> Color(0xFF0F766E)
-    BankTransactionType.INTERNAL_TRANSFER -> Color(0xFF64748B)
-    BankTransactionType.GENERAL_EXPENSE,
-    BankTransactionType.LIFESTYLE_LIVING,
-    BankTransactionType.UNCATEGORIZED -> Color(0xFF475569)
+fun getCategoryColorValue(type: BankTransactionType, isDark: Boolean = false): Color = if (isDark) {
+    when (type) {
+        BankTransactionType.SALARY_VACLAV,
+        BankTransactionType.SALARY_ELEONORA,
+        BankTransactionType.PARENTAL_BENEFIT,
+        BankTransactionType.FAMILY_GIFT,
+        BankTransactionType.OTHER_INFLOW -> Color(0xFF4ADE80)
+        BankTransactionType.HOUSING_RENT -> Color(0xFFFB923C)
+        BankTransactionType.GROCERIES -> Color(0xFFF87171)
+        BankTransactionType.DINING_RESTAURANT -> Color(0xFFFBBF24)
+        BankTransactionType.TRANSPORTATION -> Color(0xFF38BDF8)
+        BankTransactionType.SHOPPING_GOODS -> Color(0xFF818CF8)
+        BankTransactionType.HEALTH_DRUGSTORE -> Color(0xFFFB7185)
+        BankTransactionType.SUBSCRIPTIONS_MEDIA -> Color(0xFF2DD4BF)
+        BankTransactionType.SERVICES_UTILITIES -> Color(0xFF94A3B8)
+        BankTransactionType.ATM_CASH -> Color(0xFFA8A29E)
+        BankTransactionType.CHARITY_DONATION -> Color(0xFFF472B6)
+        BankTransactionType.INVESTMENT_PORTU -> Color(0xFFFBBF24)
+        BankTransactionType.INVESTMENT_DIP,
+        BankTransactionType.INVESTMENT_DPS -> Color(0xFF2DD4BF)
+        BankTransactionType.INTERNAL_TRANSFER -> Color(0xFF94A3B8)
+        BankTransactionType.GENERAL_EXPENSE,
+        BankTransactionType.LIFESTYLE_LIVING,
+        BankTransactionType.UNCATEGORIZED -> Color(0xFFCBD5E1)
+    }
+} else {
+    when (type) {
+        BankTransactionType.SALARY_VACLAV,
+        BankTransactionType.SALARY_ELEONORA,
+        BankTransactionType.PARENTAL_BENEFIT,
+        BankTransactionType.FAMILY_GIFT,
+        BankTransactionType.OTHER_INFLOW -> Color(0xFF16A34A)
+        BankTransactionType.HOUSING_RENT -> Color(0xFFEA580C)
+        BankTransactionType.GROCERIES -> Color(0xFFDC2626)
+        BankTransactionType.DINING_RESTAURANT -> Color(0xFFD97706)
+        BankTransactionType.TRANSPORTATION -> Color(0xFF0284C7)
+        BankTransactionType.SHOPPING_GOODS -> Color(0xFF6366F1)
+        BankTransactionType.HEALTH_DRUGSTORE -> Color(0xFFE11D48)
+        BankTransactionType.SUBSCRIPTIONS_MEDIA -> Color(0xFF0D9488)
+        BankTransactionType.SERVICES_UTILITIES -> Color(0xFF64748B)
+        BankTransactionType.ATM_CASH -> Color(0xFF78716C)
+        BankTransactionType.CHARITY_DONATION -> Color(0xFFEC4899)
+        BankTransactionType.INVESTMENT_PORTU -> Color(0xFFD97706)
+        BankTransactionType.INVESTMENT_DIP,
+        BankTransactionType.INVESTMENT_DPS -> Color(0xFF0F766E)
+        BankTransactionType.INTERNAL_TRANSFER -> Color(0xFF64748B)
+        BankTransactionType.GENERAL_EXPENSE,
+        BankTransactionType.LIFESTYLE_LIVING,
+        BankTransactionType.UNCATEGORIZED -> Color(0xFF475569)
+    }
 }
 
 fun getCategoryDisplayName(type: BankTransactionType): String = formatCategoryLabel(type)

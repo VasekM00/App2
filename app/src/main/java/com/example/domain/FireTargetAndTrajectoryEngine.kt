@@ -200,6 +200,22 @@ object FireTargetAndTrajectoryEngine {
         return if (result.isFinite()) max(0.0, result) else baseTarget
     }
 
+    internal fun effectiveBaristaEndAge(settings: SettingsEntity): Int =
+        if (settings.baristaEndAge > 0) settings.baristaEndAge.coerceAtLeast(30) else settings.vStatePensionAge
+
+    internal fun postFireBaristaNetAnnualForYear(
+        calYear: Int,
+        settings: SettingsEntity,
+        inflationFactor: Double
+    ): Double {
+        if (!settings.baristaTransitionEnabled) return 0.0
+        if (!settings.baristaContinuePostFire && !settings.baristaStartAtFire) return 0.0
+        val vAge = settings.primaryAge + (calYear - settings.baseYear)
+        if (vAge >= effectiveBaristaEndAge(settings)) return 0.0
+        if (!settings.baristaStartAtFire && calYear < settings.baristaStartYear) return 0.0
+        return settings.baristaMonthlyIncome.finiteNonNegative() * 12.0 * inflationFactor
+    }
+
     internal data class PreFireAnnualCashflow(
         val isBaristaActive: Boolean,
         val baseAnnual: Double,
@@ -268,8 +284,14 @@ object FireTargetAndTrajectoryEngine {
 
             val vRetiredByAge = ageAtStart >= settings.vStatePensionAge
             val eRetiredByAge = !includeSpouse || eAgeAtStart >= settings.eStatePensionAge
-            // Barista activates during the configured calendar year `sy >= baristaStartYear` (never 1 year early)
-            val isBaristaActive = !vRetiredByAge && settings.baristaTransitionEnabled && sy >= settings.baristaStartYear
+            // Pre-FIRE Barista activates at `sy >= baristaStartYear` unless configured to start at FIRE,
+            // and stops once reaching `effectiveBaristaEndAge`.
+            val baristaEndAge = effectiveBaristaEndAge(settings)
+            val isBaristaActive = !vRetiredByAge &&
+                settings.baristaTransitionEnabled &&
+                !settings.baristaStartAtFire &&
+                sy >= settings.baristaStartYear &&
+                ageAtStart < baristaEndAge
             val dcaFactor = if (dcaGrowthPct != 0.0) {
                 (1.0 + dcaGrowthPct / 100.0).coerceAtLeast(0.0).pow(y).finiteOr(1.0)
             } else 1.0
@@ -506,9 +528,14 @@ object FireTargetAndTrajectoryEngine {
         val cpiRate = (settings.cpiInflationPct.finiteOr(0.0) / 100.0).coerceAtLeast(-0.99)
         val livingSpec = LivingCostSpec.from(settings)
 
+        val reachedTargetRetAge0 = settings.targetRetirementAge <= 0 ||
+            age0 >= settings.targetRetirementAge ||
+            age0 >= settings.vStatePensionAge
         val initStatus = when {
             (bal + pensionBal) >= initialTarget -> {
-                if (age0 >= 60 || bridgeFunded0) "FIRE OK" else "Bridge Constrained"
+                if (age0 >= 60 || bridgeFunded0) {
+                    if (reachedTargetRetAge0) "FIRE OK" else "FIRE · Saving"
+                } else "Bridge Constrained"
             }
             else -> "Growing"
         }
@@ -543,13 +570,17 @@ object FireTargetAndTrajectoryEngine {
             val age = age0 + y + 1
             val ageAtStart = age0 + y
             val eAgeAtStart = (sy + y) - partnerBirth
+            val baristaNetAnnual = if (isRetired || plan.vRetiredByAge) {
+                postFireBaristaNetAnnualForYear(sy + y, settings, plan.inflationFactor)
+            } else 0.0
 
             val investedDisplay: Double
             val reinvestDisplay: Double
             val pensionInflowDisplay: Double
 
             if (isRetired || plan.vRetiredByAge) {
-                // Post-FIRE / post-pension decumulation: stop active salary DCA and compound remaining assets minus withdrawals
+                // Post-FIRE / post-pension phase: pensions, optional Barista income, and scheduled lump sums
+                // are applied as a true signed net cashflow (deposits grow portfolio & can revive depleted balance).
                 if (ageAtStart >= 60 && (dipBal > 0.0 || dpsBal > 0.0)) {
                     bal += dipBal + dpsBal
                     dipBal = 0.0
@@ -574,21 +605,28 @@ object FireTargetAndTrajectoryEngine {
                 val ePen = if (includeSpouse && eAgeAtStart >= settings.eStatePensionAge) {
                     settings.eStatePensionMonthly.finiteNonNegative() * 12.0 * plan.inflationFactor
                 } else 0.0
-                val netDraw = max(0.0, retireLivingAnnual - vPen - ePen + plan.goalsOutlayAnnual - plan.lumpAnnual)
-                if (bal >= netDraw) {
-                    bal -= netDraw
+
+                val signedNetFlow = plan.lumpAnnual + vPen + ePen + baristaNetAnnual - retireLivingAnnual - plan.goalsOutlayAnnual
+                if (signedNetFlow >= 0.0) {
+                    bal = max(0.0, bal * max(0.0, 1.0 + ret) + signedNetFlow * (1.0 + ret * 0.5))
+                    investedDisplay = max(0.0, vPen + ePen + baristaNetAnnual - retireLivingAnnual - plan.goalsOutlayAnnual)
                 } else {
-                    val shortfall = netDraw - bal
-                    bal = 0.0
-                    projectedReserve = max(0.0, projectedReserve - shortfall)
+                    val netDraw = -signedNetFlow
+                    if (bal >= netDraw) {
+                        bal -= netDraw
+                    } else {
+                        val shortfall = netDraw - bal
+                        bal = 0.0
+                        projectedReserve = max(0.0, projectedReserve - shortfall)
+                    }
+                    bal = max(0.0, bal * max(0.0, 1.0 + ret))
+                    investedDisplay = 0.0
                 }
-                bal = max(0.0, bal * max(0.0, 1.0 + ret))
                 dipBal = max(0.0, dipBal * max(0.0, 1.0 + ret))
                 dpsBal = max(0.0, dpsBal * max(0.0, 1.0 + dpsRet))
                 projectedReserve = max(0.0, projectedReserve * (1.0 + cpiRate).coerceAtLeast(0.0))
                 pensionBal = dpsBal + dipBal
 
-                investedDisplay = 0.0
                 reinvestDisplay = 0.0
                 pensionInflowDisplay = 0.0
             } else {
@@ -628,13 +666,26 @@ object FireTargetAndTrajectoryEngine {
             }
             val bridgeReq = computeBridgeTo60Required(annualLivingForBridge, yearsTo60, rReal, t)
             val bridgeFunded = if (yearsTo60 == 0) true else bal >= bridgeReq
+            val reachedTargetRetAge = settings.targetRetirementAge <= 0 ||
+                age >= settings.targetRetirementAge ||
+                age >= settings.vStatePensionAge
 
             val status = when {
-                isRetired -> if (totalBal > 0.0) "FIRE OK" else "Depleted"
+                isRetired -> when {
+                    totalBal <= 0.0 -> "Depleted"
+                    baristaNetAnnual > 0.0 -> "FIRE · Barista"
+                    else -> "FIRE OK"
+                }
                 totalBal >= t -> {
                     if (age >= 60 || bridgeFunded) {
-                        isRetired = true
-                        "FIRE OK"
+                        if (reachedTargetRetAge) {
+                            isRetired = true
+                            "FIRE OK"
+                        } else if (plan.isBaristaActive) {
+                            "Barista Active"
+                        } else {
+                            "FIRE · Saving"
+                        }
                     } else {
                         "Bridge Constrained"
                     }

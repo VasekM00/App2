@@ -179,7 +179,7 @@ object MonteCarloEngine {
     }
 
     /** Strips UI/metadata-only fields so renaming partners or learning merchant rules never busts MC caches. */
-    private fun mcCacheNormalizedSettings(settings: SettingsEntity): SettingsEntity = settings.copy(
+    internal fun mcCacheNormalizedSettings(settings: SettingsEntity): SettingsEntity = settings.copy(
         primaryName = "",
         spouseName = "",
         child1Name = "",
@@ -602,16 +602,18 @@ object MonteCarloEngine {
                 totalFireTarget = targets[y]
             )
         }
-        val canRetireAtYear0 = (initialLiquid + initialDip + initialDps) >= initialTarget0 &&
-            (baseAge >= 60 || initialLiquid >= bridgeReq0)
-
         val reserveTargetAnnual = effectiveEmergencyReserveTarget(settings).finiteNonNegative()
         val initialCashCushion = settings.emergencyReserveCurrent.finiteNonNegative()
+        val parsedLumpSums = parseCustomLumpSums(settings.customLumpSumsJson)
         val upperThreshold = 1.0 + (settings.guardrailsUpperThresholdPct.finiteNonNegative() / 100.0)
         val lowerThreshold = (1.0 - (settings.guardrailsLowerThresholdPct.finiteNonNegative() / 100.0)).coerceAtLeast(0.10)
         val cutMultiplier = (1.0 - (settings.guardrailsCutPct.finiteNonNegative() / 100.0)).coerceIn(0.50, 0.99)
         val boostMultiplier = (1.0 + (settings.guardrailsBoostPct.finiteNonNegative() / 100.0)).coerceIn(1.01, 1.50)
         val floorMultiplier = (settings.guardrailsFloorPct.finiteNonNegative() / 100.0).coerceIn(0.30, 0.95)
+        val targetRetAge = settings.targetRetirementAge
+        val canRetireAtYear0 = (targetRetAge <= 0 || baseAge >= targetRetAge || baseAge >= settings.vStatePensionAge) &&
+            (initialLiquid + initialDip + initialDps) >= initialTarget0 &&
+            (baseAge >= 60 || initialLiquid >= bridgeReq0)
 
         var fireReached = 0
         var survived = 0
@@ -667,7 +669,8 @@ object MonteCarloEngine {
                     dpsBal = max(0.0, dpsBal * dpsFactor + plan.dpsInflowAnnual * dpsHalf)
                     val totalNow = liquidBal + dipBal + dpsBal
                     val bridgeOk = ageAtEnd >= 60 || liquidBal >= bridgeRequiredByYear[y]
-                    if (totalNow >= targets[y] && bridgeOk) {
+                    val targetAgeOk = targetRetAge <= 0 || ageAtEnd >= targetRetAge || ageAtEnd >= settings.vStatePensionAge
+                    if (totalNow >= targets[y] && bridgeOk && targetAgeOk) {
                         fireYear = baseYear + y + 1
                         break
                     }
@@ -724,37 +727,50 @@ object MonteCarloEngine {
                 } else 0.0
                 val childAnnualNominal = childAnnualToday * indexation
 
-                val lifestyleAnnual = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
+                var effectiveLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
                 var pensionAnnual = 0.0
                 if (age >= settings.vStatePensionAge) pensionAnnual += vPensionToday * 12.0 * indexation
                 if (includeSpouse && eAge >= settings.eStatePensionAge) {
                     pensionAnnual += ePensionToday * 12.0 * indexation
                 }
-                var need = max(0.0, lifestyleAnnual - pensionAnnual)
+                val lumpAnnual = lumpSumForYear(calYear, settings, parsedLumpSums)
+                val baristaAnnual = FireTargetAndTrajectoryEngine.postFireBaristaNetAnnualForYear(
+                    calYear = calYear,
+                    settings = settings,
+                    inflationFactor = indexation
+                )
+                val recurringIncome = pensionAnnual + baristaAnnual
+                // Guardrail withdrawal rate excludes one-off scheduled lump sums so a single windfall
+                // cannot trigger a permanent Prosperity spending ratchet.
+                var guardrailNeed = max(0.0, effectiveLifestyle - recurringIncome)
 
                 val currentTotalBal = liquidBal + dipBal + dpsBal + cashCushion
-                val baseNeedAtAge = max(0.0, lifestyleToday * 12.0 * livingIndexation + childAnnualNominal - pensionAnnual)
+                val baseNeedAtAge = max(0.0, lifestyleToday * 12.0 * livingIndexation + childAnnualNominal - recurringIncome)
                 if (settings.guardrailsEnabled && currentTotalBal > 0.0 && baseNeedAtAge > 0.0) {
                     val plannedTargetAtAge = plannedTargetsByOffset[safeOffset]
                     val referenceSwr = (baseNeedAtAge / plannedTargetAtAge).coerceAtLeast(0.001)
-                    val currentWithdrawalRate = need / currentTotalBal
+                    val currentWithdrawalRate = guardrailNeed / currentTotalBal
 
                     val isSunsetPhase = horizon > 15 && k >= horizon - 15
                     if (!isSunsetPhase && currentWithdrawalRate > referenceSwr * upperThreshold) {
                         spendingScale = (spendingScale * cutMultiplier).coerceAtLeast(floorMultiplier)
-                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
-                        need = max(0.0, adjustedLifestyle - pensionAnnual)
+                        effectiveLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
+                        guardrailNeed = max(0.0, effectiveLifestyle - recurringIncome)
                         guardrailTriggeredInPath = true
                     } else if (currentWithdrawalRate < referenceSwr * lowerThreshold) {
                         spendingScale = min(1.30, spendingScale * boostMultiplier)
-                        val adjustedLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
-                        need = max(0.0, adjustedLifestyle - pensionAnnual)
+                        effectiveLifestyle = lifestyleToday * 12.0 * livingIndexation * spendingScale + childAnnualNominal
+                        guardrailNeed = max(0.0, effectiveLifestyle - recurringIncome)
                     }
                 }
 
+                val signedNetFlow = lumpAnnual + recurringIncome - effectiveLifestyle
+                var need = max(0.0, -signedNetFlow)
+                val postFireSurplus = max(0.0, signedNetFlow)
+
                 // 1. Causal beginning-of-year cash-cushion defense based strictly on PRIOR year's realized return
                 val indexedReserveTarget = reserveTargetAnnual * indexation
-                if (k > 0 && prevYearRet < 0.0 && cashCushion > 0.0) {
+                if (k > 0 && prevYearRet < 0.0 && cashCushion > 0.0 && need > 0.0) {
                     val drawFromCash = min(cashCushion, need)
                     cashCushion -= drawFromCash
                     need -= drawFromCash
@@ -780,50 +796,52 @@ object MonteCarloEngine {
                 }
 
                 // 2. Beginning-of-year living withdrawal before equity compounding
-                if (age < 60) {
-                    if (liquidBal < need) {
-                        val deficit = need - liquidBal
-                        if (cashCushion + 0.001 >= deficit) {
-                            cashCushion = max(0.0, cashCushion - deficit)
-                            liquidBal = 0.0
-                            need = 0.0
+                if (need > 0.0) {
+                    if (age < 60) {
+                        if (liquidBal < need) {
+                            val deficit = need - liquidBal
+                            if (cashCushion + 0.001 >= deficit) {
+                                cashCushion = max(0.0, cashCushion - deficit)
+                                liquidBal = 0.0
+                                need = 0.0
+                            } else {
+                                bal = 0.0
+                                depletedAge = age
+                                break
+                            }
                         } else {
-                            bal = 0.0
-                            depletedAge = age
-                            break
+                            liquidBal -= need
+                            need = 0.0
                         }
                     } else {
-                        liquidBal -= need
-                        need = 0.0
-                    }
-                } else {
-                    var available = liquidBal + dipBal + dpsBal
-                    if (available < need) {
-                        val deficit = need - available
-                        if (cashCushion + 0.001 >= deficit) {
-                            cashCushion = max(0.0, cashCushion - deficit)
-                            available = 0.0
-                            need = 0.0
+                        var available = liquidBal + dipBal + dpsBal
+                        if (available < need) {
+                            val deficit = need - available
+                            if (cashCushion + 0.001 >= deficit) {
+                                cashCushion = max(0.0, cashCushion - deficit)
+                                available = 0.0
+                                need = 0.0
+                            } else {
+                                bal = 0.0
+                                depletedAge = age
+                                break
+                            }
                         } else {
-                            bal = 0.0
-                            depletedAge = age
-                            break
+                            available -= need
+                            need = 0.0
                         }
-                    } else {
-                        available -= need
-                        need = 0.0
+                        liquidBal = available
+                        dipBal = 0.0
+                        dpsBal = 0.0
                     }
-                    liquidBal = available
-                    dipBal = 0.0
-                    dpsBal = 0.0
                 }
 
-                // 3. Compound remaining balances over year `k`
+                // 3. Compound remaining balances over year `k` and invest any post-FIRE lump-sum / Barista surplus
                 val ret = pathReturns.getOrNull(yearOffset) ?: (exp(muLog + sigmaLog * nextGaussian(random)) - 1.0)
                 val eqFactor = max(0.0, 1.0 + ret)
                 val dpsYearRet = (dpsBaseNetRet + dpsBeta * (ret - meanReturn)).coerceAtLeast(-0.99)
                 val dpsFactor = max(0.0, 1.0 + dpsYearRet)
-                liquidBal *= eqFactor
+                liquidBal = max(0.0, liquidBal * eqFactor + postFireSurplus * (1.0 + ret * 0.5))
                 dipBal *= eqFactor
                 dpsBal *= dpsFactor
                 cashCushion *= (1.0 + stepCpi).coerceAtLeast(0.0)

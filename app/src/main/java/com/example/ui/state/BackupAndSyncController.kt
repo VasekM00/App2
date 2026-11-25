@@ -43,7 +43,8 @@ internal class BackupAndSyncController(
     private val clearSensitivityOverrides: () -> Unit,
     private val cancelStatementJobs: suspend () -> Unit,
     private val importMutex: Mutex,
-    private val emitSnackbar: suspend (String) -> Unit
+    private val emitSnackbar: suspend (String) -> Unit,
+    private val invalidateStochasticCache: () -> Unit = {}
 ) {
     private val syncInFlight = AtomicBoolean(false)
     private var syncJob: Job? = null
@@ -240,6 +241,7 @@ internal class BackupAndSyncController(
                 InvestmentLotManager.persistLots(application, restoredLots, preferencesRepository.storeName)
                 preferencesRepository.restorePreferencesFromBackup(payload.preferences)
                 clearSensitivityOverrides()
+                invalidateStochasticCache()
                 setPendingStatementImport(null, true)
                 activeAuditReport.value = null
                 emitSnackbar(
@@ -264,6 +266,7 @@ internal class BackupAndSyncController(
                     liveSettings.value = defaults
                 }
                 clearSensitivityOverrides()
+                invalidateStochasticCache()
                 emitSnackbar("Reset all settings to default")
             }
         } catch (e: CancellationException) {
@@ -287,6 +290,7 @@ internal class BackupAndSyncController(
                     liveSettings.value = defaults
                 }
                 clearSensitivityOverrides()
+                invalidateStochasticCache()
                 clearAuxiliaryStoresInternal(application, preferencesRepository)
                 liveRegulatoryData.value = null
                 setPendingStatementImport(null, true)

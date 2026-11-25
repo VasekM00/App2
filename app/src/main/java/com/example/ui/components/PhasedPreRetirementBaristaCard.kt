@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -145,7 +148,7 @@ fun PhasedPreRetirementBaristaCard(
 
             // Explanation & Milestone status
             Text(
-                text = "Model shifting from full-time careers to passion/part-time work prior to full FIRE. In this stage, part-time earnings cover living expenses while invested assets continue compounding untouched.",
+                text = "Model shifting from full-time careers to part-time or passion work before—or starting at—FIRE. Earnings offset living expenses (or invest surplus) until your chosen stop age.",
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
@@ -199,7 +202,52 @@ fun PhasedPreRetirementBaristaCard(
             if (isEnabled) {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Editable Fields: Responsive 2-tier layout so labels and amounts never squish
+                // Start Trigger Selector: Fixed Year vs. When FIRE Reached
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Start Timing",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    ChipWrapRow(modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(
+                            selected = !s.baristaStartAtFire,
+                            onClick = {
+                                if (onUpdateSettings != null || onReduceSettings != null) {
+                                    dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                        cur.copy(baristaStartAtFire = false)
+                                    }
+                                }
+                            },
+                            label = { Text("At Year (${s.baristaStartYear})", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("barista_start_at_year_chip"),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BrandTeal.copy(alpha = 0.16f),
+                                selectedLabelColor = BrandTeal
+                            )
+                        )
+                        FilterChip(
+                            selected = s.baristaStartAtFire,
+                            onClick = {
+                                if (onUpdateSettings != null || onReduceSettings != null) {
+                                    dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                        cur.copy(baristaStartAtFire = true)
+                                    }
+                                }
+                            },
+                            label = { Text("When FIRE Reached", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("barista_start_at_fire_chip"),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BrandTeal.copy(alpha = 0.16f),
+                                selectedLabelColor = BrandTeal
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Editable Fields: Responsive layout so labels and amounts never squish
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -208,45 +256,47 @@ fun PhasedPreRetirementBaristaCard(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Start Year
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Start Year",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            var yearText by rememberSaveable { mutableStateOf(s.baristaStartYear.toString()) }
-                            var yearFocused by remember { mutableStateOf(false) }
-                            LaunchedEffect(s.baristaStartYear) {
-                                if (!yearFocused && yearText.toIntOrNull() != s.baristaStartYear) {
-                                    yearText = s.baristaStartYear.toString()
-                                }
-                            }
-                            OutlinedTextField(
-                                value = yearText,
-                                onValueChange = {
-                                    yearText = it
-                                    val parsed = it.toIntOrNull()
-                                    if (parsed != null && parsed in 1950..2200 && (onUpdateSettings != null || onReduceSettings != null)) {
-                                        dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
-                                            cur.copy(baristaStartYear = parsed)
-                                        }
+                        if (!s.baristaStartAtFire) {
+                            // Start Year
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Start Year",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                var yearText by rememberSaveable { mutableStateOf(s.baristaStartYear.toString()) }
+                                var yearFocused by remember { mutableStateOf(false) }
+                                LaunchedEffect(s.baristaStartYear) {
+                                    if (!yearFocused && yearText.toIntOrNull() != s.baristaStartYear) {
+                                        yearText = s.baristaStartYear.toString()
                                     }
-                                },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 12.sp,
-                                    fontFamily = BodyFontFamily,
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onFocusChanged { yearFocused = it.isFocused }
-                                    .testTag("barista_start_year_input")
-                            )
+                                }
+                                OutlinedTextField(
+                                    value = yearText,
+                                    onValueChange = {
+                                        yearText = it
+                                        val parsed = it.toIntOrNull()
+                                        if (parsed != null && parsed in 1950..2200 && (onUpdateSettings != null || onReduceSettings != null)) {
+                                            dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                                cur.copy(baristaStartYear = parsed)
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 12.sp,
+                                        fontFamily = BodyFontFamily,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .onFocusChanged { yearFocused = it.isFocused }
+                                        .testTag("barista_start_year_input")
+                                )
+                            }
                         }
 
                         // Monthly Part-Time Income
@@ -292,46 +342,136 @@ fun PhasedPreRetirementBaristaCard(
                         }
                     }
 
-                    // Monthly Portfolio Savings
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Monthly Portfolio Savings",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        var savingsText by rememberSaveable { mutableStateOf(fmtEditableAmount(s.baristaSavingsMonthly)) }
-                        var savingsFocused by remember { mutableStateOf(false) }
-                        LaunchedEffect(s.baristaSavingsMonthly) {
-                            if (!savingsFocused && savingsText.parseUserAmountOrNull() != s.baristaSavingsMonthly) {
-                                savingsText = fmtEditableAmount(s.baristaSavingsMonthly)
-                            }
-                        }
-                        OutlinedTextField(
-                            value = savingsText,
-                            onValueChange = {
-                                savingsText = it
-                                val parsed = it.parseUserAmountOrNull()?.takeIf { v -> v.isFinite() && v >= 0.0 }
-                                if (parsed != null && (onUpdateSettings != null || onReduceSettings != null)) {
-                                    dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
-                                        cur.copy(baristaSavingsMonthly = parsed)
-                                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Monthly Portfolio Savings
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (s.baristaStartAtFire) "Target Monthly Surplus Savings" else "Monthly Portfolio Savings",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            var savingsText by rememberSaveable { mutableStateOf(fmtEditableAmount(s.baristaSavingsMonthly)) }
+                            var savingsFocused by remember { mutableStateOf(false) }
+                            LaunchedEffect(s.baristaSavingsMonthly) {
+                                if (!savingsFocused && savingsText.parseUserAmountOrNull() != s.baristaSavingsMonthly) {
+                                    savingsText = fmtEditableAmount(s.baristaSavingsMonthly)
                                 }
-                            },
-                            singleLine = true,
-                            suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 12.sp,
-                                fontFamily = BodyFontFamily,
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            }
+                            OutlinedTextField(
+                                value = savingsText,
+                                onValueChange = {
+                                    savingsText = it
+                                    val parsed = it.parseUserAmountOrNull()?.takeIf { v -> v.isFinite() && v >= 0.0 }
+                                    if (parsed != null && (onUpdateSettings != null || onReduceSettings != null)) {
+                                        dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                            cur.copy(baristaSavingsMonthly = parsed)
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                suffix = { Text("Kč", style = MaterialTheme.typography.labelSmall) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 12.sp,
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { savingsFocused = it.isFocused }
+                                    .testTag("barista_monthly_savings_input")
+                            )
+                        }
+
+                        // Stop Barista at Age
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Stop at Age (0 = ${s.vStatePensionAge})",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            var endAgeText by rememberSaveable { mutableStateOf(s.baristaEndAge.toString()) }
+                            var endAgeFocused by remember { mutableStateOf(false) }
+                            LaunchedEffect(s.baristaEndAge) {
+                                if (!endAgeFocused && endAgeText.toIntOrNull() != s.baristaEndAge) {
+                                    endAgeText = s.baristaEndAge.toString()
+                                }
+                            }
+                            OutlinedTextField(
+                                value = endAgeText,
+                                onValueChange = {
+                                    endAgeText = it
+                                    val parsed = it.trim().toIntOrNull()
+                                    val normalized = when {
+                                        it.isBlank() || parsed == 0 -> 0
+                                        parsed != null && parsed in 30..85 -> parsed
+                                        else -> null
+                                    }
+                                    if (normalized != null && (onUpdateSettings != null || onReduceSettings != null)) {
+                                        dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                            cur.copy(baristaEndAge = normalized)
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 12.sp,
+                                    fontFamily = BodyFontFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { endAgeFocused = it.isFocused }
+                                    .testTag("barista_end_age_input")
+                            )
+                        }
+                    }
+
+                    if (!s.baristaStartAtFire) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .onFocusChanged { savingsFocused = it.isFocused }
-                                .testTag("barista_monthly_savings_input")
-                        )
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "Continue Past FIRE",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Keep part-time work active after hitting your FIRE target until stop age (${if (s.baristaEndAge > 0) s.baristaEndAge else s.vStatePensionAge})",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                            Switch(
+                                checked = s.baristaContinuePostFire,
+                                onCheckedChange = { cont ->
+                                    if (onUpdateSettings != null || onReduceSettings != null) {
+                                        dispatchSettingsPatch(s, onUpdateSettings ?: {}, onReduceSettings) { cur ->
+                                            cur.copy(baristaContinuePostFire = cont)
+                                        }
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = OnBrandTeal,
+                                    checkedTrackColor = BrandTeal
+                                ),
+                                modifier = Modifier.testTag("barista_continue_post_fire_toggle")
+                            )
+                        }
                     }
                 }
 

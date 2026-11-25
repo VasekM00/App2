@@ -92,10 +92,10 @@ fun LazyListScope.settingsDataSubTab(
     onShowImportJsonDialog: () -> Unit,
     onShowResetDialog: () -> Unit,
     onShowClearDataDialog: () -> Unit,
-    actionStates: Map<String, Boolean>,
-    ledgerEntries: List<LedgerEntryEntity>,
-    importedTransactions: List<ImportedBankTransactionEntity>,
-    exportScope: CoroutineScope? = null,
+    @Suppress("UNUSED_PARAMETER") actionStates: Map<String, Boolean>,
+    @Suppress("UNUSED_PARAMETER") ledgerEntries: List<LedgerEntryEntity>,
+    @Suppress("UNUSED_PARAMETER") importedTransactions: List<ImportedBankTransactionEntity>,
+    @Suppress("UNUSED_PARAMETER") exportScope: CoroutineScope? = null,
     onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null,
     biometricLockEnabled: Boolean = false,
     flagSecureEnabled: Boolean = false,
@@ -105,10 +105,6 @@ fun LazyListScope.settingsDataSubTab(
     onLaunchImportBackupFile: () -> Unit = {}
 ) {
     val s = state.settings
-    @Suppress("UNUSED_VARIABLE")
-    val unusedRefs = Triple(actionStates.size, ledgerEntries.size, importedTransactions.size)
-    @Suppress("UNUSED_VARIABLE")
-    val unusedScope = exportScope
 
     // 0. Appearance & Theme Settings (item index 1)
     item {

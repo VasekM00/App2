@@ -117,7 +117,7 @@ fun MetricInfoDialog(
     val rawAccent = info.accentColor ?: BrandTeal
     val effectiveAccent = if (isDark) {
         when (rawAccent) {
-            Color(0xFF0F766E) -> BrandTealDark
+            Color(0xFF0F766E), Color(0xFF0D9488) -> BrandTealDark
             Color(0xFFD97706), Color(0xFFB45309) -> BrandGoldDarkTheme
             Color(0xFF16A34A), Color(0xFF059669) -> GoodGreenDark
             Color(0xFF2563EB) -> BrandBlueDarkTheme

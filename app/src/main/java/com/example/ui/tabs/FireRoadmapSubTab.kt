@@ -72,38 +72,6 @@ fun RoadmapAndGoalsSubTab(
 }
 
 @Composable
-fun HouseholdTimelineSubTab(
-    state: FullCalculationState,
-    onUpdateSettings: ((SettingsEntity) -> Unit)? = null,
-    onShowInfo: (MetricInfo) -> Unit = {},
-    onReduceSettings: (((SettingsEntity) -> SettingsEntity) -> Unit)? = null
-) {
-    val scrollState = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp)
-            .testTag("household_timeline_subtab"),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        HouseholdTimelineCard(
-            settings = state.settings,
-            state = state,
-            onUpdateSettings = onUpdateSettings,
-            onReduceSettings = onReduceSettings
-        )
-        LifeGoalsSimulatorCard(
-            state = state,
-            onUpdateSettings = onUpdateSettings,
-            onShowInfo = onShowInfo,
-            onReduceSettings = onReduceSettings
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-@Composable
 fun FireRoadmapSubTab(
     state: FullCalculationState,
     actionStates: Map<String, Boolean>,
@@ -188,7 +156,12 @@ fun FireRoadmapSubTab(
         // Accordion: Barista / Coast Transition
         RoadmapAccordionCard(
             title = "Barista / Phased Transition",
-            subtitle = if (sEff.baristaTransitionEnabled) "Active from ${sEff.baristaStartYear}" else "Model part-time work before full FIRE",
+            subtitle = when {
+                !sEff.baristaTransitionEnabled -> "Model part-time work before or past FIRE"
+                sEff.baristaStartAtFire -> "Starts at FIRE until age ${if (sEff.baristaEndAge > 0) sEff.baristaEndAge else sEff.vStatePensionAge}"
+                sEff.baristaContinuePostFire -> "Active from ${sEff.baristaStartYear} (continues past FIRE)"
+                else -> "Active ${sEff.baristaStartYear} until FIRE"
+            },
             expanded = baristaExpanded,
             onToggle = { baristaExpanded = !baristaExpanded }
         ) {

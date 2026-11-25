@@ -230,6 +230,11 @@ fun LazyListScope.settingsHouseholdSubTab(
                 text = "Planned Lump Sum Inflows",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = BrandTeal)
             )
+            Text(
+                text = "Scheduled one-off inflows (inheritance, property sale, bonus) land directly in your liquid portfolio in the chosen year—both before and after FIRE—and are counted in projections, survival odds, and decumulation comparisons.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.height(4.dp))
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

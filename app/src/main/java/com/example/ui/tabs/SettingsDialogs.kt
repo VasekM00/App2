@@ -301,7 +301,7 @@ fun SettingsAddLumpSumDialog(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Bonus, inheritance, property or gift",
+                        text = "Scheduled portfolio inflow (bonus, inheritance, or sale) counted pre- and post-FIRE",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

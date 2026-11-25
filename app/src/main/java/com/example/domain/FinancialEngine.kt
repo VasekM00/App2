@@ -5,6 +5,7 @@ import com.example.data.LedgerEntryEntity
 import com.example.data.SettingsEntity
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 /**
  * Facade and central calculation coordinator delegating to focused domain sub-engines:
@@ -233,6 +234,73 @@ object FinancialEngine {
         crashPct: Double,
         partnerBirthYearOverride: Int? = null
     ): List<PortfolioYearPoint> = FireTargetAndTrajectoryEngine.buildLiquidPortfolioWithInitialCrash(settings, crashPct, partnerBirthYearOverride)
+
+    fun buildDecumulationConfig(
+        settings: SettingsEntity,
+        initialPortfolio: Double,
+        fireAge: Int,
+        fireYear: Int,
+        partnerAgeAtFire: Int,
+        gkInitialWithdrawalMultiplier: Double = 1.0
+    ): DecumulationConfig {
+        val safeInitialPortfolio = initialPortfolio.finiteNonNegative().coerceAtLeast(1_000_000.0)
+        val decumulationSwr = settings.safeWithdrawalRatePct.finiteIn(0.5, 20.0, 4.0)
+        val horizonYears = settings.retirementHorizonYears.coerceIn(5, 60)
+        val cpiRate = (settings.cpiInflationPct.finiteAtLeast(-99.0, 2.8) / 100.0).coerceAtLeast(-0.99)
+        val pensionStreams = buildList {
+            val vPenAnnual = settings.vStatePensionMonthly.finiteNonNegative() * 12.0
+            if (vPenAnnual > 0.0) {
+                add(max(0, settings.vStatePensionAge - fireAge) to vPenAnnual)
+            }
+            if (!settings.isSingleHousehold) {
+                val ePenAnnual = settings.eStatePensionMonthly.finiteNonNegative() * 12.0
+                if (ePenAnnual > 0.0) {
+                    add(max(0, settings.eStatePensionAge - partnerAgeAtFire) to ePenAnnual)
+                }
+            }
+        }
+        val parsedLumpSums = parseCustomLumpSums(settings.customLumpSumsJson)
+        val scheduledLumpSums = (0 until horizonYears).mapNotNull { offset ->
+            val calYear = fireYear + offset
+            val nomLump = lumpSumForYear(calYear, settings, parsedLumpSums)
+            if (nomLump > 0.0) {
+                val scaleToTodayReal = (1.0 + cpiRate).coerceAtLeast(0.01)
+                    .pow(max(0, calYear - settings.baseYear)).finiteOr(1.0)
+                val scaledAmount = (nomLump / scaleToTodayReal).finiteNonNegative()
+                if (scaledAmount > 0.0) offset to scaledAmount else null
+            } else null
+        }
+        val baristaStreams = (0 until horizonYears).mapNotNull { offset ->
+            val calYear = fireYear + offset
+            val realAnnual = FireTargetAndTrajectoryEngine.postFireBaristaNetAnnualForYear(
+                calYear = calYear,
+                settings = settings,
+                inflationFactor = 1.0
+            )
+            if (realAnnual > 0.0) offset to realAnnual else null
+        }
+        return DecumulationConfig(
+            initialPortfolio = safeInitialPortfolio,
+            initialAnnualWithdrawal = safeInitialPortfolio * (decumulationSwr / 100.0),
+            horizonYears = horizonYears,
+            annualInflationPct = settings.cpiInflationPct.finiteAtLeast(-99.0, 2.5),
+            expectedAnnualReturnPct = netTaxableNominalReturnPct(settings),
+            returnVolatilityPct = settings.monteCarloVolatilityPct.finiteNonNegative(15.0),
+            simulationsCount = settings.monteCarloN.coerceIn(50, 2000),
+            randomSeed = settings.monteCarloSeed,
+            gkUpperThresholdPct = settings.guardrailsUpperThresholdPct.finiteIn(5.0, 100.0, 20.0),
+            gkLowerThresholdPct = settings.guardrailsLowerThresholdPct.finiteIn(5.0, 100.0, 20.0),
+            gkCutPct = settings.guardrailsCutPct.finiteIn(1.0, 50.0, 10.0),
+            gkBoostPct = settings.guardrailsBoostPct.finiteIn(1.0, 50.0, 10.0),
+            gkFloorPctOfInitial = settings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
+            gkInitialWithdrawalMultiplier = gkInitialWithdrawalMultiplier,
+            vpdRatePct = (decumulationSwr * 1.075).coerceIn(0.5, 20.0),
+            vpdFloorPctOfInitial = settings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
+            pensionStreams = pensionStreams,
+            scheduledLumpSums = scheduledLumpSums,
+            baristaStreams = baristaStreams
+        )
+    }
 
     fun calculate(
         settings: SettingsEntity,
@@ -585,42 +653,18 @@ object FinancialEngine {
             fireBase.finiteNonNegative(),
             1_000_000.0
         )
-        val decumulationSwr = projectionSettings.safeWithdrawalRatePct.finiteIn(0.5, 20.0, 4.0)
         val retirementAgeForDecum = activeFireAge ?: projectionSettings.primaryAge
+        val retirementYearForDecum = activeFireYear ?: projectionSettings.baseYear
         val partnerAgeToday = projectionSettings.baseYear - partnerBirthYear(projectionSettings, partnerBirthYearOverride)
         val partnerAgeAtFire = partnerAgeToday + max(0, retirementAgeForDecum - projectionSettings.primaryAge)
-        val pensionStreams = buildList {
-            val vPenAnnual = projectionSettings.vStatePensionMonthly.finiteNonNegative() * 12.0
-            if (vPenAnnual > 0.0) {
-                add(max(0, projectionSettings.vStatePensionAge - retirementAgeForDecum) to vPenAnnual)
-            }
-            if (!projectionSettings.isSingleHousehold) {
-                val ePenAnnual = projectionSettings.eStatePensionMonthly.finiteNonNegative() * 12.0
-                if (ePenAnnual > 0.0) {
-                    add(max(0, projectionSettings.eStatePensionAge - partnerAgeAtFire) to ePenAnnual)
-                }
-            }
-        }
         val decumulationComparison = if (runMonteCarlo) {
             DecumulationStrategies.compareStrategies(
-                DecumulationConfig(
+                buildDecumulationConfig(
+                    settings = projectionSettings,
                     initialPortfolio = decumulationBase,
-                    initialAnnualWithdrawal = decumulationBase * (decumulationSwr / 100.0),
-                    horizonYears = projectionSettings.retirementHorizonYears.coerceIn(5, 60),
-                    annualInflationPct = projectionSettings.cpiInflationPct.finiteAtLeast(-99.0, 2.5),
-                    expectedAnnualReturnPct = netTaxableNominalReturnPct(projectionSettings),
-                    returnVolatilityPct = projectionSettings.monteCarloVolatilityPct.finiteNonNegative(15.0),
-                    simulationsCount = projectionSettings.monteCarloN.coerceIn(50, 2000),
-                    randomSeed = projectionSettings.monteCarloSeed,
-                    gkUpperThresholdPct = projectionSettings.guardrailsUpperThresholdPct.finiteIn(5.0, 100.0, 20.0),
-                    gkLowerThresholdPct = projectionSettings.guardrailsLowerThresholdPct.finiteIn(5.0, 100.0, 20.0),
-                    gkCutPct = projectionSettings.guardrailsCutPct.finiteIn(1.0, 50.0, 10.0),
-                    gkBoostPct = projectionSettings.guardrailsBoostPct.finiteIn(1.0, 50.0, 10.0),
-                    gkFloorPctOfInitial = projectionSettings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
-                    gkInitialWithdrawalMultiplier = 1.0,
-                    vpdRatePct = (decumulationSwr * 1.075).coerceIn(0.5, 20.0),
-                    vpdFloorPctOfInitial = projectionSettings.guardrailsFloorPct.finiteIn(10.0, 100.0, 70.0),
-                    pensionStreams = pensionStreams
+                    fireAge = retirementAgeForDecum,
+                    fireYear = retirementYearForDecum,
+                    partnerAgeAtFire = partnerAgeAtFire
                 )
             )
         } else null

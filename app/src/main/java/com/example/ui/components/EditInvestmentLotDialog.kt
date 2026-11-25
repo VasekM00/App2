@@ -60,11 +60,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ui.components.charts.finiteOrZero
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandTeal
 import com.example.ui.theme.GoodGreen
 import com.example.ui.theme.OnBrandTeal
+import com.example.ui.theme.WarnAmber
 import com.example.util.Formatters.fmtExactCZK
 import com.example.util.UserInvestmentLot
 import com.example.util.parseUserAmountOrNull
@@ -474,7 +474,7 @@ fun EditInvestmentLotDialog(
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = BodyFontFamily,
-                                        color = if (isExempt) GoodGreen else AmberWarning
+                                        color = if (isExempt) GoodGreen else WarnAmber
                                     )
                                 )
                             }

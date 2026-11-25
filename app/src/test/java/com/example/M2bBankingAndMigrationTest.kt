@@ -128,7 +128,7 @@ class M2bBankingAndMigrationTest {
             sqlite.close()
 
             val roomDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-                .addMigrations(AppDatabase.MIGRATION_37_38, AppDatabase.MIGRATION_38_39)
+                .addMigrations(AppDatabase.MIGRATION_37_38, AppDatabase.MIGRATION_38_39, AppDatabase.MIGRATION_39_40)
                 .allowMainThreadQueries()
                 .build()
             try {
